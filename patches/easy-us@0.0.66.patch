@@ -1,0 +1,26 @@
+diff --git a/dist/index.min.js b/dist/index.min.js
+index 2f9d1970b9ae9be69aa9830a9f552bfb9acdfbae..cee614dc80a224142591b6c21c414571218d2423 100644
+--- a/dist/index.min.js
++++ b/dist/index.min.js
+@@ -1750,7 +1750,7 @@
+       this.classList.add(this.type);
+       Object.assign(this.style, this.modalStyle || {});
+       const profile = h("div", {
+-        innerText: this.profile || "\u5F39\u7A97\u6765\u81EA: OCS " + (((_a = $gm.getInfos()) == null ? void 0 : _a.script.version) || ""),
++        innerText: this.profile || "\u5F39\u7A97\u6765\u81EA: 鸿鹄易学 " + (((_a = $gm.getInfos()) == null ? void 0 : _a.script.version) || ""),
+         className: "modal-profile"
+       });
+       this._title.innerText = this.title;
+diff --git a/lib/elements/modal.js b/lib/elements/modal.js
+index 75b804f8e3e5ea0bb6c60bf9f6ef383e8652c186..fd718f4a7cd43b30f6a6017d9c928b7723e37c2b 100644
+--- a/lib/elements/modal.js
++++ b/lib/elements/modal.js
+@@ -60,7 +60,7 @@ class ModalElement extends interface_1.IElement {
+         Object.assign(this.style, this.modalStyle || {});
+         // 弹窗来源
+         const profile = (0, dom_1.h)('div', {
+-            innerText: this.profile || '弹窗来自: OCS ' + (((_a = tampermonkey_1.$gm.getInfos()) === null || _a === void 0 ? void 0 : _a.script.version) || ''),
++            innerText: this.profile || '弹窗来自: 鸿鹄易学 ' + (((_a = tampermonkey_1.$gm.getInfos()) === null || _a === void 0 ? void 0 : _a.script.version) || ''),
+             className: 'modal-profile'
+         });
+         // 标题
