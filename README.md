@@ -22,17 +22,17 @@
 
 ## 安装
 
-### 方式一：直接安装
+### 方式一：商店安装
+
+- Edge 商店：[鸿鹄易学 - Microsoft Edge 加载项](https://microsoftedge.microsoft.com/addons/detail/ocidllankdjkcieeefhgmgnkppcbdfhh)
+
+### 方式二：手动安装
 
 1. 在release发行版中找到最新的版本并下载`扩展.zip`
 2. 解压缩zip
 3. 打开浏览器扩展管理页（Chrome：`chrome://extensions`，Edge：`edge://extensions`）
 4. 开启「开发者模式」
 5. 点击「加载已解压的扩展程序」，选择解压缩的`extension`目录
-
-### 方式二：商店安装
-
-上架后补充商店链接。
 
 ## 开发
 
