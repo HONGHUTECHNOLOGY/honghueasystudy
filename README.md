@@ -24,7 +24,7 @@
 
 ### 方式一：直接安装
 
-1. 在release中找到最新的版本并下载`扩展.zip`
+1. 在release发行版中找到最新的版本并下载`扩展.zip`
 2. 解压缩zip
 3. 打开浏览器扩展管理页（Chrome：`chrome://extensions`，Edge：`edge://extensions`）
 4. 开启「开发者模式」
