@@ -44,7 +44,7 @@
 - **自动化程序**：在桌面端统一配置自动学习、作业等任务
 - **集中管理**：统一管理浏览器配置、缓存、书签和任务记录
 
-> 桌面端安装包会随 Release 一起发布。下载后运行安装程序即可使用，Windows 安装包文件名为 `鸿鹄易学-<版本>-setup-win-x64.exe`。
+> 桌面端安装包会随 Release 一起发布。下载后运行安装程序即可使用，安装过程中可以选择安装目录。Windows 安装包文件名为 `鸿鹄易学-<版本>-setup-win-x64.exe`。
 
 - [GitCode Releases](https://gitcode.com/honghutech/honghueasystudy/releases)
 - [GitHub Releases](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases)

@@ -1,6 +1,6 @@
 {
   "name": "ocs-desktop",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "鸿鹄易学 - desktop for userscript",
   "packageManager": "pnpm@10.21.0",
   "files": [
