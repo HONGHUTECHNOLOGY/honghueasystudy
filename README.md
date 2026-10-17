@@ -20,6 +20,20 @@
 - 题库配置与在线搜题
 - 题库缓存
 
+## 浏览器扩展安装
+
+### 方式一：商店安装
+
+- Edge 商店：[鸿鹄易学 - Microsoft Edge 加载项](https://microsoftedge.microsoft.com/addons/detail/ocidllankdjkcieeefhgmgnkppcbdfhh)
+
+### 方式二：手动安装
+
+1. 在 Release 发行版中找到最新的版本并下载 `extension.zip`
+2. 解压缩 zip
+3. 打开浏览器扩展管理页（Chrome：`chrome://extensions`，Edge：`edge://extensions`）
+4. 开启「开发者模式」
+5. 点击「加载已解压的扩展程序」，选择解压缩的`extension`目录
+
 ## 桌面端
 
 鸿鹄易学桌面端是一款面向网课学习场景的浏览器自动化工具，适合需要多开浏览器、自动登录和集中管理任务的用户。
@@ -34,20 +48,6 @@
 
 - [GitCode Releases](https://gitcode.com/honghutech/honghueasystudy/releases)
 - [GitHub Releases](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases)
-
-## 浏览器扩展安装
-
-### 方式一：商店安装
-
-- Edge 商店：[鸿鹄易学 - Microsoft Edge 加载项](https://microsoftedge.microsoft.com/addons/detail/ocidllankdjkcieeefhgmgnkppcbdfhh)
-
-### 方式二：手动安装
-
-1. 在release发行版中找到最新的版本并下载`扩展.zip`
-2. 解压缩zip
-3. 打开浏览器扩展管理页（Chrome：`chrome://extensions`，Edge：`edge://extensions`）
-4. 开启「开发者模式」
-5. 点击「加载已解压的扩展程序」，选择解压缩的`extension`目录
 
 ## 开发
 
