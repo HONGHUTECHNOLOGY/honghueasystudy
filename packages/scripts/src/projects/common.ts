@@ -2158,7 +2158,7 @@ function createReferenceArea(onChange: () => void) {
 		h('style', areaCss),
 		h('div', { className: 'ai-ref-title' }, '参考资料'),
 		h('div', { className: 'ai-ref-desc' }, [
-			'答题时将参考资料一并发给 AI 供其参考。资料可以是文字或图片（图片需 AI 模型支持视觉，如 GPT-4o / GLM-4V 等）。',
+			'答题时将参考资料一并发给 AI 供其参考。资料可以是文字或图片（图片需 AI 模型支持视觉，如 deepseek-v4.1-flash/kimi-k3）。',
 			h('br'),
 			'勾选资料前的复选框可控制是否发送该条资料；不勾选任何资料时仅发送题目本身。大图会自动压缩。'
 		]),
