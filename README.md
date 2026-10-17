@@ -60,7 +60,8 @@ npm run build:ext  # 构建浏览器扩展
 
 ## 相关链接
 
-- 仓库：https://gitcode.com/honghutech/honghueasystudy
+- GitCode 仓库：https://gitcode.com/honghutech/honghueasystudy
+- GitHub 仓库：https://github.com/HONGHUTECHNOLOGY/honghueasystudy
 
 ## License
 
