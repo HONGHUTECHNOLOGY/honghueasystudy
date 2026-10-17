@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>鸿鹄易学 - 网课自动学习助手 | 自动刷课 · AI 答题 · 七大平台</title>
+  <meta name="description" content="鸿鹄易学是一款支持超星学习通、知到智慧树、职教云、智慧职教、雨课堂、中国大学MOOC、U校园七大网课平台的浏览器插件与桌面端软件，集自动刷课、AI 自动答题、题库搜题、视频倍速与隐形反检测于一体，MIT 开源。">
+  <meta name="keywords" content="鸿鹄易学,网课助手,自动刷课,AI答题,超星学习通,智慧树,职教云,雨课堂,中国大学MOOC,U校园">
+  <meta name="author" content="鸿鹄科技">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="鸿鹄易学 - 网课自动学习助手">
+  <meta property="og:description" content="自动刷课 · AI 答题 · 覆盖七大网课平台。浏览器插件 × 桌面工作站，MIT 开源。">
+  <meta property="og:image" content="assets/img/icon.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="theme-color" content="#1E6FFF">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="assets/img/icon300w.png">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/motion.css">
+  <script src="assets/js/vendor/lenis.min.js" defer></script>
+  <script src="assets/js/main.js" defer></script>
+  <script src="assets/js/reveal.js" defer></script>
+  <script src="assets/js/counters.js" defer></script>
+  <script src="assets/js/interactions.js" defer></script>
+</head>
+<body>
+
+  <a class="skip-link" href="#main">跳到主要内容</a>
+
+  <!-- ================= 导航栏 ================= -->
+  <header class="nav" id="nav">
+    <div class="container nav-inner">
+      <a class="nav-brand" href="#hero" data-scroll>
+        <img src="assets/img/icon300w.png" alt="鸿鹄易学 Logo" width="30" height="30" decoding="async">
+        <span>鸿鹄易学</span>
+      </a>
+      <nav class="nav-links" id="navLinks" aria-label="主导航">
+        <a href="#platforms" data-scroll>支持平台</a>
+        <a href="#features" data-scroll>功能</a>
+        <a href="#desktop" data-scroll>桌面版</a>
+        <a href="#faq" data-scroll>常见问题</a>
+        <a class="btn btn-primary nav-cta" href="#download" data-scroll>立即安装</a>
+      </nav>
+      <button class="nav-burger" id="navBurger" aria-label="打开菜单" aria-expanded="false" aria-controls="navLinks">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+    <div class="nav-progress" id="navProgress" aria-hidden="true"><i></i></div>
+  </header>
+
+  <main id="main">
+
+    <!-- ================= Hero ================= -->
+    <section class="hero" id="hero">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="container hero-inner">
+        <div class="hero-copy">
+          <span class="badge" data-reveal="fade">
+            <i class="dot" aria-hidden="true"></i>
+            v5.0.0 · MIT 开源
+          </span>
+          <h1 class="hero-title" data-reveal="lines" style="--dl:.1s" aria-label="鸿鹄易学，让网课学习，交给 AI。">
+            <span class="hl-mask"><span class="hl">鸿鹄易学</span></span>
+            <span class="hl-mask"><span class="hl"><span class="text-grad">让网课学习，</span></span></span>
+            <span class="hl-mask"><span class="hl"><span class="text-grad">交给&nbsp;AI。</span></span></span>
+          </h1>
+          <p class="hero-sub" data-reveal="lines" style="--dl:1.05s">
+            <span class="hl-mask"><span class="hl">自动刷课 · AI 自动答题 · <span class="nowrap">题库搜题 · 隐形反检测。</span></span></span>
+            <span class="hl-mask"><span class="hl">一个插件，覆盖超星、<span class="nowrap">智慧树等七大网课平台。</span></span></span>
+          </p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" data-reveal="pop" style="--i:0" href="#download" data-scroll>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+              安装扩展 / 桌面端
+            </a>
+            <a class="btn btn-ghost" data-reveal="pop" style="--i:1" href="https://gitcode.com/honghutech/honghueasystudy" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg>
+              GitCode
+            </a>
+            <a class="btn btn-ghost" data-reveal="pop" style="--i:2" href="https://github.com/HONGHUTECHNOLOGY/honghueasystudy" target="_blank" rel="noopener">
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+              GitHub
+            </a>
+          </div>
+          <ul class="hero-stats" data-reveal="fade" style="--dl:1.4s">
+            <li><strong><span class="counter" data-count="7">0</span></strong><span>网课平台</span></li>
+            <li><strong><span class="counter" data-count="4">0</span></strong><span>题型自动作答</span></li>
+            <li class="stat-text"><strong>自定义</strong><span>AI 大模型接入</span></li>
+          </ul>
+        </div>
+
+        <!-- 纯 CSS 浏览器窗口 mockup -->
+        <div class="hero-visual" data-reveal="hero-3d" style="--dl:.55s" aria-hidden="true">
+          <div class="browser-mockup" data-parallax="0.12" data-tilt="4">
+            <div class="bm-bar">
+              <span class="bm-dot" style="background:#FF5F57"></span>
+              <span class="bm-dot" style="background:#FEBC2E"></span>
+              <span class="bm-dot" style="background:#28C840"></span>
+              <span class="bm-url">chaoxing.com · 我的课程</span>
+            </div>
+            <div class="bm-body">
+              <div class="bm-video">
+                <div class="bm-play">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+                </div>
+                <div class="bm-progress"><i></i></div>
+              </div>
+              <div class="bm-panel">
+                <div class="bm-panel-head">
+                  <img src="assets/img/icon300w.png" alt="" width="18" height="18">
+                  <span>鸿鹄易学 · 答题中</span>
+                </div>
+                <div class="bm-q">1. 下列哪项属于人工智能的典型应用？</div>
+                <div class="bm-opt">A. 手工记账</div>
+                <div class="bm-opt active">B. 机器视觉识别<em>AI 标注 · 98%</em></div>
+                <div class="bm-opt">C. 纸质信件邮寄</div>
+                <div class="bm-scan"><i></i></div>
+                <div class="bm-foot"><span>多线程搜题中</span><span class="bm-ok">已答 12 / 20</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="hero-platforms-strip" aria-hidden="true">
+            <div class="hps-track">
+              <div class="hps-group">
+                <span>超星学习通</span><i></i>
+                <span>知到 · 智慧树</span><i></i>
+                <span>职教云</span><i></i>
+                <span>智慧职教</span><i></i>
+                <span>雨课堂</span><i></i>
+                <span>中国大学MOOC</span><i></i>
+                <span>U校园</span><i></i>
+              </div>
+              <div class="hps-group" aria-hidden="true">
+                <span>超星学习通</span><i></i>
+                <span>知到 · 智慧树</span><i></i>
+                <span>职教云</span><i></i>
+                <span>智慧职教</span><i></i>
+                <span>雨课堂</span><i></i>
+                <span>中国大学MOOC</span><i></i>
+                <span>U校园</span><i></i>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 支持平台 ================= -->
+    <section class="section" id="platforms">
+      <div class="container">
+        <div class="section-head" data-reveal="head">
+          <span class="section-eyebrow">Platforms</span>
+          <h2 class="section-title"><span class="hl-mask"><span class="hl">一个插件，<span class="text-grad">七大平台</span></span></span></h2>
+          <p class="section-sub">从公共课到专业课，从视频学习到作业考试，主流网课平台一站式覆盖。</p>
+        </div>
+        <ul class="platform-grid">
+          <li class="platform-card card" data-reveal="card-3d" style="--i:0"><span class="pf-index" aria-hidden="true">01</span><i class="pf-badge" style="--pf:#FF6B35">超</i><strong>超星学习通</strong><span>视频 · 阅读 · 章节任务点 · 作业考试</span></li>
+          <li class="platform-card card" data-reveal="card-3d" style="--i:1"><span class="pf-index" aria-hidden="true">02</span><i class="pf-badge" style="--pf:#22C55E">知</i><strong>知到 · 智慧树</strong><span>共享课 · 翻转课 · AI 智慧课程</span></li>
+          <li class="platform-card card" data-reveal="card-3d" style="--i:2"><span class="pf-index" aria-hidden="true">03</span><i class="pf-badge" style="--pf:#8B5CF6">职</i><strong>职教云</strong><span>课程学习 · 资源库 PPT · 作业考试</span></li>
+          <li class="platform-card card" data-reveal="card-3d" style="--i:3"><span class="pf-index" aria-hidden="true">04</span><i class="pf-badge" style="--pf:#0EA5E9">智</i><strong>智慧职教 icve</strong><span>MOOC 学院 · AI 课程 · AI 测验</span></li>
+          <li class="platform-card card" data-reveal="card-3d" style="--i:4"><span class="pf-index" aria-hidden="true">05</span><i class="pf-badge" style="--pf:#F59E0B">雨</i><strong>雨课堂</strong><span>课程学习 · AI 学伴 · 字体解密</span></li>
+          <li class="platform-card card" data-reveal="card-3d" style="--i:5"><span class="pf-index" aria-hidden="true">06</span><i class="pf-badge" style="--pf:#EF4444">慕</i><strong>中国大学MOOC</strong><span>视频 · 富文本 · 讨论 · 作业考试</span></li>
+          <li class="platform-card card" data-reveal="card-3d" style="--i:6"><span class="pf-index" aria-hidden="true">07</span><i class="pf-badge" style="--pf:#6366F1">U</i><strong>U校园</strong><span>普通版 · 经典 AI 版 · 新 AI 版</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= 功能矩阵 ================= -->
+    <section class="section section-soft" id="features">
+      <div class="container">
+        <div class="section-head" data-reveal="head">
+          <span class="section-eyebrow">Features</span>
+          <h2 class="section-title"><span class="hl-mask"><span class="hl">刷课、答题、搜题，<span class="text-grad">一站式</span></span></span></h2>
+          <p class="section-sub">把重复的点击交给脚本，把思考的时间留给自己。</p>
+        </div>
+        <ul class="feature-grid">
+          <li class="feature-card card" data-reveal="card-pop" style="--i:0">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M10 9l5 3-5 3z"/></svg></div>
+            <h3>全自动刷课</h3>
+            <p>视频自动播放、章节与任务点智能切换，PPT / 文档 / 阅读任务自动完成，全程无需值守。</p>
+          </li>
+          <li class="feature-card card" data-reveal="card-pop" style="--i:1">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+            <h3>四题型 AI 答题</h3>
+            <p>单选、多选、判断、填空全面覆盖，全新答案匹配算法 + 多线程搜题，答题进度实时可视。</p>
+          </li>
+          <li class="feature-card card" data-reveal="card-pop" style="--i:2">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z"/></svg></div>
+            <h3>调用 AI 大模型</h3>
+            <p>兼容 OpenAI 格式接口，DeepSeek、Kimi、智谱、硅基流动、百炼云随心接入。</p>
+          </li>
+          <li class="feature-card card" data-reveal="card-pop" style="--i:3">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg></div>
+            <h3>题库 × 划词搜题</h3>
+            <p>自定义题库配置，兼容 TikuAdapter 第三方题库，划词即搜，题库缓存秒级响应。</p>
+          </li>
+          <li class="feature-card card" data-reveal="card-pop" style="--i:4">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div>
+            <h3>倍速与音量</h3>
+            <p>各平台视频倍速自由调节，支持屏蔽倍速限制，音量随课程记忆。</p>
+          </li>
+          <li class="feature-card card" data-reveal="card-pop" style="--i:5">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+            <h3>隐形反检测</h3>
+            <p>在页面加载的最初一刻就悄悄介入，全程把状态伪装成正常观看的样子，低调运行，不留痕迹。</p>
+          </li>
+          <li class="feature-card card" data-reveal="card-pop" style="--i:6">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18"/><path d="M9 21V9"/></svg></div>
+            <h3>悬浮窗面板</h3>
+            <p>操作面板随页面悬浮，状态一目了然；移动端同样适配，手机也能用。</p>
+          </li>
+          <li class="feature-card card" data-reveal="card-pop" style="--i:7">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></div>
+            <h3>贴心小细节</h3>
+            <p>解除页面复制限制、禁止骚扰弹窗、系统通知提醒、自动检测更新。</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= v5.0.0 更新亮点（深色电影感） ================= -->
+    <section class="section section-dark" id="whatsnew">
+      <div class="dark-glow" aria-hidden="true"></div>
+      <div class="container">
+        <div class="section-head" data-reveal="head">
+          <span class="section-eyebrow">What's New</span>
+          <h2 class="section-title on-dark"><span class="hl-mask"><span class="hl">v5.0.0</span></span><span class="hl-mask"><span class="hl text-grad">答题引擎，全面进化</span></span></h2>
+          <p class="section-sub on-dark-sub">一次以"答得更准"为核心的大版本更新。</p>
+        </div>
+        <ul class="whatsnew-grid">
+          <li class="wn-card" data-reveal="slide-alt" style="--i:0">
+            <span class="wn-num">01</span>
+            <h3>全新答题算法</h3>
+            <p>单选 / 多选 / 判断 / 填空匹配逻辑重写，精确匹配、去标点、多片段答案适配，命中率显著提升。</p>
+          </li>
+          <li class="wn-card" data-reveal="slide-alt" style="--i:1">
+            <span class="wn-num">02</span>
+            <h3>AI 标注</h3>
+            <p>搜题结果自动标注来源与置信度，AI 答案与题库答案一眼可辨。</p>
+          </li>
+          <li class="wn-card" data-reveal="slide-alt" style="--i:2">
+            <span class="wn-num">03</span>
+            <h3>自定义答题器</h3>
+            <p>开放 AnswererWrapper 配置，接入你自己的题库服务，想怎么答，由你定义。</p>
+          </li>
+          <li class="wn-card" data-reveal="slide-alt" style="--i:3">
+            <span class="wn-num">04</span>
+            <h3>可视化辅助 + 移动端</h3>
+            <p>桌面端软件辅助实现可视化点击、模拟输入填空；悬浮面板全面适配手机屏幕。</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= 桌面版（深色延续） ================= -->
+    <section class="section section-dark section-dark-2" id="desktop">
+      <div class="dark-glow dark-glow-2" aria-hidden="true"></div>
+      <div class="container desktop-inner">
+        <div class="desktop-copy" data-reveal="head">
+          <span class="section-eyebrow">Desktop</span>
+          <h2 class="section-title on-dark"><span class="hl-mask"><span class="hl">鸿鹄易学 · 桌面版</span></span><span class="hl-mask"><span class="hl text-grad">一键刷课工作站</span></span></h2>
+          <p class="section-sub on-dark-sub">v3.0.0 · Windows / macOS / Linux。当单个浏览器不够用时，桌面版给你一支"浏览器舰队"。</p>
+          <ul class="desktop-points" style="--dl:.35s">
+            <li data-reveal="slide-left" style="--i:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>多账号批量刷课</strong><span>浏览器多开分身，独立登录态、分组、拖拽、标签管理</span></div></li>
+            <li data-reveal="slide-left" style="--i:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>自动登录 · 验证码破解</strong><span>OCR 图形验证码 + 滑块自动识别，覆盖四大平台</span></div></li>
+            <li data-reveal="slide-left" style="--i:2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>实时画面监控</strong><span>WebRTC 屏幕共享，每个浏览器实例的运行状态一目了然</span></div></li>
+            <li data-reveal="slide-left" style="--i:3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>无人值守</strong><span>无头模式后台运行，开机自启，自动更新</span></div></li>
+            <li data-reveal="slide-left" style="--i:4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>数据安全</strong><span>配置经 AES-256-GCM 加密，密钥存放于系统密钥链，不出本机</span></div></li>
+            <li data-reveal="slide-left" style="--i:5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>开箱即用</strong><span>内置定制 Chrome，自动安装鸿鹄易学扩展</span></div></li>
+          </ul>
+          <div class="hero-cta">
+            <a class="btn btn-primary" data-reveal="pop" style="--dl:.9s" href="https://gitcode.com/honghutech/honghueasystudy/releases" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+              前往 GitCode 下载
+            </a>
+          </div>
+        </div>
+
+        <!-- 纯 CSS 桌面应用窗口 mockup -->
+        <div class="desktop-visual" data-reveal="slide-right" style="--dl:.15s" aria-hidden="true">
+          <div class="app-mockup" data-parallax="0.08" data-tilt="4">
+            <div class="am-bar">
+              <span class="bm-dot" style="background:#FF5F57"></span>
+              <span class="bm-dot" style="background:#FEBC2E"></span>
+              <span class="bm-dot" style="background:#28C840"></span>
+              <span class="am-title">鸿鹄易学 · 桌面版</span>
+            </div>
+            <div class="am-body">
+              <div class="am-side">
+                <i class="am-side-item active"></i>
+                <i class="am-side-item"></i>
+                <i class="am-side-item"></i>
+                <i class="am-side-item"></i>
+              </div>
+              <div class="am-main">
+                <div class="am-row">
+                  <div class="am-instance"><i class="am-dot ok"></i>账号 A · 超星<em>学习中 82%</em><span class="am-prog" style="--p:82%"><i></i></span></div>
+                  <div class="am-instance"><i class="am-dot ok"></i>账号 B · 智慧树<em>答题中 64%</em><span class="am-prog" style="--p:64%"><i></i></span></div>
+                </div>
+                <div class="am-row">
+                  <div class="am-instance"><i class="am-dot run"></i>账号 C · 职教云<em>排队中</em><span class="am-prog" style="--p:18%"><i></i></span></div>
+                  <div class="am-instance"><i class="am-dot ok"></i>账号 D · 雨课堂<em>学习中 91%</em><span class="am-prog" style="--p:91%"><i></i></span></div>
+                </div>
+                <div class="am-monitor">
+                  <span class="am-mon-label">实时监控</span>
+                  <div class="am-mon-grid"><i></i><i></i><i></i><i></i></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 双端协同 ================= -->
+    <section class="section" id="synergy">
+      <div class="container">
+        <div class="section-head center" data-reveal="head">
+          <span class="section-eyebrow">Synergy</span>
+          <h2 class="section-title"><span class="hl-mask"><span class="hl">插件 × 桌面端，<span class="text-grad">天生一对</span></span></span></h2>
+          <p class="section-sub center-sub">桌面版首次启动即自动释放内置 MV3 扩展，注入每一个浏览器实例，并在新版本发布时自动覆盖升级——你什么都不用装。</p>
+        </div>
+        <div class="synergy-flow">
+          <div class="sy-node" data-reveal="pop" style="--dl:0s">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg></div>
+            <strong>桌面版启动</strong><span>释放内置扩展</span>
+          </div>
+          <div class="sy-arrow" data-reveal="arrow-draw" style="--dl:.18s" aria-hidden="true"><svg viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path pathLength="1" d="M2 12h40"/><path pathLength="1" d="M34 5l8 7-8 7"/></svg></div>
+          <div class="sy-node" data-reveal="pop" style="--dl:.36s">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4L10 14"/><path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6"/></svg></div>
+            <strong>自动注入</strong><span>每个浏览器实例</span>
+          </div>
+          <div class="sy-arrow" data-reveal="arrow-draw" style="--dl:.54s" aria-hidden="true"><svg viewBox="0 0 48 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path pathLength="1" d="M2 12h40"/><path pathLength="1" d="M34 5l8 7-8 7"/></svg></div>
+          <div class="sy-node" data-reveal="pop" style="--dl:.72s">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg></div>
+            <strong>自动升级</strong><span>永远保持最新</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 下载 ================= -->
+    <section class="section section-soft" id="download">
+      <div class="container">
+        <div class="section-head center" data-reveal="head">
+          <span class="section-eyebrow">Download</span>
+          <h2 class="section-title"><span class="hl-mask"><span class="hl">现在开始，<span class="text-grad">把网课交给鸿鹄易学</span></span></span></h2>
+        </div>
+        <div class="download-grid">
+          <div class="dl-card card" data-reveal="card-rise" style="--i:0">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17"/><path d="M3.5 15h17"/><path d="M12 3a15 15 0 0 1 0 18"/><path d="M12 3a15 15 0 0 0 0 18"/></svg></div>
+            <h3>浏览器插件</h3>
+            <span class="badge">v5.0.0 · MV3 · Chrome 111+</span>
+            <p>MV3 浏览器扩展，已上架 Microsoft Edge 加载项商店，一键安装。</p>
+            <a class="btn btn-primary" href="https://microsoftedge.microsoft.com/addons/detail/ocidllankdjkcieeefhgmgnkppcbdfhh" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+              Edge 商店安装
+            </a>
+            <div class="dl-alts">
+              <a class="dl-alt" href="https://gitcode.com/honghutech/honghueasystudy/releases" target="_blank" rel="noopener">GitCode Releases →</a>
+              <a class="dl-alt" href="https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases" target="_blank" rel="noopener">GitHub Releases →</a>
+            </div>
+            <details class="dl-manual">
+              <summary>其他浏览器？手动安装</summary>
+              <ol>
+                <li>从 Releases 页面下载 <code>extension.zip</code> 并解压</li>
+                <li>打开浏览器扩展管理页，开启「开发者模式」</li>
+                <li>选择「加载已解压的扩展程序」，指向解压出的文件夹即可</li>
+              </ol>
+            </details>
+          </div>
+          <div class="dl-card card" data-reveal="card-rise" style="--i:1">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg></div>
+            <h3>桌面版</h3>
+            <span class="badge">v3.0.0 · Win / macOS / Linux</span>
+            <p>一键刷课、多账号分身、自动登录、实时监控的工作站级体验，内置 Chrome 开箱即用。</p>
+            <a class="btn btn-primary" href="https://gitcode.com/honghutech/honghueasystudy/releases" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+              GitCode Releases 下载
+            </a>
+            <a class="dl-alt" href="https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases" target="_blank" rel="noopener">GitHub Releases →</a>
+            <details class="dl-manual">
+              <summary>查看系统要求</summary>
+              <ol>
+                <li>Windows 10+ / macOS 12+ / 主流 Linux 发行版</li>
+                <li>从 Releases 页面下载对应平台的安装包</li>
+                <li>首次启动自动初始化内置 Chrome 与扩展</li>
+              </ol>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= FAQ ================= -->
+    <section class="section" id="faq">
+      <div class="container container-narrow">
+        <div class="section-head center" data-reveal="head">
+          <span class="section-eyebrow">FAQ</span>
+          <h2 class="section-title"><span class="hl-mask"><span class="hl">常见问题</span></span></h2>
+        </div>
+        <div class="faq-list">
+          <details class="faq-item" name="faq" data-reveal="faq" style="--i:0">
+            <summary>支持哪些网课平台？</summary>
+            <p>目前支持超星学习通、知到·智慧树、职教云、智慧职教（icve）、雨课堂、中国大学MOOC、U校园七大平台，覆盖视频学习、阅读任务、作业与考试等场景。</p>
+          </details>
+          <details class="faq-item" name="faq" data-reveal="faq" style="--i:1">
+            <summary>AI 答题如何配置？</summary>
+            <p>插件兼容 OpenAI 格式接口，支持 DeepSeek、月之暗面 Kimi、智谱、硅基流动、百炼云等主流模型，填入 API Key 即可使用；同时也支持自定义题库与 TikuAdapter 第三方题库。</p>
+          </details>
+          <details class="faq-item" name="faq" data-reveal="faq" style="--i:2">
+            <summary>手机上能用吗？</summary>
+            <p>可以。悬浮操作面板已全面适配移动端屏幕，配合支持扩展的移动浏览器即可使用。</p>
+          </details>
+          <details class="faq-item" name="faq" data-reveal="faq" style="--i:3">
+            <summary>我的数据安全吗？</summary>
+            <p>桌面版所有配置均经 AES-256-GCM 加密存储，加密密钥保存在操作系统密钥链中；所有数据留在本机，不经过任何第三方服务器。</p>
+          </details>
+          <details class="faq-item" name="faq" data-reveal="faq" style="--i:4">
+            <summary>桌面版和浏览器插件是什么关系？</summary>
+            <p>插件是核心功能本体；桌面版是多开管理与无人值守的运行环境，内置了同款插件并自动安装、自动升级。只用浏览器装插件即可，需要多账号批量时再上桌面版。</p>
+          </details>
+          <details class="faq-item" name="faq" data-reveal="faq" style="--i:5">
+            <summary>它是开源的吗？</summary>
+            <p>是。鸿鹄易学由鸿鹄科技开发，以 MIT 协议开源，完整代码托管在 GitCode 与 GitHub，欢迎 Star 与贡献。</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ================= Footer ================= -->
+  <footer class="footer">
+    <div class="container footer-inner" data-reveal="fade">
+      <div class="footer-brand">
+        <img src="assets/img/icon300w.png" alt="鸿鹄易学 Logo" width="40" height="40">
+        <div>
+          <strong>鸿鹄易学</strong>
+          <span>鸿鹄之志，一举千里。</span>
+        </div>
+      </div>
+      <nav class="footer-links" aria-label="页脚导航">
+        <a href="https://microsoftedge.microsoft.com/addons/detail/ocidllankdjkcieeefhgmgnkppcbdfhh" target="_blank" rel="noopener">Edge 商店</a>
+        <a href="https://gitcode.com/honghutech/honghueasystudy" target="_blank" rel="noopener">GitCode 仓库</a>
+        <a href="https://github.com/HONGHUTECHNOLOGY/honghueasystudy" target="_blank" rel="noopener">GitHub 仓库</a>
+        <a href="#download" data-scroll>下载</a>
+        <a href="#faq" data-scroll>常见问题</a>
+        <a href="#main" data-scroll>回到顶部</a>
+      </nav>
+      <p class="footer-legal">
+        由 <a href="https://honghutech.eu.org" target="_blank" rel="noopener">鸿鹄科技</a> 开发 · <a href="https://honghutech.eu.org" target="_blank" rel="noopener">honghutech.eu.org</a> · MIT 协议开源<br>
+        本工具仅供学习与技术交流使用，请遵守所在学校的规章制度。
+      </p>
+    </div>
+  </footer>
+
+  <noscript><style>[data-reveal]:not(.in){opacity:1 !important}[data-reveal] .hl{opacity:1 !important;transform:none !important;filter:none !important}[data-reveal] .section-eyebrow,[data-reveal] .section-sub{opacity:1 !important;transform:none !important}[data-reveal="head"] .section-eyebrow::before,[data-reveal="head"] .section-eyebrow::after{transform:none !important}.sy-arrow svg path{stroke-dashoffset:0 !important}</style></noscript>
+
+  <button class="to-top" id="toTop" type="button" aria-label="回到顶部">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+  </button>
+
+</body>
+</html>

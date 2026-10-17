@@ -1,0 +1,527 @@
+/* ============================================================
+   鸿鹄易学官网 · motion.css
+   入场动画体系 v2：每类组件独立动画语言
+   机制：静态初始态 opacity:0 + .in 后 animation + fill-mode: backwards
+   （不占用常态 transform，hover 效果零冲突）
+   2.0 · 更克制的幅度，更细腻的节奏
+   ============================================================ */
+
+:root {
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ---------- 通用初始隐藏 ---------- */
+[data-reveal]:not(.in) {
+  opacity: 0;
+}
+
+/* ============ fade：轻上浮（徽章 / 统计 / Footer） ============ */
+[data-reveal="fade"].in {
+  animation: fade-in 0.85s var(--ease-apple) backwards;
+  animation-delay: var(--dl, 0s);
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============ pop：弹性缩放（按钮 / 协同节点） ============ */
+[data-reveal="pop"].in {
+  animation: pop-in 0.7s var(--ease-spring) backwards;
+  animation-delay: calc(var(--dl, 0s) + min(var(--i, 0), 8) * var(--stag, 80ms));
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.84);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============ lines / head：行遮罩揭示（子元素 transition） ============ */
+.hl-mask {
+  display: block;
+  overflow: hidden;
+  /* 给中文降部留出空间，避免遮罩裁切 */
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
+}
+
+.hl {
+  display: block;
+  transform: translateY(112%);
+  transition: transform 0.95s var(--ease-apple);
+}
+
+/* lines：Hero 大标题 / 副标题（整体延迟 --dl，行间错峰 120ms） */
+[data-reveal="lines"] .hl {
+  transition-delay: var(--dl, 0s);
+}
+[data-reveal="lines"] .hl-mask:nth-child(2) .hl {
+  transition-delay: calc(var(--dl, 0s) + 0.12s);
+}
+[data-reveal="lines"] .hl-mask:nth-child(3) .hl {
+  transition-delay: calc(var(--dl, 0s) + 0.24s);
+}
+[data-reveal="lines"].in .hl {
+  transform: translateY(0);
+}
+
+/* head：section 标题区（eyebrow → 标题行 → 副标题依次揭示） */
+[data-reveal="head"] .section-eyebrow {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.7s var(--ease-apple), transform 0.7s var(--ease-apple);
+  transition-delay: 0.05s;
+}
+
+[data-reveal="head"] .section-eyebrow::before,
+[data-reveal="head"] .section-eyebrow::after {
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.8s var(--ease-apple) 0.15s;
+}
+
+[data-reveal="head"] .section-eyebrow::after {
+  transform-origin: right center;
+}
+
+[data-reveal="head"] .hl {
+  transition-delay: 0.15s;
+}
+[data-reveal="head"] .hl-mask:nth-child(2) .hl {
+  transition-delay: 0.27s;
+}
+[data-reveal="head"] .section-sub {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.85s var(--ease-apple), transform 0.85s var(--ease-apple);
+  transition-delay: 0.3s;
+}
+[data-reveal="head"].in .section-eyebrow,
+[data-reveal="head"].in .section-sub {
+  opacity: 1;
+  transform: none;
+}
+[data-reveal="head"].in .section-eyebrow::before,
+[data-reveal="head"].in .section-eyebrow::after {
+  transform: scaleX(1);
+}
+[data-reveal="head"].in .hl {
+  transform: translateY(0);
+}
+
+/* ============ hero-3d：Hero 浏览器 mockup 3D 旋转滑入 ============ */
+[data-reveal="hero-3d"].in {
+  animation: hero3d-in 1.05s var(--ease-apple) backwards;
+  animation-delay: var(--dl, 0s);
+}
+@keyframes hero3d-in {
+  from {
+    opacity: 0;
+    transform: perspective(1200px) rotateY(-14deg) rotateX(4deg) translateX(52px) scale(0.95);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+/* ============ card-3d：平台卡片奇偶交替 3D 翻入 ============ */
+[data-reveal="card-3d"].in {
+  animation: card3d-in-l 0.85s var(--ease-apple) backwards;
+  animation-delay: calc(var(--dl, 0s) + min(var(--i, 0), 8) * 70ms);
+}
+[data-reveal="card-3d"].in:nth-child(even) {
+  animation-name: card3d-in-r;
+}
+@keyframes card3d-in-l {
+  from {
+    opacity: 0;
+    transform: perspective(900px) rotateY(8deg) translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes card3d-in-r {
+  from {
+    opacity: 0;
+    transform: perspective(900px) rotateY(-8deg) translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============ card-pop：功能卡浮现 + 图标延迟弹出 ============ */
+[data-reveal="card-pop"].in {
+  animation: cardpop-in 0.8s var(--ease-apple) backwards;
+  animation-delay: calc(var(--dl, 0s) + min(var(--i, 0), 8) * 80ms);
+}
+[data-reveal="card-pop"].in .icon-bubble {
+  animation: icon-pop 0.6s var(--ease-spring) backwards;
+  animation-delay: calc(var(--dl, 0s) + min(var(--i, 0), 8) * 80ms + 0.35s);
+}
+@keyframes cardpop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.93) translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes icon-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.45);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============ slide-alt：whatsnew 卡片左右交替滑入 + blur ============ */
+[data-reveal="slide-alt"].in {
+  animation: slidealt-in-l 0.9s var(--ease-apple) backwards;
+  animation-delay: calc(var(--dl, 0s) + min(var(--i, 0), 8) * 90ms);
+}
+[data-reveal="slide-alt"].in:nth-child(even) {
+  animation-name: slidealt-in-r;
+}
+@keyframes slidealt-in-l {
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+    filter: blur(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes slidealt-in-r {
+  from {
+    opacity: 0;
+    transform: translateX(32px);
+    filter: blur(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+/* ============ slide-left：桌面端卖点逐条滑入 ============ */
+[data-reveal="slide-left"].in {
+  animation: slideleft-in 0.75s var(--ease-apple) backwards;
+  animation-delay: calc(var(--dl, 0s) + min(var(--i, 0), 8) * 90ms);
+}
+@keyframes slideleft-in {
+  from {
+    opacity: 0;
+    transform: translateX(-26px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============ slide-right：桌面端 mockup 滑入 ============ */
+[data-reveal="slide-right"].in {
+  animation: slideright-in 1.05s var(--ease-apple) backwards;
+  animation-delay: var(--dl, 0s);
+}
+@keyframes slideright-in {
+  from {
+    opacity: 0;
+    transform: translateX(60px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+/* ============ card-rise：下载卡升起 ============ */
+[data-reveal="card-rise"].in {
+  animation: cardrise-in 0.9s var(--ease-apple) backwards;
+  animation-delay: calc(var(--dl, 0s) + min(var(--i, 0), 8) * 120ms);
+}
+@keyframes cardrise-in {
+  from {
+    opacity: 0;
+    transform: translateY(38px) scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============ faq：条目级联上浮 ============ */
+[data-reveal="faq"].in {
+  animation: faq-in 0.75s var(--ease-apple) backwards;
+  animation-delay: calc(var(--dl, 0s) + min(var(--i, 0), 8) * 70ms);
+}
+@keyframes faq-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============ arrow-draw：协同箭头描边生长 ============ */
+.sy-arrow svg path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 0.6s var(--ease-apple);
+}
+[data-reveal="arrow-draw"].in svg path {
+  stroke-dashoffset: 0;
+  transition-delay: var(--dl, 0s);
+}
+/* 描边完成后再启动箭头脉动 */
+[data-reveal="arrow-draw"].in svg path:last-child {
+  animation: arrow-nudge 2.2s var(--ease-apple) 1.2s infinite;
+}
+@keyframes arrow-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+}
+
+/* ============================================================
+   装饰动画（沿用并精修）
+   ============================================================ */
+
+/* ---------- Hero 光晕漂浮 ---------- */
+.hero-glow {
+  animation: hero-drift 14s ease-in-out infinite alternate;
+}
+@keyframes hero-drift {
+  0% {
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  100% {
+    transform: translateX(-48%) translateY(24px) scale(1.05);
+  }
+}
+
+/* ---------- 平台徽章悬浮 ---------- */
+.pf-badge {
+  transition: transform 0.5s var(--ease-apple), box-shadow 0.5s var(--ease-apple);
+}
+
+/* ---------- 锚点滚动偏移（避开固定导航） ---------- */
+section[id] {
+  scroll-margin-top: calc(var(--nav-h) + 16px);
+}
+
+/* ============================================================
+   移动端：blur 动画换 lite 变体（省电 + 低端机流畅）
+   ============================================================ */
+@media (max-width: 767px) {
+  [data-reveal="hero-3d"].in {
+    animation-name: hero3d-in-lite;
+  }
+  [data-reveal="slide-alt"].in {
+    animation-name: slidealt-in-l-lite;
+  }
+  [data-reveal="slide-alt"].in:nth-child(even) {
+    animation-name: slidealt-in-r-lite;
+  }
+  [data-reveal="slide-right"].in {
+    animation-name: slideright-in-lite;
+  }
+}
+@keyframes hero3d-in-lite {
+  from {
+    opacity: 0;
+    transform: perspective(1200px) rotateY(-8deg) translateX(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes slidealt-in-l-lite {
+  from {
+    opacity: 0;
+    transform: translateX(-22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes slidealt-in-r-lite {
+  from {
+    opacity: 0;
+    transform: translateX(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes slideright-in-lite {
+  from {
+    opacity: 0;
+    transform: translateX(26px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ============================================================
+   无障碍：减少动态（全量降级）
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  [data-reveal]:not(.in) {
+    opacity: 1;
+  }
+
+  [data-reveal].in,
+  [data-reveal].in .icon-bubble {
+    animation: none;
+    opacity: 1;
+  }
+
+  .hl {
+    transform: none;
+    transition: none;
+  }
+
+  [data-reveal="head"] .section-eyebrow,
+  [data-reveal="head"] .section-sub {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  [data-reveal="head"] .section-eyebrow::before,
+  [data-reveal="head"] .section-eyebrow::after {
+    transform: none;
+    transition: none;
+  }
+
+  .sy-arrow svg path {
+    stroke-dashoffset: 0;
+    transition: none;
+  }
+
+  [data-reveal="arrow-draw"].in svg path:last-child {
+    animation: none;
+  }
+
+  .hero-glow,
+  .dark-glow,
+  .bm-progress i,
+  .bm-scan i,
+  .bm-play::after,
+  .am-dot.run,
+  .am-mon-grid i,
+  .am-mon-grid i::after,
+  .am-mon-label::before,
+  .bm-panel-head::after,
+  .badge .dot::after,
+  .sy-arrow::after,
+  .hps-track,
+  .hero-title .text-grad,
+  .section-title .text-grad {
+    animation: none;
+  }
+
+  .sy-arrow::after {
+    display: none;
+  }
+
+  .hps-group[aria-hidden="true"] {
+    display: none;
+  }
+
+  .hps-track {
+    transform: none;
+  }
+
+  .btn::after {
+    display: none;
+  }
+
+  .card,
+  .wn-card,
+  .btn,
+  .browser-mockup,
+  .app-mockup,
+  .sy-node,
+  .to-top,
+  .nav-brand img {
+    transition: none;
+  }
+
+  .card:hover,
+  .wn-card:hover,
+  .btn:hover,
+  .sy-node:hover,
+  .to-top:hover {
+    transform: none;
+  }
+
+  .feature-card:hover .icon-bubble,
+  .platform-card:hover .pf-badge,
+  .platform-card:hover .pf-index,
+  .nav-brand:hover img,
+  .to-top:hover svg {
+    transform: none;
+  }
+
+  .nav-links a:not(.btn)::after,
+  .footer-links a::after {
+    transition: none;
+  }
+
+  .faq-item::details-content,
+  .dl-manual::details-content {
+    transition: none;
+  }
+
+  .faq-item[open] p {
+    animation: none;
+  }
+}

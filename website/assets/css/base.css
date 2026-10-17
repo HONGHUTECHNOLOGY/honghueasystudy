@@ -1,0 +1,592 @@
+/* ============================================================
+   鸿鹄易学官网 · base.css
+   设计系统：CSS 变量 / reset / 排版 / 按钮 / 徽章 / 卡片
+   2.0 · 以「精密光感」为核心的细节升级
+   ============================================================ */
+
+:root {
+  /* 品牌色（取自 Logo 蓝色渐变） */
+  --brand: #1E6FFF;
+  --brand-deep: #0B47C4;
+  --brand-bright: #3D87FF;
+  --brand-sky: #7DB4FF;
+  --brand-grad: linear-gradient(135deg, #1E6FFF 0%, #7DB4FF 100%);
+  --brand-grad-soft: linear-gradient(135deg, rgba(30, 111, 255, 0.14) 0%, rgba(125, 180, 255, 0.14) 100%);
+
+  /* 浅色基底 */
+  --bg: #FFFFFF;
+  --bg-soft: #F5F7FB;
+  --bg-card: #FFFFFF;
+  --bg-glass: rgba(255, 255, 255, 0.72);
+
+  /* 深色电影感区段 */
+  --dark-1: #0A1128;
+  --dark-2: #101B3C;
+  --dark-3: #070D21;
+  --dark-card: rgba(255, 255, 255, 0.055);
+  --dark-border: rgba(255, 255, 255, 0.11);
+  --dark-border-lit: rgba(125, 180, 255, 0.42);
+
+  /* 文字（苹果经典） */
+  --text: #1D1D1F;
+  --text-secondary: #6B6B73;
+  --text-tertiary: #8E8E96;
+  --text-on-dark: #F5F7FA;
+  --text-on-dark-secondary: rgba(245, 247, 250, 0.62);
+
+  /* 细线语言 */
+  --line: rgba(13, 26, 60, 0.075);
+  --line-strong: rgba(13, 26, 60, 0.12);
+
+  /* 阴影语言：柔、薄、多层 */
+  --shadow-xs: 0 1px 2px rgba(13, 26, 60, 0.05);
+  --shadow-sm: 0 0 0 1px var(--line), 0 1px 2px rgba(13, 26, 60, 0.04),
+    0 6px 16px -10px rgba(13, 26, 60, 0.09);
+  --shadow-md: 0 0 0 1px var(--line), 0 1px 2px rgba(13, 26, 60, 0.04),
+    0 10px 24px -18px rgba(13, 26, 60, 0.18);
+  --shadow-lg: 0 0 0 1px rgba(13, 26, 60, 0.06), 0 2px 4px rgba(13, 26, 60, 0.04),
+    0 18px 40px -24px rgba(13, 26, 60, 0.22);
+  --shadow-brand: 0 1px 0 rgba(255, 255, 255, 0.24) inset,
+    0 1px 2px rgba(11, 71, 196, 0.24), 0 8px 20px -8px rgba(30, 111, 255, 0.55),
+    0 16px 40px -18px rgba(30, 111, 255, 0.5);
+
+  /* 圆角 */
+  --radius-card: 24px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+  --radius-pill: 999px;
+
+  /* 布局 */
+  --max-w: 1120px;
+  --nav-h: 64px;
+
+  /* 动效曲线（苹果感） */
+  --ease-apple: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* 字体栈 */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC",
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "JetBrains Mono", ui-monospace,
+    "Menlo", "Consolas", monospace;
+}
+
+/* ---------- Reset ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* ---------- Lenis 平滑滚动配套规则（官方要求，勿删） ----------
+   注意：此处不能给 html 设置全局 scroll-behavior: smooth，
+   否则会与 Lenis 的逐帧滚动互相冲突、导致滚动异常；
+   锚点的平滑滚动已由 JS 指定（有 Lenis 走 Lenis，无 Lenis 走原生 smooth）。 */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.lenis.lenis-scrolling iframe {
+  pointer-events: none;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 17px;
+  line-height: 1.72;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* ---------- 极细颗粒质感（全局一层，安静地增加“材料感”） ---------- */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  pointer-events: none;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.86' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+}
+
+::selection {
+  background: rgba(30, 111, 255, 0.18);
+  color: var(--text);
+}
+
+/* ---------- 键盘焦点 ---------- */
+:focus-visible {
+  outline: 2px solid rgba(30, 111, 255, 0.6);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.section-dark :focus-visible,
+.footer :focus-visible {
+  outline-color: rgba(125, 180, 255, 0.8);
+}
+
+/* ---------- 跳过导航（无障碍） ---------- */
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  z-index: 300;
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  background: var(--text);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transform: translate(-50%, -160%);
+  transition: transform 0.3s var(--ease-apple);
+}
+
+.skip-link:focus-visible {
+  transform: translate(-50%, 0);
+}
+
+/* ---------- 排版 ---------- */
+.section-title {
+  font-size: clamp(1.9rem, 4.2vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.14;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.section-sub {
+  margin-top: 16px;
+  font-size: clamp(1rem, 1.6vw, 1.18rem);
+  line-height: 1.68;
+  color: var(--text-secondary);
+  max-width: 640px;
+  text-wrap: balance;
+}
+.section-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 15px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: var(--brand-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.section-eyebrow::before {
+  content: "";
+  width: 24px;
+  height: 1px;
+  flex: none;
+  background: linear-gradient(90deg, rgba(30, 111, 255, 0), rgba(30, 111, 255, 0.75));
+  -webkit-text-fill-color: initial;
+}
+
+.section-head.center .section-eyebrow::after {
+  content: "";
+  width: 24px;
+  height: 1px;
+  flex: none;
+  background: linear-gradient(270deg, rgba(30, 111, 255, 0), rgba(30, 111, 255, 0.75));
+}
+
+.text-grad {
+  display: inline-block;
+  background: var(--brand-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* 渐变文字缓慢流动：只在强调标题上使用，幅度很小 */
+.hero-title .text-grad,
+.section-title .text-grad {
+  background-size: 180% 180%;
+  animation: grad-flow 14s ease-in-out infinite;
+}
+
+@keyframes grad-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* ---------- 布局容器 ---------- */
+.container {
+  width: 100%;
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ---------- 按钮 ---------- */
+.btn {
+  --mx: 0px;
+  --my: 0px;
+  --lift: 0px;
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 28px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translate3d(var(--mx), calc(var(--my) - var(--lift)), 0);
+  transition: transform 0.32s var(--ease-apple), box-shadow 0.4s var(--ease-apple),
+    background-color 0.4s var(--ease-apple), border-color 0.4s var(--ease-apple),
+    color 0.3s var(--ease-apple);
+  will-change: transform;
+}
+
+.btn > * {
+  position: relative;
+  z-index: 1;
+}
+
+.btn svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+/* 掠过按钮的高光 */
+.btn::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 45%;
+  z-index: 0;
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.32) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: translate3d(-180%, 0, 0) skewX(-16deg);
+  opacity: 0;
+  transition: transform 0.9s var(--ease-apple), opacity 0.4s;
+  pointer-events: none;
+}
+
+.btn:hover::after {
+  transform: translate3d(320%, 0, 0) skewX(-16deg);
+  opacity: 1;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, #3b84ff 0%, #1e6fff 52%, #1a63f0 100%);
+  color: #fff;
+  box-shadow: var(--shadow-brand);
+}
+
+.btn-primary:hover {
+  --lift: 2px;
+  background: linear-gradient(180deg, #4a8eff 0%, #2a76ff 52%, #1e6fff 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 2px 4px rgba(11, 71, 196, 0.28), 0 12px 26px -8px rgba(30, 111, 255, 0.62),
+    0 22px 52px -20px rgba(30, 111, 255, 0.55);
+}
+
+.btn-primary:active {
+  --lift: 0px;
+  transform: translate3d(var(--mx), var(--my), 0) scale(0.985);
+}
+
+/* 磁吸时缩短跟手延迟，离开时恢复苹果式缓动 */
+.btn.is-magnet {
+  transition: transform 0.12s ease-out, box-shadow 0.4s var(--ease-apple),
+    background-color 0.4s var(--ease-apple), border-color 0.4s var(--ease-apple),
+    color 0.3s var(--ease-apple);
+}
+
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--brand);
+  box-shadow: inset 0 0 0 1px rgba(30, 111, 255, 0.13), 0 1px 2px rgba(13, 26, 60, 0.04);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.btn-ghost:hover {
+  --lift: 2px;
+  background: rgba(30, 111, 255, 0.075);
+  box-shadow: inset 0 0 0 1px rgba(30, 111, 255, 0.24), 0 8px 20px -12px rgba(30, 111, 255, 0.4);
+}
+
+.btn-dark {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-on-dark);
+  border: 1px solid var(--dark-border);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.btn-dark:hover {
+  --lift: 2px;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ---------- 徽章 ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--brand);
+  box-shadow: inset 0 0 0 1px rgba(30, 111, 255, 0.12), 0 2px 8px -4px rgba(30, 111, 255, 0.24);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+  white-space: nowrap;
+}
+
+.badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 状态点 */
+.badge .dot {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.13);
+}
+
+.badge .dot::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: inherit;
+  animation: dot-ping 2.8s var(--ease-apple) infinite;
+}
+
+@keyframes dot-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  60%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+/* ---------- 卡片 ---------- */
+.card {
+  position: relative;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-md);
+  transition: transform 0.5s var(--ease-apple), box-shadow 0.5s var(--ease-apple);
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ---------- 指针光斑（由 JS 注入 --mx / --my） ---------- */
+.spot {
+  position: relative;
+}
+
+.spot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 1px;
+  border-radius: inherit;
+  background: radial-gradient(
+    240px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(30, 111, 255, 0.55),
+    rgba(30, 111, 255, 0) 62%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.45s var(--ease-apple);
+  pointer-events: none;
+}
+
+.spot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    300px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(30, 111, 255, 0.065),
+    rgba(30, 111, 255, 0) 64%
+  );
+  opacity: 0;
+  transition: opacity 0.45s var(--ease-apple);
+  pointer-events: none;
+}
+
+.spot:hover::before,
+.spot:hover::after {
+  opacity: 1;
+}
+
+.spot > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* 深色卡片的光斑 */
+.wn-card.spot::before {
+  background: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(125, 180, 255, 0.65),
+    rgba(125, 180, 255, 0) 62%
+  );
+}
+
+.wn-card.spot::after {
+  background: radial-gradient(
+    320px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(61, 135, 255, 0.11),
+    rgba(61, 135, 255, 0) 64%
+  );
+}
+
+/* ---------- 图标泡 ---------- */
+.icon-bubble {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: linear-gradient(150deg, #4b8dff 0%, #1e6fff 55%, #1a5fe0 100%);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 1px 2px rgba(11, 71, 196, 0.3),
+    0 10px 22px -10px rgba(30, 111, 255, 0.6);
+  flex: none;
+  transition: transform 0.5s var(--ease-apple), box-shadow 0.5s var(--ease-apple);
+}
+
+.icon-bubble::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 55%);
+  pointer-events: none;
+}
+
+.icon-bubble svg {
+  width: 26px;
+  height: 26px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- 滚动条（桌面端，低调） ---------- */
+@media (min-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+    background-color: rgba(13, 26, 60, 0.18);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(13, 26, 60, 0.3);
+  }
+}
