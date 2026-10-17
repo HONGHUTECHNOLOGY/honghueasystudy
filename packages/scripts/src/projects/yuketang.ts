@@ -1,4 +1,5 @@
 import { $, $elements, Project, Script, $message, $modal, $el, h, cors, $ui } from 'easy-us';
+import { trustedDispatch, OrigEvent } from '../utils/safe-click';
 import { $msg, playMedia } from '../utils';
 import { request } from '@ocsjs/core';
 import { restudy, volume } from '../utils/configs';
@@ -203,7 +204,7 @@ export const YKTProject = Project.create({
 					}
 
 					// 触发输入事件
-					textarea.dispatchEvent(new Event('input', { bubbles: true }));
+					trustedDispatch(textarea, new OrigEvent('input', { bubbles: true, composed: true }));
 
 					const submit_btn = await waitForElement('button.submitComment');
 					submit_btn?.click();

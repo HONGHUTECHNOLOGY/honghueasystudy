@@ -1,3 +1,4 @@
+import { trustedDispatch, OrigEvent } from '../utils/safe-click';
 import {
 	$,
 	SimplifyWorkResult,
@@ -1032,7 +1033,7 @@ function aiWork({ answererWrappers, period, thread, answerSeparators }: CommonWo
 						// @ts-ignore
 						option.value = answer.trim();
 						await $.sleep(100);
-						option.dispatchEvent(new Event('input', { bubbles: true }));
+						trustedDispatch(option, new OrigEvent('input', { bubbles: true, composed: true }));
 						await $.sleep(100);
 						option.blur();
 						await $.sleep(100);

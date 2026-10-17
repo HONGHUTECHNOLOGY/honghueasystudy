@@ -1,6 +1,6 @@
 {
 	"name": "honghueasystudy",
-	"version": "4.15.3",
+	"version": "5.0.0",
 	"description": "鸿鹄易学 - 在线网络课程辅助工具",
 	"types": "./lib/src/core/index.d.ts",
 	"main": "./lib/src/core/index.js",
@@ -63,7 +63,7 @@
 	"bugs": {
 		"url": "https://github.com/ocsjs/ocsjs/issues"
 	},
-	"homepage": "https://github.com/ocsjs/ocsjs#readme",
+	"homepage": "https://easystudy.honghutech.eu.org",
 	"dependencies": {
 		"@microsoft/tsdoc": "^0.14.2"
 	},

@@ -7,6 +7,17 @@ export const AnswerWrapperHandlerConfig = {
 	timeout_seconds: 60
 };
 
+let _sizeErrorRetryHandler: ((error: any, data: any) => Promise<any | undefined>) | undefined;
+
+export function setSizeErrorRetryHandler(fn: ((error: any, data: any) => Promise<any | undefined>) | undefined) {
+	_sizeErrorRetryHandler = fn;
+}
+
+function isSizeError(error: any): boolean {
+	const msg = typeof error === 'string' ? error : (error?.message || error?.toString?.() || String(error || ''));
+	return /413|too large|too long|payload|entity|size.*limit|max.*size|request.*large|body.*limit/i.test(msg);
+}
+
 /**
  *
  * 默认题库配置解析器
@@ -69,13 +80,13 @@ export async function defaultAnswerWrapperHandler(
 				data: wrapperData = {},
 				handler = 'return (res)=> [JSON.stringify(res), undefined]'
 			} = wrapper;
+			// 请求数据
+			let requestData: any;
+			// 请求地址
+			let url: URL | undefined;
 			try {
 				// 答案列表
 				let results: Result[] = [];
-				// 请求数据
-				let requestData;
-				// 请求地址
-				let url: URL;
 				if (method.toLocaleLowerCase() === 'get') {
 					url = new URL(resolvePlaceHolder(wrapper.url, { encodeURI: true }));
 					/**
@@ -84,7 +95,7 @@ export async function defaultAnswerWrapperHandler(
 					 */
 					Object.keys(wrapperData).forEach((key) => {
 						// searchParams.set 方法会自动编码，所以不需要 encodeURI: true
-						url.searchParams.set(key, resolvePlaceHolder(wrapperData[key]));
+						url!.searchParams.set(key, resolvePlaceHolder(wrapperData[key]));
 					});
 					// get 的请求数据为空
 					requestData = {};
@@ -116,7 +127,7 @@ export async function defaultAnswerWrapperHandler(
 
 				// 发送请求
 				const responseData = await Promise.race([
-					request(url.toString(), {
+					request(url!.toString(), {
 						method,
 						// 历史遗留的命名问题
 						responseType: contentType,
@@ -166,6 +177,60 @@ export async function defaultAnswerWrapperHandler(
 					data: requestData
 				});
 			} catch (error) {
+				// 大小错误自动重试（如压缩图片后重发）
+				if (_sizeErrorRetryHandler && isSizeError(error) && url && requestData) {
+					try {
+						const newData = await _sizeErrorRetryHandler(error, JSON.parse(JSON.stringify(requestData)));
+						if (newData) {
+							const retryResponse = await Promise.race([
+								request(url.toString(), {
+									method,
+									responseType: contentType,
+									data: newData,
+									type,
+									headers: JSON.parse(JSON.stringify(headers || {}))
+								}),
+								$.sleep((AnswerWrapperHandlerConfig.timeout_seconds ?? 60) * 1000)
+							]);
+							if (retryResponse !== undefined) {
+								let retryResults: Result[] = [];
+								// eslint-disable-next-line no-new-func
+								const retryHandlerFn = Function(handler)();
+								if (typeof retryHandlerFn === 'function') {
+									const retryInfo = retryHandlerFn(retryResponse);
+									if (retryInfo && Array.isArray(retryInfo)) {
+										if (retryInfo.every((item: any) => Array.isArray(item))) {
+											retryResults = retryResults.concat(
+												retryInfo.map((item: any) => ({
+													question: item[0],
+													answer: item[1],
+													extra_data: item[2] || {}
+												}))
+											);
+										} else {
+											retryResults.push({
+												question: retryInfo[0],
+												answer: retryInfo[1],
+												extra_data: retryInfo[2] || {}
+											});
+										}
+									}
+								}
+								searchInfos.push({
+									url: wrapper.url,
+									name,
+									homepage,
+									results: retryResults,
+									response: retryResponse,
+									data: newData
+								});
+								return;
+							}
+						}
+					} catch (retryError) {
+						console.error('大小错误重试失败', retryError);
+					}
+				}
 				console.error(error);
 				searchInfos.push({
 					url: wrapper.url,

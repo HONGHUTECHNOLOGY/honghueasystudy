@@ -11,6 +11,7 @@ import {
 } from '../utils/work';
 import { CommonWorkOptions, playMedia } from '../utils';
 import { $console, BackgroundProject } from './background';
+import { safeClick, trustedClick, trustedDispatch, OrigEvent } from '../utils/safe-click';
 import { waitForMedia, waitForElement } from '../utils/study';
 import { $playwright } from '../utils/app';
 import { $render } from '../utils/render';
@@ -63,9 +64,21 @@ class StudyVideoH5 implements ZHSProcessor {
 	remotePage: RemotePage | undefined = undefined;
 	async init() {
 		this.remotePage = await BackgroundProject.scripts.dev.methods.getRemotePlaywrightCurrentPage();
-		// 检查是否为软件环境
 		if (!this.remotePage) {
-			throw $playwright.showError();
+			$playwright.showError();
+			await new Promise<void>((resolve) => {
+				const check = async () => {
+					const page = await BackgroundProject.scripts.dev.methods.getRemotePlaywrightCurrentPage();
+					if (page) {
+						this.remotePage = page;
+						$message.success({ content: '已连接，即将开始学习', duration: 3 });
+						resolve();
+					} else {
+						setTimeout(check, 1000);
+					}
+				};
+				setTimeout(check, 1000);
+			});
 		}
 	}
 
@@ -110,7 +123,7 @@ class StudyVideoH5 implements ZHSProcessor {
 			if (this.remotePage) {
 				await this.remotePage.click(selector);
 			} else {
-				document.querySelector<HTMLElement>(selector)?.click();
+				trustedClick(document.querySelector<HTMLElement>(selector));
 			}
 		}
 	}
@@ -129,7 +142,7 @@ class StudyVideoH5 implements ZHSProcessor {
 				if (this.remotePage) {
 					await this.remotePage.click(selector);
 				} else {
-					el.click();
+					await safeClick(el);
 				}
 			}
 		}
@@ -151,7 +164,7 @@ class StudyVideoH5 implements ZHSProcessor {
 		if (items.length) {
 			for (const item of items) {
 				if (item.classList.contains('active') === false) {
-					item.click();
+					await safeClick(item);
 					await $.sleep(500);
 				}
 
@@ -168,7 +181,7 @@ class StudyVideoH5 implements ZHSProcessor {
 					if (this.remotePage) {
 						await this.remotePage.click(btn_selector);
 					} else {
-						$el(btn_selector)?.click();
+						trustedClick($el(btn_selector));
 					}
 
 					await $.sleep(1000);
@@ -180,7 +193,7 @@ class StudyVideoH5 implements ZHSProcessor {
 			if (this.remotePage) {
 				await this.remotePage.click(close_btn_selector);
 			} else {
-				$el(close_btn_selector)?.click();
+				trustedClick($el(close_btn_selector));
 			}
 		}
 
@@ -357,7 +370,7 @@ class StudyPlusH5 extends StudyVideoH5 implements ZHSProcessor {
 					if (remotePage) {
 						await remotePage.click(close_btn);
 					} else {
-						close_btn.click();
+						await safeClick(close_btn);
 					}
 				}
 			} else {
@@ -372,7 +385,7 @@ class StudyPlusH5 extends StudyVideoH5 implements ZHSProcessor {
 					if (remotePage) {
 						await remotePage.click(options[random]);
 					} else {
-						options[random].click();
+						trustedClick(options[random]);
 					}
 
 					await $.sleep(1000);
@@ -383,7 +396,7 @@ class StudyPlusH5 extends StudyVideoH5 implements ZHSProcessor {
 					if (remotePage) {
 						await remotePage.click(submit_btn);
 					} else {
-						submit_btn.click();
+						await safeClick(submit_btn);
 					}
 				}
 				await $.sleep(1000);
@@ -392,7 +405,7 @@ class StudyPlusH5 extends StudyVideoH5 implements ZHSProcessor {
 					if (remotePage) {
 						await remotePage.click(close_btn);
 					} else {
-						close_btn.click();
+						await safeClick(close_btn);
 					}
 				}
 			}
@@ -476,14 +489,14 @@ class WishdomH5 extends StudyVideoH5 implements ZHSProcessor {
 				// 随机选
 				const random = Math.floor(Math.random() * options.length);
 				await $.sleep(1000);
-				if (remotePage) {
-					await remotePage.click(options[random]);
-				} else {
-					options[random].click();
-				}
-
-				await $.sleep(1000);
+			if (remotePage) {
+				await remotePage.click(options[random]);
+			} else {
+				trustedClick(options[random]);
 			}
+
+			await $.sleep(1000);
+		}
 			await $.sleep(1000);
 
 			const submit_btn = $el('.ai-class-exercise-dialog .el-dialog__footer .el-button.btn');
@@ -492,7 +505,7 @@ class WishdomH5 extends StudyVideoH5 implements ZHSProcessor {
 					await remotePage.hover('.ai-class-exercise-dialog .el-dialog__footer .el-button.btn');
 					await remotePage.click('.ai-class-exercise-dialog .el-dialog__footer .el-button.btn');
 				} else {
-					submit_btn.click();
+					await safeClick(submit_btn);
 				}
 			}
 
@@ -502,7 +515,7 @@ class WishdomH5 extends StudyVideoH5 implements ZHSProcessor {
 					await remotePage.hover('.ai-class-exercise-dialog .header-icon');
 					await remotePage.click('.ai-class-exercise-dialog .header-icon');
 				} else {
-					close_btn.click();
+					await safeClick(close_btn);
 				}
 			}
 
@@ -684,17 +697,16 @@ export const ZHSProject = Project.create({
 						appConfigSync: false
 					}
 				},
-				stopTime: {
-					label: '定时停止',
-					tag: 'select',
-					attrs: { title: '到时间后自动暂停脚本' },
-					defaultValue: '0',
-					options: [
-						['0', '关闭'],
-						['0.5', '半小时后'],
-						['1', '一小时后'],
-						['2', '两小时后']
-					]
+				stopTimeMinutes: {
+					label: '定时停止（分钟）',
+					attrs: {
+						type: 'number',
+						min: 0,
+						step: 1,
+						title: '0 表示关闭；例如 30 = 30 分钟，90 = 1 小时 30 分钟；进入学习页面后开始计时',
+						placeholder: '0 表示关闭，例如 30 = 30 分钟'
+					},
+					defaultValue: 0
 				},
 				restudy: restudy,
 				reloadWhenError: {
@@ -799,8 +811,6 @@ export const ZHSProject = Project.create({
 				);
 			},
 			onactive() {
-				// 重置时间
-				this.cfg.stopTime = '0';
 				if (this.cfg.playbackRate) {
 					// 转换为数字
 					this.cfg.playbackRate = parseFloat(this.cfg.playbackRate.toString());
@@ -850,12 +860,14 @@ export const ZHSProject = Project.create({
 				// 初始化处理器
 				await processor.init();
 
-				// 监听定时停止
-				this.onConfigChange('stopTime', (stopTime) => {
-					if (stopTime === '0') {
+				// 监听定时停止（分钟）
+				this.onConfigChange('stopTimeMinutes', (minutes) => {
+					const value = parseFloat(String(minutes));
+					if (!isFinite(value) || value <= 0) {
 						$message.info({ content: '定时停止已关闭' });
+						autoStop(0);
 					} else {
-						autoStop(stopTime);
+						autoStop(value);
 					}
 				});
 
@@ -888,7 +900,7 @@ export const ZHSProject = Project.create({
 				// 循环记录学习时间
 				recordStudyTimeLoop();
 				// 自动暂停任务
-				autoStop(this.cfg.stopTime);
+				autoStop(this.cfg.stopTimeMinutes);
 				// 自动隐藏弹窗
 				processor.hideDialog();
 				// 自动过弹窗测验
@@ -929,7 +941,7 @@ export const ZHSProject = Project.create({
 								await remotePage.click(item);
 								await $.sleep(1000);
 							} else {
-								item.click();
+								await safeClick(item);
 							}
 
 							// 适配AI助教课程PPT跳过
@@ -1258,7 +1270,7 @@ export const ZHSProject = Project.create({
 									const nextJobTitle = nextJob.querySelector('.common-text') as HTMLElement;
 
 									if (include_jobs.some((job) => nextJob.querySelector('.icon-box')?.classList.contains(job))) {
-										nextJobTitle.click();
+										await safeClick(nextJobTitle);
 										await doWork();
 									}
 									// 链接任务
@@ -1278,7 +1290,7 @@ export const ZHSProject = Project.create({
 
 										const _open = $gm.unsafeWindow.open;
 										$gm.unsafeWindow.open = () => null;
-										nextJobTitle.click();
+										await safeClick(nextJobTitle);
 
 										const msg = '链接任务完成，即将自动下一节！';
 										$message.info(msg);
@@ -1293,7 +1305,7 @@ export const ZHSProject = Project.create({
 
 								const nextEl = getNext();
 								if (nextEl) {
-									nextEl.click();
+									await safeClick(nextEl);
 								} else {
 									finishAlert();
 								}
@@ -1556,7 +1568,7 @@ export const ZHSProject = Project.create({
 								setTimeout(() => {
 									/** 下一章 */
 									const next = nextElement();
-									if (next) next.click();
+									if (next) trustedClick(next);
 								}, 3000);
 							});
 						} else {
@@ -1566,7 +1578,7 @@ export const ZHSProject = Project.create({
 								$console.warn(msg);
 								/** 下一章 */
 								const next = nextElement();
-								if (next) next.click();
+								if (next) trustedClick(next);
 							}, 3000);
 						}
 					}
@@ -1686,10 +1698,10 @@ export const ZHSProject = Project.create({
 					const hidden = $el('.chapter-wrapper.hidden');
 					if (hidden) {
 						if (processor.remotePage) {
-							await processor.remotePage.click('.collapse-box');
-						} else {
-							await hidden.click();
-						}
+						await processor.remotePage.click('.collapse-box');
+					} else {
+						trustedClick(hidden);
+					}
 					}
 
 					// 全部章节下拉展开
@@ -1991,7 +2003,7 @@ export const ZHSProject = Project.create({
 				const next = async () => {
 					const nextJob = processor.getNext({ next: true, restudy: this.cfg.restudy });
 					if (nextJob) {
-						nextJob.click();
+						await safeClick(nextJob);
 						await $.sleep(3000);
 						doWork();
 					} else {
@@ -2193,7 +2205,7 @@ export const ZHSProject = Project.create({
 					if (nextJob) {
 						nextJob.scrollIntoView({ behavior: 'smooth', block: 'center' });
 						await $.sleep(200);
-						nextJob.click();
+						await safeClick(nextJob);
 						await $.sleep(3000);
 						doJob();
 					} else {
@@ -2643,7 +2655,15 @@ function gxkWorkAndExam(
 		answerSeparators: answerSeparators.split(',').map((s) => s.trim()),
 		/** 默认搜题方法构造器 */
 		answerer: (elements, ctx) => {
-			const title = titleTransform(undefined, request_index++);
+			const index = request_index++;
+			// 优先用页面实际题干，避免接口题目顺序与 DOM 顺序不一致导致错题/漏题
+			const domTitle = (elements.title || [])
+				.map((t) => (t ? optimizationElementWithImage(t, true).innerText : ''))
+				.join(' ')
+				.trim();
+			const title = domTitle
+				? removeRedundantWords(domTitle, redundanceWordsText.split('\n'))
+				: titleTransform(undefined, index);
 			if (title) {
 				return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
 					await $.sleep((period ?? 3) * 1000);
@@ -2662,24 +2682,36 @@ function gxkWorkAndExam(
 				const type = ctx.elements.title[0].parentElement?.parentElement
 					?.querySelector('.subject_type')
 					?.textContent?.trim();
-				if (type?.includes('单选题')) {
+				if (type?.includes('单选') || type?.includes('单项选择')) {
 					return 'single';
-				} else if (type?.includes('多选题')) {
+				} else if (type?.includes('多选') || type?.includes('不定项') || type?.includes('多项选择')) {
 					return 'multiple';
-				} else if (type?.includes('判断题')) {
+				} else if (type?.includes('判断')) {
 					return 'judgement';
-				} else if (type?.includes('填空题')) {
+				} else if (type?.includes('填空') || type?.includes('问答')) {
 					return 'completion';
-				} else {
-					return undefined;
 				}
+
+				// 题型文本缺失/特殊（如“选择题”“不定项”）时，按选项控件兜底
+				const hasCheckbox = ctx.elements.options.some((o) =>
+					o.querySelector('input[type="checkbox"], .el-checkbox__input')
+				);
+				if (hasCheckbox) return 'multiple';
+				const hasRadio = ctx.elements.options.some((o) =>
+					o.querySelector('input[type="radio"], .el-radio__input')
+				);
+				if (hasRadio) return 'single';
+				return undefined;
 			},
 			/** 自定义处理器 */
 			async handler(type, answer, option) {
 				if (type === 'judgement' || type === 'single' || type === 'multiple') {
-					if (!option.querySelector('input')?.checked) {
-						option.click();
-						await $.sleep(200);
+					const input = option.querySelector<HTMLInputElement>('input');
+					if (input && !input.checked) {
+						await clickOptionUntilSelected(option, () => {
+							const cur = option.querySelector<HTMLInputElement>('input');
+							return !!cur && !cur.checked;
+						});
 					}
 				} else if (type === 'completion' && answer.trim()) {
 					const text = option.querySelector('textarea');
@@ -2744,12 +2776,12 @@ function gxkWorkAndExam(
 				await waitForCaptcha();
 				await $.sleep(2000);
 				// 跳转到该题目，防止用户在保存时切换题目
-				document.querySelectorAll<HTMLElement>('.answerCard_list ul li').item(index)?.click();
+				trustedClick(document.querySelectorAll<HTMLElement>('.answerCard_list ul li').item(index));
 				await $.sleep(200);
 				// 下一页
 				const next = $el('div.examPaper_box > div.switch-btn-box > button:nth-child(2)');
 				if (next) {
-					next.click();
+					await safeClick(next);
 				} else {
 					$console.error('未找到下一页按钮。');
 				}
@@ -2815,9 +2847,12 @@ function xnkWork({ answererWrappers, period, thread, answerSeparators }: CommonW
 			/** 自定义处理器 */
 			async handler(type, answer, option, ctx) {
 				if (type === 'judgement' || type === 'single' || type === 'multiple') {
-					if (option.querySelector('input')?.checked === false) {
-						option.click();
-						await $.sleep(200);
+					const input = option.querySelector<HTMLInputElement>('input');
+					if (input && !input.checked) {
+						await clickOptionUntilSelected(option, () => {
+							const cur = option.querySelector<HTMLInputElement>('input');
+							return !!cur && !cur.checked;
+						});
 					}
 				} else if (type === 'completion' && answer.trim()) {
 					const text = option.querySelector('textarea');
@@ -2863,7 +2898,7 @@ function xnkWork({ answererWrappers, period, thread, answerSeparators }: CommonW
 			await worker.doWork();
 			await $.sleep(1000);
 			next = getBtn();
-			next?.click();
+			if (next) await safeClick(next);
 			await $.sleep(1000);
 		}
 
@@ -2931,13 +2966,13 @@ function smartWork(
 		work: {
 			type(ctx) {
 				const type = ctx.elements.title[0]?.parentElement?.querySelector('.letterSortNum')?.textContent;
-				if (type?.includes('单选题')) {
+				if (type?.includes('单选') || type?.includes('单项选择')) {
 					return 'single';
-				} else if (type?.includes('多选题')) {
+				} else if (type?.includes('多选') || type?.includes('不定项') || type?.includes('多项选择')) {
 					return 'multiple';
-				} else if (type?.includes('判断题')) {
+				} else if (type?.includes('判断')) {
 					return 'judgement';
-				} else if (type?.includes('填空')) {
+				} else if (type?.includes('填空') || type?.includes('问答')) {
 					return 'completion';
 				} else {
 					return undefined;
@@ -2946,17 +2981,14 @@ function smartWork(
 			/** 自定义处理器 */
 			async handler(type, answer, option, ctx) {
 				if (type === 'judgement' || type === 'single' || type === 'multiple') {
-					const opt = option.querySelector<HTMLElement>(
-						'.el-checkbox__input:not(.is-checked),i.iconfont:not(.checkedIcon)'
-					);
-
-					if (opt) {
-						if (remotePage) {
-							await remotePage.click(opt);
-						} else {
-							opt.click();
-						}
-						await $.sleep(200);
+					const selector = '.el-checkbox__input:not(.is-checked),i.iconfont:not(.checkedIcon)';
+					const isNotSelected = () => !!option.querySelector(selector);
+					if (isNotSelected()) {
+						await clickOptionUntilSelected(option, isNotSelected, async (el) => {
+							const target = el.querySelector<HTMLElement>(selector);
+							if (!target) return;
+							await clickElement(remotePage, target);
+						});
 					}
 				} else if (type === 'completion') {
 					const opt = option.querySelector<HTMLInputElement>('input');
@@ -3007,7 +3039,7 @@ function smartWork(
 		const first = document.querySelector<HTMLElement>('[role="treeitem"] .font-sec-style-node');
 		if (first) {
 			if (remotePage) await remotePage.click(first);
-			else first.click();
+			else trustedClick(first);
 			await $.sleep(3000);
 		}
 		let count = 0;
@@ -3020,7 +3052,7 @@ function smartWork(
 
 			await $.sleep(1000);
 			if (remotePage) await remotePage.click(next);
-			else next.click();
+			else trustedClick(next);
 			// 等待题目加载
 			await $.sleep(1000);
 			count++;
@@ -3092,9 +3124,9 @@ function smartExam(
 		work: {
 			type(ctx) {
 				const type = ctx.elements.type[0].textContent;
-				if (type?.includes('单选')) {
+				if (type?.includes('单选') || type?.includes('单项选择')) {
 					return 'single';
-				} else if (type?.includes('多选题')) {
+				} else if (type?.includes('多选') || type?.includes('不定项') || type?.includes('多项选择')) {
 					return 'multiple';
 				} else if (type?.includes('判断')) {
 					return 'judgement';
@@ -3108,13 +3140,9 @@ function smartExam(
 			async handler(type, answer, option, ctx) {
 				if (type === 'judgement' || type === 'single' || type === 'multiple') {
 					// mainBg 为已经选择的选项的背景色，未选择的选项没有这个类
-					if (option.querySelector<HTMLElement>('div.bg-mainBg') === null) {
-						if (remotePage) {
-							await remotePage.click(option);
-						} else {
-							option.click();
-						}
-						await $.sleep(200);
+					const isNotSelected = () => option.querySelector<HTMLElement>('div.bg-mainBg') === null;
+					if (isNotSelected()) {
+						await clickOptionUntilSelected(option, isNotSelected, (el) => clickElement(remotePage, el));
 					}
 				} else if (type === 'completion') {
 					// 简答
@@ -3126,7 +3154,7 @@ function smartExam(
 						if (input) {
 							input.value = answer;
 							Reflect.set(input, 'composition', true);
-							input.dispatchEvent(new Event('input', { bubbles: true }));
+							trustedDispatch(input, new OrigEvent('input', { bubbles: true, composed: true }));
 						}
 					}
 
@@ -3171,7 +3199,7 @@ function smartExam(
 		const first = document.querySelector<HTMLElement>('.grid.grid-cols-7 > button');
 		if (first) {
 			if (remotePage) await remotePage.click(first);
-			else first.click();
+			else trustedClick(first);
 			await $.sleep(3000);
 		}
 		let count = 0;
@@ -3184,7 +3212,7 @@ function smartExam(
 
 			await $.sleep(1000);
 			if (remotePage) await remotePage.click(next);
-			else next.click();
+			else trustedClick(next);
 			// 等待题目加载
 			await $.sleep(1000);
 			count++;
@@ -3248,13 +3276,13 @@ function fusioncourseWork(
 		work: {
 			type(ctx) {
 				const type = ctx.elements.type[0].textContent;
-				if (type?.includes('单选题')) {
+				if (type?.includes('单选') || type?.includes('单项选择')) {
 					return 'single';
-				} else if (type?.includes('多选题')) {
+				} else if (type?.includes('多选') || type?.includes('不定项') || type?.includes('多项选择')) {
 					return 'multiple';
-				} else if (type?.includes('判断题')) {
+				} else if (type?.includes('判断')) {
 					return 'judgement';
-				} else if (type?.includes('填空题')) {
+				} else if (type?.includes('填空') || type?.includes('问答')) {
 					return 'completion';
 				} else {
 					return undefined;
@@ -3263,17 +3291,14 @@ function fusioncourseWork(
 			/** 自定义处理器 */
 			async handler(type, answer, option, ctx) {
 				if (type === 'judgement' || type === 'single' || type === 'multiple') {
-					const opt = option.querySelector<HTMLElement>(
-						'.el-checkbox__input:not(.is-checked),.el-radio__input:not(.is-checked)'
-					);
-
-					if (opt) {
-						if (remotePage) {
-							await remotePage.click(opt);
-						} else {
-							opt.click();
-						}
-						await $.sleep(200);
+					const selector = '.el-checkbox__input:not(.is-checked),.el-radio__input:not(.is-checked)';
+					const isNotSelected = () => !!option.querySelector(selector);
+					if (isNotSelected()) {
+						await clickOptionUntilSelected(option, isNotSelected, async (el) => {
+							const target = el.querySelector<HTMLElement>(selector);
+							if (!target) return;
+							await clickElement(remotePage, target);
+						});
 					}
 				}
 			}
@@ -3369,13 +3394,13 @@ function hikeWork(
 		work: {
 			type(ctx) {
 				const type = ctx.elements.type[0].textContent;
-				if (type?.includes('单选题')) {
+				if (type?.includes('单选') || type?.includes('单项选择')) {
 					return 'single';
-				} else if (type?.includes('多选题')) {
+				} else if (type?.includes('多选') || type?.includes('不定项') || type?.includes('多项选择')) {
 					return 'multiple';
-				} else if (type?.includes('判断题')) {
+				} else if (type?.includes('判断')) {
 					return 'judgement';
-				} else if (type?.includes('填空题')) {
+				} else if (type?.includes('填空') || type?.includes('问答')) {
 					return 'completion';
 				} else {
 					return undefined;
@@ -3384,17 +3409,14 @@ function hikeWork(
 			/** 自定义处理器 */
 			async handler(type, answer, option, ctx) {
 				if (type === 'judgement' || type === 'single' || type === 'multiple') {
-					const opt = option.querySelector<HTMLElement>(
-						'.el-checkbox__input:not(.is-checked),.el-radio__input:not(.is-checked)'
-					);
-
-					if (opt) {
-						if (remotePage) {
-							await remotePage.click(opt);
-						} else {
-							opt.click();
-						}
-						await $.sleep(200);
+					const selector = '.el-checkbox__input:not(.is-checked),.el-radio__input:not(.is-checked)';
+					const isNotSelected = () => !!option.querySelector(selector);
+					if (isNotSelected()) {
+						await clickOptionUntilSelected(option, isNotSelected, async (el) => {
+							const target = el.querySelector<HTMLElement>(selector);
+							if (!target) return;
+							await clickElement(remotePage, target);
+						});
 					}
 				}
 			}
@@ -3427,7 +3449,7 @@ function hikeWork(
 		const first = document.querySelector<HTMLElement>('.card_ul .card_li');
 		if (first) {
 			if (remotePage) await remotePage.click(first);
-			else first.click();
+			else trustedClick(first);
 			await $.sleep(3000);
 		}
 
@@ -3437,7 +3459,7 @@ function hikeWork(
 			if (next) {
 				await $.sleep(1000);
 				if (remotePage) await remotePage.click(next);
-				else next.click();
+				else trustedClick(next);
 				// 等待题目加载
 				await $.sleep(1000);
 				count++;
@@ -3498,13 +3520,13 @@ function hikeHomework(
 		work: {
 			type(ctx) {
 				const type = ctx.elements.type[0].textContent;
-				if (type?.includes('单选')) {
+				if (type?.includes('单选') || type?.includes('单项选择')) {
 					return 'single';
-				} else if (type?.includes('多选')) {
+				} else if (type?.includes('多选') || type?.includes('不定项') || type?.includes('多项选择')) {
 					return 'multiple';
 				} else if (type?.includes('判断')) {
 					return 'judgement';
-				} else if (type?.includes('问答')) {
+				} else if (type?.includes('填空') || type?.includes('问答')) {
 					return 'completion';
 				} else {
 					return undefined;
@@ -3513,12 +3535,20 @@ function hikeHomework(
 			/** 自定义处理器 */
 			async handler(type, answer, option, ctx) {
 				if (type === 'judgement' || type === 'single' || type === 'multiple') {
-					if (remotePage) {
-						await remotePage.click(option);
-					} else {
-						option.click();
+					const input = option.querySelector<HTMLInputElement>('input');
+					if (input && !input.checked) {
+						await clickOptionUntilSelected(
+							option,
+							() => {
+								const cur = option.querySelector<HTMLInputElement>('input');
+								return !!cur && !cur.checked;
+							},
+							(el) => clickElement(remotePage, el)
+						);
+					} else if (!input) {
+						await clickElement(remotePage, option);
+						await $.sleep(200);
 					}
-					await $.sleep(200);
 				} else if (type === 'completion') {
 					const textarea = option.querySelector('.vditor-reset');
 					if (textarea) textarea.innerHTML = `<p data-block="0">${answer.trim()}</p>`;
@@ -3568,32 +3598,81 @@ function optimizeSecond(second: number) {
 	}
 }
 
-function autoStop(stopTime: string) {
+/** 点击元素；有 remotePage 时优先用 Playwright，失败则回退 DOM 点击 */
+async function clickElement(remotePage: RemotePage | undefined, el: HTMLElement | null | undefined) {
+	if (!el) return;
+	if (remotePage) await remotePage.click(el);
+	else await safeClick(el);
+}
+
+/**
+ * 点击选项并确认真的选中。页面重渲染、元素被遮挡或点击被吞掉时自动重试，
+ * 避免智慧树答题出现中间某一题选项没选上的情况。
+ */
+async function clickOptionUntilSelected(
+	option: HTMLElement,
+	isNotSelected: () => boolean,
+	click: (el: HTMLElement) => Promise<void> | void = safeClick
+) {
+	for (let attempt = 0; attempt < 3 && isNotSelected(); attempt++) {
+		try {
+			option.scrollIntoView({ block: 'center', inline: 'nearest' });
+			await $.sleep(120);
+			await click(option);
+			await $.sleep(250);
+		} catch (e) {}
+	}
+	if (isNotSelected()) {
+		const input = option.querySelector<HTMLInputElement>('input');
+		if (input && !input.checked) {
+			try {
+				input.click();
+			} catch (e) {}
+			await $.sleep(200);
+		}
+	}
+}
+
+/** 把分钟数格式化为“X小时Y分钟” */
+function formatStopDuration(minutes: number) {
+	const totalSeconds = Math.round(minutes * 60);
+	const h = Math.floor(totalSeconds / 3600);
+	const m = Math.floor((totalSeconds % 3600) / 60);
+	const s = totalSeconds % 60;
+	if (h && m) return `${h}小时${m}分钟`;
+	if (h) return `${h}小时`;
+	if (m && s) return `${m}分钟${s}秒`;
+	if (m) return `${m}分钟`;
+	return `${s}秒`;
+}
+
+function autoStop(stopTime: string | number) {
 	clearInterval(state.study.stopInterval);
 	state.study.stopMessage?.remove();
-	if (stopTime !== '0') {
-		let stopCount = parseFloat(stopTime) * 60 * 60;
-		state.study.stopInterval = setInterval(() => {
-			if (stopCount > 0) {
-				// 如果有弹窗验证码则暂停自动停止的计时
-				if (getPopupCaptcha() === null) {
-					stopCount--;
-				}
-			} else {
-				clearInterval(state.study.stopInterval);
-				state.study.stop = true;
-				$el<HTMLVideoElement>('video')?.pause();
-				$modal.alert({ content: '脚本暂停，已获得今日平时分，如需继续观看，请刷新页面。' });
+	const minutes = parseFloat(String(stopTime));
+	if (!isFinite(minutes) || minutes <= 0) return;
+
+	let stopCount = Math.round(minutes * 60);
+	state.study.stopInterval = setInterval(() => {
+		if (stopCount > 0) {
+			// 如果有弹窗验证码则暂停自动停止的计时
+			if (getPopupCaptcha() === null) {
+				stopCount--;
 			}
-		}, 1000);
-		const val = ZHSProject.scripts['gxk-study'].configs!.stopTime.options.find((t) => t[0] === stopTime)?.[0] || '0';
-		const date = new Date();
-		date.setMinutes(date.getMinutes() + parseFloat(val) * 60);
-		state.study.stopMessage = $message.info({
-			duration: 0,
-			content: `在 ${date.toLocaleTimeString()} 脚本将自动暂停`
-		});
-	}
+		} else {
+			clearInterval(state.study.stopInterval);
+			state.study.stop = true;
+			$el<HTMLVideoElement>('video')?.pause();
+			$modal.alert({ content: '脚本暂停，已获得今日平时分，如需继续观看，请刷新页面。' });
+		}
+	}, 1000);
+
+	const date = new Date();
+	date.setSeconds(date.getSeconds() + Math.round(minutes * 60));
+	state.study.stopMessage = $message.info({
+		duration: 0,
+		content: `在 ${date.toLocaleTimeString()} 脚本将自动暂停（${formatStopDuration(minutes)}后）`
+	});
 }
 /** 固定视频进度 */
 function fixProcessBar() {

@@ -6,7 +6,8 @@ import {
 	SimplifyWorkResult,
 	$,
 	WorkUploadType,
-	AnswerWrapperHandlerConfig
+	AnswerWrapperHandlerConfig,
+	setSizeErrorRetryHandler
 } from '@ocsjs/core';
 import { $message, h, $gm, $store, Project, Script, $modal, StoreListenerType, $ui } from 'easy-us';
 import type { AnswererWrapper, SearchInformation } from '@ocsjs/core';
@@ -16,6 +17,7 @@ import { enableCopy } from '../utils';
 import { SearchInfosElement } from '../elements/search.infos';
 import { RenderScript } from '../render';
 import { dropdownStyle } from '../utils/configs';
+import { trustedClick } from '../utils/safe-click';
 
 const TAB_WORK_RESULTS_KEY = 'common.work-results.results';
 
@@ -35,22 +37,22 @@ const state = {
 				}
 			},
 			'zhs-gxk': (index: number) => {
-				document.querySelectorAll<HTMLElement>('.answerCard_list ul li').item(index)?.click();
+				trustedClick(document.querySelectorAll<HTMLElement>('.answerCard_list ul li').item(index));
 			},
 			'zhs-xnk': (index: number) => {
-				document.querySelectorAll<HTMLElement>('.jobclassallnumber-div li[questionid]').item(index)?.click();
+				trustedClick(document.querySelectorAll<HTMLElement>('.jobclassallnumber-div li[questionid]').item(index));
 			},
 			'zhs-smart': (index: number) => {
-				document.querySelectorAll<HTMLElement>('[role="treeitem"] .font-sec-style-node').item(index)?.click();
+				trustedClick(document.querySelectorAll<HTMLElement>('[role="treeitem"] .font-sec-style-node').item(index));
 			},
 			'zhs-fusion': (index: number) => {
-				document.querySelectorAll<HTMLElement>('.right-box .list .item').item(index)?.click();
+				trustedClick(document.querySelectorAll<HTMLElement>('.right-box .list .item').item(index));
 			},
 			'zhs-hike': (index: number) => {
-				document.querySelectorAll<HTMLElement>('.q_main_right .card_ul .card_li').item(index)?.click();
+				trustedClick(document.querySelectorAll<HTMLElement>('.q_main_right .card_ul .card_li').item(index));
 			},
 			icve: (index: number) => {
-				document.querySelectorAll<HTMLElement>(`.sheet_nums [id*="sheetSeq"]`).item(index)?.click();
+				trustedClick(document.querySelectorAll<HTMLElement>(`.sheet_nums [id*="sheetSeq"]`).item(index));
 			},
 			zjy: (index: number) => {
 				document
@@ -926,10 +928,13 @@ export const CommonProject = Project.create({
 			aiApiKey: {
 				defaultValue: ''
 			},
-			aiModel: {
+		aiModel: {
 				defaultValue: 'deepseek-flash'
+			},
+			referenceDocs: {
+				defaultValue: [] as ReferenceDoc[]
 			}
-		},
+	},
 		onrender({ panel }) {
 			panel.body.replaceChildren(createAiConfigCard());
 		}
@@ -1776,6 +1781,395 @@ function createAnswererWrapperList(aw: AnswererWrapper[]) {
 	);
 }
 
+interface ReferenceDoc {
+	id: string;
+	name: string;
+	type: 'text' | 'image';
+	content: string;
+	enabled: boolean;
+}
+
+const AI_SYSTEM_PROMPT =
+	'你是一个考试答题助手。根据题目、选项和题型选出正确答案。规则：单选题(single)只输出一个选项字母如 A；多选题(multiple)输出多个字母用 # 分隔如 A#B#C；判断题(judgement)输出"正确"或"错误"；填空题(completion)直接输出答案。只输出答案，不要解释。';
+const AI_USER_PROMPT = '题目：${title}\n选项：${options}\n题型：${type}';
+
+function buildAiMessages(referenceDocs: ReferenceDoc[]) {
+	const enabled = (referenceDocs || []).filter((r) => r.enabled && r.content);
+	const textRefs = enabled.filter((r) => r.type === 'text');
+	const imageRefs = enabled.filter((r) => r.type === 'image');
+
+	if (imageRefs.length > 0) {
+		const textPart =
+			(textRefs.length > 0 ? '【参考资料】\n' + textRefs.map((r) => r.content).join('\n\n') + '\n\n' : '') + AI_USER_PROMPT;
+		const userContent: any[] = [{ type: 'text', text: textPart }];
+		for (const img of imageRefs) {
+			userContent.push({ type: 'image_url', image_url: { url: img.content } });
+		}
+		return [
+			{ role: 'system', content: AI_SYSTEM_PROMPT },
+			{ role: 'user', content: userContent }
+		];
+	} else if (textRefs.length > 0) {
+		return [
+			{ role: 'system', content: AI_SYSTEM_PROMPT },
+			{ role: 'user', content: '【参考资料】\n' + textRefs.map((r) => r.content).join('\n\n') + '\n\n' + AI_USER_PROMPT }
+		];
+	} else {
+		return [
+			{ role: 'system', content: AI_SYSTEM_PROMPT },
+			{ role: 'user', content: AI_USER_PROMPT }
+		];
+	}
+}
+
+function compressDataUrl(dataUrl: string, maxSize = 2 * 1024 * 1024, maxDim = 1920): Promise<string> {
+	return new Promise((resolve) => {
+		const img = new Image();
+		img.onload = () => {
+			const nw = img.naturalWidth;
+			const nh = img.naturalHeight;
+			let w = nw;
+			let h = nh;
+			if (w > maxDim || h > maxDim) {
+				const ratio = Math.min(maxDim / w, maxDim / h);
+				w = Math.round(w * ratio);
+				h = Math.round(h * ratio);
+			}
+			const canvas = document.createElement('canvas');
+			canvas.width = w;
+			canvas.height = h;
+			const ctx = canvas.getContext('2d');
+			if (!ctx) {
+				resolve(dataUrl);
+				return;
+			}
+			ctx.drawImage(img, 0, 0, w, h);
+			let quality = 0.85;
+			let result = canvas.toDataURL('image/jpeg', quality);
+			while (result.length > maxSize * 1.37 && quality > 0.3) {
+				quality -= 0.1;
+				result = canvas.toDataURL('image/jpeg', quality);
+			}
+			resolve(result);
+		};
+		img.onerror = () => resolve(dataUrl);
+		img.src = dataUrl;
+	});
+}
+
+async function compressMessagesForRetry(messages: any[]): Promise<any[] | undefined> {
+	let compressed = false;
+	const newMessages: any[] = [];
+	for (const msg of messages) {
+		if (msg && Array.isArray(msg.content)) {
+			const newContent: any[] = [];
+			for (const part of msg.content) {
+				if (part && part.type === 'image_url' && part.image_url && part.image_url.url) {
+					const original = part.image_url.url;
+					const compressedUrl = await compressDataUrl(original);
+					if (compressedUrl.length < original.length) {
+						compressed = true;
+					}
+					newContent.push({ type: 'image_url', image_url: { url: compressedUrl } });
+				} else {
+					newContent.push(part);
+				}
+			}
+			newMessages.push({ ...msg, content: newContent });
+		} else {
+			newMessages.push(msg);
+		}
+	}
+	return compressed ? newMessages : undefined;
+}
+
+setSizeErrorRetryHandler(async (_error: any, data: any) => {
+	if (!data || !Array.isArray(data.messages)) return undefined;
+	const newMessages = await compressMessagesForRetry(data.messages);
+	if (!newMessages) return undefined;
+	return { ...data, messages: newMessages };
+});
+
+function buildAiTestMessages(customText: string, referenceDocs: ReferenceDoc[]) {
+	const enabled = (referenceDocs || []).filter((r) => r.enabled && r.content);
+	const textRefs = enabled.filter((r) => r.type === 'text');
+	const imageRefs = enabled.filter((r) => r.type === 'image');
+	const refPrefix = textRefs.length > 0 ? '【参考资料】\n' + textRefs.map((r) => r.content).join('\n\n') + '\n\n' : '';
+
+	if (imageRefs.length > 0) {
+		const userContent: any[] = [{ type: 'text', text: refPrefix + customText }];
+		for (const img of imageRefs) {
+			userContent.push({ type: 'image_url', image_url: { url: img.content } });
+		}
+		return [
+			{ role: 'system', content: '你是一个考试答题助手。请根据提供的参考资料和用户问题进行回答。' },
+			{ role: 'user', content: userContent }
+		];
+	} else {
+		return [
+			{ role: 'system', content: '你是一个考试答题助手。请根据提供的参考资料和用户问题进行回答。' },
+			{ role: 'user', content: refPrefix + customText }
+		];
+	}
+}
+
+function aiSendTestMessageRaw(endpoint: string, apiKey: string, model: string, messages: any[]): Promise<string> {
+	const fullEndpoint = normalizeAiEndpoint(endpoint);
+	return new Promise((resolve, reject) => {
+		try {
+			// eslint-disable-next-line no-undef
+			GM_xmlhttpRequest({
+				url: fullEndpoint,
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
+				data: JSON.stringify({ model, messages, temperature: 0 }),
+				responseType: 'json',
+				onload: (resp: any) => {
+					if (resp.status === 200) {
+						let body = resp.response;
+						if (body == null && resp.responseText) {
+							try {
+								body = JSON.parse(resp.responseText);
+							} catch (e) {
+								body = resp.responseText;
+							}
+						}
+						const content = body && body.choices && body.choices[0] && body.choices[0].message && body.choices[0].message.content;
+						resolve(content ? String(content).trim() : '(AI 未返回内容)');
+					} else {
+						reject(new Error('HTTP ' + resp.status + '：' + String(resp.responseText || '').slice(0, 300)));
+					}
+				},
+				onerror: (err: any) => reject(new Error(String((err && err.error) || err || '请求失败')))
+			});
+		} catch (e) {
+			reject(e);
+		}
+	});
+}
+
+async function aiSendTestMessage(endpoint: string, apiKey: string, model: string, messages: any[]): Promise<string> {
+	try {
+		return await aiSendTestMessageRaw(endpoint, apiKey, model, messages);
+	} catch (error) {
+		const errStr = typeof error === 'string' ? error : (error as any)?.message || String(error);
+		if (/413|too large|too long|payload|entity|size.*limit|max.*size|request.*large|body.*limit/i.test(errStr)) {
+			const compressed = await compressMessagesForRetry(messages);
+			if (compressed) {
+				return await aiSendTestMessageRaw(endpoint, apiKey, model, compressed);
+			}
+		}
+		throw error;
+	}
+}
+
+function createReferenceArea(onChange: () => void) {
+	const aiCfg = CommonProject.scripts.aiSettings.cfg;
+	const areaCss = `.ai-ref-area{margin-top:16px;border-top:1px dashed rgba(0,0,0,.1);padding-top:14px;}
+.ai-ref-title{font-size:15px;font-weight:600;margin-bottom:4px;color:#1d1d1f;}
+.ai-ref-desc{color:#6e6e73;font-size:12px;margin-bottom:10px;line-height:1.5;}
+.ai-ref-btn-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.ai-ref-btn{padding:6px 14px;border:1px dashed rgba(0,122,255,.4);border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;background:rgba(0,122,255,.06);color:#007aff;transition:background .2s ease;}
+.ai-ref-btn:hover{background:rgba(0,122,255,.12);}
+.ai-ref-list{display:flex;flex-direction:column;gap:8px;}
+.ai-ref-item{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid rgba(0,0,0,.08);border-radius:8px;background:#fafafa;}
+.ai-ref-item-info{flex:1;min-width:0;overflow:hidden;}
+.ai-ref-item-name{font-size:13px;font-weight:500;color:#1d1d1f;word-break:break-all;}
+.ai-ref-item-meta{font-size:11px;color:#8e8e93;margin-top:2px;}
+.ai-ref-item-thumb{max-width:60px;max-height:60px;border-radius:4px;margin-top:4px;display:block;}
+.ai-ref-item-del{padding:4px 8px;border:none;border-radius:6px;font-size:12px;cursor:pointer;background:#ff3b30;color:#fff;flex-shrink:0;}
+.ai-ref-item-del:hover{background:#d8302a;}
+.ai-ref-empty{color:#8e8e93;font-size:12px;padding:8px 0;}
+.ai-ref-edit{border:1px solid #007aff;border-radius:8px;padding:10px;margin-bottom:8px;background:#fff;}
+.ai-ref-edit-input{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid rgba(0,0,0,.1);border-radius:6px;font-size:13px;margin-bottom:6px;outline:none;}
+.ai-ref-edit-input:focus{border-color:#007aff;}
+.ai-ref-edit-textarea{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid rgba(0,0,0,.1);border-radius:6px;font-size:13px;resize:vertical;min-height:80px;font-family:inherit;outline:none;}
+.ai-ref-edit-textarea:focus{border-color:#007aff;}
+.ai-ref-edit-row{display:flex;gap:6px;margin-top:6px;}
+.ai-ref-edit-btn{padding:5px 12px;border:none;border-radius:6px;font-size:12px;cursor:pointer;color:#fff;}
+.ai-ref-edit-save{background:#34c759;}
+.ai-ref-edit-cancel{background:#8e8e93;}
+.ai-ref-test-area{margin-top:12px;border:1px dashed rgba(0,122,255,.3);border-radius:8px;padding:10px;background:rgba(0,122,255,.03);}
+.ai-ref-test-textarea{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid rgba(0,0,0,.1);border-radius:6px;font-size:13px;resize:vertical;min-height:60px;font-family:inherit;outline:none;margin-bottom:6px;}
+.ai-ref-test-textarea:focus{border-color:#007aff;}
+.ai-ref-test-result{margin-top:8px;padding:8px 10px;border-radius:6px;font-size:13px;background:#fff;border:1px solid rgba(0,0,0,.06);white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;line-height:1.5;}
+.ai-ref-test-result.err{background:#fff5f5;border-color:#ff3b30;color:#d8302a;}
+.ai-ref-test-result.loading{color:#8e8e93;}
+.ai-ref-test-send{background:#007aff;}`;
+
+	const listEl = h('div', { className: 'ai-ref-list' });
+
+	const getDocs = () => ((aiCfg.referenceDocs as any) || []) as ReferenceDoc[];
+	const saveDocs = (docs: ReferenceDoc[]) => {
+		aiCfg.referenceDocs = docs as any;
+		onChange();
+	};
+
+	const renderList = () => {
+		const docs = getDocs();
+		listEl.replaceChildren();
+		if (docs.length === 0) {
+			listEl.appendChild(h('div', { className: 'ai-ref-empty' }, '暂无参考资料，答题时仅发送题目本身。'));
+			return;
+		}
+		for (const doc of docs) {
+			const checkbox = h('input', { type: 'checkbox' }) as HTMLInputElement;
+			checkbox.checked = doc.enabled;
+			checkbox.style.marginTop = '4px';
+			checkbox.onchange = () => {
+				const next = getDocs().map((d) => (d.id === doc.id ? { ...d, enabled: checkbox.checked } : d));
+				saveDocs(next);
+			};
+
+			const delBtn = h('button', { className: 'ai-ref-item-del' }, '删除');
+			delBtn.onclick = () => {
+				saveDocs(getDocs().filter((d) => d.id !== doc.id));
+				renderList();
+			};
+
+			const infoChildren: any[] = [
+				h('div', { className: 'ai-ref-item-name' }, doc.name || '(未命名)'),
+				h('div', { className: 'ai-ref-item-meta' }, doc.type === 'text' ? '文字资料' : '图片资料')
+			];
+			if (doc.type === 'image') {
+				const thumb = h('img', { className: 'ai-ref-item-thumb' }) as HTMLImageElement;
+				thumb.src = doc.content;
+				infoChildren.push(thumb);
+			}
+
+			listEl.appendChild(h('div', { className: 'ai-ref-item' }, [checkbox, h('div', { className: 'ai-ref-item-info' }, infoChildren), delBtn]));
+		}
+	};
+
+	const editArea = h('div');
+
+	const addTextBtn = h('button', { className: 'ai-ref-btn' }, '+ 添加文字');
+	addTextBtn.onclick = () => {
+		const nameInput = h('input', { className: 'ai-ref-edit-input', placeholder: '资料名称（如：教材第三章知识点）' }) as HTMLInputElement;
+		const contentInput = h('textarea', { className: 'ai-ref-edit-textarea', placeholder: '粘贴或输入参考资料内容...' }) as HTMLTextAreaElement;
+		const saveBtn = h('button', { className: 'ai-ref-edit-btn ai-ref-edit-save' }, '保存');
+		const cancelBtn = h('button', { className: 'ai-ref-edit-btn ai-ref-edit-cancel' }, '取消');
+
+		saveBtn.onclick = () => {
+			const name = nameInput.value.trim();
+			const content = contentInput.value.trim();
+			if (!content) {
+				$message.error({ content: '内容不能为空' });
+				return;
+			}
+			saveDocs([
+				...getDocs(),
+				{ id: 'ref_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: name || '文字资料', type: 'text', content, enabled: true }
+			]);
+			renderList();
+			editArea.replaceChildren();
+		};
+		cancelBtn.onclick = () => editArea.replaceChildren();
+
+		editArea.replaceChildren(
+			h('div', { className: 'ai-ref-edit' }, [nameInput, contentInput, h('div', { className: 'ai-ref-edit-row' }, [saveBtn, cancelBtn])])
+		);
+		nameInput.focus();
+	};
+
+	const addImageBtn = h('button', { className: 'ai-ref-btn' }, '+ 添加图片');
+	const fileInput = h('input', { type: 'file', accept: 'image/*', multiple: true }) as HTMLInputElement;
+	fileInput.style.display = 'none';
+	addImageBtn.onclick = () => fileInput.click();
+	fileInput.onchange = async () => {
+		const files = fileInput.files;
+		if (!files || files.length === 0) return;
+		const newDocs: ReferenceDoc[] = [];
+		for (let i = 0; i < files.length; i++) {
+			const file = files[i];
+			const dataUrl = await new Promise<string>((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(reader.result as string);
+				reader.onerror = () => reject(new Error('读取失败'));
+				reader.readAsDataURL(file);
+			}).catch(() => '');
+			if (dataUrl) {
+				newDocs.push({
+					id: 'ref_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+					name: file.name,
+					type: 'image',
+					content: dataUrl,
+					enabled: true
+				});
+			} else {
+				$message.error({ content: '图片「' + file.name + '」读取失败' });
+			}
+		}
+		if (newDocs.length > 0) {
+			saveDocs([...getDocs(), ...newDocs]);
+			renderList();
+			$message.success({
+				content: '已添加 ' + newDocs.length + ' 张图片' + (newDocs.length < files.length ? '（' + (files.length - newDocs.length) + ' 张失败）' : '')
+			});
+		}
+		fileInput.value = '';
+	};
+
+	const testBtn = h('button', { className: 'ai-ref-btn' }, '测试资料');
+	const testArea = h('div');
+	testBtn.onclick = () => {
+		const testInput = h('textarea', { className: 'ai-ref-test-textarea', placeholder: '输入测试文字，如：请根据参考资料回答：1+1=?' }) as HTMLTextAreaElement;
+		const sendBtn = h('button', { className: 'ai-ref-edit-btn ai-ref-test-send' }, '发送给 AI');
+		const resultEl = h('div', { className: 'ai-ref-test-result' }, '点击「发送给 AI」，将把上方文字连同已启用的参考资料一并发送给 AI。');
+
+		sendBtn.onclick = async () => {
+			const text = testInput.value.trim();
+			if (!text) {
+				$message.error({ content: '请输入测试文字' });
+				return;
+			}
+			const { aiEndpoint, aiApiKey, aiModel } = aiCfg;
+			if (!aiEndpoint || !aiApiKey || !aiModel) {
+				$message.error({ content: '请先填写完整的 AI API 地址、Key、模型' });
+				return;
+			}
+			sendBtn.textContent = '发送中...';
+			sendBtn.setAttribute('disabled', 'true');
+			resultEl.className = 'ai-ref-test-result loading';
+			resultEl.textContent = '正在等待 AI 回复...';
+			try {
+				const messages = buildAiTestMessages(text, getDocs());
+				const reply = await aiSendTestMessage(aiEndpoint, aiApiKey, aiModel, messages);
+				resultEl.className = 'ai-ref-test-result';
+				resultEl.textContent = reply;
+			} catch (e) {
+				resultEl.className = 'ai-ref-test-result err';
+				resultEl.textContent = '发送失败：' + ((e as any)?.message || String(e));
+			} finally {
+				sendBtn.textContent = '发送给 AI';
+				sendBtn.removeAttribute('disabled');
+			}
+		};
+
+		testArea.replaceChildren(
+			h('div', { className: 'ai-ref-test-area' }, [testInput, h('div', { className: 'ai-ref-edit-row' }, [sendBtn]), resultEl])
+		);
+		testInput.focus();
+	};
+
+	renderList();
+
+	return h('div', { className: 'ai-ref-area' }, [
+		h('style', areaCss),
+		h('div', { className: 'ai-ref-title' }, '参考资料'),
+		h('div', { className: 'ai-ref-desc' }, [
+			'答题时将参考资料一并发给 AI 供其参考。资料可以是文字或图片（图片需 AI 模型支持视觉，如 GPT-4o / GLM-4V 等）。',
+			h('br'),
+			'勾选资料前的复选框可控制是否发送该条资料；不勾选任何资料时仅发送题目本身。大图会自动压缩。'
+		]),
+		h('div', { className: 'ai-ref-btn-row' }, [addTextBtn, addImageBtn, testBtn]),
+		editArea,
+		listEl,
+		testArea,
+		fileInput
+	]);
+}
+
 function normalizeAiEndpoint(raw: string) {
 	let ep = (raw || '').trim().replace(/\/+$/, '');
 	if (!/\/chat\/completions$/i.test(ep)) {
@@ -1892,10 +2286,7 @@ function createAiConfigCard() {
 			headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + aiApiKey },
 			data: {
 				model: aiModel,
-				messages: [
-					{ role: 'system', content: '你是一个考试答题助手。根据题目、选项和题型选出正确答案。规则：单选题(single)只输出一个选项字母如 A；多选题(multiple)输出多个字母用 # 分隔如 A#B#C；判断题(judgement)输出"正确"或"错误"；填空题(completion)直接输出答案。只输出答案，不要解释。' },
-					{ role: 'user', content: '题目：${title}\n选项：${options}\n题型：${type}' }
-				],
+				messages: buildAiMessages((aiCfg.referenceDocs as any) || []),
 				temperature: 0
 			},
 			handler: 'return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }'
@@ -1943,6 +2334,19 @@ function createAiConfigCard() {
 
 	updateBtns();
 
+	const refArea = createReferenceArea(() => {
+		const aws: any[] = CommonProject.scripts.settings.cfg.answererWrappers || [];
+		const aiIdx = aws.findIndex((w) => w.name === 'AI答题');
+		if (aiIdx !== -1) {
+			const next = [...aws];
+			next[aiIdx] = {
+				...next[aiIdx],
+				data: { ...(next[aiIdx].data || {}), messages: buildAiMessages((aiCfg.referenceDocs as any) || []) }
+			};
+			CommonProject.scripts.settings.cfg.answererWrappers = next;
+		}
+	});
+
 	return h('div', { className: 'ai-cfg-card' }, [
 		h('style', aiCss),
 		h('div', { className: 'ai-cfg-title' }, 'AI 答题配置'),
@@ -1954,7 +2358,8 @@ function createAiConfigCard() {
 		h('label', { className: 'ai-cfg-label' }, '模型名称 (Model)'),
 		modelInput,
 		h('div', { className: 'ai-cfg-btn-row' }, [enableBtn, disableBtn, testBtn]),
-		statusEl
+		statusEl,
+		refArea
 	]);
 }
 

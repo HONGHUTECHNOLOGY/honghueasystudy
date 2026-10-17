@@ -1,0 +1,357 @@
+<template>
+	<a-row class="col-12 pt-2">
+		<a-col flex="auto">
+			<a-space :size="0">
+				<template #split>
+					<a-divider direction="vertical" />
+				</template>
+
+				<span>
+					<a-tooltip
+						:content="`共有 ${currentSources.length} 个文件`"
+						position="top"
+						mini
+					>
+						<a-button
+							size="mini"
+							:disabled="currentSources.length === 0"
+							@click="
+								() => {
+									if (currentSources.length) {
+										state.selectedAll = true;
+										selectAllBrowserOfCurrentFolder();
+									}
+								}
+							"
+						>
+							全选
+						</a-button>
+					</a-tooltip>
+
+					<a-tooltip
+						v-if="state.selectedAll || currentCheckedBrowsers.length"
+						:content="`共选中${currentCheckedBrowsers.length}个文件`"
+						position="top"
+						mini
+					>
+						<a-button
+							size="mini"
+							class="ms-2"
+							@click="
+								() => {
+									state.selectedAll = false;
+									cancelAllBrowserCheck();
+								}
+							"
+						>
+							取消
+						</a-button>
+					</a-tooltip>
+				</span>
+
+				<template v-if="currentCheckedBrowsers.length">
+					<a-tooltip
+						:content="`共选中${currentCheckedBrowsers.length}个文件`"
+						position="top"
+						mini
+					>
+						<a-dropdown
+							class="multi-operate"
+							:popup-max-height="false"
+						>
+							<a-button size="mini"> <Icon type="checklist">批量操作</Icon> <icon-down /> </a-button>
+							<template #content>
+								<a-doption
+									class="border-bottom"
+									size="mini"
+									type="text"
+									@click="state.showChecked = true"
+								>
+									<Icon type="visibility"> 查看 </Icon>
+								</a-doption>
+								<a-doption
+									style="width: 100px"
+									@click="copy"
+								>
+									<Icon type="content_copy"> 复制 </Icon>
+								</a-doption>
+								<a-doption @click="cut"> <Icon type="content_cut"> 剪切 </Icon> </a-doption>
+								<a-doption
+									class="border-bottom"
+									:disabled="state.selectBrowsers.length === 0"
+									@click="paste"
+								>
+									<Icon type="content_paste"> 粘贴 </Icon>
+								</a-doption>
+
+								<a-doption @click="launchAll"> <Icon type="play_arrow"> 批量运行 </Icon> </a-doption>
+								<a-doption @click="closeAll"> <Icon type="close"> 批量关闭 </Icon> </a-doption>
+								<a-doption @click="deleteAll"> <Icon type="delete"> 批量删除 </Icon> </a-doption>
+							</template>
+						</a-dropdown>
+					</a-tooltip>
+				</template>
+			</a-space>
+		</a-col>
+
+		<!-- 文件操作 -->
+		<FileOperators v-if="currentSearchedEntities === undefined"></FileOperators>
+
+		<a-drawer
+			v-model:visible="state.showChecked"
+			:title="`已选中 ${currentCheckedBrowsers.length} 个文件`"
+			:width="state.windowWidth * 0.8"
+			:footer="false"
+		>
+			<BrowserList :entities="currentCheckedBrowsers"> </BrowserList>
+		</a-drawer>
+	</a-row>
+</template>
+
+<script setup lang="ts">
+import { reactive, computed, h, ref } from 'vue';
+import { currentFolder, currentSearchedEntities } from '../../fs';
+import { Browser } from '../../fs/browser';
+import { root } from '../../fs/folder';
+import FileOperators from './FileOperators.vue';
+import { BrowserOptions } from '../../fs/interface';
+import { inBrowser } from '../../utils/node';
+import { store } from '../../store';
+import { remote } from '../../utils/remote';
+import { Entity } from '../../fs/entity';
+import { Col, InputNumber, Message, Modal, Row, Select, Tooltip } from '@arco-design/web-vue';
+import { Process } from '../../utils/process';
+import BrowserList from '../BrowserList.vue';
+import { IconSync } from '@arco-design/web-vue/es/icon';
+import Icon from '../Icon.vue';
+import { Status } from '../../utils/statusBar';
+
+const state = reactive({
+	showChecked: false,
+	selectBrowsers: [] as Browser[],
+	pasteType: 'copy' as 'copy' | 'cut',
+	selectedAll: false,
+	windowWidth: window.innerWidth
+});
+
+window.addEventListener('resize', () => {
+	state.windowWidth = window.innerWidth;
+});
+
+/** 当前文件夹的浏览器 */
+const currentSources = computed(
+	() =>
+		Object.keys(currentFolder.value.children)
+			.map((key) => currentFolder.value.children[key])
+			.filter((e) => e.type === 'browser') as Browser[]
+);
+
+/** 所有浏览器 */
+const allSources = computed(() =>
+	currentSearchedEntities.value
+		? (currentSearchedEntities.value.filter((e) => e.type === 'browser') as Browser[])
+		: (root().findAll((e) => e.type === 'browser') as Browser[])
+);
+
+/** 当前选中的浏览器 */
+const currentCheckedBrowsers = computed(() => allSources.value.filter((e) => e.checked));
+
+function selectAllBrowserOfCurrentFolder() {
+	for (const child of currentSources.value) {
+		if (child.type === 'browser') {
+			child.checked = true;
+		}
+	}
+}
+
+function cancelAllBrowserCheck() {
+	for (const child of root().findAll((e) => e.type === 'browser' && e.checked === true)) {
+		if (child.type === 'browser') {
+			child.checked = false;
+		}
+	}
+}
+
+async function launchAll() {
+	const type = ref('顺序启动');
+	const time = ref(3);
+	Modal.confirm({
+		title: '批量启动',
+		simple: false,
+		okText: '开始批量启动',
+		cancelText: '取消',
+		content: () =>
+			h('div', [
+				h(Row, { gutter: [24, 24] }, [
+					h(Col, [
+						h(Row, [
+							h(Col, { flex: '140px', style: { lineHeight: '32px' } }, '启动类型：'),
+							h(Col, { flex: 'auto' }, [
+								h(Select, {
+									modelValue: type.value,
+									options: ['顺序启动', '延时启动'],
+									onChange: (value) => {
+										type.value = value.toString();
+									}
+								})
+							])
+						])
+					]),
+					type.value === '延时启动'
+						? h(Col, [
+								h(Row, [
+									h(Col, { flex: '140px', style: { lineHeight: '32px' } }, '延时启动间隔(秒)：'),
+									h(Col, { flex: 'auto' }, [
+										h(Tooltip, { content: '每隔一段时间启动浏览器' }, [
+											h(InputNumber, {
+												modelValue: time.value,
+												placeholder: '请输入延时时间(秒)'
+											})
+										])
+									])
+								])
+						  ])
+						: undefined
+				])
+			]),
+		onOk() {
+			multipleOperationRegister('批量启动', async (canRun) => {
+				const browsers = currentCheckedBrowsers.value
+					.map((e) => {
+						if (Process.from(e.uid) === undefined) {
+							return e;
+						} else {
+							return undefined;
+						}
+					})
+					.filter((e) => e !== undefined) as Browser[];
+
+				if (type.value === '延时启动') {
+					for (const browser of browsers) {
+						if (canRun()) {
+							browser.launch();
+							await new Promise((resolve) => setTimeout(resolve, time.value * 1000));
+						}
+					}
+				} else {
+					for (const browser of browsers) {
+						if (canRun()) {
+							await browser.launch();
+						}
+					}
+				}
+			});
+		},
+		maskClosable: false
+	});
+}
+
+async function closeAll() {
+	if (currentCheckedBrowsers.value.every((b) => Process.from(b.uid) === undefined)) {
+		Message.warning('没有浏览器正在运行');
+		return;
+	}
+	multipleOperationRegister('批量关闭', async (canRun) => {
+		for (const browser of currentCheckedBrowsers.value) {
+			if (canRun()) {
+				await browser.close();
+			}
+		}
+	});
+}
+
+async function deleteAll() {
+	Modal.warning({
+		title: '警告',
+		simple: true,
+		content: '是否要删除所选的浏览器？删除后将无法找回。',
+		onOk() {
+			multipleOperationRegister('批量删除', async (canRun) => {
+				for (const browser of currentCheckedBrowsers.value) {
+					if (canRun()) {
+						await Browser.from(browser.uid)?.remove();
+						await new Promise((resolve) => setTimeout(resolve, 200));
+					}
+				}
+			});
+		}
+	});
+}
+
+function copy() {
+	state.selectBrowsers = currentCheckedBrowsers.value;
+	state.pasteType = 'copy';
+	Status.success(`已复制 ${currentCheckedBrowsers.value.length} 个浏览器`, { icon: 'content_copy' });
+}
+
+function cut() {
+	state.selectBrowsers = currentCheckedBrowsers.value;
+	state.pasteType = 'cut';
+	Status.success(`已剪切 ${currentCheckedBrowsers.value.length} 个浏览器`, { icon: 'content_cut' });
+}
+
+async function paste() {
+	const browsers: BrowserOptions[] = JSON.parse(JSON.stringify(state.selectBrowsers));
+	const count = browsers.length;
+	state.selectBrowsers = [];
+
+	for (const browser of browsers) {
+		const id = await Entity.uuid();
+		browser.uid = id;
+		browser.cachePath = inBrowser ? '' : await remote.path.call('join', store.paths.userDataDirsFolder, id);
+		browser.parent = currentFolder.value.uid;
+		browser.checked = false;
+
+		currentFolder.value.children[id] = new Browser(browser);
+	}
+
+	if (state.pasteType === 'cut') {
+		for (const source of allSources.value) {
+			if (source.type === 'browser' && source.checked) {
+				await source.remove();
+			}
+		}
+	}
+
+	cancelAllBrowserCheck();
+	Status.success(`已粘贴 ${count} 个浏览器`, { icon: 'content_paste' });
+}
+
+/**
+ * 批量化操作的控制窗口
+ */
+async function multipleOperationRegister(name: string, runner: (canRun: () => boolean) => Promise<any>) {
+	let canRun = true;
+	const modal = Modal.info({
+		title: '批量化操作',
+		content: () => h('div', [h(IconSync, { spin: true }), ' 正在执行批量化操作中： ' + name]),
+		maskClosable: false,
+		closable: false,
+		simple: false,
+		okText: '暂停操作',
+		okButtonProps: {
+			type: 'secondary'
+		},
+		onOk() {
+			canRun = false;
+			modal.close();
+		}
+	});
+	await runner(() => canRun);
+	canRun = false;
+	modal.close();
+}
+</script>
+
+<style scoped lang="less">
+.entity {
+	padding: 4px 0px;
+}
+
+.notes {
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow: hidden;
+}
+</style>

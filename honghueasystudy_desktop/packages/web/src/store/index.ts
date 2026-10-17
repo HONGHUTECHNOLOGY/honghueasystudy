@@ -1,0 +1,209 @@
+import { reactive } from 'vue';
+import { remote } from '../utils/remote';
+import defaultsDeep from 'lodash/defaultsDeep';
+import type { AppStore, UserScripts } from '@ocs-desktop/app';
+import { CommonUserScript } from '../types/user.script';
+import { FolderOptions } from '../fs/interface';
+import { Browser } from '../fs/browser';
+import { Folder } from '../fs/folder';
+
+export type StoreUserScript = { info?: CommonUserScript } & Omit<UserScripts, 'info'>;
+
+export type WebStore = {
+	scripts: StoreUserScript[];
+	notifies: any[];
+
+	browser: {
+		currentFolderUid: string;
+		currentBrowserUid: string;
+		/** 根目录 */
+		root: FolderOptions<'root', Browser | Folder>;
+		tags: Record<string, { color: string; count: number }>;
+		search: {
+			/** 名字或者备注搜素 */
+			value: string;
+			tags: string[];
+		};
+	};
+	dashboard: {
+		/** 显示标签和备注 */
+		details: {
+			tags: boolean;
+			notes: boolean;
+		};
+		/** 列数控制 */
+		num: number;
+		/** 视频设置 */
+		video: {
+			/** 横纵比 */
+			aspectRatio?: number;
+		};
+	};
+	setting: {
+		browserType: 'diy' | 'local' | 'setup';
+		/** 界面模式：简洁模式 / 专业模式 */
+		mode: 'simple' | 'professional';
+		/** 是否显示侧边栏文字 */
+		showSideBarText: boolean;
+		/** 浏览器启动参数 */
+		launchOptions: {
+			custom: boolean;
+			executablePath: string;
+		};
+		/** 当前的主题 */
+		theme: {
+			dark: boolean;
+		};
+		/** ocs 特殊配置 */
+		ocs: {
+			/** 当前配置名 */
+			currentProjectName: string;
+			/** 全局配置 */
+			store: any;
+			/** 是否同步OCS配置 */
+			openSync: boolean;
+		};
+		browser: {
+			/** 浏览器缓存大小预警阈值（GB） */
+			cachesSizeWarningPoint: number;
+			/** 是否启用浏览器原版对话框 */
+			enableDialog: boolean;
+			/** 是否强制更新/安装脚本 */
+			forceUpdateScript: boolean;
+			/** 点击「新建浏览器」时是否自动打开初始化弹窗并执行初始化 */
+			autoInitNewBrowser: boolean;
+		};
+	};
+
+	langs: Record<string, string>;
+	state: {
+		/** 是否第一次打开 */
+		first: boolean;
+		/** 是否展示初始化设置  */
+		setup: boolean;
+		/** 是否展示「新建浏览器自动初始化」弹窗 */
+		newBrowserSetup: boolean;
+		mini: boolean;
+		responsive: 'mini' | 'small';
+		height: number;
+		/** 已读的提示记录 */
+		read_record: {
+			user_script_usage: boolean;
+			browser_usage: boolean;
+			automation_script_usage: boolean;
+		};
+	};
+};
+
+const _store: AppStore & { render: WebStore } = defaultsDeep(remote['electron-store'].get('store'), {
+	render: {
+		scripts: [],
+		notifies: [],
+		browser: {
+			currentFolderUid: '',
+			currentBrowserUid: '',
+			root: {
+				name: '根目录',
+				parent: undefined,
+				createTime: Date.now(),
+				type: 'root',
+				uid: 'root-folder',
+				children: {},
+				renaming: false
+			},
+			tags: {},
+			search: {
+				value: '',
+				tags: [],
+				results: undefined
+			}
+		},
+		dashboard: {
+			details: {
+				tags: false,
+				notes: false
+			},
+			num: 4,
+			video: {
+				aspectRatio: 0
+			}
+		},
+		setting: {
+			browserType: 'diy',
+			mode: 'simple' as const,
+			showSideBarText: true,
+			launchOptions: {
+				custom: false,
+				executablePath: ''
+			},
+			theme: {
+				dark: false
+			},
+			ocs: {
+				currentProjectName: '',
+				store: {},
+				openSync: false
+			},
+			browser: {
+				cachesSizeWarningPoint: 10,
+				enableDialog: false,
+				forceUpdateScript: false,
+				autoInitNewBrowser: true
+			}
+		},
+		langs: {},
+		state: {
+			first: true,
+			setup: true,
+			newBrowserSetup: false,
+			mini: false,
+			responsive: 'small',
+			height: document.documentElement.clientHeight,
+			read_record: {
+				user_script_usage: false,
+				browser_usage: false,
+				automation_script_usage: false
+			}
+		}
+	} as WebStore
+});
+
+// 解密数据（兼容新旧加密格式）
+// @ts-ignore - render 在磁盘上可能是加密后的字符串
+if (typeof _store.render === 'string') {
+	try {
+		console.log('_store', _store);
+		// @ts-ignore
+		const renderStr = _store.render as string;
+		const data = JSON.parse(remote.methods.callSync('decryptRenderString' as any, renderStr));
+		Reflect.set(_store, 'render', data);
+	} catch (e) {
+		console.error('数据解密失败：' + e);
+	}
+}
+
+/** 数据存储对象 */
+export const store: AppStore & { render: WebStore } = reactive(_store);
+
+console.log('store', store);
+// @ts-ignore
+window.store = store;
+
+/** 根目录 */
+export const files = reactive<File[]>([]);
+
+/** 打开的文件 */
+export const openedFiles = reactive(new Map<string, File>());
+
+export function lang(key: string, def?: string, params?: Record<string, any>) {
+	let text = store.render.langs[key];
+	if (!text) {
+		text = def || '';
+	}
+	if (params) {
+		Object.keys(params).forEach((k) => {
+			text = text.replace(new RegExp(`{{${k}}}`, 'g'), params[k]);
+		});
+	}
+	return text;
+}

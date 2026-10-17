@@ -1,10 +1,10 @@
 {
 	"manifest_version": 3,
 	"name": "鸿鹄易学",
-	"version": "4.15.3",
-	"description": "鸿鹄易学，支持超星、智慧树、职教云、雨课堂等网课的学习与作业辅助，内置 AI 答题。",
+	"version": "5.0.0",
+	"description": "鸿鹄易学，支持超星学习通、智慧树、职教云、雨课堂等主流网课平台的自动刷课学习与作业辅助，内置 AI 答题。",
 	"default_locale": "zh_CN",
-	"minimum_chrome_version": "111",
+	"minimum_chrome_version": "120",
 	"icons": {
 		"16": "icon/icon.png",
 		"32": "icon/icon.png",
@@ -24,10 +24,14 @@
 	},
 	"permissions": [
 		"storage",
+		"unlimitedStorage",
 		"notifications",
-		"tabs"
+		"tabs",
+		"userScripts",
+		"scripting"
 	],
 	"host_permissions": [
+		"*://easystudy.honghutech.eu.org/*",
 		"*://*.zhihuishu.com/*",
 		"*://*.hike-teaching-center.polymas.com/*",
 		"*://*.icve.com.cn/*",
@@ -118,57 +122,12 @@
 				"*://*.xuexi365.com/*"
 			],
 			"js": [
+				"content/bridge-key.js",
 				"content/isolated.js"
 			],
 			"run_at": "document_start",
 			"all_frames": true,
 			"world": "ISOLATED"
-		},
-		{
-			"matches": [
-				"*://*.zhihuishu.com/*",
-				"*://*.hike-teaching-center.polymas.com/*",
-				"*://*.icve.com.cn/*",
-				"*://*.ai.icve.com.cn/*",
-				"*://*.course.icve.com.cn/*",
-				"*://*.zjy2.icve.com.cn/*",
-				"*://*.zyk.icve.com.cn/*",
-				"*://*.courshare.cn/*",
-				"*://*.webtrn.cn/*",
-				"*://*.yuketang.cn/*",
-				"*://*.unipus.cn/*",
-				"*://*.icourse163.org/*",
-				"*://*.chaoxing.com/*",
-				"*://*.edu.cn/*",
-				"*://*.org.cn/*",
-				"*://*.xueyinonline.com/*",
-				"*://*.hnsyu.net/*",
-				"*://*.qutjxjy.cn/*",
-				"*://*.ynny.cn/*",
-				"*://*.hnvist.cn/*",
-				"*://*.fjlecb.cn/*",
-				"*://*.gdhkmooc.com/*",
-				"*://*.cugbonline.cn/*",
-				"*://*.zjelib.cn/*",
-				"*://*.cqrspx.cn/*",
-				"*://*.neauce.com/*",
-				"*://*.zhihui-yun.com/*",
-				"*://*.cqie.cn/*",
-				"*://*.ccqmxx.com/*",
-				"*://*.jxgmxy.com/*",
-				"*://*.jnzyjsxy.cn/*",
-				"*://*.sslibrary.com/*",
-				"*://*.xuexi365.com/*"
-			],
-			"js": [
-				"content/resources.js",
-				"content/gm-polyfill.js",
-				"lib/index.js",
-				"content/entry.js"
-			],
-			"run_at": "document_start",
-			"all_frames": true,
-			"world": "MAIN"
 		}
 	]
 }

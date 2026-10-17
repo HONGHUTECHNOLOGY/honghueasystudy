@@ -1,5 +1,6 @@
 /** global Ext videojs getTeacherAjax jobs */
 
+import { trustedDispatch, OrigEvent } from '../utils/safe-click';
 import {
 	OCSWorker,
 	defaultAnswerWrapperHandler,
@@ -356,12 +357,12 @@ export const CXProject = Project.create({
 												5:正文275页
 												7:封底页
 											*/
-										jumper.value = '5';
-										jumper.dispatchEvent(new Event('change'));
-										console.log('已跳转正文页');
-										await $.sleep(timing * 1000);
-										jumper.value = '7';
-										jumper.dispatchEvent(new Event('change'));
+									jumper.value = '5';
+									trustedDispatch(jumper, new OrigEvent('change', { composed: true }));
+									console.log('已跳转正文页');
+									await $.sleep(timing * 1000);
+									jumper.value = '7';
+									trustedDispatch(jumper, new OrigEvent('change', { composed: true }));
 										console.log('已跳转封底页');
 										await $.sleep(timing * 1000);
 										Array.from(document.querySelectorAll<HTMLElement>('.readerPager'))

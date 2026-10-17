@@ -1,4 +1,6 @@
 import { RemotePlaywright, request } from '@ocsjs/core';
+import type { RemotePage } from '@ocsjs/core';
+import { createDynamicRemotePage } from '../utils/app';
 import {
 	$ui,
 	$gm,
@@ -20,6 +22,7 @@ import { CXProject, definedProjects, ICourseProject, IcveMoocProject, YKTProject
 import { RenderScript } from '../render';
 import { SearchInfosElement } from '../elements/search.infos';
 import { $render } from '../utils/render';
+import { AntiDetectScript } from './anti-detect';
 
 const state = {
 	console: {
@@ -64,6 +67,7 @@ export const BackgroundProject = Project.create({
 				$.loadCustomElements([SearchInfosElement]);
 			}
 		}),
+		antiDetect: AntiDetectScript,
 		console: new Script({
 			name: '日志输出',
 			matches: [['所有', /.*/]],
@@ -440,19 +444,35 @@ export const BackgroundProject = Project.create({
 					defaultValue: true,
 					label: '开启答题日志输出',
 					attrs: { type: 'checkbox' }
-				}
+				},
 			},
 			methods() {
 				return {
-					getRemotePlaywrightCurrentPage: () => {
-						return RemotePlaywright.getRemotePage(this.cfg.show_debug_cursor, console.debug);
+				getRemotePlaywrightCurrentPage: async () => {
+					const resolver = async (): Promise<RemotePage | undefined> => {
+						return await RemotePlaywright.getRemotePage(
+							this.cfg.show_debug_cursor,
+							console.debug
+						);
+					};
+					const initial = await resolver();
+					if (!initial) {
+						return undefined;
 					}
+					return createDynamicRemotePage(resolver);
+				}
 				};
 			},
 			onrender({ panel }) {
 				const injectBtn = h('button', { className: 'base-style-button' }, '点击注入全局变量');
 				injectBtn.addEventListener('click', () => {
-					$gm.unsafeWindow.HH_CONTEXT = self;
+					const ctxKey = 'HH_CONTEXT_' + Math.random().toString(36).slice(2, 10);
+					Object.defineProperty($gm.unsafeWindow, ctxKey, {
+						value: self,
+						enumerable: false,
+						configurable: true,
+						writable: true
+					});
 				});
 
 				const showTabDataBtn = h('button', { className: 'base-style-button' }, '显示Tab存储');
@@ -701,7 +721,6 @@ export const BackgroundProject = Project.create({
 				/* global GM_xmlhttpRequest  RequestInfo RequestInit */
 				/* eslint-disable no-global-assign */
 				const gmRequest = GM_xmlhttpRequest;
-				const originalFetch = fetch;
 
 				const getId = () => Math.random().toString(16).slice(2);
 
@@ -757,43 +776,49 @@ export const BackgroundProject = Project.create({
 
 					return gmRequest.apply(this, [details as any]);
 				};
-				// @ts-ignore
-				fetch = (input: URL | RequestInfo, init?: RequestInit | undefined) => {
-					if (this.cfg.enable) {
-						const id = getId();
-						const data = {
-							id: id,
-							url: typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
-							method: init?.method || 'unknown',
-							type: 'fetch',
-							data: init?.body,
-							headers: init?.headers,
-							response: '',
-							error: '',
-							time: Date.now()
-						};
-						addRecord(data);
-						const res = originalFetch.apply(this, [input, init]);
-						res
-							.then((result) => {
-								return result.clone().text();
-							})
-							.then((result) => {
-								setItem(id, result, '');
-								data.response = result;
-								console.log('%c [请求成功]', 'color: green; font-weight: bold', data.url, data);
-							});
+				// 默认关闭请求记录时不要替换页面 fetch：
+				// qiankun 等框架会直接调用 window.fetch，包装函数里 this 不对会导致
+				// “Failed to execute 'fetch' on 'Window': Illegal invocation”。
+				if (this.cfg.enable) {
+					// fetch 是 Window 方法，必须绑定到真实全局对象再调用
+					const originalFetch = fetch.bind(globalThis);
+					// @ts-ignore
+					fetch = (input: URL | RequestInfo, init?: RequestInit | undefined) => {
+						if (this.cfg.enable) {
+							const id = getId();
+							const data = {
+								id: id,
+								url: typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
+								method: init?.method || 'unknown',
+								type: 'fetch',
+								data: init?.body,
+								headers: init?.headers,
+								response: '',
+								error: '',
+								time: Date.now()
+							};
+							addRecord(data);
+							const res = originalFetch(input, init);
+							res
+								.then((result) => {
+									return result.clone().text();
+								})
+								.then((result) => {
+									setItem(id, result, '');
+									data.response = result;
+									console.log('%c [请求成功]', 'color: green; font-weight: bold', data.url, data);
+								});
 
-						res.catch((err) => {
-							setItem(id, '', String(err));
-							data.error = String(err);
-							console.log('%c [请求失败]', 'color: red; font-weight: bold', data.url, data);
-						});
-						return res;
-					} else {
-						return originalFetch.apply(this, [input, init]);
-					}
-				};
+							res.catch((err) => {
+								setItem(id, '', String(err));
+								data.error = String(err);
+								console.log('%c [请求失败]', 'color: red; font-weight: bold', data.url, data);
+							});
+							return res;
+						}
+						return originalFetch(input, init);
+					};
+				}
 			}
 		}),
 		environmentDetect: new Script({

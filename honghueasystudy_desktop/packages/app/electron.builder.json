@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json.schemastore.org/electron-builder.json",
+  "appId": "ocs.enncy.cn",
+  "extraMetadata": {
+    "name": "鸿鹄易学",
+    "description": "鸿鹄易学 — 浏览器自动化神器，一键浏览器多开，用户脚本环境一键配置。"
+  },
+  "productName": "鸿鹄易学",
+  "asar": false,
+  "files": [
+    "**/*",
+    "!dist/**",
+    "!dist-*/**",
+    "!**/dist-links/**"
+  ],
+  "extraResources": [
+    {
+      "from": "resources/extension",
+      "to": "extension",
+      "filter": [
+        "**/*"
+      ]
+    }
+  ],
+  "copyright": "Copyright © 2021 ${author}",
+  "nsis": {
+    "oneClick": true
+  },
+  "win": {
+    "icon": "public/favicon.png",
+    "artifactName": "鸿鹄易学-${version}-setup-${os}-${arch}.${ext}",
+    "target": [
+      {
+        "target": "nsis"
+      }
+    ],
+    "requestedExecutionLevel": "highestAvailable",
+    "extraResources": [
+      {
+        "from": "../../bin/chrome/win-${arch}/",
+        "to": "bin/chrome",
+        "filter": [
+          "**/*.zip"
+        ]
+      }
+    ]
+  },
+  "mac": {
+    "icon": "public/favicon.icns",
+    "artifactName": "鸿鹄易学-${version}-setup-${os}-${arch}.${ext}",
+    "target": [
+      {
+        "target": "dmg"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "../../bin/chrome/mac-${arch}/",
+        "to": "bin/chrome",
+        "filter": [
+          "**/*.zip"
+        ]
+      }
+    ]
+  },
+  "linux": {
+    "icon": "public/favicon.png",
+    "artifactName": "鸿鹄易学-${version}-setup-${os}-${arch}.${ext}",
+    "target": [
+      {
+        "target": "AppImage"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "../../bin/chrome/linux-${arch}/",
+        "to": "bin/chrome",
+        "filter": [
+          "**/*.zip"
+        ]
+      }
+    ]
+  }
+}

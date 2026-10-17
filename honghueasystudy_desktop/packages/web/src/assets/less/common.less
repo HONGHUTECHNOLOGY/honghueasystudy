@@ -1,0 +1,379 @@
+body,
+html,
+#app {
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	height: 100%;
+	max-width: 100%;
+	max-height: 100%;
+	min-width: 500px;
+	min-height: 300px;
+	--title-height: 32px;
+}
+
+html.window-frame {
+	border: 1px solid #e1e1e1;
+	overflow: hidden;
+	box-shadow: 0px 0px 12px #d3d3d3;
+}
+
+#app {
+	font-family: Avenir, Helvetica, Arial, sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+.pointer {
+	cursor: pointer;
+}
+
+/* 设置滚动条的样式 */
+::-webkit-scrollbar {
+	width: 12px;
+	height: 12px;
+}
+
+/* 滚动槽 */
+::-webkit-scrollbar-track {
+	background: rgb(235, 235, 235);
+}
+
+/* 滚动条滑块 */
+::-webkit-scrollbar-thumb {
+	border-radius: 7px;
+	background: rgb(184, 184, 184);
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: rgb(143, 143, 143);
+}
+
+/* 滚动条箭头按钮 */
+@scrollbar-arrow-up: url('../img/scrollbar/up.svg');
+@scrollbar-arrow-down: url('../img/scrollbar/down.svg');
+@scrollbar-arrow-left: url('../img/scrollbar/left.svg');
+@scrollbar-arrow-right: url('../img/scrollbar/right.svg');
+
+::-webkit-scrollbar-button {
+	display: none;
+}
+
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:end:increment,
+::-webkit-scrollbar-button:horizontal:start:decrement,
+::-webkit-scrollbar-button:horizontal:end:increment {
+	display: block;
+	height: 18px;
+	width: 18px;
+	background: rgb(209, 209, 209) no-repeat center center;
+	background-size: 14px;
+}
+
+::-webkit-scrollbar-button:vertical:start:decrement:hover,
+::-webkit-scrollbar-button:vertical:end:increment:hover,
+::-webkit-scrollbar-button:horizontal:start:decrement:hover,
+::-webkit-scrollbar-button:horizontal:end:increment:hover {
+	background-color: rgba(214, 214, 214, 0.1);
+}
+
+::-webkit-scrollbar-button:vertical:start:decrement {
+	background-image: @scrollbar-arrow-up;
+}
+
+::-webkit-scrollbar-button:vertical:end:increment {
+	background-image: @scrollbar-arrow-down;
+}
+
+::-webkit-scrollbar-button:horizontal:start:decrement {
+	background-image: @scrollbar-arrow-left;
+}
+
+::-webkit-scrollbar-button:horizontal:end:increment {
+	background-image: @scrollbar-arrow-right;
+}
+
+::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+/** 通知栏样式 */
+.arco-notification {
+	/** 主容器 */
+	.arco-notification-notice {
+		padding: 12px;
+	}
+
+	/** 底部按钮 */
+	.arco-notification-notice-btn {
+		margin-top: 8px;
+	}
+
+	.arco-notification-notice-with-icon .arco-notification-notice-description {
+		margin-left: 0;
+		font-size: 12px;
+	}
+
+	.arco-notification-notice-with-icon .arco-notification-notice-message {
+		margin-left: 36px;
+	}
+
+	.arco-notification-notice-description {
+		overflow: auto;
+	}
+}
+
+.anticon {
+	vertical-align: 0px !important;
+}
+
+.markdown {
+	font-size: 14px;
+	border: 1px solid #e6e6e6;
+	border-radius: 4px;
+	padding: 4px;
+}
+
+code {
+	margin: 0px 2px !important;
+	padding: 4px 6px !important;
+	font-size: 12px !important;
+	color: #d63384;
+	background-color: rgb(242, 242, 242);
+	border-radius: 4px;
+}
+
+em {
+	background-color: yellow;
+	font-weight: bold;
+}
+
+body {
+	.arco-tree li span.arco-tree-iconEle {
+		vertical-align: unset;
+	}
+
+	.arco-tree li .arco-tree-node-content-wrapper {
+		padding: 0;
+	}
+
+	.arco-tree li {
+		padding: 0px 8px 0px 0px !important;
+		text-overflow: hidden;
+		overflow: hidden;
+		white-space: nowrap;
+	}
+
+	.arco-tree-title {
+		padding: 4px 8px 4px 0px !important;
+	}
+
+	.arco-tree * {
+		animation-duration: 0s !important;
+		animation: none !important;
+
+	}
+
+	.arco-tree-iconEle.arco-tree-icon__customize {
+		width: 18px;
+	}
+
+	.arco-tree li span.arco-tree-switcher {
+		width: 18px;
+	}
+}
+
+@night-color-primary: #4898e2;
+@night-color: #cccccc;
+@night-color-secondary: #aaaaaa;
+@night-bg-color: #2c2c2c;
+@night-bg-color-secondary: #4b4b4b;
+@night-active: #61a5e4;
+@night-border-color: #4b4848;
+
+body[arco-theme='dark'] {
+	color: @night-color;
+	background-color: @night-bg-color;
+
+	/* 暗色模式滚动槽 */
+	::-webkit-scrollbar-track {
+		background: rgba(255, 255, 255, 0.288);
+	}
+
+	/* 暗色模式滚动条滑块 */
+	::-webkit-scrollbar-thumb {
+		background: rgba(255, 255, 255, 0.589);
+	}
+
+	::-webkit-scrollbar-thumb:hover {
+		background: rgba(255, 255, 255, 0.87);
+	}
+
+	/* 暗色模式滚动条箭头按钮 - 通过 filter 反色适配暗色 */
+	::-webkit-scrollbar-button:vertical:start:decrement,
+	::-webkit-scrollbar-button:vertical:end:increment,
+	::-webkit-scrollbar-button:horizontal:start:decrement,
+	::-webkit-scrollbar-button:horizontal:end:increment {
+		background: rgba(255, 255, 255, 0.671) no-repeat center center;
+		background-size: 14px;
+		filter: invert(1);
+	}
+
+	::-webkit-scrollbar-button:vertical:start:decrement:hover,
+	::-webkit-scrollbar-button:vertical:end:increment:hover,
+	::-webkit-scrollbar-button:horizontal:start:decrement:hover,
+	::-webkit-scrollbar-button:horizontal:end:increment:hover {
+		background-color: rgba(255, 255, 255, 0.342);
+	}
+
+	::-webkit-scrollbar-button:vertical:start:decrement {
+		background-image: @scrollbar-arrow-up;
+	}
+
+	::-webkit-scrollbar-button:vertical:end:increment {
+		background-image: @scrollbar-arrow-down;
+	}
+
+	::-webkit-scrollbar-button:horizontal:start:decrement {
+		background-image: @scrollbar-arrow-left;
+	}
+
+	::-webkit-scrollbar-button:horizontal:end:increment {
+		background-image: @scrollbar-arrow-right;
+	}
+
+	.text-secondary {
+		color: @night-color-secondary !important;
+	}
+
+	.title {
+		color: @night-color;
+		background-color: @night-bg-color;
+		border-bottom: 1px solid @night-border-color;
+	}
+
+	#title {
+		ul li {
+			color: @night-color;
+		}
+	}
+
+	a,
+	a.link {
+		color: @night-active !important;
+	}
+
+	// 边框颜色
+	.border-end,
+	.border-start,
+	.border-bottom,
+	.border-top {
+		border-color: @night-border-color !important;
+	}
+
+	// 取消所有悬浮效果
+	* {
+		box-shadow: none !important;
+	}
+
+	// 鼠标选择
+	.entity:hover {
+		background: #3b3b3b !important;
+	}
+
+	// 截图边框
+	.screenshot-item {
+		border: 1px solid;
+		border-color: @night-border-color !important;
+	}
+
+	// 目录路径栏
+	.breadcrumb {
+		background-color: @night-bg-color;
+		border: 1px solid @night-border-color;
+	}
+	.path-item {
+		color: @night-color;
+	}
+
+	// 实体
+	.entity {
+		border-bottom: 1px solid @night-border-color;
+	}
+
+	.entity-properties {
+		background-color: @night-bg-color-secondary;
+		color: @night-color-secondary;
+	}
+
+	// 侧边栏
+	.sider-item.active {
+		background-color: @night-bg-color-secondary;
+	}
+
+	.sider {
+		border-right: 1px solid @night-border-color;
+
+		.sider-item {
+			border-left: 6px solid @night-bg-color;
+		}
+		.sider-item.active {
+			background-color: @night-bg-color-secondary;
+			border-left: 6px solid @night-color-primary;
+		}
+	}
+
+	// 批量创建表格
+	.ps-table {
+		.ps-body-cell {
+			border: 1px solid @night-border-color;
+
+			.arco-input-wrapper {
+				background: @night-bg-color-secondary;
+			}
+		}
+
+		.arco-table-tr {
+			.ps-table-index {
+				background-color: @night-bg-color-secondary;
+
+				color: @night-color-secondary;
+			}
+		}
+	}
+}
+
+.arco-trigger-popup {
+	animation: linear-fade-up 0.2s var(--ease-precise) !important;
+
+	* {
+		animation-duration: 0s !important;
+	}
+}
+
+.arco-dropdown-option-content {
+	font-size: 12px;
+	line-height: 28px;
+}
+
+/** 简单模式下不要有头部间隔 */
+.arco-modal-simple .arco-modal-header {
+	margin-bottom: 0px;
+}
+
+/** 防止被标题栏遮挡 */
+.arco-drawer-container,
+.arco-modal-container {
+	top: var(--title-height) !important;
+}
+
+.arco-notification-list,
+.arco-message-list {
+	top: 52px;
+}
+
+.user-script-search-modal {
+	max-width: 1200px;
+	min-width: 600px;
+	overflow: auto;
+}

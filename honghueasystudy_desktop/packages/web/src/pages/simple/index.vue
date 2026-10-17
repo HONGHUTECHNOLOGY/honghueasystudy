@@ -1,0 +1,423 @@
+<template>
+	<CommonEditActionDropdown
+		trigger="contextMenu"
+		align-point
+		position="bl"
+		:style="{ display: 'block' }"
+	>
+		<div class="simple-mode-container">
+			<div class="p-2 d-flex justify-content-center tabs">
+				<a-tabs
+					v-model:active-key="state.activeTab"
+					type="rounded"
+					hide-content
+					size="small"
+				>
+					<a-tab-pane key="browsers">
+						<template #title>
+							<Icon type="web"> {{ allBrowsers.length > 0 ? `浏览器 - ${allBrowsers.length}` : '浏览器' }} </Icon>
+						</template>
+					</a-tab-pane>
+					<a-tab-pane key="scripts">
+						<template #title>
+							<Icon type="code">
+								{{ store.render.scripts.length > 0 ? `用户脚本 - ${store.render.scripts.length}` : '脚本' }}
+							</Icon>
+						</template>
+					</a-tab-pane>
+					<a-tab-pane key="setting">
+						<template #title> <Icon type="settings">软件设置 </Icon> </template>
+					</a-tab-pane>
+				</a-tabs>
+			</div>
+
+			<div
+				class="container-md"
+				style="max-width: 800px"
+			>
+				<!-- 浏览器面板 -->
+				<div
+					v-show="state.activeTab === 'browsers'"
+					class="overflow-aut mb-3o"
+				>
+					<!-- 环境检测提示 -->
+					<EnvironmentAlert class="mb-3" />
+
+					<UsageAlertCollapse
+						v-model:collapse="store.render.state.read_record.browser_usage"
+						class="mb-2"
+						banner
+						title="使用提示"
+						:html="lang('simple_mode_index_browser_usage', '启动浏览器、打开任意网课后即可自动执行脚本。')"
+					/>
+
+					<div class="cards-area entities">
+						<template v-if="allBrowsers.length === 0">
+							<a-card class="h-100 d-flex justify-content-center flex-wrap align-items-center pb-5">
+								<EmptyBrowserCard />
+							</a-card>
+						</template>
+						<template v-else>
+							<div class="cards-grid">
+								<!-- 浏览器卡片 -->
+								<template
+									v-for="browser in allBrowsers"
+									:key="browser.uid"
+								>
+									<a-card
+										:data-uid="browser.uid"
+										class="browser-card entity"
+										@click="selectBrowser(browser)"
+									>
+										<template #extra>
+											<div class="d-flex align-items-end">
+												<BrowserOperators
+													:browser="browser"
+													icon-class="fs-5"
+												/>
+											</div>
+										</template>
+
+										<template #title>
+											<div class="card-name-text">
+												<Icon type="web">
+													<!-- 重命名状态 -->
+													<template v-if="getBrowserInstance(browser.uid)?.renaming">
+														<a-input
+															v-model="renameValue"
+															size="mini"
+															@click.stop
+															@blur="handleRenameFinish(browser)"
+															@keyup.enter="handleRenameFinish(browser)"
+														/>
+													</template>
+													<template v-else>
+														{{ browser.name }}
+													</template>
+												</Icon>
+											</div>
+										</template>
+
+										<a-card-meta>
+											<template #description>
+												<!-- 备注/描述 -->
+												<div
+													v-if="browser.notes?.trim()"
+													class="card-notes"
+												>
+													{{ browser.notes }}
+												</div>
+												<div
+													v-else
+													style="font-size: 12px"
+													class="text-center text-secondary"
+												>
+													<IconInfoCircleFill /> 点击 启动 运行浏览器。<br />
+													单击 设置浏览器
+												</div>
+											</template>
+
+											<template #avatar>
+												<!-- 标签 -->
+												<div
+													v-if="browser.tags.length"
+													class="card-tags"
+												>
+													<Tags
+														:tags="browser.tags"
+														:read-only="true"
+														size="small"
+													/>
+												</div>
+											</template>
+										</a-card-meta>
+									</a-card>
+								</template>
+
+								<!-- 新增浏览器卡片 -->
+								<div
+									class="browser-card add-card"
+									@click="handleAddBrowser"
+								>
+									<Icon
+										type="add_circle_outline"
+										class="add-icon"
+									/>
+									<span class="add-text">新建浏览器</span>
+									<span
+										class="text-secondary"
+										style="font-size: 11px"
+									>
+										<a-tag>数据隔离</a-tag>
+										<a-tag>账号多开</a-tag>
+									</span>
+								</div>
+							</div>
+						</template>
+					</div>
+				</div>
+
+				<!-- 脚本面板 -->
+				<div
+					v-show="state.activeTab === 'scripts'"
+					class="overflow-auto p-2"
+				>
+					<UserScriptListPage />
+				</div>
+
+				<!-- 软件设置面板 -->
+				<div
+					v-show="state.activeTab === 'setting'"
+					class="overflow-auto"
+				>
+					<SettingPanel simple />
+				</div>
+			</div>
+		</div>
+	</CommonEditActionDropdown>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
+import Icon from '../../components/Icon.vue';
+import Tags from '../../components/Tags.vue';
+import BrowserOperators from '../../components/browsers/BrowserOperators.vue';
+import CommonEditActionDropdown from '../../components/CommonEditActionDropdown.vue';
+import { store } from '../../store';
+import { root } from '../../fs/folder';
+import { Browser } from '../../fs/browser';
+import { BrowserOptions } from '../../fs/interface';
+import { newBrowserOrInit } from '../../utils/browser';
+import EmptyBrowserCard from '../../components/EmptyBrowserCard.vue';
+import SettingPanel from '../../components/SettingPanel.vue';
+import { lang } from '../../store/index';
+import UsageAlertCollapse from '../../components/UsageAlertCollapse.vue';
+import UserScriptListPage from '../../components/UserScriptListPage.vue';
+import EnvironmentAlert from '../../components/EnvironmentAlert.vue';
+
+const state = reactive({
+	activeTab: 'browsers'
+});
+
+/** 获取所有浏览器（递归） */
+const allBrowsers = computed(() => {
+	return root().findAll((e) => e.type === 'browser') as BrowserOptions[];
+});
+
+/** 获取浏览器实例 */
+function getBrowserInstance(uid: string): Browser | undefined {
+	return Browser.from(uid);
+}
+
+/** 选中浏览器，显示操作面板 */
+function selectBrowser(browser: BrowserOptions) {
+	store.render.browser.currentBrowserUid = browser.uid;
+}
+
+/** 新增浏览器 */
+function handleAddBrowser() {
+	newBrowserOrInit();
+}
+
+/** 重命名临时值 */
+const renameValue = ref('');
+
+/** 处理重命名完成 */
+function handleRenameFinish(browser: BrowserOptions) {
+	const instance = Browser.from(browser.uid);
+	if (instance) {
+		instance.rename(renameValue.value || browser.name);
+	}
+}
+
+/** 监听重命名状态，初始化值并自动聚焦输入框 */
+watch(
+	() => allBrowsers.value.find((b) => getBrowserInstance(b.uid)?.renaming),
+	(renamingBrowser) => {
+		if (renamingBrowser) {
+			renameValue.value = renamingBrowser.name;
+			nextTick(() => {
+				const input = document.querySelector('.browser-card .arco-input') as HTMLInputElement;
+				if (input) {
+					input.focus();
+					input.select();
+				}
+			});
+		}
+	}
+);
+
+onMounted(() => {
+	// 确保专业模式的面板已关闭
+	store.render.browser.currentBrowserUid = '';
+});
+</script>
+
+<style lang="less" scoped>
+.simple-mode-container {
+	height: calc(100vh - var(--title-height));
+	display: flex;
+	flex-direction: column;
+	overflow: auto;
+	background-color: #165cff08;
+}
+
+.cards-area {
+	padding: 4px 20px 20px 16px;
+}
+
+.cards-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 16px;
+	max-width: 900px;
+	margin: 0 auto;
+}
+
+.browser-card {
+	background: transparent;
+	border: 1px solid #e5e6eb;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	background-color: white;
+
+	&:hover {
+		border-color: #bedaff;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+		transform: translateY(-2px);
+	}
+
+	&:active {
+		transform: translateY(0);
+	}
+
+	.card-name-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 300px;
+		font-size: 14px;
+	}
+
+	.card-icon {
+		font-size: 18px;
+		color: #165dff;
+		flex-shrink: 0;
+	}
+
+	.card-operators {
+		flex-shrink: 0;
+	}
+
+	.card-tags {
+		margin-bottom: 6px;
+	}
+
+	.card-notes {
+		font-size: 12px;
+		color: #86909c;
+		line-height: 1.5;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+	}
+}
+
+.add-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 120px;
+	border: 1px dashed #c9cdd4;
+	background-color: transparent;
+
+	&:hover {
+		border-color: #165dff;
+		background-color: #f2f3f5;
+	}
+
+	.add-icon {
+		font-size: 32px;
+		margin-bottom: 8px;
+	}
+}
+
+/** 暗色主题适配 */
+body[arco-theme='dark'] & {
+	.simple-mode-container {
+		background-color: #17171a;
+	}
+
+	.browser-card {
+		background: transparent;
+		border-color: #3d3d3f;
+
+		&:hover {
+			border-color: #3a5a8c;
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+		}
+
+		.card-name {
+			color: #ffffffd9;
+		}
+
+		.card-notes {
+			color: #86909c;
+		}
+	}
+
+	.add-card {
+		border-color: #484849;
+		background: transparent;
+
+		&:hover {
+			border-color: #165dff;
+			background-color: #2a2a2b;
+		}
+
+		.add-icon {
+			color: #484849;
+		}
+
+		.add-text {
+			color: #86909c;
+		}
+	}
+
+	.tabs {
+		background-color: #17171a;
+
+		:deep(.arco-tabs-tab) {
+			border-color: #3d3d3f;
+		}
+	}
+}
+
+/** 响应式：小屏幕单列 */
+@media (max-width: 600px) {
+	.cards-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+.tabs {
+	position: sticky;
+	top: 0px;
+	z-index: 99;
+
+	:deep(.arco-tabs-tab) {
+		border: 1px solid rgb(235, 235, 235);
+		background-color: white;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.06) !important;
+		margin: 4px;
+	}
+}
+
+:deep(.arco-card-meta-footer) {
+	align-items: start !important;
+}
+</style>

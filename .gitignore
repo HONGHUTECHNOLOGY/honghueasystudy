@@ -152,4 +152,5 @@ ocsjs-4.0/
 extension/lib/
 extension/icon/
 extension/content/resources.js
+extension/content/main.js
 install.log

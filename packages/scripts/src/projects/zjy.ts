@@ -1,5 +1,6 @@
 import { $, OCSWorker, defaultAnswerWrapperHandler } from '@ocsjs/core';
 import { Project, Script, $ui, $el, $message, $modal, h } from 'easy-us';
+import { trustedDispatch, OrigEvent } from '../utils/safe-click';
 import { volume } from '../utils/configs';
 import { waitForMedia, waitForElement } from '../utils/study';
 import { $msg, CommonWorkOptions, playMedia } from '../utils';
@@ -709,10 +710,10 @@ function workOrExam(type: 'work' | 'exam', { answererWrappers, period, thread, a
 					const textarea = option.querySelector<HTMLTextAreaElement>('textarea');
 					if (text) {
 						text.value = answer;
-						text.dispatchEvent(new Event('input', { bubbles: true }));
+						trustedDispatch(text, new OrigEvent('input', { bubbles: true, composed: true }));
 					} else if (textarea) {
 						textarea.value = answer;
-						textarea.dispatchEvent(new Event('input', { bubbles: true }));
+						trustedDispatch(textarea, new OrigEvent('input', { bubbles: true, composed: true }));
 					}
 				}
 			}
