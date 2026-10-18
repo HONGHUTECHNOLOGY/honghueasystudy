@@ -62,6 +62,9 @@ import { onMounted, nextTick, onActivated, reactive, watch, ref, WatchStopHandle
 import { remote } from '../utils/remote';
 import { store as Store, lang } from '../store/index';
 import { observeVisibleBrand } from '../utils/brand-sanitizer';
+import ocsCode from '../vendor/ocs/index.js?raw';
+import easyUsCode from '../vendor/ocs/easy-us.js?raw';
+import ocsCss from '../vendor/ocs/style.css?raw';
 import type { Project } from 'easy-us';
 
 const props = defineProps<{
@@ -215,21 +218,17 @@ async function loadOCS() {
 	try {
 		// @ts-ignore
 		if (global.OCS === undefined) {
-			// 加载 OCS
-			const code = await remote.methods.call('get', 'https://cdn.ocsjs.com/index.js');
-			await remote.webContents.call('executeJavaScript', code);
+			// 使用项目内固定副本，避免运行时依赖远程脚本
+			await remote.webContents.call('executeJavaScript', ocsCode);
 		}
 
 		// @ts-ignore
 		if (global.EUS === undefined) {
-			// 加载 EUS
-			const code = await remote.methods.call('get', 'https://cdn.ocsjs.com/easy-us.js');
-			await remote.webContents.call('executeJavaScript', code);
+			await remote.webContents.call('executeJavaScript', easyUsCode);
 		}
 
 		if (state.css === '') {
-			// 加载样式
-			state.css = await remote.methods.call('get', 'https://cdn.ocsjs.com/style.css');
+			state.css = ocsCss;
 		}
 
 		// @ts-ignore
