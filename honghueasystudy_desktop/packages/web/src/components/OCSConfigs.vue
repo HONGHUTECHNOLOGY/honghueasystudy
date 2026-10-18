@@ -61,6 +61,7 @@
 import { onMounted, nextTick, onActivated, reactive, watch, ref, WatchStopHandle, onDeactivated } from 'vue';
 import { remote } from '../utils/remote';
 import { store as Store, lang } from '../store/index';
+import { observeVisibleBrand } from '../utils/brand-sanitizer';
 import type { Project } from 'easy-us';
 
 const props = defineProps<{
@@ -104,6 +105,7 @@ state.watchStopHandle = watch(store, () => {
 
 let wrapper = null as HTMLElement | null;
 let root = null as ShadowRoot | null;
+let brandObserver: MutationObserver | undefined;
 
 /** 设置手风琴效果：同时只能打开一个 detail */
 function setupAccordion(detailsList: HTMLDetailsElement[]) {
@@ -239,6 +241,7 @@ async function loadOCS() {
 
 		wrapper = wrapper || h('div');
 		root = root || wrapper.attachShadow({ mode: 'closed' });
+		if (!brandObserver) brandObserver = observeVisibleBrand(root);
 
 		OCS.$elements.root = root;
 		$elements.root = root;

@@ -67,6 +67,7 @@ import { closeAllBrowser, showClearBrowserCachesModal } from './utils/browser';
 import { changeTheme, fetchRemoteLangs, setAlwaysOnTop, setAutoLaunch } from './utils';
 import { activeIpcRenderListener } from './utils/ipc';
 import { getWindowsRelease } from './utils/os';
+import { observeVisibleBrand } from './utils/brand-sanitizer';
 import { currentBrowser } from './fs';
 import { Modal, Message } from '@arco-design/web-vue';
 import zhCN from '@arco-design/web-vue/es/locale/lang/zh-cn';
@@ -100,6 +101,9 @@ function saveStoreToLocalSync(_store: typeof store) {
 }
 
 onMounted(async () => {
+	/** 清理界面中残留的旧品牌字样 */
+	observeVisibleBrand(document.body);
+
 	/** 开启 Ipc 通道监听 */
 	activeIpcRenderListener();
 

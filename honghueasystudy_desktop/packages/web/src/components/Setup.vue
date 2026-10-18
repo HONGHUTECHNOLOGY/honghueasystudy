@@ -253,7 +253,7 @@ type Step = {
 const _preset_steps = {
 	show_desc: {
 		title: '等待初始化...',
-		description: '将检测浏览器环境并配置鸿鹄易学内置扩展；无需安装脚本管理器或 OCS 用户脚本。',
+		description: '将检测浏览器环境并配置鸿鹄易学内置扩展；无需安装脚本管理器或额外用户脚本。',
 		action() {}
 	} as Step,
 	init_env: {
