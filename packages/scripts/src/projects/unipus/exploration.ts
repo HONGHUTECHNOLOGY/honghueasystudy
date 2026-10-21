@@ -139,32 +139,39 @@ export const UnipusExplorationScript = new Script({
 			}
 		});
 
-		// 等待确认弹窗出现自动关闭
-		const checkConfirmModal = async () => {
-			await $.sleep(3000);
-
-			const btns = [
-				// 系统学习时间确认
-				'.system-info-cloud-ok-button',
-				// 确认做笔记习惯弹窗
-				'.ant-modal-body .ant-btn-primary',
-				// 由于你长时间未操作，请点确定继续使用。
-				'button[class*=mask_notice]'
-			];
-
-			const btn = await waitForElement(btns.join(','));
-			if (btn) {
-				await rp.click(btn);
-			}
-			await checkConfirmModal();
+		// 常驻轮询关闭平台的确认弹窗（学习时长提示、笔记习惯提示、长时间未操作提示等）。
+		// 注意：不能跟着 job() 结束就退出，因为 SPA 换任务不会再触发 oncomplete，
+		// 弹窗留着会盖住整页导致后续点击全部失效。
+		const pickConfirmButton = () => {
+			const direct = $el<HTMLElement>('.system-info-cloud-ok-button, button[class*=mask_notice]');
+			if (direct) return direct;
+			const modal = $el<HTMLElement>('.ant-modal-wrap:not([style*="display: none"])');
+			if (!modal) return null;
+			// 交卷、提交、删除这类弹窗不能替用户点确定
+			if (/提交|交卷|删除/.test(modal.innerText || '')) return null;
+			return modal.querySelector<HTMLElement>('.ant-modal-body .ant-btn-primary');
 		};
-		checkConfirmModal();
+		(async () => {
+			for (;;) {
+				await $.sleep(2000);
+				const btn = pickConfirmButton();
+				if (!btn) continue;
+				try {
+					await rp.click(btn);
+				} catch {
+					// 模拟点击失败时走原生点击兜底
+				}
+				// 部分弹窗只监听原生 click，模拟事件点不掉，这里补一次
+				if (btn.isConnected) {
+					btn.click();
+				}
+			}
+		})();
 		console.log('[U校园调试] oncomplete 开始执行, readyState:', document.readyState);
 		console.log('[U校园调试] 当前URL:', location.href);
 		const wrap = await waitForElement('.question-wrap', { timeout_seconds: 30 });
 		if (!wrap) {
 			console.error('[U校园调试] 未找到 .question-wrap！页面DOM可能已变更');
-			console.log('[U校园调试] body innerHTML前2000字符:', document.body?.innerHTML?.substring(0, 2000));
 			$msg.error('未找到题目容器 .question-wrap，可能页面结构已变更或页面未完全加载');
 			return;
 		}
@@ -196,6 +203,59 @@ export const UnipusExplorationScript = new Script({
 	}
 });
 
+/**
+ * U 校园 5.x（经典 AI 版）把每道题统一收进 `.question-common-abs-reply`，一题一个。
+ * 内部的作答控件决定题型：
+ *   .option-wrap .option                → 选择（单选/多选）
+ *   textarea                            → 填空 / 翻译 / 简答
+ *   .question-common-abs-scoop          → 表格填分（每行填一个分值）
+ *   .evaluation-slider-reply-wrapper    → 打分量表（每行点一个档位）
+ *   input                               → 单行填空
+ */
+const QUESTION_ROOT = '.question-common-abs-reply';
+
+type QuestionKind = 'choice' | 'textarea' | 'scoop' | 'slider' | 'input' | 'other';
+
+/** 判断单个题目根的作答类型 */
+function getQuestionKind(root: Element): QuestionKind {
+	if (root.querySelector('.option-wrap .option')) return 'choice';
+	if (root.querySelector('textarea')) return 'textarea';
+	if (root.querySelector('.question-common-abs-scoop')) return 'scoop';
+	// 打分量表（Reading the text 里 "Rate each statement 1~5" 那种）
+	if (root.querySelector('.evaluation-slider-reply-wrapper')) return 'slider';
+	if (root.querySelector('input')) return 'input';
+	return 'other';
+}
+
+/**
+ * 给某一类题目根打临时标记，返回可用于 OCSWorker 的 root 选择器。
+ * 新版一份试卷里可能混排选择题和填空题，只能先分组再分别作答。
+ */
+function markQuestions(kind: QuestionKind) {
+	const attr = `data-ocs-qk-${kind}`;
+	$$el(QUESTION_ROOT).forEach((root) => {
+		if (getQuestionKind(root) === kind) {
+			root.setAttribute(attr, '1');
+		}
+	});
+	return {
+		selector: `[${attr}="1"]`,
+		clear() {
+			$$el(`[${attr}]`).forEach((root) => root.removeAttribute(attr));
+		}
+	};
+}
+
+/** 带标记地执行某个题型的作答，结束后一定清理标记 */
+async function withMarkedQuestions<T>(kind: QuestionKind, run: (rootSelector: string) => Promise<T>) {
+	const mark = markQuestions(kind);
+	try {
+		return await run(mark.selector);
+	} finally {
+		mark.clear();
+	}
+}
+
 async function job(cfg: typeof UnipusExplorationScript.cfg, rp: RemotePage) {
 	const wrap = await waitForElement('.question-wrap', { check_period_ms: 3000 });
 	const wrap_content = wrap?.childNodes[0] as HTMLElement;
@@ -208,32 +268,12 @@ async function job(cfg: typeof UnipusExplorationScript.cfg, rp: RemotePage) {
 		});
 	};
 
-	// 调试日志：输出当前页面的关键选择器匹配情况
-	console.log('[U校园调试] job 开始执行');
-	console.log('[U校园调试] wrap:', wrap);
-	console.log('[U校园调试] wrap_content:', wrap_content);
-	console.log(
-		'[U校园调试] 选择器检测:',
-		{
-			'.question-wrap': !!document.querySelector('.question-wrap'),
-			'.unipus-upload-container': !!document.querySelector('.unipus-upload-container'),
-			'.question-wrap .video-box': !!document.querySelector('.question-wrap .video-box'),
-			'.question-wrap .question-rich-text-read': !!document.querySelector('.question-wrap .question-rich-text-read'),
-			'.vocabulary-wrapper': !!document.querySelector('.vocabulary-wrapper'),
-			'.swiper-slide': !!document.querySelector('.swiper-slide'),
-			'.layout-material-container': !!document.querySelector('.layout-material-container'),
-			'.layout-reply-container': !!document.querySelector('.layout-reply-container'),
-			'.option-wrap': !!document.querySelector('.option-wrap'),
-			'.question-common-abs-choice': !!document.querySelector('.question-common-abs-choice'),
-			'.question-common-abs-reply': !!document.querySelector('.question-common-abs-reply'),
-			'.full': !!document.querySelector('.full'),
-			'textarea': !!document.querySelector('textarea'),
-			'.question-material-banked-cloze-reply': !!document.querySelector('.question-material-banked-cloze-reply'),
-			'.input-wrapper': !!document.querySelector('.input-wrapper'),
-			'.sequence-reply-view-item-text': !!document.querySelector('.sequence-reply-view-item-text'),
-			'.text-material-wrapper': !!document.querySelector('.text-material-wrapper')
-		}
-	);
+	// 输出当前任务的题型识别结果，方便排查
+	const debugKinds = $$el(QUESTION_ROOT).map(getQuestionKind);
+	console.log('[U校园调试] 题目根数量:', debugKinds.length, '题型分布:', debugKinds.reduce<Record<string, number>>((acc, k) => {
+		acc[k] = (acc[k] || 0) + 1;
+		return acc;
+	}, {}));
 
 	await (async () => {
 		if (!wrap_content) {
@@ -251,8 +291,9 @@ async function job(cfg: typeof UnipusExplorationScript.cfg, rp: RemotePage) {
 			return;
 		}
 
-		// 不支持图片题
-		if (matches('.layout-material-container .component-htmlview img')) {
+		// 不支持图片题：只有图片出现在「作答区 / 选项」里才算图片题，
+		// 阅读材料里的配图不影响搜题，不能误判成图片题直接跳过。
+		if (matches('.question-common-abs-reply .component-htmlview img, .option-wrap .option img, textarea ~ .component-htmlview img')) {
 			$msg.error('检测到题目中包含图片，暂时无法处理，即将跳过该任务');
 			return;
 		}
@@ -403,86 +444,80 @@ async function job(cfg: typeof UnipusExplorationScript.cfg, rp: RemotePage) {
 			return;
 		}
 
-		// ===============================  阅读理解填空题 ===============================
-		if (
-			matches(
-				// 左侧阅读理解
-				'.layout-material-container',
-				// 右侧回复区域
-				'.layout-reply-container',
-				'textarea'
-			)
-		) {
-			if (!cfg.enable_reading) {
-				$msg.warn('阅读理解题任务开关已关闭，即将跳过该任务');
-				return;
-			}
+		// =============================== 新版通用题型（选择 / 填空 / 翻译 / 表格填分）===============================
+		// U 校园 5.x 把每道题都收进 .question-common-abs-reply，一题一个；
+		// 同一份试卷里可能混排选择题和填空题，所以先按题型分组，再分别作答。
+		const questionRoots = $$el(QUESTION_ROOT);
+		const questionKinds = questionRoots.map(getQuestionKind);
+		const countKind = (kind: QuestionKind) => questionKinds.filter((k) => k === kind).length;
+		const choiceCount = countKind('choice');
+		const blankCount = countKind('textarea');
+		const scaleCount = countKind('scoop') + countKind('slider') + countKind('input');
+		const hasMaterial = !!(questionRoots.length && $el('.question-common-abs-material, .layout-material-container'));
+
+		if (choiceCount + blankCount + scaleCount > 0) {
 			// 判断已经完成
 			if (checkUniTestIsDone()) {
-				$msg.success('阅读理解填空题任务已完成，即将跳过该任务');
-				return;
-			}
-			$msg.info('检测到阅读理解填空题任务，即将开始答题');
-
-			await doUnderstandingText(rp, CommonProject.scripts.settings.methods.getWorkOptions());
-			return;
-		}
-
-		// =============================== 阅读理解选择题 ===============================
-		if (
-			matches(
-				// 左侧阅读理解
-				'.layout-material-container',
-				// 右侧回复区域
-				'.layout-reply-container',
-				'.option-wrap'
-			)
-		) {
-			if (!cfg.enable_reading) {
-				$msg.warn('阅读理解题任务开关已关闭，即将跳过该任务');
-				return;
-			}
-			// 判断已经完成
-			if (checkUniTestIsDone()) {
-				$msg.success('阅读理解选择题任务已完成，即将跳过该任务');
-				return;
-			}
-			$msg.info('检测到阅读理解选择题任务，即将开始答题');
-
-			await doReading(rp, CommonProject.scripts.settings.methods.getWorkOptions());
-			return;
-		}
-
-		// ===============================  普通选择题，需要在阅读理解下面判断，因为只是没有左侧区域，其他内容类似 ===============================
-		if (matches('.layout-reply-container', '.option-wrap')) {
-			if (!cfg.enable_choice) {
-				$msg.warn('选择题任务开关已关闭，即将跳过该任务');
-				return;
-			}
-			// 判断已经完成
-			if (checkUniTestIsDone()) {
-				$msg.success('选择题任务已完成，即将跳过该任务');
-				return;
-			}
-			$msg.info('检测到选择题任务，即将开始答题');
-			await doChoice(rp, CommonProject.scripts.settings.methods.getWorkOptions());
-			return;
-		}
-
-		// =============================== 普通填空题，翻译题 ===============================
-		if (matches('.layout-reply-container', '.full', 'textarea')) {
-			if (!cfg.enable_completion) {
-				$msg.warn('填空题任务开关已关闭，即将跳过该任务');
-				return;
-			}
-			// 判断已经完成
-			if (checkUniTestIsDone()) {
-				$msg.success('填空题任务已完成，即将跳过该任务');
+				$msg.success('当前任务已完成，即将跳过该任务');
 				return;
 			}
 
-			$msg.info('检测到填空题任务，即将开始答题');
-			await doCompletion(rp, CommonProject.scripts.settings.methods.getWorkOptions());
+			// 按题型分组，混排试卷（选择题 + 填空题）会依次作答
+			const groups: { label: string; run: (sub: CommonWorkOptions) => Promise<unknown> }[] = [];
+
+			if (choiceCount > 0) {
+				if (!cfg.enable_choice) {
+					$msg.warn('选择题任务开关已关闭，跳过选择题');
+				} else if (hasMaterial) {
+					groups.push({
+						label: '阅读理解选择题',
+						run: (sub) => withMarkedQuestions('choice', (root) => doReading(rp, sub, root))
+					});
+				} else {
+					groups.push({
+						label: '选择题',
+						run: (sub) => withMarkedQuestions('choice', (root) => doChoice(rp, sub, root))
+					});
+				}
+			}
+
+			if (blankCount > 0) {
+				if (hasMaterial && cfg.enable_reading) {
+					groups.push({
+						label: '阅读理解填空题',
+						run: (sub) => withMarkedQuestions('textarea', (root) => doUnderstandingText(rp, sub, root))
+					});
+				} else if (cfg.enable_completion) {
+					groups.push({
+						label: '填空题',
+						run: (sub) => withMarkedQuestions('textarea', (root) => doCompletion(rp, sub, root))
+					});
+				} else {
+					$msg.warn('填空题任务开关已关闭，跳过填空题');
+				}
+			}
+
+			if (scaleCount > 0) {
+				if (!cfg.enable_completion) {
+					$msg.warn('表格填分任务开关已关闭，跳过表格填分');
+				} else {
+					groups.push({ label: '表格填分', run: () => doRatingScale(rp) });
+				}
+			}
+
+			if (groups.length === 0) {
+				$msg.warn('当前任务的所有题型均已关闭，即将跳过该任务');
+				return;
+			}
+
+			const workOptions = CommonProject.scripts.settings.methods.getWorkOptions();
+			for (let index = 0; index < groups.length; index++) {
+				const group = groups[index];
+				// 多组题型时，前面的分组先保存，最后一组才交给平台提交
+				const sub = index === groups.length - 1 ? workOptions : { ...workOptions, upload: 'save' as const };
+				$msg.info(`检测到${group.label}任务，即将开始作答（${index + 1}/${groups.length}）`);
+				await group.run(sub);
+			}
 			return;
 		}
 
@@ -788,43 +823,24 @@ async function job(cfg: typeof UnipusExplorationScript.cfg, rp: RemotePage) {
 			}
 		}
 
-		// =============================== 文本阅读题，这里等十秒跳过 ===============================
-		if (matches('.text-material-wrapper')) {
-			console.log('[U校园调试] 匹配到 .text-material-wrapper');
-			const ps = $$el('.text-material-wrapper .component-htmlview p');
-			console.log('[U校园调试] .text-material-wrapper .component-htmlview p 数量:', ps.length);
-			if (ps.length === 1) {
-				$msg.info('检测到文本阅读题任务，阅读10秒后跳过');
+		// =============================== 纯文本阅读题（Structure analysis / Reading skills / Collocation），阅读一段时间后跳过 ===============================
+		if (matches('.text-material-wrapper') || matches('.question-common-abs-material')) {
+			const textLength = ($el('.text-material-wrapper, .question-common-abs-material')?.innerText || '').trim().length;
+			if (textLength > 0) {
+				$msg.info('检测到文本阅读任务，阅读 10 秒后跳过');
 				await $.sleep(10 * 1000);
 				return;
 			}
 		}
 
-		// 调试：输出更多 DOM 信息
-		console.log('[U校园调试] 未知任务类型，输出 DOM 信息用于调试');
-		console.log('[U校园调试] wrap_content.className:', wrap_content.className);
-		console.log('[U校园调试] wrap_content innerHTML前2000字符:', wrap_content.innerHTML.substring(0, 2000));
-		console.log('[U校园调试] iframe数量:', document.querySelectorAll('iframe').length);
-		const iframes = document.querySelectorAll('iframe');
-		iframes.forEach((iframe, i) => {
-			console.log(`[U校园调试] iframe[${i}] src:`, iframe.src, 'id:', iframe.id, 'className:', iframe.className);
-		});
-		// 检测更多可能的选择器
-		console.log('[U校园调试] 额外选择器检测:', {
-			'.question-basic': !!document.querySelector('.question-basic'),
-			'.question-abs-question': !!document.querySelector('.question-abs-question'),
-			'.abs-question': !!document.querySelector('.abs-question'),
-			'.question-content': !!document.querySelector('.question-content'),
-			'.question-body': !!document.querySelector('.question-body'),
-			'.question-stem': !!document.querySelector('.question-stem'),
-			'.question-options': !!document.querySelector('.question-options'),
-			'.question-answer': !!document.querySelector('.question-answer'),
-			'.abs-direction': !!document.querySelector('.abs-direction'),
-			'.question-common-course-page': !!document.querySelector('.question-common-course-page'),
-			'input': !!document.querySelector('input'),
-			'.ant-btn': !!document.querySelector('.ant-btn'),
-			'.btn': !!document.querySelector('.btn'),
-			'button': !!document.querySelector('button')
+		// 兜底：未识别的内容（Quotation、Stories of China 等纯展示任务，
+		// 平台的样式类是哈希生成的，无法稳定定位），直接交给平台自动标记完成。
+		console.log('[U校园调试] 未识别的任务内容:', {
+			className: wrap_content.className,
+			text: (wrap_content.innerText || '').replace(/\s+/g, ' ').slice(0, 200),
+			video: document.querySelectorAll('video').length,
+			audio: document.querySelectorAll('audio').length,
+			iframe: document.querySelectorAll('iframe').length
 		});
 
 		$msg.info('未知任务类型，即将跳过');
@@ -852,46 +868,53 @@ async function job(cfg: typeof UnipusExplorationScript.cfg, rp: RemotePage) {
 	await job(cfg, rp);
 }
 
-async function next(rp: RemotePage) {
-	// 小任务
-	const tasks = $$el('.pc-header-tasks-row .pc-task');
-	for (let index = 0; index < tasks.length; index++) {
-		const task = tasks[index];
-		if (task.classList.contains('pc-header-task-activity')) {
-			const nextTask = tasks[index + 1];
-			if (nextTask) {
-				await rp.click(nextTask);
-				// nextTask.click();
-				return true;
-			}
-		}
+/** 等待页面 hash 变化，作为「跳转成功」的判据 */
+async function waitHashChange(hash: string, timeout = 8000) {
+	const start = Date.now();
+	while (Date.now() - start < timeout) {
+		await $.sleep(500);
+		if (location.hash !== hash) return true;
 	}
-	// 小章节
-	const tabs = $$el('.pc-tab-row .tab');
-	for (let index = 0; index < tabs.length; index++) {
-		const tab = tabs[index];
-		if (tab.classList.contains('pc-header-tab-activity')) {
-			const nextTab = tabs[index + 1];
-			if (nextTab) {
-				await rp.click(nextTab);
-				// nextTab.click();
-				return true;
-			}
-		}
-	}
+	return false;
+}
 
-	// 大章节，好像有两个UI版本
-	const elements = $$el('.pc-slider-content [data-role="micro"],.pc-slider-content [data-role="node"]');
-	for (let index = 0; index < elements.length; index++) {
-		const element = elements[index];
-		if (element.classList.contains('pc-menu-activity')) {
-			const nextElement = elements[index + 1];
-			if (nextElement) {
-				await rp.click(nextElement);
-				// nextElement.click();
-				return true;
+/**
+ * 进入下一个任务。
+ * 光点击不判断结果的话，一旦平台没响应就会在同一个任务上无限空转，
+ * 所以这里统一用 hash 是否变化来确认跳转成功，并补一次原生 click 兜底。
+ */
+async function next(rp: RemotePage) {
+	const hash = location.hash;
+
+	const go = async (el?: HTMLElement) => {
+		if (!el) return false;
+		await rp.click(el);
+		if (await waitHashChange(hash, 5000)) return true;
+		// 模拟点击被平台忽略时，用原生 click 再试一次
+		if (el.isConnected) {
+			el.click();
+			if (await waitHashChange(hash, 5000)) return true;
+		}
+		return false;
+	};
+
+	const findNext = async (selector: string, activeClass: string) => {
+		const elements = $$el<HTMLElement>(selector) as HTMLElement[];
+		for (let index = 0; index < elements.length; index++) {
+			if (elements[index].classList.contains(activeClass)) {
+				return await go(elements[index + 1]);
 			}
 		}
+		return false;
+	};
+
+	// 小任务
+	if (await findNext('.pc-header-tasks-row .pc-task', 'pc-header-task-activity')) return true;
+	// 小章节
+	if (await findNext('.pc-tab-row .tab', 'pc-header-tab-activity')) return true;
+	// 大章节，好像有两个UI版本
+	if (await findNext('.pc-slider-content [data-role="micro"],.pc-slider-content [data-role="node"]', 'pc-menu-activity')) {
+		return true;
 	}
 
 	return false;
@@ -1029,12 +1052,12 @@ async function singleQuestionHandle({
 	}
 }
 
-function doChoice(rp: RemotePage, opts: CommonWorkOptions) {
+function doChoice(rp: RemotePage, opts: CommonWorkOptions, root = '.question-common-abs-choice') {
 	const is_multiple = !!$el('.multipleChoice');
 	return handleCommonUnitTest(rp, opts, {
 		type: is_multiple ? 'multiple' : 'single',
 		test_type: 'choice',
-		root: '.question-common-abs-choice',
+		root,
 		elements: {
 			title: '.ques-title',
 			options: '.option-wrap .option .content'
@@ -1042,12 +1065,12 @@ function doChoice(rp: RemotePage, opts: CommonWorkOptions) {
 	});
 }
 
-function doReading(rp: RemotePage, opts: CommonWorkOptions) {
+function doReading(rp: RemotePage, opts: CommonWorkOptions, root = '.question-common-abs-choice') {
 	const is_multiple = !!$el('.multipleChoice');
 	return handleCommonUnitTest(rp, opts, {
 		type: is_multiple ? 'multiple' : 'single',
 		test_type: 'reading-choice',
-		root: '.question-common-abs-choice',
+		root,
 		elements: {
 			// 将题目和选项一起搜索
 			title: '.ques-title,.option-wrap',
@@ -1064,11 +1087,11 @@ function doReading(rp: RemotePage, opts: CommonWorkOptions) {
 	});
 }
 
-function doUnderstandingText(rp: RemotePage, opts: CommonWorkOptions) {
+function doUnderstandingText(rp: RemotePage, opts: CommonWorkOptions, root = '.question-common-abs-reply') {
 	return handleCommonUnitTest(rp, opts, {
 		type: 'completion',
 		test_type: 'reading-replay',
-		root: '.question-common-abs-reply',
+		root,
 		elements: {
 			// 将题目和选项一起搜索
 			title: '.question-inputbox-header',
@@ -1085,11 +1108,11 @@ function doUnderstandingText(rp: RemotePage, opts: CommonWorkOptions) {
 	});
 }
 
-function doCompletion(rp: RemotePage, opts: CommonWorkOptions) {
+function doCompletion(rp: RemotePage, opts: CommonWorkOptions, root = '.question-common-abs-reply') {
 	return handleCommonUnitTest(rp, opts, {
 		type: 'completion',
 		test_type: 'complete',
-		root: '.question-common-abs-reply',
+		root,
 		elements: {
 			title: '.question-inputbox-header',
 			options: '.question-inputbox-body textarea'
@@ -1101,6 +1124,69 @@ function doCompletion(rp: RemotePage, opts: CommonWorkOptions) {
 			return [direction, '-'.repeat(10), ques].filter(Boolean).join('\n');
 		}
 	});
+}
+
+/**
+ * 量表题（Reading the text 里的自我评估 / 打分题）。
+ * 两类形态：
+ *   1. 表格填分：每行一个空格，填 1~N 的分值（.question-common-abs-scoop）
+ *   2. 点击打分：每题一排档位格子，点中间那格（.evaluation-slider-reply-wrapper）
+ * 这两种题都没有标准答案，题库也搜不到，所以统一取量表的中间值，
+ * 保证题目被平台标记为「已作答」，不至于卡住整个学习流程。
+ */
+async function doRatingScale(rp: RemotePage) {
+	const marks = [markQuestions('scoop'), markQuestions('slider'), markQuestions('input')];
+	try {
+		let filled = 0;
+
+		// ===== 点击打分：每题点中间档位 =====
+		const sliderRoots = $$el<HTMLElement>('[data-ocs-qk-slider="1"]') as HTMLElement[];
+		for (const root of sliderRoots) {
+			const items = Array.from(
+				root.querySelectorAll<HTMLElement>('.evaluation-slider-reply-component-wrapper_option_item')
+			);
+			if (items.length === 0) continue;
+			await rp.click(items[Math.floor((items.length - 1) / 2)]);
+			await $.sleep(300);
+			filled++;
+		}
+		if (sliderRoots.length > 0) {
+			$msg.success(`打分题已选择 ${filled}/${sliderRoots.length} 项（统一选中间档位）`);
+		}
+
+		// ===== 表格填分：空格填中间值 =====
+		const inputRoots = $$el<HTMLElement>(`${marks[0].selector},${marks[2].selector}`) as HTMLElement[];
+		const inputs = inputRoots
+			.flatMap((root) => Array.from(root.querySelectorAll<HTMLInputElement>('input')))
+			.filter((input) => !input.disabled && !['radio', 'checkbox', 'file', 'hidden'].includes(input.type));
+
+		if (inputs.length > 0) {
+			// 从题面里解析量表范围，例如 "1 = Strongly disagree ... 7 = Strongly agree"
+			const legend = $el('.question-common-abs-scoop')?.innerText || $el('.question-common-abs-material')?.innerText || '';
+			const scaleValues = (legend.match(/(?:^|\s)(\d{1,2})\s*=/g) || [])
+				.map((s) => parseInt(s.replace(/\D/g, ''), 10))
+				.filter((n) => n >= 1 && n <= 10);
+			const max = scaleValues.length ? Math.max(...scaleValues) : 5;
+			const value = String(Math.round((1 + max) / 2));
+
+			let inputFilled = 0;
+			for (const input of inputs) {
+				if (input.value) continue;
+				await rp.click(input);
+				await rp['keyboard.type'](value);
+				await $.sleep(200);
+				if (input.value) inputFilled++;
+			}
+			filled += inputFilled;
+			if (inputFilled > 0) {
+				$msg.success(`表格填分已填写 ${inputFilled}/${inputs.length} 项（量表 1~${max}，统一填 ${value}）`);
+			}
+		}
+
+		return filled;
+	} finally {
+		marks.forEach((mark) => mark.clear());
+	}
 }
 
 async function handleCommonUnitTest(

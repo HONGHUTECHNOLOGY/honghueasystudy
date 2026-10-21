@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-var __OCS_BRIDGE_KEY__="b487d276-f27b-41cf-8698-49791c17f2e6";
+var __OCS_BRIDGE_KEY__="382cb056-41cd-4f49-ad00-415d6ff6b22d";
 /* 鸿鹄易学 · MAIN world 运行时（ScriptCat 风格）
  *
  * 本文件由 background.js 通过 chrome.userScripts.register({ world: "MAIN" })
@@ -256,7 +256,7 @@ var __ocs_sandbox__=__ocsCreateSandbox();
 	'use strict';
 
 	/* ===== 1/4 resources（构建生成） ===== */
-var __OCS_RESOURCES__ = {"version":"5.1.0","metadata":{"name":"鸿鹄易学","version":"5.1.0","description":"鸿鹄易学 - 在线网络课程辅助工具","author":"enncy","license":"MIT","namespace":"https://honghueasystudy","homepage":"https://easystudy.honghutech.eu.org","source":"https://easystudy.honghutech.eu.org","icon":"https://easystudy.honghutech.eu.org/assets/img/icon.png","connect":["easystudy.honghutech.eu.org","enncy.cn","icodef.com","ocsjs.com","zaizhexue.top","localhost","127.0.0.1"],"run-at":"document-start"},"resources":{"STYLE":"/** 默认字体 */\n/** 输入框默认边距 */\nul,\nol {\n  line-height: 26px;\n  padding-left: 22px;\n  margin: 0px;\n}\na {\n  color: #1890ff;\n}\nhr {\n  border-style: solid;\n  border-color: #63636346;\n  border-width: 0px;\n  border-bottom: 1px solid #63636346;\n  margin-block-start: 1em;\n  margin-block-end: 1em;\n}\n.base-style-active-form-control {\n  border: 1px solid #ffffff00;\n}\n.base-style-active-form-control:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.base-style-active-form-control:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.base-style-active-form-control:hover {\n  background-color: #ebeef4;\n}\n.base-style-input {\n  outline: none;\n  border: 1px solid #ffffff00;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n}\n.base-style-input::placeholder {\n  color: #bababa;\n}\n.base-style-switch {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.base-style-switch:checked {\n  background: #1890ff;\n}\n.base-style-switch:disabled {\n  background-color: #f7f7f78b;\n}\n.base-style-switch:checked::before {\n  transform: translate(24px, 0px);\n}\n.base-style-switch::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.base-style-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.base-style-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button + .base-style-button {\n  margin-left: 12px;\n}\n.base-style-button:hover {\n  background-color: #7abbff24;\n}\n.base-style-button.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button:disabled:active {\n  box-shadow: none;\n}\n.base-style-button-secondary {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\n.base-style-button-secondary:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button-secondary + .base-style-button-secondary {\n  margin-left: 12px;\n}\n.base-style-button-secondary:hover {\n  background-color: #7abbff24;\n}\n.base-style-button-secondary.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button-secondary:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button-secondary.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button-secondary:disabled:active {\n  box-shadow: none;\n}\ncontainer-element.hidden {\n  display: none;\n}\ncontainer-element.minimize {\n  min-width: unset;\n}\ncontainer-element {\n  position: fixed;\n  top: 10%;\n  left: 10%;\n  z-index: 99999;\n  text-align: left;\n  min-width: 300px;\n  -webkit-font-smoothing: antialiased;\n  -moz-osx-font-smoothing: grayscale;\n  color: #636363;\n  box-shadow: 0 0 24px -12px #3f3f3f;\n  border-radius: 8px;\n  letter-spacing: 0.5px;\n  border: 1px solid #c1c1c1;\n}\nheader-element {\n  display: flex;\n  align-items: center;\n  background-color: white;\n  border-radius: 8px 8px 0px 0px;\n  user-select: none;\n  padding: 4px;\n  padding-bottom: 0px;\n}\nheader-element .extra-menu-bar {\n  width: 100%;\n  padding: 4px;\n  padding-bottom: 0px;\n  margin-top: 4px;\n  border-top: 1px solid #e8e8e8;\n  /** 默认隐藏，一直到需要激活的时候再更改 */\n  display: none;\n}\nheader-element .extra-menu-bar .script-panel-link {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n  padding-bottom: 2px;\n  margin-bottom: 0px;\n}\nheader-element .extra-menu-bar .script-panel-link:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nheader-element .extra-menu-bar .script-panel-link + header-element .extra-menu-bar .script-panel-link {\n  margin-left: 12px;\n}\nheader-element .extra-menu-bar .script-panel-link:hover {\n  background-color: #7abbff24;\n}\nheader-element .extra-menu-bar .script-panel-link.danger:hover {\n  background-color: #ffdede86;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nheader-element .extra-menu-bar .script-panel-link.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled:active {\n  box-shadow: none;\n}\nheader-element .extra-menu-bar .script-panel-link.active {\n  background-color: #1890ff1a;\n  border-color: #1890ff;\n  color: #1890ff;\n}\nheader-element .extra-menu-bar .script-panel-link + .script-panel-link {\n  margin-left: 4px;\n}\nheader-element .profile {\n  flex: 1;\n  cursor: move;\n}\nheader-element .switch:hover,\nheader-element .dropdown:hover {\n  background-color: #f3f3f3;\n}\nheader-element .close:hover {\n  background-color: #ff000038;\n}\nheader-element .switch,\nheader-element .close {\n  cursor: pointer;\n}\nheader-element .dropdown {\n  line-height: 24px;\n  text-decoration: underline;\n}\nheader-element .switch,\nheader-element .close,\nheader-element .profile {\n  display: inline-flex;\n  align-items: center;\n  padding: 0px 8px;\n}\n.logo {\n  width: 18px;\n  height: 18px;\n  cursor: pointer;\n}\n.project-selector {\n  display: flex;\n  align-items: center;\n}\n.project-selector select {\n  background: #ffffff00;\n  border-radius: 4px;\n  border: 1px solid #63636346;\n  padding: 4px;\n}\n.project-selector.expand-all {\n  display: none;\n}\n.body {\n  overflow: auto;\n  width: auto;\n  height: 100%;\n}\nscript-panel-element {\n  display: block;\n  background-color: white;\n  border-radius: 0px 0px 8px 8px;\n  padding: 0px 8px 12px 8px;\n  overflow: auto;\n}\nscript-panel-element .script-panel-body {\n  padding: 0px 8px;\n}\nscript-panel-element + script-panel-element {\n  margin-top: 12px;\n}\n.card + .card {\n  margin-top: 12px;\n}\n.card {\n  background-color: white;\n  border-radius: 2px;\n  padding: 0px 8px;\n}\n.notes {\n  background: #0099ff0e;\n  border-left: 4px solid #0099ff65;\n  width: -webkit-fill-available;\n  margin: 0px 8px;\n  line-height: 26px;\n  letter-spacing: 1px;\n}\n.secondary {\n  font-size: 12px;\n  color: #8b8b8b;\n}\n.tooltip-container {\n  z-index: 99999999999999;\n  margin: 12px 0px 0px 12px;\n  padding: 4px;\n  color: black;\n  background: #f0f0f0;\n  box-shadow: 0px 0px 4px #949494;\n  position: fixed;\n  white-space: normal;\n  max-width: 200px;\n  height: auto;\n  border-radius: 2px;\n  line-height: 18px;\n}\n.configs-container.lock {\n  filter: blur(1px);\n  user-select: none;\n  -webkit-user-select: none;\n  -moz-user-select: none;\n  -ms-user-select: none;\n}\n.configs-container .lock-wrapper {\n  cursor: not-allowed !important;\n  border-radius: 4px;\n  position: absolute;\n  left: 0px;\n  z-index: 1;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n}\n.configs-container .lock-message {\n  background-color: #ffffff7d;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #6a6a6a98;\n  padding: 2px;\n}\n.configs {\n  display: table;\n  background: #e1e1e107;\n  width: -webkit-fill-available;\n}\n.configs .configs-body {\n  display: table-row-group;\n}\n.configs .configs-body config-element + config-element label {\n  padding-top: 4px;\n}\n.configs .configs-body config-element + config-element .config-wrapper {\n  padding-top: 4px;\n}\n.configs .configs-body config-element {\n  width: 100%;\n  display: table-row;\n  line-height: 26px;\n}\n.configs .configs-body config-element label {\n  white-space: nowrap;\n  color: #4e5969;\n  display: table-cell;\n  padding-right: 12px;\n  text-align: left;\n  vertical-align: top;\n  margin-right: 12px;\n}\n.configs .configs-body config-element .config-wrapper {\n  display: table-cell;\n  vertical-align: middle;\n  /** check box 的样式 */\n}\n.configs .configs-body config-element .config-wrapper select {\n  outline: none;\n  border: none;\n  border: 1px solid #e4e4e4;\n  border-radius: 4px;\n  padding: 2px 8px;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper select:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper select:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper select:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper textarea {\n  padding: 2px 8px;\n  outline: none;\n  border: none;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper textarea:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']) {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button'])::placeholder {\n  color: #bababa;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  padding: 0px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] + .configs .configs-body config-element .config-wrapper input[type='button'] {\n  margin-left: 12px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:hover {\n  background-color: #7abbff24;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger:hover {\n  background-color: #ffdede86;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled:active {\n  box-shadow: none;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked {\n  background: #1890ff;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:disabled {\n  background-color: #f7f7f78b;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked::before {\n  transform: translate(24px, 0px);\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.configs .configs-body config-element .config-wrapper input:not([type='checkbox'], [type='radio']),\n.configs .configs-body config-element .config-wrapper textarea,\n.configs .configs-body config-element .config-wrapper select {\n  width: -webkit-fill-available;\n  font-size: inherit;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'],\n.configs .configs-body config-element .config-wrapper input[type='radio'],\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  accent-color: #0e8ee2;\n}\n.configs .configs-body config-element .config-wrapper > *:not(.tooltip) {\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  float: right;\n}\n.configs .configs-body config-element .config-wrapper > *:disabled {\n  cursor: not-allowed;\n  background-color: #f7f7f78b;\n}\n.message-container {\n  margin-bottom: 4px;\n  position: absolute;\n  bottom: 100%;\n  left: 50%;\n  width: 100%;\n  transform: translate(-50%, 0px);\n  min-width: 300px;\n}\n.message-container message-element {\n  display: flex;\n  border-radius: 4px;\n  padding: 4px 12px;\n  margin-bottom: 4px;\n}\n.message-container message-element .message-content-container {\n  margin-right: 8px;\n  flex: auto;\n}\n.message-container message-element .message-text {\n  letter-spacing: 1px;\n  font-weight: bold;\n}\n.message-container message-element .message-closer {\n  width: 18px;\n  min-width: 18px;\n  cursor: pointer;\n  background-color: #ffffffb3;\n  color: #a1a1a1;\n  border-radius: 100%;\n  text-align: center;\n  height: 18px;\n  vertical-align: middle;\n  font-size: 12px;\n}\n.message-container message-element.error {\n  background-color: #ffe6e6;\n  color: #c70208;\n  border: 1px solid #ff6b6ded;\n}\n.message-container message-element.info {\n  background-color: #c9e7ff;\n  color: #004d95;\n  border: 1px solid #1890ff69;\n}\n.message-container message-element.success {\n  background-color: #e8ffe0;\n  color: #3e8d0d;\n  border: 1px solid #6fd91d;\n}\n.message-container message-element.warn {\n  background-color: #ffefc8;\n  color: #9b7400;\n  border: 1px solid #ffc107;\n}\nmodal-element {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  background-color: white;\n  border-radius: 4px;\n  box-shadow: 0px 0px 24px -12px black;\n  border: 1px solid #929292;\n  height: fit-content;\n  transform: translate(-50%, -50%);\n  padding: 12px 18px 18px 18px;\n  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;\n  z-index: 99999999999;\n  line-height: 24px;\n}\nmodal-element .modal-profile {\n  zoom: 0.9;\n  color: #969696;\n  user-select: none;\n  margin-bottom: 4px;\n}\nmodal-element .modal-title {\n  font-size: 18px;\n  font-weight: bold;\n  user-select: none;\n}\nmodal-element .modal-body {\n  margin: 12px 0px;\n  overflow: auto;\n}\nmodal-element .modal-footer {\n  display: flex;\n  white-space: nowrap;\n  justify-content: end;\n  align-items: end;\n}\nmodal-element .modal-footer > * + * {\n  margin-left: 12px;\n}\nmodal-element .modal-input {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n  width: -webkit-fill-available;\n}\nmodal-element .modal-input::placeholder {\n  color: #bababa;\n}\nmodal-element .modal-input:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\nmodal-element .modal-input:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\nmodal-element .modal-input:hover {\n  background-color: #ebeef4;\n}\nmodal-element .modal-cancel-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\nmodal-element .modal-cancel-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-cancel-button + modal-element .modal-cancel-button {\n  margin-left: 12px;\n}\nmodal-element .modal-cancel-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-cancel-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-cancel-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-cancel-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-cancel-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element .modal-confirm-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\nmodal-element .modal-confirm-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-confirm-button + modal-element .modal-confirm-button {\n  margin-left: 12px;\n}\nmodal-element .modal-confirm-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-confirm-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-confirm-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-confirm-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-confirm-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element.alert .modal-input,\nmodal-element.alert .modal-cancel-button {\n  display: none;\n}\nmodal-element.alert .modal-confirm-button {\n  margin: 0;\n}\nmodal-element.prompt .modal-input,\nmodal-element.prompt .modal-cancel-button,\nmodal-element.prompt .modal-confirm-button {\n  display: block;\n}\nmodal-element.confirm .modal-input {\n  display: none;\n}\n.modal-wrapper {\n  width: 100%;\n  height: 100%;\n  z-index: 9999;\n  position: fixed;\n  top: 0px;\n  left: 0px;\n  z-index: 9999999;\n  background-color: rgba(0, 0, 0, 0.265);\n  color: #636363;\n  font: 14px Menlo, Monaco, Consolas, 'Courier New', monospace;\n}\n.pointer {\n  cursor: pointer;\n}\n.separator {\n  display: flex;\n  align-items: center;\n  text-align: center;\n  padding: 4px 0px 8px 0px;\n}\n.separator::before,\n.separator::after {\n  content: '';\n  flex: 1;\n  border-bottom: 1px solid #63636346;\n}\n.separator:not(:empty)::before {\n  margin-right: 0.25em;\n}\n.separator:not(:empty)::after {\n  margin-left: 0.25em;\n}\ncontainer-element.minimize .body,\ncontainer-element.minimize header-element .dropdown,\ncontainer-element.minimize .footer {\n  display: none;\n}\ncontainer-element.minimize header-element {\n  padding: 8px;\n  border-radius: 8px;\n  box-shadow: 0px 0px 24px -12px black;\n}\n.user-guide > li {\n  padding: 4px 0px;\n}\n.search-infos-num {\n  width: 26px;\n  margin: 2px;\n  height: 20px;\n  border-radius: 4px;\n  display: inline-block;\n  background-color: white;\n  text-align: center;\n  cursor: pointer;\n  border: 1px solid #b6b6b6;\n}\n.search-infos-num.requested {\n  border: 1px solid #63b4ff;\n  color: #63b4ff;\n}\n.search-infos-num.active {\n  background-color: #127de1 !important;\n  color: white;\n}\n.search-infos-num.error {\n  border: 1px solid #ff8789ed;\n  background-color: #ff6b6ded;\n  color: white;\n}\n.search-infos-num.finish {\n  background-color: #63b4ff;\n  border: 1px solid #63b4ff;\n  color: white;\n}\nsearch-infos-element {\n  display: block;\n  overflow: auto;\n}\nsearch-infos-element .search-result {\n  margin-bottom: 12px;\n  padding-left: 12px;\n}\nsearch-infos-element .search-result .question {\n  font-weight: bold;\n  max-height: 200px;\n  overflow: auto;\n}\nsearch-infos-element .search-result .answer {\n  color: #7c7c7c;\n}\nsearch-infos-element .search-result .answer code {\n  border-bottom: 1px solid #dcdcdc;\n  padding: 2px 0px;\n  border-radius: 2px;\n  margin: 4px;\n  line-height: 22px;\n}\nsearch-infos-element .search-result .answer code + code {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag {\n  padding: 2px 6px;\n  border-radius: 2px;\n  font-size: 12px;\n  cursor: pointer;\n  margin-right: 6px;\n}\nsearch-infos-element .search-result .search-result-answer-tag + .search-result-answer-tag {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag.blue {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n}\nsearch-infos-element .search-result .search-result-answer-tag.green {\n  background-color: #f6ffed;\n  border: 1px solid #b7eb8f;\n  color: #52c41a;\n}\nsearch-infos-element .search-result .search-result-answer-tag.gray {\n  background-color: #fafafa;\n  border: 1px solid #d9d9d9;\n  color: #595959;\n}\nsearch-infos-element .search-result .search-result-answer-tag.red {\n  background-color: #fff1f0;\n  border: 1px solid #ffa39e;\n  color: #ff4d4f;\n}\nsearch-infos-element .search-result .search-result-answer-tag.yellow {\n  background-color: #fffbe6;\n  border: 1px solid #ffe58f;\n  color: #faad14;\n}\nsearch-infos-element .search-result-question-type {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n  margin-right: 8px;\n  padding: 0px 4px;\n  border-radius: 4px;\n}\nsearch-infos-element .error {\n  color: #ff6b6ded;\n  display: inline-block;\n  padding-left: 12px;\n}\n.copy,\n.question-title-extra-btn {\n  margin-left: 4px;\n  padding: 2px 4px;\n  border-radius: 2px;\n  box-shadow: 0 0 4px #b1b1b1;\n  cursor: pointer !important;\n  font-weight: normal;\n  font-size: 12px;\n}\n.work-result-question-container {\n  position: absolute;\n  width: 400px;\n  left: -100%;\n  top: 0px;\n  background: white;\n  border: 1px solid #cbcbcb;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #d1cfcf;\n  padding: 12px;\n}\n.work-result-question-container .close-search-result {\n  font-size: 12px;\n  margin-left: 8px;\n  text-decoration: underline;\n  color: gray;\n  cursor: pointer;\n}\n.work-result-list {\n  max-height: 400px;\n  overflow: auto;\n  margin: 12px 0px;\n  padding: 6px;\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n}\n.search-info-title {\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  margin-bottom: 12px;\n  line-height: 20px;\n  overflow: auto;\n}\n.search-info-title .title-content {\n  max-height: 200px;\n  overflow: auto;\n}\n.search-info-details {\n  margin-left: 4px;\n}\n.console {\n  max-height: 300px;\n  max-width: 400px;\n  overflow: auto;\n  background-color: #292929;\n  padding: 12px 6px;\n  color: #ececec;\n  font-size: 12px;\n}\n.console .item {\n  padding: 3px 0px;\n  border-radius: 2px;\n}\n.console .item .time {\n  color: #757575;\n}\n.console .item .info {\n  background-color: #2196f3a3;\n}\n.console .item .warn {\n  background-color: #ffc107db;\n}\n.console .item .error {\n  background-color: #f36c71cc;\n}\n.console .item .debug,\n.console .item .log {\n  background-color: #9e9e9ec4;\n}\n.console *::selection {\n  background-color: #ffffff6b;\n}\n.markdown {\n  max-width: 400px;\n  max-height: 50vh;\n  overflow: auto;\n}\n.markdown code {\n  padding: 2px 4px;\n  background-color: #f0f0f0;\n  border-radius: 6px;\n  font-size: 12px;\n}\n.markdown blockquote {\n  padding: 4px 4px 4px 12px;\n  margin: 0px;\n  color: #b5b5b5;\n  border-left: #ababab 2px solid;\n}\n.markdown blockquote p {\n  margin: 0px;\n}\n.markdown h1,\n.markdown h2,\n.markdown h3,\n.markdown h4,\n.markdown h5,\n.markdown h6,\n.markdown p {\n  margin: 8px 0px;\n}\n.dropdown {\n  position: relative;\n  display: inline-block;\n}\n.dropdown.active .dropdown-trigger-element {\n  color: #1890ff;\n}\n.dropdown-trigger-element {\n  cursor: pointer;\n}\n.dropdown-content {\n  display: none;\n  position: absolute;\n  background-color: #ffffff;\n  overflow: auto;\n  box-shadow: 0px 8px 16px 0px #00000033;\n  z-index: 1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  min-width: 120px;\n}\n.dropdown-content.show {\n  display: block;\n}\n.dropdown-content {\n  cursor: pointer;\n  z-index: 999;\n}\n.dropdown-content .dropdown-option {\n  padding-left: 4px;\n  white-space: nowrap;\n}\n.dropdown-content .dropdown-option:hover {\n  background-color: #f3f3f3;\n}\n.dropdown-content .dropdown-option.active {\n  background-color: #1890ff1a;\n  color: #1890ff;\n}\n.space {\n  display: inline-flex;\n}\n.config-details {\n  animation: fade-in 0.5s;\n}\n.config-details label {\n  padding-left: 12px;\n}\n.alert-info-wrapper {\n  margin-bottom: 8px;\n}\n.alert-info-wrapper .result-info {\n  padding: 12px;\n  text-align: center;\n  border-radius: 6px;\n}\n.alert-info-wrapper .unresolved {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .no-answer {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .error {\n  color: #ff4d4f;\n  background-color: #fff1f0;\n}\nmessage-element {\n  animation: show 0.5s;\n}\nscript-panel-element > div,\nscript-panel-link,\ncontainer-element,\nmodal-element {\n  animation: fade-in 0.3s;\n}\n@keyframes show {\n  0% {\n    transform: translateY(20px);\n    opacity: 0;\n  }\n  100% {\n    transform: translateY(0);\n    opacity: 1;\n  }\n}\n@keyframes fade-in {\n  0% {\n    opacity: 0;\n  }\n  100% {\n    opacity: 1;\n  }\n}\n@keyframes fade-out {\n  0% {\n    opacity: 1;\n  }\n  100% {\n    opacity: 0;\n  }\n}\n.checkbox-label {\n  display: inline-block !important;\n  position: relative;\n  cursor: pointer;\n  font-size: 16px;\n  color: #2c3e50;\n}\n/* 隐藏原始复选框 */\n.checkbox-input {\n  position: absolute;\n  opacity: 0;\n  width: 0;\n  height: 0;\n}\n/* 自定义按钮样式 */\n.checkbox-label::after {\n  content: '';\n  display: inline-block;\n  border-radius: 50%;\n  transition: all 0.1s ease;\n  position: relative;\n  margin-left: 4px;\n  vertical-align: middle;\n}\n/* 向下箭头（未选中状态） */\n.checkbox-label::before {\n  content: '🔽';\n  position: absolute;\n  width: 0;\n  height: 0;\n  right: 8px;\n  transition: all 0.1s ease;\n  z-index: 2;\n}\n/* 向上箭头（选中状态） */\n.checked .checkbox-label::before {\n  content: '🔼';\n}\n/* ==================== Apple Design Style Override ==================== */\ncontainer-element,\ncontainer-element * {\n  font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"SF Pro Display\",\n    \"Helvetica Neue\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif !important;\n  letter-spacing: 0 !important;\n}\ncontainer-element {\n  background: rgba(255, 255, 255, 0.86) !important;\n  backdrop-filter: saturate(180%) blur(24px) !important;\n  -webkit-backdrop-filter: saturate(180%) blur(24px) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 14px !important;\n  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06) !important;\n  color: #1d1d1f !important;\n}\nheader-element {\n  background: transparent !important;\n  border-radius: 14px 14px 0 0 !important;\n  padding: 10px 12px 8px !important;\n  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar {\n  gap: 4px !important;\n}\nheader-element .extra-menu-bar button {\n  background: transparent !important;\n  border: none !important;\n  border-radius: 7px !important;\n  padding: 5px 12px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  color: #1d1d1f !important;\n  transition: background 0.15s ease !important;\n}\nheader-element .extra-menu-bar button:hover {\n  background: rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar button.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\nheader-element .profile {\n  font-weight: 600 !important;\n  font-size: 14px !important;\n  color: #1d1d1f !important;\n}\n.base-style-button {\n  background: #007aff !important;\n  color: #fff !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 7px 16px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease, transform 0.1s ease !important;\n}\n.base-style-button:hover {\n  background: #0066d6 !important;\n}\n.base-style-button:active {\n  transform: scale(0.97) !important;\n}\n.base-style-button-secondary {\n  background: rgba(0, 0, 0, 0.05) !important;\n  color: #1d1d1f !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 6px 14px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease !important;\n}\n.base-style-button-secondary:hover {\n  background: rgba(0, 0, 0, 0.1) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  border: 1px solid rgba(0, 0, 0, 0.1) !important;\n  border-radius: 8px !important;\n  background: #fff !important;\n  padding: 7px 10px !important;\n  font-size: 13px !important;\n  color: #1d1d1f !important;\n  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;\n  outline: none !important;\n}\n.base-style-active-form-control:focus,\n.base-style-input:focus {\n  border-color: #007aff !important;\n  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.16) !important;\n  background: #fff !important;\n}\n.base-style-active-form-control:hover,\n.base-style-input:hover {\n  background: #fff !important;\n}\n.card {\n  background: #fff !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 12px !important;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;\n}\n.configs-container {\n  border: none !important;\n  box-shadow: none !important;\n}\n.notes {\n  color: #6e6e73 !important;\n  line-height: 1.6 !important;\n}\n.secondary {\n  color: #6e6e73 !important;\n}\n.separator {\n  border-color: rgba(0, 0, 0, 0.06) !important;\n}\n.dropdown-content {\n  border-radius: 10px !important;\n  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  overflow: hidden !important;\n}\n.dropdown-option {\n  border-radius: 6px !important;\n  transition: background 0.12s ease !important;\n}\n.dropdown-option:hover {\n  background: rgba(0, 0, 0, 0.05) !important;\n}\n.dropdown-option.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\n.modal-wrapper {\n  border-radius: 14px !important;\n  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\n.message-container {\n  gap: 6px !important;\n}\n/* 面板留白 */\nscript-panel-element {\n  padding: 4px 2px !important;\n}\n/* 滚动条苹果风格 */\ncontainer-element ::-webkit-scrollbar {\n  width: 8px !important;\n  height: 8px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb {\n  background: rgba(0, 0, 0, 0.18) !important;\n  border-radius: 4px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb:hover {\n  background: rgba(0, 0, 0, 0.3) !important;\n}\ncontainer-element ::-webkit-scrollbar-track {\n  background: transparent !important;\n}\n/* ==================== Silky Animations ==================== */\ncontainer-element {\n  scroll-behavior: smooth !important;\n}\ncontainer-element * {\n  scroll-behavior: smooth !important;\n}\n@keyframes ocs-panel-in {\n  from {\n    opacity: 0;\n    transform: translateY(10px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\n@keyframes ocs-card-in {\n  from {\n    opacity: 0;\n    transform: translateY(8px) scale(0.99);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0) scale(1);\n  }\n}\n@keyframes ocs-modal-in {\n  from {\n    opacity: 0;\n    transform: scale(0.9) translateY(12px);\n  }\n  to {\n    opacity: 1;\n    transform: scale(1) translateY(0);\n  }\n}\n@keyframes ocs-dropdown-in {\n  from {\n    opacity: 0;\n    transform: scaleY(0.92) translateY(-6px);\n  }\n  to {\n    opacity: 1;\n    transform: scaleY(1) translateY(0);\n  }\n}\n@keyframes ocs-msg-in {\n  from {\n    opacity: 0;\n    transform: translateX(24px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n@keyframes ocs-cfg-in {\n  from {\n    opacity: 0;\n    transform: translateY(6px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\nscript-panel-element {\n  animation: ocs-panel-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.base-style-button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease !important;\n  will-change: transform !important;\n}\n.base-style-button:hover {\n  transform: translateY(-1px) !important;\n  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.28) !important;\n}\n.base-style-button:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\n.base-style-button-secondary {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  will-change: transform !important;\n}\n.base-style-button-secondary:hover {\n  transform: translateY(-1px) !important;\n}\n.base-style-button-secondary:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\nheader-element .extra-menu-bar button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease,\n    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\nheader-element .extra-menu-bar button:active {\n  transform: scale(0.92) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),\n    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease !important;\n}\n.card {\n  animation: ocs-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.modal-wrapper {\n  animation: ocs-modal-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\n.dropdown-content {\n  animation: ocs-dropdown-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  transform-origin: top center !important;\n}\n.message-container > * {\n  animation: ocs-msg-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.configs-container > * {\n  animation: ocs-cfg-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.configs-container > *:nth-child(1) {\n  animation-delay: 0s !important;\n}\n.configs-container > *:nth-child(2) {\n  animation-delay: 0.05s !important;\n}\n.configs-container > *:nth-child(3) {\n  animation-delay: 0.1s !important;\n}\n.configs-container > *:nth-child(4) {\n  animation-delay: 0.15s !important;\n}\n.configs-container > *:nth-child(5) {\n  animation-delay: 0.2s !important;\n}\n.configs-container > *:nth-child(6) {\n  animation-delay: 0.25s !important;\n}\n.configs-container > *:nth-child(7) {\n  animation-delay: 0.3s !important;\n}\n.configs-container > *:nth-child(8) {\n  animation-delay: 0.35s !important;\n}\n.base-style-switch {\n  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n.base-style-switch::before {\n  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\na {\n  transition: color 0.2s ease, opacity 0.2s ease !important;\n}\n.dropdown-option {\n  transition: background 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n"}};
+var __OCS_RESOURCES__ = {"version":"5.1.5","metadata":{"name":"鸿鹄易学","version":"5.1.5","description":"鸿鹄易学 - 在线网络课程辅助工具","author":"enncy","license":"MIT","namespace":"https://honghueasystudy","homepage":"https://easystudy.honghutech.eu.org","source":"https://easystudy.honghutech.eu.org","icon":"https://easystudy.honghutech.eu.org/assets/img/icon.png","connect":["easystudy.honghutech.eu.org","enncy.cn","icodef.com","ocsjs.com","zaizhexue.top","localhost","127.0.0.1"],"run-at":"document-start"},"resources":{"STYLE":"/** 默认字体 */\n/** 输入框默认边距 */\nul,\nol {\n  line-height: 26px;\n  padding-left: 22px;\n  margin: 0px;\n}\na {\n  color: #1890ff;\n}\nhr {\n  border-style: solid;\n  border-color: #63636346;\n  border-width: 0px;\n  border-bottom: 1px solid #63636346;\n  margin-block-start: 1em;\n  margin-block-end: 1em;\n}\n.base-style-active-form-control {\n  border: 1px solid #ffffff00;\n}\n.base-style-active-form-control:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.base-style-active-form-control:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.base-style-active-form-control:hover {\n  background-color: #ebeef4;\n}\n.base-style-input {\n  outline: none;\n  border: 1px solid #ffffff00;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n}\n.base-style-input::placeholder {\n  color: #bababa;\n}\n.base-style-switch {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.base-style-switch:checked {\n  background: #1890ff;\n}\n.base-style-switch:disabled {\n  background-color: #f7f7f78b;\n}\n.base-style-switch:checked::before {\n  transform: translate(24px, 0px);\n}\n.base-style-switch::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.base-style-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.base-style-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button + .base-style-button {\n  margin-left: 12px;\n}\n.base-style-button:hover {\n  background-color: #7abbff24;\n}\n.base-style-button.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button:disabled:active {\n  box-shadow: none;\n}\n.base-style-button-secondary {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\n.base-style-button-secondary:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button-secondary + .base-style-button-secondary {\n  margin-left: 12px;\n}\n.base-style-button-secondary:hover {\n  background-color: #7abbff24;\n}\n.base-style-button-secondary.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button-secondary:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button-secondary.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button-secondary:disabled:active {\n  box-shadow: none;\n}\ncontainer-element.hidden {\n  display: none;\n}\ncontainer-element.minimize {\n  min-width: unset;\n}\ncontainer-element {\n  position: fixed;\n  top: 10%;\n  left: 10%;\n  z-index: 99999;\n  text-align: left;\n  min-width: 300px;\n  -webkit-font-smoothing: antialiased;\n  -moz-osx-font-smoothing: grayscale;\n  color: #636363;\n  box-shadow: 0 0 24px -12px #3f3f3f;\n  border-radius: 8px;\n  letter-spacing: 0.5px;\n  border: 1px solid #c1c1c1;\n}\nheader-element {\n  display: flex;\n  align-items: center;\n  background-color: white;\n  border-radius: 8px 8px 0px 0px;\n  user-select: none;\n  padding: 4px;\n  padding-bottom: 0px;\n}\nheader-element .extra-menu-bar {\n  width: 100%;\n  padding: 4px;\n  padding-bottom: 0px;\n  margin-top: 4px;\n  border-top: 1px solid #e8e8e8;\n  /** 默认隐藏，一直到需要激活的时候再更改 */\n  display: none;\n}\nheader-element .extra-menu-bar .script-panel-link {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n  padding-bottom: 2px;\n  margin-bottom: 0px;\n}\nheader-element .extra-menu-bar .script-panel-link:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nheader-element .extra-menu-bar .script-panel-link + header-element .extra-menu-bar .script-panel-link {\n  margin-left: 12px;\n}\nheader-element .extra-menu-bar .script-panel-link:hover {\n  background-color: #7abbff24;\n}\nheader-element .extra-menu-bar .script-panel-link.danger:hover {\n  background-color: #ffdede86;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nheader-element .extra-menu-bar .script-panel-link.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled:active {\n  box-shadow: none;\n}\nheader-element .extra-menu-bar .script-panel-link.active {\n  background-color: #1890ff1a;\n  border-color: #1890ff;\n  color: #1890ff;\n}\nheader-element .extra-menu-bar .script-panel-link + .script-panel-link {\n  margin-left: 4px;\n}\nheader-element .profile {\n  flex: 1;\n  cursor: move;\n}\nheader-element .switch:hover,\nheader-element .dropdown:hover {\n  background-color: #f3f3f3;\n}\nheader-element .close:hover {\n  background-color: #ff000038;\n}\nheader-element .switch,\nheader-element .close {\n  cursor: pointer;\n}\nheader-element .dropdown {\n  line-height: 24px;\n  text-decoration: underline;\n}\nheader-element .switch,\nheader-element .close,\nheader-element .profile {\n  display: inline-flex;\n  align-items: center;\n  padding: 0px 8px;\n}\n.logo {\n  width: 18px;\n  height: 18px;\n  cursor: pointer;\n}\n.project-selector {\n  display: flex;\n  align-items: center;\n}\n.project-selector select {\n  background: #ffffff00;\n  border-radius: 4px;\n  border: 1px solid #63636346;\n  padding: 4px;\n}\n.project-selector.expand-all {\n  display: none;\n}\n.body {\n  overflow: auto;\n  width: auto;\n  height: 100%;\n}\nscript-panel-element {\n  display: block;\n  background-color: white;\n  border-radius: 0px 0px 8px 8px;\n  padding: 0px 8px 12px 8px;\n  overflow: auto;\n}\nscript-panel-element .script-panel-body {\n  padding: 0px 8px;\n}\nscript-panel-element + script-panel-element {\n  margin-top: 12px;\n}\n.card + .card {\n  margin-top: 12px;\n}\n.card {\n  background-color: white;\n  border-radius: 2px;\n  padding: 0px 8px;\n}\n.notes {\n  background: #0099ff0e;\n  border-left: 4px solid #0099ff65;\n  width: -webkit-fill-available;\n  margin: 0px 8px;\n  line-height: 26px;\n  letter-spacing: 1px;\n}\n.secondary {\n  font-size: 12px;\n  color: #8b8b8b;\n}\n.tooltip-container {\n  z-index: 99999999999999;\n  margin: 12px 0px 0px 12px;\n  padding: 4px;\n  color: black;\n  background: #f0f0f0;\n  box-shadow: 0px 0px 4px #949494;\n  position: fixed;\n  white-space: normal;\n  max-width: 200px;\n  height: auto;\n  border-radius: 2px;\n  line-height: 18px;\n}\n.configs-container.lock {\n  filter: blur(1px);\n  user-select: none;\n  -webkit-user-select: none;\n  -moz-user-select: none;\n  -ms-user-select: none;\n}\n.configs-container .lock-wrapper {\n  cursor: not-allowed !important;\n  border-radius: 4px;\n  position: absolute;\n  left: 0px;\n  z-index: 1;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n}\n.configs-container .lock-message {\n  background-color: #ffffff7d;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #6a6a6a98;\n  padding: 2px;\n}\n.configs {\n  display: table;\n  background: #e1e1e107;\n  width: -webkit-fill-available;\n}\n.configs .configs-body {\n  display: table-row-group;\n}\n.configs .configs-body config-element + config-element label {\n  padding-top: 4px;\n}\n.configs .configs-body config-element + config-element .config-wrapper {\n  padding-top: 4px;\n}\n.configs .configs-body config-element {\n  width: 100%;\n  display: table-row;\n  line-height: 26px;\n}\n.configs .configs-body config-element label {\n  white-space: nowrap;\n  color: #4e5969;\n  display: table-cell;\n  padding-right: 12px;\n  text-align: left;\n  vertical-align: top;\n  margin-right: 12px;\n}\n.configs .configs-body config-element .config-wrapper {\n  display: table-cell;\n  vertical-align: middle;\n  /** check box 的样式 */\n}\n.configs .configs-body config-element .config-wrapper select {\n  outline: none;\n  border: none;\n  border: 1px solid #e4e4e4;\n  border-radius: 4px;\n  padding: 2px 8px;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper select:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper select:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper select:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper textarea {\n  padding: 2px 8px;\n  outline: none;\n  border: none;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper textarea:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']) {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button'])::placeholder {\n  color: #bababa;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  padding: 0px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] + .configs .configs-body config-element .config-wrapper input[type='button'] {\n  margin-left: 12px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:hover {\n  background-color: #7abbff24;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger:hover {\n  background-color: #ffdede86;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled:active {\n  box-shadow: none;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked {\n  background: #1890ff;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:disabled {\n  background-color: #f7f7f78b;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked::before {\n  transform: translate(24px, 0px);\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.configs .configs-body config-element .config-wrapper input:not([type='checkbox'], [type='radio']),\n.configs .configs-body config-element .config-wrapper textarea,\n.configs .configs-body config-element .config-wrapper select {\n  width: -webkit-fill-available;\n  font-size: inherit;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'],\n.configs .configs-body config-element .config-wrapper input[type='radio'],\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  accent-color: #0e8ee2;\n}\n.configs .configs-body config-element .config-wrapper > *:not(.tooltip) {\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  float: right;\n}\n.configs .configs-body config-element .config-wrapper > *:disabled {\n  cursor: not-allowed;\n  background-color: #f7f7f78b;\n}\n.message-container {\n  margin-bottom: 4px;\n  position: absolute;\n  bottom: 100%;\n  left: 50%;\n  width: 100%;\n  transform: translate(-50%, 0px);\n  min-width: 300px;\n}\n.message-container message-element {\n  display: flex;\n  border-radius: 4px;\n  padding: 4px 12px;\n  margin-bottom: 4px;\n}\n.message-container message-element .message-content-container {\n  margin-right: 8px;\n  flex: auto;\n}\n.message-container message-element .message-text {\n  letter-spacing: 1px;\n  font-weight: bold;\n}\n.message-container message-element .message-closer {\n  width: 18px;\n  min-width: 18px;\n  cursor: pointer;\n  background-color: #ffffffb3;\n  color: #a1a1a1;\n  border-radius: 100%;\n  text-align: center;\n  height: 18px;\n  vertical-align: middle;\n  font-size: 12px;\n}\n.message-container message-element.error {\n  background-color: #ffe6e6;\n  color: #c70208;\n  border: 1px solid #ff6b6ded;\n}\n.message-container message-element.info {\n  background-color: #c9e7ff;\n  color: #004d95;\n  border: 1px solid #1890ff69;\n}\n.message-container message-element.success {\n  background-color: #e8ffe0;\n  color: #3e8d0d;\n  border: 1px solid #6fd91d;\n}\n.message-container message-element.warn {\n  background-color: #ffefc8;\n  color: #9b7400;\n  border: 1px solid #ffc107;\n}\nmodal-element {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  background-color: white;\n  border-radius: 4px;\n  box-shadow: 0px 0px 24px -12px black;\n  border: 1px solid #929292;\n  height: fit-content;\n  transform: translate(-50%, -50%);\n  padding: 12px 18px 18px 18px;\n  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;\n  z-index: 99999999999;\n  line-height: 24px;\n}\nmodal-element .modal-profile {\n  zoom: 0.9;\n  color: #969696;\n  user-select: none;\n  margin-bottom: 4px;\n}\nmodal-element .modal-title {\n  font-size: 18px;\n  font-weight: bold;\n  user-select: none;\n}\nmodal-element .modal-body {\n  margin: 12px 0px;\n  overflow: auto;\n}\nmodal-element .modal-footer {\n  display: flex;\n  white-space: nowrap;\n  justify-content: end;\n  align-items: end;\n}\nmodal-element .modal-footer > * + * {\n  margin-left: 12px;\n}\nmodal-element .modal-input {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n  width: -webkit-fill-available;\n}\nmodal-element .modal-input::placeholder {\n  color: #bababa;\n}\nmodal-element .modal-input:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\nmodal-element .modal-input:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\nmodal-element .modal-input:hover {\n  background-color: #ebeef4;\n}\nmodal-element .modal-cancel-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\nmodal-element .modal-cancel-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-cancel-button + modal-element .modal-cancel-button {\n  margin-left: 12px;\n}\nmodal-element .modal-cancel-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-cancel-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-cancel-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-cancel-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-cancel-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element .modal-confirm-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\nmodal-element .modal-confirm-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-confirm-button + modal-element .modal-confirm-button {\n  margin-left: 12px;\n}\nmodal-element .modal-confirm-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-confirm-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-confirm-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-confirm-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-confirm-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element.alert .modal-input,\nmodal-element.alert .modal-cancel-button {\n  display: none;\n}\nmodal-element.alert .modal-confirm-button {\n  margin: 0;\n}\nmodal-element.prompt .modal-input,\nmodal-element.prompt .modal-cancel-button,\nmodal-element.prompt .modal-confirm-button {\n  display: block;\n}\nmodal-element.confirm .modal-input {\n  display: none;\n}\n.modal-wrapper {\n  width: 100%;\n  height: 100%;\n  z-index: 9999;\n  position: fixed;\n  top: 0px;\n  left: 0px;\n  z-index: 9999999;\n  background-color: rgba(0, 0, 0, 0.265);\n  color: #636363;\n  font: 14px Menlo, Monaco, Consolas, 'Courier New', monospace;\n}\n.pointer {\n  cursor: pointer;\n}\n.separator {\n  display: flex;\n  align-items: center;\n  text-align: center;\n  padding: 4px 0px 8px 0px;\n}\n.separator::before,\n.separator::after {\n  content: '';\n  flex: 1;\n  border-bottom: 1px solid #63636346;\n}\n.separator:not(:empty)::before {\n  margin-right: 0.25em;\n}\n.separator:not(:empty)::after {\n  margin-left: 0.25em;\n}\ncontainer-element.minimize .body,\ncontainer-element.minimize header-element .dropdown,\ncontainer-element.minimize .footer {\n  display: none;\n}\ncontainer-element.minimize header-element {\n  padding: 8px;\n  border-radius: 8px;\n  box-shadow: 0px 0px 24px -12px black;\n}\n.user-guide > li {\n  padding: 4px 0px;\n}\n.search-infos-num {\n  width: 26px;\n  margin: 2px;\n  height: 20px;\n  border-radius: 4px;\n  display: inline-block;\n  background-color: white;\n  text-align: center;\n  cursor: pointer;\n  border: 1px solid #b6b6b6;\n}\n.search-infos-num.requested {\n  border: 1px solid #63b4ff;\n  color: #63b4ff;\n}\n.search-infos-num.active {\n  background-color: #127de1 !important;\n  color: white;\n}\n.search-infos-num.error {\n  border: 1px solid #ff8789ed;\n  background-color: #ff6b6ded;\n  color: white;\n}\n.search-infos-num.finish {\n  background-color: #63b4ff;\n  border: 1px solid #63b4ff;\n  color: white;\n}\nsearch-infos-element {\n  display: block;\n  overflow: auto;\n}\nsearch-infos-element .search-result {\n  margin-bottom: 12px;\n  padding-left: 12px;\n}\nsearch-infos-element .search-result .question {\n  font-weight: bold;\n  max-height: 200px;\n  overflow: auto;\n}\nsearch-infos-element .search-result .answer {\n  color: #7c7c7c;\n}\nsearch-infos-element .search-result .answer code {\n  border-bottom: 1px solid #dcdcdc;\n  padding: 2px 0px;\n  border-radius: 2px;\n  margin: 4px;\n  line-height: 22px;\n}\nsearch-infos-element .search-result .answer code + code {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag {\n  padding: 2px 6px;\n  border-radius: 2px;\n  font-size: 12px;\n  cursor: pointer;\n  margin-right: 6px;\n}\nsearch-infos-element .search-result .search-result-answer-tag + .search-result-answer-tag {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag.blue {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n}\nsearch-infos-element .search-result .search-result-answer-tag.green {\n  background-color: #f6ffed;\n  border: 1px solid #b7eb8f;\n  color: #52c41a;\n}\nsearch-infos-element .search-result .search-result-answer-tag.gray {\n  background-color: #fafafa;\n  border: 1px solid #d9d9d9;\n  color: #595959;\n}\nsearch-infos-element .search-result .search-result-answer-tag.red {\n  background-color: #fff1f0;\n  border: 1px solid #ffa39e;\n  color: #ff4d4f;\n}\nsearch-infos-element .search-result .search-result-answer-tag.yellow {\n  background-color: #fffbe6;\n  border: 1px solid #ffe58f;\n  color: #faad14;\n}\nsearch-infos-element .search-result-question-type {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n  margin-right: 8px;\n  padding: 0px 4px;\n  border-radius: 4px;\n}\nsearch-infos-element .error {\n  color: #ff6b6ded;\n  display: inline-block;\n  padding-left: 12px;\n}\n.copy,\n.question-title-extra-btn {\n  margin-left: 4px;\n  padding: 2px 4px;\n  border-radius: 2px;\n  box-shadow: 0 0 4px #b1b1b1;\n  cursor: pointer !important;\n  font-weight: normal;\n  font-size: 12px;\n}\n.work-result-question-container {\n  position: absolute;\n  width: 400px;\n  left: -100%;\n  top: 0px;\n  background: white;\n  border: 1px solid #cbcbcb;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #d1cfcf;\n  padding: 12px;\n}\n.work-result-question-container .close-search-result {\n  font-size: 12px;\n  margin-left: 8px;\n  text-decoration: underline;\n  color: gray;\n  cursor: pointer;\n}\n.work-result-list {\n  max-height: 400px;\n  overflow: auto;\n  margin: 12px 0px;\n  padding: 6px;\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n}\n.search-info-title {\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  margin-bottom: 12px;\n  line-height: 20px;\n  overflow: auto;\n}\n.search-info-title .title-content {\n  max-height: 200px;\n  overflow: auto;\n}\n.search-info-details {\n  margin-left: 4px;\n}\n.console {\n  max-height: 300px;\n  max-width: 400px;\n  overflow: auto;\n  background-color: #292929;\n  padding: 12px 6px;\n  color: #ececec;\n  font-size: 12px;\n}\n.console .item {\n  padding: 3px 0px;\n  border-radius: 2px;\n}\n.console .item .time {\n  color: #757575;\n}\n.console .item .info {\n  background-color: #2196f3a3;\n}\n.console .item .warn {\n  background-color: #ffc107db;\n}\n.console .item .error {\n  background-color: #f36c71cc;\n}\n.console .item .debug,\n.console .item .log {\n  background-color: #9e9e9ec4;\n}\n.console *::selection {\n  background-color: #ffffff6b;\n}\n.markdown {\n  max-width: 400px;\n  max-height: 50vh;\n  overflow: auto;\n}\n.markdown code {\n  padding: 2px 4px;\n  background-color: #f0f0f0;\n  border-radius: 6px;\n  font-size: 12px;\n}\n.markdown blockquote {\n  padding: 4px 4px 4px 12px;\n  margin: 0px;\n  color: #b5b5b5;\n  border-left: #ababab 2px solid;\n}\n.markdown blockquote p {\n  margin: 0px;\n}\n.markdown h1,\n.markdown h2,\n.markdown h3,\n.markdown h4,\n.markdown h5,\n.markdown h6,\n.markdown p {\n  margin: 8px 0px;\n}\n.dropdown {\n  position: relative;\n  display: inline-block;\n}\n.dropdown.active .dropdown-trigger-element {\n  color: #1890ff;\n}\n.dropdown-trigger-element {\n  cursor: pointer;\n}\n.dropdown-content {\n  display: none;\n  position: absolute;\n  background-color: #ffffff;\n  overflow: auto;\n  box-shadow: 0px 8px 16px 0px #00000033;\n  z-index: 1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  min-width: 120px;\n}\n.dropdown-content.show {\n  display: block;\n}\n.dropdown-content {\n  cursor: pointer;\n  z-index: 999;\n}\n.dropdown-content .dropdown-option {\n  padding-left: 4px;\n  white-space: nowrap;\n}\n.dropdown-content .dropdown-option:hover {\n  background-color: #f3f3f3;\n}\n.dropdown-content .dropdown-option.active {\n  background-color: #1890ff1a;\n  color: #1890ff;\n}\n.space {\n  display: inline-flex;\n}\n.config-details {\n  animation: fade-in 0.5s;\n}\n.config-details label {\n  padding-left: 12px;\n}\n.alert-info-wrapper {\n  margin-bottom: 8px;\n}\n.alert-info-wrapper .result-info {\n  padding: 12px;\n  text-align: center;\n  border-radius: 6px;\n}\n.alert-info-wrapper .unresolved {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .no-answer {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .error {\n  color: #ff4d4f;\n  background-color: #fff1f0;\n}\nmessage-element {\n  animation: show 0.5s;\n}\nscript-panel-element > div,\nscript-panel-link,\ncontainer-element,\nmodal-element {\n  animation: fade-in 0.3s;\n}\n@keyframes show {\n  0% {\n    transform: translateY(20px);\n    opacity: 0;\n  }\n  100% {\n    transform: translateY(0);\n    opacity: 1;\n  }\n}\n@keyframes fade-in {\n  0% {\n    opacity: 0;\n  }\n  100% {\n    opacity: 1;\n  }\n}\n@keyframes fade-out {\n  0% {\n    opacity: 1;\n  }\n  100% {\n    opacity: 0;\n  }\n}\n.checkbox-label {\n  display: inline-block !important;\n  position: relative;\n  cursor: pointer;\n  font-size: 16px;\n  color: #2c3e50;\n}\n/* 隐藏原始复选框 */\n.checkbox-input {\n  position: absolute;\n  opacity: 0;\n  width: 0;\n  height: 0;\n}\n/* 自定义按钮样式 */\n.checkbox-label::after {\n  content: '';\n  display: inline-block;\n  border-radius: 50%;\n  transition: all 0.1s ease;\n  position: relative;\n  margin-left: 4px;\n  vertical-align: middle;\n}\n/* 向下箭头（未选中状态） */\n.checkbox-label::before {\n  content: '🔽';\n  position: absolute;\n  width: 0;\n  height: 0;\n  right: 8px;\n  transition: all 0.1s ease;\n  z-index: 2;\n}\n/* 向上箭头（选中状态） */\n.checked .checkbox-label::before {\n  content: '🔼';\n}\n/* ==================== Apple Design Style Override ==================== */\ncontainer-element,\ncontainer-element * {\n  font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"SF Pro Display\",\n    \"Helvetica Neue\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif !important;\n  letter-spacing: 0 !important;\n}\ncontainer-element {\n  background: rgba(255, 255, 255, 0.86) !important;\n  backdrop-filter: saturate(180%) blur(24px) !important;\n  -webkit-backdrop-filter: saturate(180%) blur(24px) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 14px !important;\n  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06) !important;\n  color: #1d1d1f !important;\n}\nheader-element {\n  background: transparent !important;\n  border-radius: 14px 14px 0 0 !important;\n  padding: 10px 12px 8px !important;\n  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar {\n  gap: 4px !important;\n}\nheader-element .extra-menu-bar button {\n  background: transparent !important;\n  border: none !important;\n  border-radius: 7px !important;\n  padding: 5px 12px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  color: #1d1d1f !important;\n  transition: background 0.15s ease !important;\n}\nheader-element .extra-menu-bar button:hover {\n  background: rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar button.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\nheader-element .profile {\n  font-weight: 600 !important;\n  font-size: 14px !important;\n  color: #1d1d1f !important;\n}\n.base-style-button {\n  background: #007aff !important;\n  color: #fff !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 7px 16px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease, transform 0.1s ease !important;\n}\n.base-style-button:hover {\n  background: #0066d6 !important;\n}\n.base-style-button:active {\n  transform: scale(0.97) !important;\n}\n.base-style-button-secondary {\n  background: rgba(0, 0, 0, 0.05) !important;\n  color: #1d1d1f !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 6px 14px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease !important;\n}\n.base-style-button-secondary:hover {\n  background: rgba(0, 0, 0, 0.1) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  border: 1px solid rgba(0, 0, 0, 0.1) !important;\n  border-radius: 8px !important;\n  background: #fff !important;\n  padding: 7px 10px !important;\n  font-size: 13px !important;\n  color: #1d1d1f !important;\n  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;\n  outline: none !important;\n}\n.base-style-active-form-control:focus,\n.base-style-input:focus {\n  border-color: #007aff !important;\n  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.16) !important;\n  background: #fff !important;\n}\n.base-style-active-form-control:hover,\n.base-style-input:hover {\n  background: #fff !important;\n}\n.card {\n  background: #fff !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 12px !important;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;\n}\n.configs-container {\n  border: none !important;\n  box-shadow: none !important;\n}\n.notes {\n  color: #6e6e73 !important;\n  line-height: 1.6 !important;\n}\n.secondary {\n  color: #6e6e73 !important;\n}\n.separator {\n  border-color: rgba(0, 0, 0, 0.06) !important;\n}\n.dropdown-content {\n  border-radius: 10px !important;\n  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  overflow: hidden !important;\n}\n.dropdown-option {\n  border-radius: 6px !important;\n  transition: background 0.12s ease !important;\n}\n.dropdown-option:hover {\n  background: rgba(0, 0, 0, 0.05) !important;\n}\n.dropdown-option.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\n.modal-wrapper {\n  border-radius: 14px !important;\n  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\n.message-container {\n  gap: 6px !important;\n}\n/* 面板留白 */\nscript-panel-element {\n  padding: 4px 2px !important;\n}\n/* 滚动条苹果风格 */\ncontainer-element ::-webkit-scrollbar {\n  width: 8px !important;\n  height: 8px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb {\n  background: rgba(0, 0, 0, 0.18) !important;\n  border-radius: 4px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb:hover {\n  background: rgba(0, 0, 0, 0.3) !important;\n}\ncontainer-element ::-webkit-scrollbar-track {\n  background: transparent !important;\n}\n/* ==================== Silky Animations ==================== */\ncontainer-element {\n  scroll-behavior: smooth !important;\n}\ncontainer-element * {\n  scroll-behavior: smooth !important;\n}\n@keyframes ocs-panel-in {\n  from {\n    opacity: 0;\n    transform: translateY(10px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\n@keyframes ocs-card-in {\n  from {\n    opacity: 0;\n    transform: translateY(8px) scale(0.99);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0) scale(1);\n  }\n}\n@keyframes ocs-modal-in {\n  from {\n    opacity: 0;\n    transform: scale(0.9) translateY(12px);\n  }\n  to {\n    opacity: 1;\n    transform: scale(1) translateY(0);\n  }\n}\n@keyframes ocs-dropdown-in {\n  from {\n    opacity: 0;\n    transform: scaleY(0.92) translateY(-6px);\n  }\n  to {\n    opacity: 1;\n    transform: scaleY(1) translateY(0);\n  }\n}\n@keyframes ocs-msg-in {\n  from {\n    opacity: 0;\n    transform: translateX(24px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n@keyframes ocs-cfg-in {\n  from {\n    opacity: 0;\n    transform: translateY(6px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\nscript-panel-element {\n  animation: ocs-panel-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.base-style-button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease !important;\n  will-change: transform !important;\n}\n.base-style-button:hover {\n  transform: translateY(-1px) !important;\n  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.28) !important;\n}\n.base-style-button:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\n.base-style-button-secondary {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  will-change: transform !important;\n}\n.base-style-button-secondary:hover {\n  transform: translateY(-1px) !important;\n}\n.base-style-button-secondary:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\nheader-element .extra-menu-bar button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease,\n    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\nheader-element .extra-menu-bar button:active {\n  transform: scale(0.92) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),\n    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease !important;\n}\n.card {\n  animation: ocs-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.modal-wrapper {\n  animation: ocs-modal-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\n.dropdown-content {\n  animation: ocs-dropdown-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  transform-origin: top center !important;\n}\n.message-container > * {\n  animation: ocs-msg-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.configs-container > * {\n  animation: ocs-cfg-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.configs-container > *:nth-child(1) {\n  animation-delay: 0s !important;\n}\n.configs-container > *:nth-child(2) {\n  animation-delay: 0.05s !important;\n}\n.configs-container > *:nth-child(3) {\n  animation-delay: 0.1s !important;\n}\n.configs-container > *:nth-child(4) {\n  animation-delay: 0.15s !important;\n}\n.configs-container > *:nth-child(5) {\n  animation-delay: 0.2s !important;\n}\n.configs-container > *:nth-child(6) {\n  animation-delay: 0.25s !important;\n}\n.configs-container > *:nth-child(7) {\n  animation-delay: 0.3s !important;\n}\n.configs-container > *:nth-child(8) {\n  animation-delay: 0.35s !important;\n}\n.base-style-switch {\n  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n.base-style-switch::before {\n  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\na {\n  transition: color 0.2s ease, opacity 0.2s ease !important;\n}\n.dropdown-option {\n  transition: background 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n"}};
 
 	/* ===== 2/4 GM API polyfill ===== */
 /* 鸿鹄易学 · GM API polyfill
@@ -20174,7 +20174,6 @@ try {
       }
     },
     async oncomplete() {
-      var _a, _b;
       if (location.href.includes("cmgt/resource-detail")) {
         $msg.info("请打开任意课程的章节进行自动学习");
         return;
@@ -20191,26 +20190,37 @@ try {
           state$1.current_media.volume = value;
         }
       });
-      const checkConfirmModal = async () => {
-        await lib.$.sleep(3e3);
-        const btns = [
-          ".system-info-cloud-ok-button",
-          ".ant-modal-body .ant-btn-primary",
-          "button[class*=mask_notice]"
-        ];
-        const btn = await waitForElement(btns.join(","));
-        if (btn) {
-          await rp.click(btn);
-        }
-        await checkConfirmModal();
+      const pickConfirmButton = () => {
+        const direct = lib.$el(".system-info-cloud-ok-button, button[class*=mask_notice]");
+        if (direct)
+          return direct;
+        const modal2 = lib.$el('.ant-modal-wrap:not([style*="display: none"])');
+        if (!modal2)
+          return null;
+        if (/提交|交卷|删除/.test(modal2.innerText || ""))
+          return null;
+        return modal2.querySelector(".ant-modal-body .ant-btn-primary");
       };
-      checkConfirmModal();
+      (async () => {
+        for (; ; ) {
+          await lib.$.sleep(2e3);
+          const btn = pickConfirmButton();
+          if (!btn)
+            continue;
+          try {
+            await rp.click(btn);
+          } catch {
+          }
+          if (btn.isConnected) {
+            btn.click();
+          }
+        }
+      })();
       console.log("[U校园调试] oncomplete 开始执行, readyState:", document.readyState);
       console.log("[U校园调试] 当前URL:", location.href);
       const wrap = await waitForElement(".question-wrap", { timeout_seconds: 30 });
       if (!wrap) {
         console.error("[U校园调试] 未找到 .question-wrap！页面DOM可能已变更");
-        console.log("[U校园调试] body innerHTML前2000字符:", (_b = (_a = document.body) == null ? void 0 : _a.innerHTML) == null ? void 0 : _b.substring(0, 2e3));
         $msg.error("未找到题目容器 .question-wrap，可能页面结构已变更或页面未完全加载");
         return;
       }
@@ -20242,6 +20252,42 @@ try {
       console.log(1);
     }
   });
+  const QUESTION_ROOT$1 = ".question-common-abs-reply";
+  function getQuestionKind(root2) {
+    if (root2.querySelector(".option-wrap .option"))
+      return "choice";
+    if (root2.querySelector("textarea"))
+      return "textarea";
+    if (root2.querySelector(".question-common-abs-scoop"))
+      return "scoop";
+    if (root2.querySelector(".evaluation-slider-reply-wrapper"))
+      return "slider";
+    if (root2.querySelector("input"))
+      return "input";
+    return "other";
+  }
+  function markQuestions(kind) {
+    const attr = `data-ocs-qk-${kind}`;
+    lib.$$el(QUESTION_ROOT$1).forEach((root2) => {
+      if (getQuestionKind(root2) === kind) {
+        root2.setAttribute(attr, "1");
+      }
+    });
+    return {
+      selector: `[${attr}="1"]`,
+      clear() {
+        lib.$$el(`[${attr}]`).forEach((root2) => root2.removeAttribute(attr));
+      }
+    };
+  }
+  async function withMarkedQuestions(kind, run) {
+    const mark = markQuestions(kind);
+    try {
+      return await run(mark.selector);
+    } finally {
+      mark.clear();
+    }
+  }
   async function job(cfg, rp) {
     const wrap = await waitForElement(".question-wrap", { check_period_ms: 3e3 });
     const wrap_content = wrap == null ? void 0 : wrap.childNodes[0];
@@ -20252,33 +20298,13 @@ try {
         return !!document.querySelector(selector);
       });
     };
-    console.log("[U校园调试] job 开始执行");
-    console.log("[U校园调试] wrap:", wrap);
-    console.log("[U校园调试] wrap_content:", wrap_content);
-    console.log(
-      "[U校园调试] 选择器检测:",
-      {
-        ".question-wrap": !!document.querySelector(".question-wrap"),
-        ".unipus-upload-container": !!document.querySelector(".unipus-upload-container"),
-        ".question-wrap .video-box": !!document.querySelector(".question-wrap .video-box"),
-        ".question-wrap .question-rich-text-read": !!document.querySelector(".question-wrap .question-rich-text-read"),
-        ".vocabulary-wrapper": !!document.querySelector(".vocabulary-wrapper"),
-        ".swiper-slide": !!document.querySelector(".swiper-slide"),
-        ".layout-material-container": !!document.querySelector(".layout-material-container"),
-        ".layout-reply-container": !!document.querySelector(".layout-reply-container"),
-        ".option-wrap": !!document.querySelector(".option-wrap"),
-        ".question-common-abs-choice": !!document.querySelector(".question-common-abs-choice"),
-        ".question-common-abs-reply": !!document.querySelector(".question-common-abs-reply"),
-        ".full": !!document.querySelector(".full"),
-        "textarea": !!document.querySelector("textarea"),
-        ".question-material-banked-cloze-reply": !!document.querySelector(".question-material-banked-cloze-reply"),
-        ".input-wrapper": !!document.querySelector(".input-wrapper"),
-        ".sequence-reply-view-item-text": !!document.querySelector(".sequence-reply-view-item-text"),
-        ".text-material-wrapper": !!document.querySelector(".text-material-wrapper")
-      }
-    );
+    const debugKinds = lib.$$el(QUESTION_ROOT$1).map(getQuestionKind);
+    console.log("[U校园调试] 题目根数量:", debugKinds.length, "题型分布:", debugKinds.reduce((acc, k) => {
+      acc[k] = (acc[k] || 0) + 1;
+      return acc;
+    }, {}));
     await (async () => {
-      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
       if (!wrap_content) {
         $msg.error("未找到任务内容区域，跳过该任务");
         return;
@@ -20291,7 +20317,7 @@ try {
         $msg.info("检测到图片任务，即将跳过");
         return;
       }
-      if (matches2(".layout-material-container .component-htmlview img")) {
+      if (matches2(".question-common-abs-reply .component-htmlview img, .option-wrap .option img, textarea ~ .component-htmlview img")) {
         $msg.error("检测到题目中包含图片，暂时无法处理，即将跳过该任务");
         return;
       }
@@ -20420,64 +20446,67 @@ try {
         }
         return;
       }
-      if (matches2(
-        ".layout-material-container",
-        ".layout-reply-container",
-        "textarea"
-      )) {
-        if (!cfg.enable_reading) {
-          $msg.warn("阅读理解题任务开关已关闭，即将跳过该任务");
-          return;
-        }
+      const questionRoots = lib.$$el(QUESTION_ROOT$1);
+      const questionKinds = questionRoots.map(getQuestionKind);
+      const countKind = (kind) => questionKinds.filter((k) => k === kind).length;
+      const choiceCount = countKind("choice");
+      const blankCount = countKind("textarea");
+      const scaleCount = countKind("scoop") + countKind("slider") + countKind("input");
+      const hasMaterial = !!(questionRoots.length && lib.$el(".question-common-abs-material, .layout-material-container"));
+      if (choiceCount + blankCount + scaleCount > 0) {
         if (checkUniTestIsDone()) {
-          $msg.success("阅读理解填空题任务已完成，即将跳过该任务");
+          $msg.success("当前任务已完成，即将跳过该任务");
           return;
         }
-        $msg.info("检测到阅读理解填空题任务，即将开始答题");
-        await doUnderstandingText(rp, CommonProject.scripts.settings.methods.getWorkOptions());
-        return;
-      }
-      if (matches2(
-        ".layout-material-container",
-        ".layout-reply-container",
-        ".option-wrap"
-      )) {
-        if (!cfg.enable_reading) {
-          $msg.warn("阅读理解题任务开关已关闭，即将跳过该任务");
+        const groups = [];
+        if (choiceCount > 0) {
+          if (!cfg.enable_choice) {
+            $msg.warn("选择题任务开关已关闭，跳过选择题");
+          } else if (hasMaterial) {
+            groups.push({
+              label: "阅读理解选择题",
+              run: (sub) => withMarkedQuestions("choice", (root2) => doReading(rp, sub, root2))
+            });
+          } else {
+            groups.push({
+              label: "选择题",
+              run: (sub) => withMarkedQuestions("choice", (root2) => doChoice(rp, sub, root2))
+            });
+          }
+        }
+        if (blankCount > 0) {
+          if (hasMaterial && cfg.enable_reading) {
+            groups.push({
+              label: "阅读理解填空题",
+              run: (sub) => withMarkedQuestions("textarea", (root2) => doUnderstandingText(rp, sub, root2))
+            });
+          } else if (cfg.enable_completion) {
+            groups.push({
+              label: "填空题",
+              run: (sub) => withMarkedQuestions("textarea", (root2) => doCompletion(rp, sub, root2))
+            });
+          } else {
+            $msg.warn("填空题任务开关已关闭，跳过填空题");
+          }
+        }
+        if (scaleCount > 0) {
+          if (!cfg.enable_completion) {
+            $msg.warn("表格填分任务开关已关闭，跳过表格填分");
+          } else {
+            groups.push({ label: "表格填分", run: () => doRatingScale(rp) });
+          }
+        }
+        if (groups.length === 0) {
+          $msg.warn("当前任务的所有题型均已关闭，即将跳过该任务");
           return;
         }
-        if (checkUniTestIsDone()) {
-          $msg.success("阅读理解选择题任务已完成，即将跳过该任务");
-          return;
+        const workOptions = CommonProject.scripts.settings.methods.getWorkOptions();
+        for (let index = 0; index < groups.length; index++) {
+          const group = groups[index];
+          const sub = index === groups.length - 1 ? workOptions : { ...workOptions, upload: "save" };
+          $msg.info(`检测到${group.label}任务，即将开始作答（${index + 1}/${groups.length}）`);
+          await group.run(sub);
         }
-        $msg.info("检测到阅读理解选择题任务，即将开始答题");
-        await doReading(rp, CommonProject.scripts.settings.methods.getWorkOptions());
-        return;
-      }
-      if (matches2(".layout-reply-container", ".option-wrap")) {
-        if (!cfg.enable_choice) {
-          $msg.warn("选择题任务开关已关闭，即将跳过该任务");
-          return;
-        }
-        if (checkUniTestIsDone()) {
-          $msg.success("选择题任务已完成，即将跳过该任务");
-          return;
-        }
-        $msg.info("检测到选择题任务，即将开始答题");
-        await doChoice(rp, CommonProject.scripts.settings.methods.getWorkOptions());
-        return;
-      }
-      if (matches2(".layout-reply-container", ".full", "textarea")) {
-        if (!cfg.enable_completion) {
-          $msg.warn("填空题任务开关已关闭，即将跳过该任务");
-          return;
-        }
-        if (checkUniTestIsDone()) {
-          $msg.success("填空题任务已完成，即将跳过该任务");
-          return;
-        }
-        $msg.info("检测到填空题任务，即将开始答题");
-        await doCompletion(rp, CommonProject.scripts.settings.methods.getWorkOptions());
         return;
       }
       if (matches2(
@@ -20721,39 +20750,20 @@ try {
           $msg.error(err.message || "自由填空题任务答题出错，跳过该任务");
         }
       }
-      if (matches2(".text-material-wrapper")) {
-        console.log("[U校园调试] 匹配到 .text-material-wrapper");
-        const ps = lib.$$el(".text-material-wrapper .component-htmlview p");
-        console.log("[U校园调试] .text-material-wrapper .component-htmlview p 数量:", ps.length);
-        if (ps.length === 1) {
-          $msg.info("检测到文本阅读题任务，阅读10秒后跳过");
+      if (matches2(".text-material-wrapper") || matches2(".question-common-abs-material")) {
+        const textLength = (((_k = lib.$el(".text-material-wrapper, .question-common-abs-material")) == null ? void 0 : _k.innerText) || "").trim().length;
+        if (textLength > 0) {
+          $msg.info("检测到文本阅读任务，阅读 10 秒后跳过");
           await lib.$.sleep(10 * 1e3);
           return;
         }
       }
-      console.log("[U校园调试] 未知任务类型，输出 DOM 信息用于调试");
-      console.log("[U校园调试] wrap_content.className:", wrap_content.className);
-      console.log("[U校园调试] wrap_content innerHTML前2000字符:", wrap_content.innerHTML.substring(0, 2e3));
-      console.log("[U校园调试] iframe数量:", document.querySelectorAll("iframe").length);
-      const iframes = document.querySelectorAll("iframe");
-      iframes.forEach((iframe, i) => {
-        console.log(`[U校园调试] iframe[${i}] src:`, iframe.src, "id:", iframe.id, "className:", iframe.className);
-      });
-      console.log("[U校园调试] 额外选择器检测:", {
-        ".question-basic": !!document.querySelector(".question-basic"),
-        ".question-abs-question": !!document.querySelector(".question-abs-question"),
-        ".abs-question": !!document.querySelector(".abs-question"),
-        ".question-content": !!document.querySelector(".question-content"),
-        ".question-body": !!document.querySelector(".question-body"),
-        ".question-stem": !!document.querySelector(".question-stem"),
-        ".question-options": !!document.querySelector(".question-options"),
-        ".question-answer": !!document.querySelector(".question-answer"),
-        ".abs-direction": !!document.querySelector(".abs-direction"),
-        ".question-common-course-page": !!document.querySelector(".question-common-course-page"),
-        "input": !!document.querySelector("input"),
-        ".ant-btn": !!document.querySelector(".ant-btn"),
-        ".btn": !!document.querySelector(".btn"),
-        "button": !!document.querySelector("button")
+      console.log("[U校园调试] 未识别的任务内容:", {
+        className: wrap_content.className,
+        text: (wrap_content.innerText || "").replace(/\s+/g, " ").slice(0, 200),
+        video: document.querySelectorAll("video").length,
+        audio: document.querySelectorAll("audio").length,
+        iframe: document.querySelectorAll("iframe").length
       });
       $msg.info("未知任务类型，即将跳过");
     })();
@@ -20777,39 +20787,45 @@ try {
     }
     await job(cfg, rp);
   }
+  async function waitHashChange(hash, timeout = 8e3) {
+    const start2 = Date.now();
+    while (Date.now() - start2 < timeout) {
+      await lib.$.sleep(500);
+      if (location.hash !== hash)
+        return true;
+    }
+    return false;
+  }
   async function next(rp) {
-    const tasks = lib.$$el(".pc-header-tasks-row .pc-task");
-    for (let index = 0; index < tasks.length; index++) {
-      const task = tasks[index];
-      if (task.classList.contains("pc-header-task-activity")) {
-        const nextTask = tasks[index + 1];
-        if (nextTask) {
-          await rp.click(nextTask);
+    const hash = location.hash;
+    const go = async (el) => {
+      if (!el)
+        return false;
+      await rp.click(el);
+      if (await waitHashChange(hash, 5e3))
+        return true;
+      if (el.isConnected) {
+        el.click();
+        if (await waitHashChange(hash, 5e3))
           return true;
+      }
+      return false;
+    };
+    const findNext = async (selector, activeClass) => {
+      const elements2 = lib.$$el(selector);
+      for (let index = 0; index < elements2.length; index++) {
+        if (elements2[index].classList.contains(activeClass)) {
+          return await go(elements2[index + 1]);
         }
       }
-    }
-    const tabs = lib.$$el(".pc-tab-row .tab");
-    for (let index = 0; index < tabs.length; index++) {
-      const tab = tabs[index];
-      if (tab.classList.contains("pc-header-tab-activity")) {
-        const nextTab = tabs[index + 1];
-        if (nextTab) {
-          await rp.click(nextTab);
-          return true;
-        }
-      }
-    }
-    const elements2 = lib.$$el('.pc-slider-content [data-role="micro"],.pc-slider-content [data-role="node"]');
-    for (let index = 0; index < elements2.length; index++) {
-      const element = elements2[index];
-      if (element.classList.contains("pc-menu-activity")) {
-        const nextElement = elements2[index + 1];
-        if (nextElement) {
-          await rp.click(nextElement);
-          return true;
-        }
-      }
+      return false;
+    };
+    if (await findNext(".pc-header-tasks-row .pc-task", "pc-header-task-activity"))
+      return true;
+    if (await findNext(".pc-tab-row .tab", "pc-header-tab-activity"))
+      return true;
+    if (await findNext('.pc-slider-content [data-role="micro"],.pc-slider-content [data-role="node"]', "pc-menu-activity")) {
+      return true;
     }
     return false;
   }
@@ -20907,24 +20923,24 @@ try {
       return { upload: false, finish: false };
     }
   }
-  function doChoice(rp, opts) {
+  function doChoice(rp, opts, root2 = ".question-common-abs-choice") {
     const is_multiple = !!lib.$el(".multipleChoice");
     return handleCommonUnitTest(rp, opts, {
       type: is_multiple ? "multiple" : "single",
       test_type: "choice",
-      root: ".question-common-abs-choice",
+      root: root2,
       elements: {
         title: ".ques-title",
         options: ".option-wrap .option .content"
       }
     });
   }
-  function doReading(rp, opts) {
+  function doReading(rp, opts, root2 = ".question-common-abs-choice") {
     const is_multiple = !!lib.$el(".multipleChoice");
     return handleCommonUnitTest(rp, opts, {
       type: is_multiple ? "multiple" : "single",
       test_type: "reading-choice",
-      root: ".question-common-abs-choice",
+      root: root2,
       elements: {
         title: ".ques-title,.option-wrap",
         options: ".option-wrap .option .content"
@@ -20937,11 +20953,11 @@ try {
       }
     });
   }
-  function doUnderstandingText(rp, opts) {
+  function doUnderstandingText(rp, opts, root2 = ".question-common-abs-reply") {
     return handleCommonUnitTest(rp, opts, {
       type: "completion",
       test_type: "reading-replay",
-      root: ".question-common-abs-reply",
+      root: root2,
       elements: {
         title: ".question-inputbox-header",
         options: "textarea"
@@ -20954,11 +20970,11 @@ try {
       }
     });
   }
-  function doCompletion(rp, opts) {
+  function doCompletion(rp, opts, root2 = ".question-common-abs-reply") {
     return handleCommonUnitTest(rp, opts, {
       type: "completion",
       test_type: "complete",
-      root: ".question-common-abs-reply",
+      root: root2,
       elements: {
         title: ".question-inputbox-header",
         options: ".question-inputbox-body textarea"
@@ -20969,6 +20985,52 @@ try {
         return [direction, "-".repeat(10), ques].filter(Boolean).join("\n");
       }
     });
+  }
+  async function doRatingScale(rp) {
+    var _a, _b;
+    const marks = [markQuestions("scoop"), markQuestions("slider"), markQuestions("input")];
+    try {
+      let filled = 0;
+      const sliderRoots = lib.$$el('[data-ocs-qk-slider="1"]');
+      for (const root2 of sliderRoots) {
+        const items = Array.from(
+          root2.querySelectorAll(".evaluation-slider-reply-component-wrapper_option_item")
+        );
+        if (items.length === 0)
+          continue;
+        await rp.click(items[Math.floor((items.length - 1) / 2)]);
+        await lib.$.sleep(300);
+        filled++;
+      }
+      if (sliderRoots.length > 0) {
+        $msg.success(`打分题已选择 ${filled}/${sliderRoots.length} 项（统一选中间档位）`);
+      }
+      const inputRoots = lib.$$el(`${marks[0].selector},${marks[2].selector}`);
+      const inputs = inputRoots.flatMap((root2) => Array.from(root2.querySelectorAll("input"))).filter((input) => !input.disabled && !["radio", "checkbox", "file", "hidden"].includes(input.type));
+      if (inputs.length > 0) {
+        const legend = ((_a = lib.$el(".question-common-abs-scoop")) == null ? void 0 : _a.innerText) || ((_b = lib.$el(".question-common-abs-material")) == null ? void 0 : _b.innerText) || "";
+        const scaleValues = (legend.match(/(?:^|\s)(\d{1,2})\s*=/g) || []).map((s) => parseInt(s.replace(/\D/g, ""), 10)).filter((n) => n >= 1 && n <= 10);
+        const max = scaleValues.length ? Math.max(...scaleValues) : 5;
+        const value = String(Math.round((1 + max) / 2));
+        let inputFilled = 0;
+        for (const input of inputs) {
+          if (input.value)
+            continue;
+          await rp.click(input);
+          await rp["keyboard.type"](value);
+          await lib.$.sleep(200);
+          if (input.value)
+            inputFilled++;
+        }
+        filled += inputFilled;
+        if (inputFilled > 0) {
+          $msg.success(`表格填分已填写 ${inputFilled}/${inputs.length} 项（量表 1~${max}，统一填 ${value}）`);
+        }
+      }
+      return filled;
+    } finally {
+      marks.forEach((mark) => mark.clear());
+    }
   }
   async function handleCommonUnitTest(rp, opts, config2) {
     var _a;
@@ -21859,7 +21921,7 @@ try {
                 state.running = false;
                 if (state.media && !state.media.paused)
                   state.media.pause();
-                lib.$message.warning("已停止");
+                lib.$message.warn("已停止");
                 return;
               }
               state.running = true;
