@@ -14,7 +14,7 @@ import {
 	WorkContext
 } from '@ocsjs/core';
 import { BackgroundProject } from '../background';
-import { $playwright } from '../../utils/app';
+import { createLocalRemotePage } from '../../utils/app';
 import { answerWrapperEmptyWarning, simplifyWorkResult } from '../../utils/work';
 
 const state = {
@@ -125,12 +125,8 @@ export const UnipusExplorationScript = new Script({
 
 		CommonProject.scripts.render.methods.pin(this);
 
-		// 检查是否为软件环境
-		const rp: RemotePage | undefined = await BackgroundProject.scripts.dev.methods.getRemotePlaywrightCurrentPage();
-		// 检查是否为软件环境
-		if (!rp) {
-			return $playwright.showError();
-		}
+		// 纯浏览器扩展环境即可运行，使用本地 RemotePage（原生 DOM 事件）
+		const rp: RemotePage = createLocalRemotePage();
 
 		this.onConfigChange('playbackRate', (value) => {
 			if (state.current_media) {
@@ -163,8 +159,18 @@ export const UnipusExplorationScript = new Script({
 			await checkConfirmModal();
 		};
 		checkConfirmModal();
-		await waitForElement('.question-wrap');
-		job(this.cfg, rp);
+		console.log('[U校园调试] oncomplete 开始执行, readyState:', document.readyState);
+		console.log('[U校园调试] 当前URL:', location.href);
+		const wrap = await waitForElement('.question-wrap', { timeout_seconds: 30 });
+		if (!wrap) {
+			console.error('[U校园调试] 未找到 .question-wrap！页面DOM可能已变更');
+			console.log('[U校园调试] body innerHTML前2000字符:', document.body?.innerHTML?.substring(0, 2000));
+			$msg.error('未找到题目容器 .question-wrap，可能页面结构已变更或页面未完全加载');
+			return;
+		}
+		console.log('[U校园调试] .question-wrap 已找到，开始答题');
+		$msg.info('题目容器已找到，开始答题');
+		await job(this.cfg, rp);
 	},
 	onrender(elements) {
 		const translateBtn = h(
@@ -201,6 +207,33 @@ async function job(cfg: typeof UnipusExplorationScript.cfg, rp: RemotePage) {
 			return !!document.querySelector(selector);
 		});
 	};
+
+	// 调试日志：输出当前页面的关键选择器匹配情况
+	console.log('[U校园调试] job 开始执行');
+	console.log('[U校园调试] wrap:', wrap);
+	console.log('[U校园调试] wrap_content:', wrap_content);
+	console.log(
+		'[U校园调试] 选择器检测:',
+		{
+			'.question-wrap': !!document.querySelector('.question-wrap'),
+			'.unipus-upload-container': !!document.querySelector('.unipus-upload-container'),
+			'.question-wrap .video-box': !!document.querySelector('.question-wrap .video-box'),
+			'.question-wrap .question-rich-text-read': !!document.querySelector('.question-wrap .question-rich-text-read'),
+			'.vocabulary-wrapper': !!document.querySelector('.vocabulary-wrapper'),
+			'.swiper-slide': !!document.querySelector('.swiper-slide'),
+			'.layout-material-container': !!document.querySelector('.layout-material-container'),
+			'.layout-reply-container': !!document.querySelector('.layout-reply-container'),
+			'.option-wrap': !!document.querySelector('.option-wrap'),
+			'.question-common-abs-choice': !!document.querySelector('.question-common-abs-choice'),
+			'.question-common-abs-reply': !!document.querySelector('.question-common-abs-reply'),
+			'.full': !!document.querySelector('.full'),
+			'textarea': !!document.querySelector('textarea'),
+			'.question-material-banked-cloze-reply': !!document.querySelector('.question-material-banked-cloze-reply'),
+			'.input-wrapper': !!document.querySelector('.input-wrapper'),
+			'.sequence-reply-view-item-text': !!document.querySelector('.sequence-reply-view-item-text'),
+			'.text-material-wrapper': !!document.querySelector('.text-material-wrapper')
+		}
+	);
 
 	await (async () => {
 		if (!wrap_content) {
@@ -757,12 +790,42 @@ async function job(cfg: typeof UnipusExplorationScript.cfg, rp: RemotePage) {
 
 		// =============================== 文本阅读题，这里等十秒跳过 ===============================
 		if (matches('.text-material-wrapper')) {
-			if ($$el('.text-material-wrapper .component-htmlview p').length === 1) {
+			console.log('[U校园调试] 匹配到 .text-material-wrapper');
+			const ps = $$el('.text-material-wrapper .component-htmlview p');
+			console.log('[U校园调试] .text-material-wrapper .component-htmlview p 数量:', ps.length);
+			if (ps.length === 1) {
 				$msg.info('检测到文本阅读题任务，阅读10秒后跳过');
 				await $.sleep(10 * 1000);
 				return;
 			}
 		}
+
+		// 调试：输出更多 DOM 信息
+		console.log('[U校园调试] 未知任务类型，输出 DOM 信息用于调试');
+		console.log('[U校园调试] wrap_content.className:', wrap_content.className);
+		console.log('[U校园调试] wrap_content innerHTML前2000字符:', wrap_content.innerHTML.substring(0, 2000));
+		console.log('[U校园调试] iframe数量:', document.querySelectorAll('iframe').length);
+		const iframes = document.querySelectorAll('iframe');
+		iframes.forEach((iframe, i) => {
+			console.log(`[U校园调试] iframe[${i}] src:`, iframe.src, 'id:', iframe.id, 'className:', iframe.className);
+		});
+		// 检测更多可能的选择器
+		console.log('[U校园调试] 额外选择器检测:', {
+			'.question-basic': !!document.querySelector('.question-basic'),
+			'.question-abs-question': !!document.querySelector('.question-abs-question'),
+			'.abs-question': !!document.querySelector('.abs-question'),
+			'.question-content': !!document.querySelector('.question-content'),
+			'.question-body': !!document.querySelector('.question-body'),
+			'.question-stem': !!document.querySelector('.question-stem'),
+			'.question-options': !!document.querySelector('.question-options'),
+			'.question-answer': !!document.querySelector('.question-answer'),
+			'.abs-direction': !!document.querySelector('.abs-direction'),
+			'.question-common-course-page': !!document.querySelector('.question-common-course-page'),
+			'input': !!document.querySelector('input'),
+			'.ant-btn': !!document.querySelector('.ant-btn'),
+			'.btn': !!document.querySelector('.btn'),
+			'button': !!document.querySelector('button')
+		});
 
 		$msg.info('未知任务类型，即将跳过');
 	})();

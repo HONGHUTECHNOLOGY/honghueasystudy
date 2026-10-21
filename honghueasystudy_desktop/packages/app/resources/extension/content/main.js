@@ -14,7 +14,7 @@
 	'use strict';
 
 	/* ===== 1/4 resources（构建生成） ===== */
-var __OCS_RESOURCES__ = {"version":"5.0.1","metadata":{"name":"鸿鹄易学","version":"5.0.1","description":"鸿鹄易学 - 在线网络课程辅助工具","author":"enncy","license":"MIT","namespace":"https://honghueasystudy","homepage":"https://easystudy.honghutech.eu.org","source":"https://easystudy.honghutech.eu.org","icon":"https://easystudy.honghutech.eu.org/assets/img/icon.png","connect":["easystudy.honghutech.eu.org","enncy.cn","icodef.com","ocsjs.com","zaizhexue.top","localhost","127.0.0.1"],"run-at":"document-start"},"resources":{"STYLE":"/** 默认字体 */\n/** 输入框默认边距 */\nul,\nol {\n  line-height: 26px;\n  padding-left: 22px;\n  margin: 0px;\n}\na {\n  color: #1890ff;\n}\nhr {\n  border-style: solid;\n  border-color: #63636346;\n  border-width: 0px;\n  border-bottom: 1px solid #63636346;\n  margin-block-start: 1em;\n  margin-block-end: 1em;\n}\n.base-style-active-form-control {\n  border: 1px solid #ffffff00;\n}\n.base-style-active-form-control:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.base-style-active-form-control:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.base-style-active-form-control:hover {\n  background-color: #ebeef4;\n}\n.base-style-input {\n  outline: none;\n  border: 1px solid #ffffff00;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n}\n.base-style-input::placeholder {\n  color: #bababa;\n}\n.base-style-switch {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.base-style-switch:checked {\n  background: #1890ff;\n}\n.base-style-switch:disabled {\n  background-color: #f7f7f78b;\n}\n.base-style-switch:checked::before {\n  transform: translate(24px, 0px);\n}\n.base-style-switch::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.base-style-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.base-style-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button + .base-style-button {\n  margin-left: 12px;\n}\n.base-style-button:hover {\n  background-color: #7abbff24;\n}\n.base-style-button.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button:disabled:active {\n  box-shadow: none;\n}\n.base-style-button-secondary {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\n.base-style-button-secondary:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button-secondary + .base-style-button-secondary {\n  margin-left: 12px;\n}\n.base-style-button-secondary:hover {\n  background-color: #7abbff24;\n}\n.base-style-button-secondary.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button-secondary:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button-secondary.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button-secondary:disabled:active {\n  box-shadow: none;\n}\ncontainer-element.hidden {\n  display: none;\n}\ncontainer-element.minimize {\n  min-width: unset;\n}\ncontainer-element {\n  position: fixed;\n  top: 10%;\n  left: 10%;\n  z-index: 99999;\n  text-align: left;\n  min-width: 300px;\n  -webkit-font-smoothing: antialiased;\n  -moz-osx-font-smoothing: grayscale;\n  color: #636363;\n  box-shadow: 0 0 24px -12px #3f3f3f;\n  border-radius: 8px;\n  letter-spacing: 0.5px;\n  border: 1px solid #c1c1c1;\n}\nheader-element {\n  display: flex;\n  align-items: center;\n  background-color: white;\n  border-radius: 8px 8px 0px 0px;\n  user-select: none;\n  padding: 4px;\n  padding-bottom: 0px;\n}\nheader-element .extra-menu-bar {\n  width: 100%;\n  padding: 4px;\n  padding-bottom: 0px;\n  margin-top: 4px;\n  border-top: 1px solid #e8e8e8;\n  /** 默认隐藏，一直到需要激活的时候再更改 */\n  display: none;\n}\nheader-element .extra-menu-bar .script-panel-link {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n  padding-bottom: 2px;\n  margin-bottom: 0px;\n}\nheader-element .extra-menu-bar .script-panel-link:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nheader-element .extra-menu-bar .script-panel-link + header-element .extra-menu-bar .script-panel-link {\n  margin-left: 12px;\n}\nheader-element .extra-menu-bar .script-panel-link:hover {\n  background-color: #7abbff24;\n}\nheader-element .extra-menu-bar .script-panel-link.danger:hover {\n  background-color: #ffdede86;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nheader-element .extra-menu-bar .script-panel-link.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled:active {\n  box-shadow: none;\n}\nheader-element .extra-menu-bar .script-panel-link.active {\n  background-color: #1890ff1a;\n  border-color: #1890ff;\n  color: #1890ff;\n}\nheader-element .extra-menu-bar .script-panel-link + .script-panel-link {\n  margin-left: 4px;\n}\nheader-element .profile {\n  flex: 1;\n  cursor: move;\n}\nheader-element .switch:hover,\nheader-element .dropdown:hover {\n  background-color: #f3f3f3;\n}\nheader-element .close:hover {\n  background-color: #ff000038;\n}\nheader-element .switch,\nheader-element .close {\n  cursor: pointer;\n}\nheader-element .dropdown {\n  line-height: 24px;\n  text-decoration: underline;\n}\nheader-element .switch,\nheader-element .close,\nheader-element .profile {\n  display: inline-flex;\n  align-items: center;\n  padding: 0px 8px;\n}\n.logo {\n  width: 18px;\n  height: 18px;\n  cursor: pointer;\n}\n.project-selector {\n  display: flex;\n  align-items: center;\n}\n.project-selector select {\n  background: #ffffff00;\n  border-radius: 4px;\n  border: 1px solid #63636346;\n  padding: 4px;\n}\n.project-selector.expand-all {\n  display: none;\n}\n.body {\n  overflow: auto;\n  width: auto;\n  height: 100%;\n}\nscript-panel-element {\n  display: block;\n  background-color: white;\n  border-radius: 0px 0px 8px 8px;\n  padding: 0px 8px 12px 8px;\n  overflow: auto;\n}\nscript-panel-element .script-panel-body {\n  padding: 0px 8px;\n}\nscript-panel-element + script-panel-element {\n  margin-top: 12px;\n}\n.card + .card {\n  margin-top: 12px;\n}\n.card {\n  background-color: white;\n  border-radius: 2px;\n  padding: 0px 8px;\n}\n.notes {\n  background: #0099ff0e;\n  border-left: 4px solid #0099ff65;\n  width: -webkit-fill-available;\n  margin: 0px 8px;\n  line-height: 26px;\n  letter-spacing: 1px;\n}\n.secondary {\n  font-size: 12px;\n  color: #8b8b8b;\n}\n.tooltip-container {\n  z-index: 99999999999999;\n  margin: 12px 0px 0px 12px;\n  padding: 4px;\n  color: black;\n  background: #f0f0f0;\n  box-shadow: 0px 0px 4px #949494;\n  position: fixed;\n  white-space: normal;\n  max-width: 200px;\n  height: auto;\n  border-radius: 2px;\n  line-height: 18px;\n}\n.configs-container.lock {\n  filter: blur(1px);\n  user-select: none;\n  -webkit-user-select: none;\n  -moz-user-select: none;\n  -ms-user-select: none;\n}\n.configs-container .lock-wrapper {\n  cursor: not-allowed !important;\n  border-radius: 4px;\n  position: absolute;\n  left: 0px;\n  z-index: 1;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n}\n.configs-container .lock-message {\n  background-color: #ffffff7d;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #6a6a6a98;\n  padding: 2px;\n}\n.configs {\n  display: table;\n  background: #e1e1e107;\n  width: -webkit-fill-available;\n}\n.configs .configs-body {\n  display: table-row-group;\n}\n.configs .configs-body config-element + config-element label {\n  padding-top: 4px;\n}\n.configs .configs-body config-element + config-element .config-wrapper {\n  padding-top: 4px;\n}\n.configs .configs-body config-element {\n  width: 100%;\n  display: table-row;\n  line-height: 26px;\n}\n.configs .configs-body config-element label {\n  white-space: nowrap;\n  color: #4e5969;\n  display: table-cell;\n  padding-right: 12px;\n  text-align: left;\n  vertical-align: top;\n  margin-right: 12px;\n}\n.configs .configs-body config-element .config-wrapper {\n  display: table-cell;\n  vertical-align: middle;\n  /** check box 的样式 */\n}\n.configs .configs-body config-element .config-wrapper select {\n  outline: none;\n  border: none;\n  border: 1px solid #e4e4e4;\n  border-radius: 4px;\n  padding: 2px 8px;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper select:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper select:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper select:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper textarea {\n  padding: 2px 8px;\n  outline: none;\n  border: none;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper textarea:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']) {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button'])::placeholder {\n  color: #bababa;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  padding: 0px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] + .configs .configs-body config-element .config-wrapper input[type='button'] {\n  margin-left: 12px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:hover {\n  background-color: #7abbff24;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger:hover {\n  background-color: #ffdede86;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled:active {\n  box-shadow: none;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked {\n  background: #1890ff;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:disabled {\n  background-color: #f7f7f78b;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked::before {\n  transform: translate(24px, 0px);\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.configs .configs-body config-element .config-wrapper input:not([type='checkbox'], [type='radio']),\n.configs .configs-body config-element .config-wrapper textarea,\n.configs .configs-body config-element .config-wrapper select {\n  width: -webkit-fill-available;\n  font-size: inherit;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'],\n.configs .configs-body config-element .config-wrapper input[type='radio'],\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  accent-color: #0e8ee2;\n}\n.configs .configs-body config-element .config-wrapper > *:not(.tooltip) {\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  float: right;\n}\n.configs .configs-body config-element .config-wrapper > *:disabled {\n  cursor: not-allowed;\n  background-color: #f7f7f78b;\n}\n.message-container {\n  margin-bottom: 4px;\n  position: absolute;\n  bottom: 100%;\n  left: 50%;\n  width: 100%;\n  transform: translate(-50%, 0px);\n  min-width: 300px;\n}\n.message-container message-element {\n  display: flex;\n  border-radius: 4px;\n  padding: 4px 12px;\n  margin-bottom: 4px;\n}\n.message-container message-element .message-content-container {\n  margin-right: 8px;\n  flex: auto;\n}\n.message-container message-element .message-text {\n  letter-spacing: 1px;\n  font-weight: bold;\n}\n.message-container message-element .message-closer {\n  width: 18px;\n  min-width: 18px;\n  cursor: pointer;\n  background-color: #ffffffb3;\n  color: #a1a1a1;\n  border-radius: 100%;\n  text-align: center;\n  height: 18px;\n  vertical-align: middle;\n  font-size: 12px;\n}\n.message-container message-element.error {\n  background-color: #ffe6e6;\n  color: #c70208;\n  border: 1px solid #ff6b6ded;\n}\n.message-container message-element.info {\n  background-color: #c9e7ff;\n  color: #004d95;\n  border: 1px solid #1890ff69;\n}\n.message-container message-element.success {\n  background-color: #e8ffe0;\n  color: #3e8d0d;\n  border: 1px solid #6fd91d;\n}\n.message-container message-element.warn {\n  background-color: #ffefc8;\n  color: #9b7400;\n  border: 1px solid #ffc107;\n}\nmodal-element {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  background-color: white;\n  border-radius: 4px;\n  box-shadow: 0px 0px 24px -12px black;\n  border: 1px solid #929292;\n  height: fit-content;\n  transform: translate(-50%, -50%);\n  padding: 12px 18px 18px 18px;\n  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;\n  z-index: 99999999999;\n  line-height: 24px;\n}\nmodal-element .modal-profile {\n  zoom: 0.9;\n  color: #969696;\n  user-select: none;\n  margin-bottom: 4px;\n}\nmodal-element .modal-title {\n  font-size: 18px;\n  font-weight: bold;\n  user-select: none;\n}\nmodal-element .modal-body {\n  margin: 12px 0px;\n  overflow: auto;\n}\nmodal-element .modal-footer {\n  display: flex;\n  white-space: nowrap;\n  justify-content: end;\n  align-items: end;\n}\nmodal-element .modal-footer > * + * {\n  margin-left: 12px;\n}\nmodal-element .modal-input {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n  width: -webkit-fill-available;\n}\nmodal-element .modal-input::placeholder {\n  color: #bababa;\n}\nmodal-element .modal-input:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\nmodal-element .modal-input:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\nmodal-element .modal-input:hover {\n  background-color: #ebeef4;\n}\nmodal-element .modal-cancel-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\nmodal-element .modal-cancel-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-cancel-button + modal-element .modal-cancel-button {\n  margin-left: 12px;\n}\nmodal-element .modal-cancel-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-cancel-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-cancel-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-cancel-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-cancel-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element .modal-confirm-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\nmodal-element .modal-confirm-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-confirm-button + modal-element .modal-confirm-button {\n  margin-left: 12px;\n}\nmodal-element .modal-confirm-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-confirm-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-confirm-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-confirm-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-confirm-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element.alert .modal-input,\nmodal-element.alert .modal-cancel-button {\n  display: none;\n}\nmodal-element.alert .modal-confirm-button {\n  margin: 0;\n}\nmodal-element.prompt .modal-input,\nmodal-element.prompt .modal-cancel-button,\nmodal-element.prompt .modal-confirm-button {\n  display: block;\n}\nmodal-element.confirm .modal-input {\n  display: none;\n}\n.modal-wrapper {\n  width: 100%;\n  height: 100%;\n  z-index: 9999;\n  position: fixed;\n  top: 0px;\n  left: 0px;\n  z-index: 9999999;\n  background-color: rgba(0, 0, 0, 0.265);\n  color: #636363;\n  font: 14px Menlo, Monaco, Consolas, 'Courier New', monospace;\n}\n.pointer {\n  cursor: pointer;\n}\n.separator {\n  display: flex;\n  align-items: center;\n  text-align: center;\n  padding: 4px 0px 8px 0px;\n}\n.separator::before,\n.separator::after {\n  content: '';\n  flex: 1;\n  border-bottom: 1px solid #63636346;\n}\n.separator:not(:empty)::before {\n  margin-right: 0.25em;\n}\n.separator:not(:empty)::after {\n  margin-left: 0.25em;\n}\ncontainer-element.minimize .body,\ncontainer-element.minimize header-element .dropdown,\ncontainer-element.minimize .footer {\n  display: none;\n}\ncontainer-element.minimize header-element {\n  padding: 8px;\n  border-radius: 8px;\n  box-shadow: 0px 0px 24px -12px black;\n}\n.user-guide > li {\n  padding: 4px 0px;\n}\n.search-infos-num {\n  width: 26px;\n  margin: 2px;\n  height: 20px;\n  border-radius: 4px;\n  display: inline-block;\n  background-color: white;\n  text-align: center;\n  cursor: pointer;\n  border: 1px solid #b6b6b6;\n}\n.search-infos-num.requested {\n  border: 1px solid #63b4ff;\n  color: #63b4ff;\n}\n.search-infos-num.active {\n  background-color: #127de1 !important;\n  color: white;\n}\n.search-infos-num.error {\n  border: 1px solid #ff8789ed;\n  background-color: #ff6b6ded;\n  color: white;\n}\n.search-infos-num.finish {\n  background-color: #63b4ff;\n  border: 1px solid #63b4ff;\n  color: white;\n}\nsearch-infos-element {\n  display: block;\n  overflow: auto;\n}\nsearch-infos-element .search-result {\n  margin-bottom: 12px;\n  padding-left: 12px;\n}\nsearch-infos-element .search-result .question {\n  font-weight: bold;\n  max-height: 200px;\n  overflow: auto;\n}\nsearch-infos-element .search-result .answer {\n  color: #7c7c7c;\n}\nsearch-infos-element .search-result .answer code {\n  border-bottom: 1px solid #dcdcdc;\n  padding: 2px 0px;\n  border-radius: 2px;\n  margin: 4px;\n  line-height: 22px;\n}\nsearch-infos-element .search-result .answer code + code {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag {\n  padding: 2px 6px;\n  border-radius: 2px;\n  font-size: 12px;\n  cursor: pointer;\n  margin-right: 6px;\n}\nsearch-infos-element .search-result .search-result-answer-tag + .search-result-answer-tag {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag.blue {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n}\nsearch-infos-element .search-result .search-result-answer-tag.green {\n  background-color: #f6ffed;\n  border: 1px solid #b7eb8f;\n  color: #52c41a;\n}\nsearch-infos-element .search-result .search-result-answer-tag.gray {\n  background-color: #fafafa;\n  border: 1px solid #d9d9d9;\n  color: #595959;\n}\nsearch-infos-element .search-result .search-result-answer-tag.red {\n  background-color: #fff1f0;\n  border: 1px solid #ffa39e;\n  color: #ff4d4f;\n}\nsearch-infos-element .search-result .search-result-answer-tag.yellow {\n  background-color: #fffbe6;\n  border: 1px solid #ffe58f;\n  color: #faad14;\n}\nsearch-infos-element .search-result-question-type {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n  margin-right: 8px;\n  padding: 0px 4px;\n  border-radius: 4px;\n}\nsearch-infos-element .error {\n  color: #ff6b6ded;\n  display: inline-block;\n  padding-left: 12px;\n}\n.copy,\n.question-title-extra-btn {\n  margin-left: 4px;\n  padding: 2px 4px;\n  border-radius: 2px;\n  box-shadow: 0 0 4px #b1b1b1;\n  cursor: pointer !important;\n  font-weight: normal;\n  font-size: 12px;\n}\n.work-result-question-container {\n  position: absolute;\n  width: 400px;\n  left: -100%;\n  top: 0px;\n  background: white;\n  border: 1px solid #cbcbcb;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #d1cfcf;\n  padding: 12px;\n}\n.work-result-question-container .close-search-result {\n  font-size: 12px;\n  margin-left: 8px;\n  text-decoration: underline;\n  color: gray;\n  cursor: pointer;\n}\n.work-result-list {\n  max-height: 400px;\n  overflow: auto;\n  margin: 12px 0px;\n  padding: 6px;\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n}\n.search-info-title {\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  margin-bottom: 12px;\n  line-height: 20px;\n  overflow: auto;\n}\n.search-info-title .title-content {\n  max-height: 200px;\n  overflow: auto;\n}\n.search-info-details {\n  margin-left: 4px;\n}\n.console {\n  max-height: 300px;\n  max-width: 400px;\n  overflow: auto;\n  background-color: #292929;\n  padding: 12px 6px;\n  color: #ececec;\n  font-size: 12px;\n}\n.console .item {\n  padding: 3px 0px;\n  border-radius: 2px;\n}\n.console .item .time {\n  color: #757575;\n}\n.console .item .info {\n  background-color: #2196f3a3;\n}\n.console .item .warn {\n  background-color: #ffc107db;\n}\n.console .item .error {\n  background-color: #f36c71cc;\n}\n.console .item .debug,\n.console .item .log {\n  background-color: #9e9e9ec4;\n}\n.console *::selection {\n  background-color: #ffffff6b;\n}\n.markdown {\n  max-width: 400px;\n  max-height: 50vh;\n  overflow: auto;\n}\n.markdown code {\n  padding: 2px 4px;\n  background-color: #f0f0f0;\n  border-radius: 6px;\n  font-size: 12px;\n}\n.markdown blockquote {\n  padding: 4px 4px 4px 12px;\n  margin: 0px;\n  color: #b5b5b5;\n  border-left: #ababab 2px solid;\n}\n.markdown blockquote p {\n  margin: 0px;\n}\n.markdown h1,\n.markdown h2,\n.markdown h3,\n.markdown h4,\n.markdown h5,\n.markdown h6,\n.markdown p {\n  margin: 8px 0px;\n}\n.dropdown {\n  position: relative;\n  display: inline-block;\n}\n.dropdown.active .dropdown-trigger-element {\n  color: #1890ff;\n}\n.dropdown-trigger-element {\n  cursor: pointer;\n}\n.dropdown-content {\n  display: none;\n  position: absolute;\n  background-color: #ffffff;\n  overflow: auto;\n  box-shadow: 0px 8px 16px 0px #00000033;\n  z-index: 1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  min-width: 120px;\n}\n.dropdown-content.show {\n  display: block;\n}\n.dropdown-content {\n  cursor: pointer;\n  z-index: 999;\n}\n.dropdown-content .dropdown-option {\n  padding-left: 4px;\n  white-space: nowrap;\n}\n.dropdown-content .dropdown-option:hover {\n  background-color: #f3f3f3;\n}\n.dropdown-content .dropdown-option.active {\n  background-color: #1890ff1a;\n  color: #1890ff;\n}\n.space {\n  display: inline-flex;\n}\n.config-details {\n  animation: fade-in 0.5s;\n}\n.config-details label {\n  padding-left: 12px;\n}\n.alert-info-wrapper {\n  margin-bottom: 8px;\n}\n.alert-info-wrapper .result-info {\n  padding: 12px;\n  text-align: center;\n  border-radius: 6px;\n}\n.alert-info-wrapper .unresolved {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .no-answer {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .error {\n  color: #ff4d4f;\n  background-color: #fff1f0;\n}\nmessage-element {\n  animation: show 0.5s;\n}\nscript-panel-element > div,\nscript-panel-link,\ncontainer-element,\nmodal-element {\n  animation: fade-in 0.3s;\n}\n@keyframes show {\n  0% {\n    transform: translateY(20px);\n    opacity: 0;\n  }\n  100% {\n    transform: translateY(0);\n    opacity: 1;\n  }\n}\n@keyframes fade-in {\n  0% {\n    opacity: 0;\n  }\n  100% {\n    opacity: 1;\n  }\n}\n@keyframes fade-out {\n  0% {\n    opacity: 1;\n  }\n  100% {\n    opacity: 0;\n  }\n}\n.checkbox-label {\n  display: inline-block !important;\n  position: relative;\n  cursor: pointer;\n  font-size: 16px;\n  color: #2c3e50;\n}\n/* 隐藏原始复选框 */\n.checkbox-input {\n  position: absolute;\n  opacity: 0;\n  width: 0;\n  height: 0;\n}\n/* 自定义按钮样式 */\n.checkbox-label::after {\n  content: '';\n  display: inline-block;\n  border-radius: 50%;\n  transition: all 0.1s ease;\n  position: relative;\n  margin-left: 4px;\n  vertical-align: middle;\n}\n/* 向下箭头（未选中状态） */\n.checkbox-label::before {\n  content: '🔽';\n  position: absolute;\n  width: 0;\n  height: 0;\n  right: 8px;\n  transition: all 0.1s ease;\n  z-index: 2;\n}\n/* 向上箭头（选中状态） */\n.checked .checkbox-label::before {\n  content: '🔼';\n}\n/* ==================== Apple Design Style Override ==================== */\ncontainer-element,\ncontainer-element * {\n  font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"SF Pro Display\",\n    \"Helvetica Neue\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif !important;\n  letter-spacing: 0 !important;\n}\ncontainer-element {\n  background: rgba(255, 255, 255, 0.86) !important;\n  backdrop-filter: saturate(180%) blur(24px) !important;\n  -webkit-backdrop-filter: saturate(180%) blur(24px) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 14px !important;\n  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06) !important;\n  color: #1d1d1f !important;\n}\nheader-element {\n  background: transparent !important;\n  border-radius: 14px 14px 0 0 !important;\n  padding: 10px 12px 8px !important;\n  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar {\n  gap: 4px !important;\n}\nheader-element .extra-menu-bar button {\n  background: transparent !important;\n  border: none !important;\n  border-radius: 7px !important;\n  padding: 5px 12px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  color: #1d1d1f !important;\n  transition: background 0.15s ease !important;\n}\nheader-element .extra-menu-bar button:hover {\n  background: rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar button.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\nheader-element .profile {\n  font-weight: 600 !important;\n  font-size: 14px !important;\n  color: #1d1d1f !important;\n}\n.base-style-button {\n  background: #007aff !important;\n  color: #fff !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 7px 16px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease, transform 0.1s ease !important;\n}\n.base-style-button:hover {\n  background: #0066d6 !important;\n}\n.base-style-button:active {\n  transform: scale(0.97) !important;\n}\n.base-style-button-secondary {\n  background: rgba(0, 0, 0, 0.05) !important;\n  color: #1d1d1f !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 6px 14px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease !important;\n}\n.base-style-button-secondary:hover {\n  background: rgba(0, 0, 0, 0.1) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  border: 1px solid rgba(0, 0, 0, 0.1) !important;\n  border-radius: 8px !important;\n  background: #fff !important;\n  padding: 7px 10px !important;\n  font-size: 13px !important;\n  color: #1d1d1f !important;\n  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;\n  outline: none !important;\n}\n.base-style-active-form-control:focus,\n.base-style-input:focus {\n  border-color: #007aff !important;\n  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.16) !important;\n  background: #fff !important;\n}\n.base-style-active-form-control:hover,\n.base-style-input:hover {\n  background: #fff !important;\n}\n.card {\n  background: #fff !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 12px !important;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;\n}\n.configs-container {\n  border: none !important;\n  box-shadow: none !important;\n}\n.notes {\n  color: #6e6e73 !important;\n  line-height: 1.6 !important;\n}\n.secondary {\n  color: #6e6e73 !important;\n}\n.separator {\n  border-color: rgba(0, 0, 0, 0.06) !important;\n}\n.dropdown-content {\n  border-radius: 10px !important;\n  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  overflow: hidden !important;\n}\n.dropdown-option {\n  border-radius: 6px !important;\n  transition: background 0.12s ease !important;\n}\n.dropdown-option:hover {\n  background: rgba(0, 0, 0, 0.05) !important;\n}\n.dropdown-option.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\n.modal-wrapper {\n  border-radius: 14px !important;\n  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\n.message-container {\n  gap: 6px !important;\n}\n/* 面板留白 */\nscript-panel-element {\n  padding: 4px 2px !important;\n}\n/* 滚动条苹果风格 */\ncontainer-element ::-webkit-scrollbar {\n  width: 8px !important;\n  height: 8px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb {\n  background: rgba(0, 0, 0, 0.18) !important;\n  border-radius: 4px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb:hover {\n  background: rgba(0, 0, 0, 0.3) !important;\n}\ncontainer-element ::-webkit-scrollbar-track {\n  background: transparent !important;\n}\n/* ==================== Silky Animations ==================== */\ncontainer-element {\n  scroll-behavior: smooth !important;\n}\ncontainer-element * {\n  scroll-behavior: smooth !important;\n}\n@keyframes ocs-panel-in {\n  from {\n    opacity: 0;\n    transform: translateY(10px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\n@keyframes ocs-card-in {\n  from {\n    opacity: 0;\n    transform: translateY(8px) scale(0.99);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0) scale(1);\n  }\n}\n@keyframes ocs-modal-in {\n  from {\n    opacity: 0;\n    transform: scale(0.9) translateY(12px);\n  }\n  to {\n    opacity: 1;\n    transform: scale(1) translateY(0);\n  }\n}\n@keyframes ocs-dropdown-in {\n  from {\n    opacity: 0;\n    transform: scaleY(0.92) translateY(-6px);\n  }\n  to {\n    opacity: 1;\n    transform: scaleY(1) translateY(0);\n  }\n}\n@keyframes ocs-msg-in {\n  from {\n    opacity: 0;\n    transform: translateX(24px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n@keyframes ocs-cfg-in {\n  from {\n    opacity: 0;\n    transform: translateY(6px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\nscript-panel-element {\n  animation: ocs-panel-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.base-style-button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease !important;\n  will-change: transform !important;\n}\n.base-style-button:hover {\n  transform: translateY(-1px) !important;\n  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.28) !important;\n}\n.base-style-button:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\n.base-style-button-secondary {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  will-change: transform !important;\n}\n.base-style-button-secondary:hover {\n  transform: translateY(-1px) !important;\n}\n.base-style-button-secondary:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\nheader-element .extra-menu-bar button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease,\n    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\nheader-element .extra-menu-bar button:active {\n  transform: scale(0.92) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),\n    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease !important;\n}\n.card {\n  animation: ocs-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.modal-wrapper {\n  animation: ocs-modal-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\n.dropdown-content {\n  animation: ocs-dropdown-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  transform-origin: top center !important;\n}\n.message-container > * {\n  animation: ocs-msg-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.configs-container > * {\n  animation: ocs-cfg-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.configs-container > *:nth-child(1) {\n  animation-delay: 0s !important;\n}\n.configs-container > *:nth-child(2) {\n  animation-delay: 0.05s !important;\n}\n.configs-container > *:nth-child(3) {\n  animation-delay: 0.1s !important;\n}\n.configs-container > *:nth-child(4) {\n  animation-delay: 0.15s !important;\n}\n.configs-container > *:nth-child(5) {\n  animation-delay: 0.2s !important;\n}\n.configs-container > *:nth-child(6) {\n  animation-delay: 0.25s !important;\n}\n.configs-container > *:nth-child(7) {\n  animation-delay: 0.3s !important;\n}\n.configs-container > *:nth-child(8) {\n  animation-delay: 0.35s !important;\n}\n.base-style-switch {\n  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n.base-style-switch::before {\n  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\na {\n  transition: color 0.2s ease, opacity 0.2s ease !important;\n}\n.dropdown-option {\n  transition: background 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n"}};
+var __OCS_RESOURCES__ = {"version":"5.1.0","metadata":{"name":"鸿鹄易学","version":"5.1.0","description":"鸿鹄易学 - 在线网络课程辅助工具","author":"enncy","license":"MIT","namespace":"https://honghueasystudy","homepage":"https://easystudy.honghutech.eu.org","source":"https://easystudy.honghutech.eu.org","icon":"https://easystudy.honghutech.eu.org/assets/img/icon.png","connect":["easystudy.honghutech.eu.org","enncy.cn","icodef.com","ocsjs.com","zaizhexue.top","localhost","127.0.0.1"],"run-at":"document-start"},"resources":{"STYLE":"/** 默认字体 */\n/** 输入框默认边距 */\nul,\nol {\n  line-height: 26px;\n  padding-left: 22px;\n  margin: 0px;\n}\na {\n  color: #1890ff;\n}\nhr {\n  border-style: solid;\n  border-color: #63636346;\n  border-width: 0px;\n  border-bottom: 1px solid #63636346;\n  margin-block-start: 1em;\n  margin-block-end: 1em;\n}\n.base-style-active-form-control {\n  border: 1px solid #ffffff00;\n}\n.base-style-active-form-control:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.base-style-active-form-control:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.base-style-active-form-control:hover {\n  background-color: #ebeef4;\n}\n.base-style-input {\n  outline: none;\n  border: 1px solid #ffffff00;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n}\n.base-style-input::placeholder {\n  color: #bababa;\n}\n.base-style-switch {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.base-style-switch:checked {\n  background: #1890ff;\n}\n.base-style-switch:disabled {\n  background-color: #f7f7f78b;\n}\n.base-style-switch:checked::before {\n  transform: translate(24px, 0px);\n}\n.base-style-switch::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.base-style-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.base-style-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button + .base-style-button {\n  margin-left: 12px;\n}\n.base-style-button:hover {\n  background-color: #7abbff24;\n}\n.base-style-button.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button:disabled:active {\n  box-shadow: none;\n}\n.base-style-button-secondary {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\n.base-style-button-secondary:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button-secondary + .base-style-button-secondary {\n  margin-left: 12px;\n}\n.base-style-button-secondary:hover {\n  background-color: #7abbff24;\n}\n.base-style-button-secondary.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button-secondary:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button-secondary.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button-secondary:disabled:active {\n  box-shadow: none;\n}\ncontainer-element.hidden {\n  display: none;\n}\ncontainer-element.minimize {\n  min-width: unset;\n}\ncontainer-element {\n  position: fixed;\n  top: 10%;\n  left: 10%;\n  z-index: 99999;\n  text-align: left;\n  min-width: 300px;\n  -webkit-font-smoothing: antialiased;\n  -moz-osx-font-smoothing: grayscale;\n  color: #636363;\n  box-shadow: 0 0 24px -12px #3f3f3f;\n  border-radius: 8px;\n  letter-spacing: 0.5px;\n  border: 1px solid #c1c1c1;\n}\nheader-element {\n  display: flex;\n  align-items: center;\n  background-color: white;\n  border-radius: 8px 8px 0px 0px;\n  user-select: none;\n  padding: 4px;\n  padding-bottom: 0px;\n}\nheader-element .extra-menu-bar {\n  width: 100%;\n  padding: 4px;\n  padding-bottom: 0px;\n  margin-top: 4px;\n  border-top: 1px solid #e8e8e8;\n  /** 默认隐藏，一直到需要激活的时候再更改 */\n  display: none;\n}\nheader-element .extra-menu-bar .script-panel-link {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n  padding-bottom: 2px;\n  margin-bottom: 0px;\n}\nheader-element .extra-menu-bar .script-panel-link:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nheader-element .extra-menu-bar .script-panel-link + header-element .extra-menu-bar .script-panel-link {\n  margin-left: 12px;\n}\nheader-element .extra-menu-bar .script-panel-link:hover {\n  background-color: #7abbff24;\n}\nheader-element .extra-menu-bar .script-panel-link.danger:hover {\n  background-color: #ffdede86;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nheader-element .extra-menu-bar .script-panel-link.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled:active {\n  box-shadow: none;\n}\nheader-element .extra-menu-bar .script-panel-link.active {\n  background-color: #1890ff1a;\n  border-color: #1890ff;\n  color: #1890ff;\n}\nheader-element .extra-menu-bar .script-panel-link + .script-panel-link {\n  margin-left: 4px;\n}\nheader-element .profile {\n  flex: 1;\n  cursor: move;\n}\nheader-element .switch:hover,\nheader-element .dropdown:hover {\n  background-color: #f3f3f3;\n}\nheader-element .close:hover {\n  background-color: #ff000038;\n}\nheader-element .switch,\nheader-element .close {\n  cursor: pointer;\n}\nheader-element .dropdown {\n  line-height: 24px;\n  text-decoration: underline;\n}\nheader-element .switch,\nheader-element .close,\nheader-element .profile {\n  display: inline-flex;\n  align-items: center;\n  padding: 0px 8px;\n}\n.logo {\n  width: 18px;\n  height: 18px;\n  cursor: pointer;\n}\n.project-selector {\n  display: flex;\n  align-items: center;\n}\n.project-selector select {\n  background: #ffffff00;\n  border-radius: 4px;\n  border: 1px solid #63636346;\n  padding: 4px;\n}\n.project-selector.expand-all {\n  display: none;\n}\n.body {\n  overflow: auto;\n  width: auto;\n  height: 100%;\n}\nscript-panel-element {\n  display: block;\n  background-color: white;\n  border-radius: 0px 0px 8px 8px;\n  padding: 0px 8px 12px 8px;\n  overflow: auto;\n}\nscript-panel-element .script-panel-body {\n  padding: 0px 8px;\n}\nscript-panel-element + script-panel-element {\n  margin-top: 12px;\n}\n.card + .card {\n  margin-top: 12px;\n}\n.card {\n  background-color: white;\n  border-radius: 2px;\n  padding: 0px 8px;\n}\n.notes {\n  background: #0099ff0e;\n  border-left: 4px solid #0099ff65;\n  width: -webkit-fill-available;\n  margin: 0px 8px;\n  line-height: 26px;\n  letter-spacing: 1px;\n}\n.secondary {\n  font-size: 12px;\n  color: #8b8b8b;\n}\n.tooltip-container {\n  z-index: 99999999999999;\n  margin: 12px 0px 0px 12px;\n  padding: 4px;\n  color: black;\n  background: #f0f0f0;\n  box-shadow: 0px 0px 4px #949494;\n  position: fixed;\n  white-space: normal;\n  max-width: 200px;\n  height: auto;\n  border-radius: 2px;\n  line-height: 18px;\n}\n.configs-container.lock {\n  filter: blur(1px);\n  user-select: none;\n  -webkit-user-select: none;\n  -moz-user-select: none;\n  -ms-user-select: none;\n}\n.configs-container .lock-wrapper {\n  cursor: not-allowed !important;\n  border-radius: 4px;\n  position: absolute;\n  left: 0px;\n  z-index: 1;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n}\n.configs-container .lock-message {\n  background-color: #ffffff7d;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #6a6a6a98;\n  padding: 2px;\n}\n.configs {\n  display: table;\n  background: #e1e1e107;\n  width: -webkit-fill-available;\n}\n.configs .configs-body {\n  display: table-row-group;\n}\n.configs .configs-body config-element + config-element label {\n  padding-top: 4px;\n}\n.configs .configs-body config-element + config-element .config-wrapper {\n  padding-top: 4px;\n}\n.configs .configs-body config-element {\n  width: 100%;\n  display: table-row;\n  line-height: 26px;\n}\n.configs .configs-body config-element label {\n  white-space: nowrap;\n  color: #4e5969;\n  display: table-cell;\n  padding-right: 12px;\n  text-align: left;\n  vertical-align: top;\n  margin-right: 12px;\n}\n.configs .configs-body config-element .config-wrapper {\n  display: table-cell;\n  vertical-align: middle;\n  /** check box 的样式 */\n}\n.configs .configs-body config-element .config-wrapper select {\n  outline: none;\n  border: none;\n  border: 1px solid #e4e4e4;\n  border-radius: 4px;\n  padding: 2px 8px;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper select:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper select:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper select:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper textarea {\n  padding: 2px 8px;\n  outline: none;\n  border: none;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper textarea:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']) {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button'])::placeholder {\n  color: #bababa;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  padding: 0px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] + .configs .configs-body config-element .config-wrapper input[type='button'] {\n  margin-left: 12px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:hover {\n  background-color: #7abbff24;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger:hover {\n  background-color: #ffdede86;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled:active {\n  box-shadow: none;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked {\n  background: #1890ff;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:disabled {\n  background-color: #f7f7f78b;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked::before {\n  transform: translate(24px, 0px);\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.configs .configs-body config-element .config-wrapper input:not([type='checkbox'], [type='radio']),\n.configs .configs-body config-element .config-wrapper textarea,\n.configs .configs-body config-element .config-wrapper select {\n  width: -webkit-fill-available;\n  font-size: inherit;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'],\n.configs .configs-body config-element .config-wrapper input[type='radio'],\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  accent-color: #0e8ee2;\n}\n.configs .configs-body config-element .config-wrapper > *:not(.tooltip) {\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  float: right;\n}\n.configs .configs-body config-element .config-wrapper > *:disabled {\n  cursor: not-allowed;\n  background-color: #f7f7f78b;\n}\n.message-container {\n  margin-bottom: 4px;\n  position: absolute;\n  bottom: 100%;\n  left: 50%;\n  width: 100%;\n  transform: translate(-50%, 0px);\n  min-width: 300px;\n}\n.message-container message-element {\n  display: flex;\n  border-radius: 4px;\n  padding: 4px 12px;\n  margin-bottom: 4px;\n}\n.message-container message-element .message-content-container {\n  margin-right: 8px;\n  flex: auto;\n}\n.message-container message-element .message-text {\n  letter-spacing: 1px;\n  font-weight: bold;\n}\n.message-container message-element .message-closer {\n  width: 18px;\n  min-width: 18px;\n  cursor: pointer;\n  background-color: #ffffffb3;\n  color: #a1a1a1;\n  border-radius: 100%;\n  text-align: center;\n  height: 18px;\n  vertical-align: middle;\n  font-size: 12px;\n}\n.message-container message-element.error {\n  background-color: #ffe6e6;\n  color: #c70208;\n  border: 1px solid #ff6b6ded;\n}\n.message-container message-element.info {\n  background-color: #c9e7ff;\n  color: #004d95;\n  border: 1px solid #1890ff69;\n}\n.message-container message-element.success {\n  background-color: #e8ffe0;\n  color: #3e8d0d;\n  border: 1px solid #6fd91d;\n}\n.message-container message-element.warn {\n  background-color: #ffefc8;\n  color: #9b7400;\n  border: 1px solid #ffc107;\n}\nmodal-element {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  background-color: white;\n  border-radius: 4px;\n  box-shadow: 0px 0px 24px -12px black;\n  border: 1px solid #929292;\n  height: fit-content;\n  transform: translate(-50%, -50%);\n  padding: 12px 18px 18px 18px;\n  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;\n  z-index: 99999999999;\n  line-height: 24px;\n}\nmodal-element .modal-profile {\n  zoom: 0.9;\n  color: #969696;\n  user-select: none;\n  margin-bottom: 4px;\n}\nmodal-element .modal-title {\n  font-size: 18px;\n  font-weight: bold;\n  user-select: none;\n}\nmodal-element .modal-body {\n  margin: 12px 0px;\n  overflow: auto;\n}\nmodal-element .modal-footer {\n  display: flex;\n  white-space: nowrap;\n  justify-content: end;\n  align-items: end;\n}\nmodal-element .modal-footer > * + * {\n  margin-left: 12px;\n}\nmodal-element .modal-input {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n  width: -webkit-fill-available;\n}\nmodal-element .modal-input::placeholder {\n  color: #bababa;\n}\nmodal-element .modal-input:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\nmodal-element .modal-input:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\nmodal-element .modal-input:hover {\n  background-color: #ebeef4;\n}\nmodal-element .modal-cancel-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\nmodal-element .modal-cancel-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-cancel-button + modal-element .modal-cancel-button {\n  margin-left: 12px;\n}\nmodal-element .modal-cancel-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-cancel-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-cancel-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-cancel-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-cancel-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element .modal-confirm-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\nmodal-element .modal-confirm-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-confirm-button + modal-element .modal-confirm-button {\n  margin-left: 12px;\n}\nmodal-element .modal-confirm-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-confirm-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-confirm-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-confirm-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-confirm-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element.alert .modal-input,\nmodal-element.alert .modal-cancel-button {\n  display: none;\n}\nmodal-element.alert .modal-confirm-button {\n  margin: 0;\n}\nmodal-element.prompt .modal-input,\nmodal-element.prompt .modal-cancel-button,\nmodal-element.prompt .modal-confirm-button {\n  display: block;\n}\nmodal-element.confirm .modal-input {\n  display: none;\n}\n.modal-wrapper {\n  width: 100%;\n  height: 100%;\n  z-index: 9999;\n  position: fixed;\n  top: 0px;\n  left: 0px;\n  z-index: 9999999;\n  background-color: rgba(0, 0, 0, 0.265);\n  color: #636363;\n  font: 14px Menlo, Monaco, Consolas, 'Courier New', monospace;\n}\n.pointer {\n  cursor: pointer;\n}\n.separator {\n  display: flex;\n  align-items: center;\n  text-align: center;\n  padding: 4px 0px 8px 0px;\n}\n.separator::before,\n.separator::after {\n  content: '';\n  flex: 1;\n  border-bottom: 1px solid #63636346;\n}\n.separator:not(:empty)::before {\n  margin-right: 0.25em;\n}\n.separator:not(:empty)::after {\n  margin-left: 0.25em;\n}\ncontainer-element.minimize .body,\ncontainer-element.minimize header-element .dropdown,\ncontainer-element.minimize .footer {\n  display: none;\n}\ncontainer-element.minimize header-element {\n  padding: 8px;\n  border-radius: 8px;\n  box-shadow: 0px 0px 24px -12px black;\n}\n.user-guide > li {\n  padding: 4px 0px;\n}\n.search-infos-num {\n  width: 26px;\n  margin: 2px;\n  height: 20px;\n  border-radius: 4px;\n  display: inline-block;\n  background-color: white;\n  text-align: center;\n  cursor: pointer;\n  border: 1px solid #b6b6b6;\n}\n.search-infos-num.requested {\n  border: 1px solid #63b4ff;\n  color: #63b4ff;\n}\n.search-infos-num.active {\n  background-color: #127de1 !important;\n  color: white;\n}\n.search-infos-num.error {\n  border: 1px solid #ff8789ed;\n  background-color: #ff6b6ded;\n  color: white;\n}\n.search-infos-num.finish {\n  background-color: #63b4ff;\n  border: 1px solid #63b4ff;\n  color: white;\n}\nsearch-infos-element {\n  display: block;\n  overflow: auto;\n}\nsearch-infos-element .search-result {\n  margin-bottom: 12px;\n  padding-left: 12px;\n}\nsearch-infos-element .search-result .question {\n  font-weight: bold;\n  max-height: 200px;\n  overflow: auto;\n}\nsearch-infos-element .search-result .answer {\n  color: #7c7c7c;\n}\nsearch-infos-element .search-result .answer code {\n  border-bottom: 1px solid #dcdcdc;\n  padding: 2px 0px;\n  border-radius: 2px;\n  margin: 4px;\n  line-height: 22px;\n}\nsearch-infos-element .search-result .answer code + code {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag {\n  padding: 2px 6px;\n  border-radius: 2px;\n  font-size: 12px;\n  cursor: pointer;\n  margin-right: 6px;\n}\nsearch-infos-element .search-result .search-result-answer-tag + .search-result-answer-tag {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag.blue {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n}\nsearch-infos-element .search-result .search-result-answer-tag.green {\n  background-color: #f6ffed;\n  border: 1px solid #b7eb8f;\n  color: #52c41a;\n}\nsearch-infos-element .search-result .search-result-answer-tag.gray {\n  background-color: #fafafa;\n  border: 1px solid #d9d9d9;\n  color: #595959;\n}\nsearch-infos-element .search-result .search-result-answer-tag.red {\n  background-color: #fff1f0;\n  border: 1px solid #ffa39e;\n  color: #ff4d4f;\n}\nsearch-infos-element .search-result .search-result-answer-tag.yellow {\n  background-color: #fffbe6;\n  border: 1px solid #ffe58f;\n  color: #faad14;\n}\nsearch-infos-element .search-result-question-type {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n  margin-right: 8px;\n  padding: 0px 4px;\n  border-radius: 4px;\n}\nsearch-infos-element .error {\n  color: #ff6b6ded;\n  display: inline-block;\n  padding-left: 12px;\n}\n.copy,\n.question-title-extra-btn {\n  margin-left: 4px;\n  padding: 2px 4px;\n  border-radius: 2px;\n  box-shadow: 0 0 4px #b1b1b1;\n  cursor: pointer !important;\n  font-weight: normal;\n  font-size: 12px;\n}\n.work-result-question-container {\n  position: absolute;\n  width: 400px;\n  left: -100%;\n  top: 0px;\n  background: white;\n  border: 1px solid #cbcbcb;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #d1cfcf;\n  padding: 12px;\n}\n.work-result-question-container .close-search-result {\n  font-size: 12px;\n  margin-left: 8px;\n  text-decoration: underline;\n  color: gray;\n  cursor: pointer;\n}\n.work-result-list {\n  max-height: 400px;\n  overflow: auto;\n  margin: 12px 0px;\n  padding: 6px;\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n}\n.search-info-title {\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  margin-bottom: 12px;\n  line-height: 20px;\n  overflow: auto;\n}\n.search-info-title .title-content {\n  max-height: 200px;\n  overflow: auto;\n}\n.search-info-details {\n  margin-left: 4px;\n}\n.console {\n  max-height: 300px;\n  max-width: 400px;\n  overflow: auto;\n  background-color: #292929;\n  padding: 12px 6px;\n  color: #ececec;\n  font-size: 12px;\n}\n.console .item {\n  padding: 3px 0px;\n  border-radius: 2px;\n}\n.console .item .time {\n  color: #757575;\n}\n.console .item .info {\n  background-color: #2196f3a3;\n}\n.console .item .warn {\n  background-color: #ffc107db;\n}\n.console .item .error {\n  background-color: #f36c71cc;\n}\n.console .item .debug,\n.console .item .log {\n  background-color: #9e9e9ec4;\n}\n.console *::selection {\n  background-color: #ffffff6b;\n}\n.markdown {\n  max-width: 400px;\n  max-height: 50vh;\n  overflow: auto;\n}\n.markdown code {\n  padding: 2px 4px;\n  background-color: #f0f0f0;\n  border-radius: 6px;\n  font-size: 12px;\n}\n.markdown blockquote {\n  padding: 4px 4px 4px 12px;\n  margin: 0px;\n  color: #b5b5b5;\n  border-left: #ababab 2px solid;\n}\n.markdown blockquote p {\n  margin: 0px;\n}\n.markdown h1,\n.markdown h2,\n.markdown h3,\n.markdown h4,\n.markdown h5,\n.markdown h6,\n.markdown p {\n  margin: 8px 0px;\n}\n.dropdown {\n  position: relative;\n  display: inline-block;\n}\n.dropdown.active .dropdown-trigger-element {\n  color: #1890ff;\n}\n.dropdown-trigger-element {\n  cursor: pointer;\n}\n.dropdown-content {\n  display: none;\n  position: absolute;\n  background-color: #ffffff;\n  overflow: auto;\n  box-shadow: 0px 8px 16px 0px #00000033;\n  z-index: 1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  min-width: 120px;\n}\n.dropdown-content.show {\n  display: block;\n}\n.dropdown-content {\n  cursor: pointer;\n  z-index: 999;\n}\n.dropdown-content .dropdown-option {\n  padding-left: 4px;\n  white-space: nowrap;\n}\n.dropdown-content .dropdown-option:hover {\n  background-color: #f3f3f3;\n}\n.dropdown-content .dropdown-option.active {\n  background-color: #1890ff1a;\n  color: #1890ff;\n}\n.space {\n  display: inline-flex;\n}\n.config-details {\n  animation: fade-in 0.5s;\n}\n.config-details label {\n  padding-left: 12px;\n}\n.alert-info-wrapper {\n  margin-bottom: 8px;\n}\n.alert-info-wrapper .result-info {\n  padding: 12px;\n  text-align: center;\n  border-radius: 6px;\n}\n.alert-info-wrapper .unresolved {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .no-answer {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .error {\n  color: #ff4d4f;\n  background-color: #fff1f0;\n}\nmessage-element {\n  animation: show 0.5s;\n}\nscript-panel-element > div,\nscript-panel-link,\ncontainer-element,\nmodal-element {\n  animation: fade-in 0.3s;\n}\n@keyframes show {\n  0% {\n    transform: translateY(20px);\n    opacity: 0;\n  }\n  100% {\n    transform: translateY(0);\n    opacity: 1;\n  }\n}\n@keyframes fade-in {\n  0% {\n    opacity: 0;\n  }\n  100% {\n    opacity: 1;\n  }\n}\n@keyframes fade-out {\n  0% {\n    opacity: 1;\n  }\n  100% {\n    opacity: 0;\n  }\n}\n.checkbox-label {\n  display: inline-block !important;\n  position: relative;\n  cursor: pointer;\n  font-size: 16px;\n  color: #2c3e50;\n}\n/* 隐藏原始复选框 */\n.checkbox-input {\n  position: absolute;\n  opacity: 0;\n  width: 0;\n  height: 0;\n}\n/* 自定义按钮样式 */\n.checkbox-label::after {\n  content: '';\n  display: inline-block;\n  border-radius: 50%;\n  transition: all 0.1s ease;\n  position: relative;\n  margin-left: 4px;\n  vertical-align: middle;\n}\n/* 向下箭头（未选中状态） */\n.checkbox-label::before {\n  content: '🔽';\n  position: absolute;\n  width: 0;\n  height: 0;\n  right: 8px;\n  transition: all 0.1s ease;\n  z-index: 2;\n}\n/* 向上箭头（选中状态） */\n.checked .checkbox-label::before {\n  content: '🔼';\n}\n/* ==================== Apple Design Style Override ==================== */\ncontainer-element,\ncontainer-element * {\n  font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"SF Pro Display\",\n    \"Helvetica Neue\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif !important;\n  letter-spacing: 0 !important;\n}\ncontainer-element {\n  background: rgba(255, 255, 255, 0.86) !important;\n  backdrop-filter: saturate(180%) blur(24px) !important;\n  -webkit-backdrop-filter: saturate(180%) blur(24px) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 14px !important;\n  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06) !important;\n  color: #1d1d1f !important;\n}\nheader-element {\n  background: transparent !important;\n  border-radius: 14px 14px 0 0 !important;\n  padding: 10px 12px 8px !important;\n  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar {\n  gap: 4px !important;\n}\nheader-element .extra-menu-bar button {\n  background: transparent !important;\n  border: none !important;\n  border-radius: 7px !important;\n  padding: 5px 12px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  color: #1d1d1f !important;\n  transition: background 0.15s ease !important;\n}\nheader-element .extra-menu-bar button:hover {\n  background: rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar button.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\nheader-element .profile {\n  font-weight: 600 !important;\n  font-size: 14px !important;\n  color: #1d1d1f !important;\n}\n.base-style-button {\n  background: #007aff !important;\n  color: #fff !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 7px 16px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease, transform 0.1s ease !important;\n}\n.base-style-button:hover {\n  background: #0066d6 !important;\n}\n.base-style-button:active {\n  transform: scale(0.97) !important;\n}\n.base-style-button-secondary {\n  background: rgba(0, 0, 0, 0.05) !important;\n  color: #1d1d1f !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 6px 14px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease !important;\n}\n.base-style-button-secondary:hover {\n  background: rgba(0, 0, 0, 0.1) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  border: 1px solid rgba(0, 0, 0, 0.1) !important;\n  border-radius: 8px !important;\n  background: #fff !important;\n  padding: 7px 10px !important;\n  font-size: 13px !important;\n  color: #1d1d1f !important;\n  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;\n  outline: none !important;\n}\n.base-style-active-form-control:focus,\n.base-style-input:focus {\n  border-color: #007aff !important;\n  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.16) !important;\n  background: #fff !important;\n}\n.base-style-active-form-control:hover,\n.base-style-input:hover {\n  background: #fff !important;\n}\n.card {\n  background: #fff !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 12px !important;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;\n}\n.configs-container {\n  border: none !important;\n  box-shadow: none !important;\n}\n.notes {\n  color: #6e6e73 !important;\n  line-height: 1.6 !important;\n}\n.secondary {\n  color: #6e6e73 !important;\n}\n.separator {\n  border-color: rgba(0, 0, 0, 0.06) !important;\n}\n.dropdown-content {\n  border-radius: 10px !important;\n  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  overflow: hidden !important;\n}\n.dropdown-option {\n  border-radius: 6px !important;\n  transition: background 0.12s ease !important;\n}\n.dropdown-option:hover {\n  background: rgba(0, 0, 0, 0.05) !important;\n}\n.dropdown-option.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\n.modal-wrapper {\n  border-radius: 14px !important;\n  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\n.message-container {\n  gap: 6px !important;\n}\n/* 面板留白 */\nscript-panel-element {\n  padding: 4px 2px !important;\n}\n/* 滚动条苹果风格 */\ncontainer-element ::-webkit-scrollbar {\n  width: 8px !important;\n  height: 8px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb {\n  background: rgba(0, 0, 0, 0.18) !important;\n  border-radius: 4px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb:hover {\n  background: rgba(0, 0, 0, 0.3) !important;\n}\ncontainer-element ::-webkit-scrollbar-track {\n  background: transparent !important;\n}\n/* ==================== Silky Animations ==================== */\ncontainer-element {\n  scroll-behavior: smooth !important;\n}\ncontainer-element * {\n  scroll-behavior: smooth !important;\n}\n@keyframes ocs-panel-in {\n  from {\n    opacity: 0;\n    transform: translateY(10px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\n@keyframes ocs-card-in {\n  from {\n    opacity: 0;\n    transform: translateY(8px) scale(0.99);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0) scale(1);\n  }\n}\n@keyframes ocs-modal-in {\n  from {\n    opacity: 0;\n    transform: scale(0.9) translateY(12px);\n  }\n  to {\n    opacity: 1;\n    transform: scale(1) translateY(0);\n  }\n}\n@keyframes ocs-dropdown-in {\n  from {\n    opacity: 0;\n    transform: scaleY(0.92) translateY(-6px);\n  }\n  to {\n    opacity: 1;\n    transform: scaleY(1) translateY(0);\n  }\n}\n@keyframes ocs-msg-in {\n  from {\n    opacity: 0;\n    transform: translateX(24px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n@keyframes ocs-cfg-in {\n  from {\n    opacity: 0;\n    transform: translateY(6px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\nscript-panel-element {\n  animation: ocs-panel-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.base-style-button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease !important;\n  will-change: transform !important;\n}\n.base-style-button:hover {\n  transform: translateY(-1px) !important;\n  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.28) !important;\n}\n.base-style-button:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\n.base-style-button-secondary {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  will-change: transform !important;\n}\n.base-style-button-secondary:hover {\n  transform: translateY(-1px) !important;\n}\n.base-style-button-secondary:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\nheader-element .extra-menu-bar button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease,\n    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\nheader-element .extra-menu-bar button:active {\n  transform: scale(0.92) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),\n    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease !important;\n}\n.card {\n  animation: ocs-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.modal-wrapper {\n  animation: ocs-modal-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\n.dropdown-content {\n  animation: ocs-dropdown-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  transform-origin: top center !important;\n}\n.message-container > * {\n  animation: ocs-msg-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.configs-container > * {\n  animation: ocs-cfg-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.configs-container > *:nth-child(1) {\n  animation-delay: 0s !important;\n}\n.configs-container > *:nth-child(2) {\n  animation-delay: 0.05s !important;\n}\n.configs-container > *:nth-child(3) {\n  animation-delay: 0.1s !important;\n}\n.configs-container > *:nth-child(4) {\n  animation-delay: 0.15s !important;\n}\n.configs-container > *:nth-child(5) {\n  animation-delay: 0.2s !important;\n}\n.configs-container > *:nth-child(6) {\n  animation-delay: 0.25s !important;\n}\n.configs-container > *:nth-child(7) {\n  animation-delay: 0.3s !important;\n}\n.configs-container > *:nth-child(8) {\n  animation-delay: 0.35s !important;\n}\n.base-style-switch {\n  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n.base-style-switch::before {\n  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\na {\n  transition: color 0.2s ease, opacity 0.2s ease !important;\n}\n.dropdown-option {\n  transition: background 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n"}};
 
 	/* ===== 2/4 GM API polyfill ===== */
 /* 鸿鹄易学 · GM API polyfill
@@ -4842,6 +4842,9 @@ try {
   const origInsertBefore = Element.prototype.insertBefore;
   const origAppendChild = Node.prototype.appendChild;
   const OrigEvent = Event;
+  const OrigMouseEvent = MouseEvent;
+  const OrigKeyboardEvent = KeyboardEvent;
+  const OrigInputEvent = InputEvent;
   function hidePanel() {
     const wrapper = lib.$elements.wrapper;
     if (!wrapper || !wrapper.parentElement) {
@@ -4911,6 +4914,146 @@ try {
       lib.$message.error({ content: errorEl.cloneNode(true), duration: 0 });
     }
   };
+  function resolveEl(selectorOrElement) {
+    if (typeof selectorOrElement === "string") {
+      return document.querySelector(selectorOrElement);
+    }
+    return selectorOrElement;
+  }
+  function createLocalRemotePage() {
+    const noop = async () => {
+    };
+    return {
+      async click(selectorOrElement) {
+        const el = resolveEl(selectorOrElement);
+        if (el)
+          await safeClick(el);
+      },
+      async dblclick(selectorOrElement) {
+        const el = resolveEl(selectorOrElement);
+        if (el) {
+          await safeClick(el);
+          await lib.$.sleep(50);
+          await safeClick(el);
+        }
+      },
+      async hover(selectorOrElement) {
+        const el = resolveEl(selectorOrElement);
+        if (el) {
+          trustedDispatch(el, new OrigMouseEvent("mouseover", { bubbles: true, view: window, composed: true }));
+          trustedDispatch(el, new OrigMouseEvent("mousemove", { bubbles: true, view: window, composed: true }));
+          trustedDispatch(el, new OrigMouseEvent("mouseenter", { bubbles: true, view: window, composed: true }));
+        }
+      },
+      async focus(selectorOrElement) {
+        var _a;
+        (_a = resolveEl(selectorOrElement)) == null ? void 0 : _a.focus();
+      },
+      async fill(selectorOrElement, value) {
+        const el = resolveEl(selectorOrElement);
+        if (el) {
+          const restore = hidePanel();
+          try {
+            el.focus();
+            el.value = value;
+            trustedDispatch(el, new OrigEvent("input", { bubbles: true, composed: true }));
+            trustedDispatch(el, new OrigEvent("change", { bubbles: true, composed: true }));
+          } finally {
+            restore();
+          }
+        }
+      },
+      async press(selectorOrElement, key) {
+        const el = resolveEl(selectorOrElement);
+        if (el) {
+          trustedDispatch(el, new OrigKeyboardEvent("keydown", { key, bubbles: true, cancelable: true, view: window, composed: true }));
+          trustedDispatch(el, new OrigKeyboardEvent("keyup", { key, bubbles: true, cancelable: true, view: window, composed: true }));
+        }
+      },
+      async tap(selectorOrElement) {
+        const el = resolveEl(selectorOrElement);
+        if (el)
+          await safeClick(el);
+      },
+      async check(selectorOrElement) {
+        const el = resolveEl(selectorOrElement);
+        if (el && !el.checked)
+          await safeClick(el);
+      },
+      async inputValue(selectorOrElement) {
+        const el = resolveEl(selectorOrElement);
+        return (el == null ? void 0 : el.value) || "";
+      },
+      async waitForSelector(selector) {
+        const maxWait = 3e4;
+        const start2 = Date.now();
+        while (!document.querySelector(selector)) {
+          if (Date.now() - start2 > maxWait)
+            return;
+          await lib.$.sleep(200);
+        }
+      },
+      async waitForResponse(url) {
+        const res = await fetch(url);
+        const body = await res.text();
+        return {
+          body,
+          headers: Object.fromEntries(res.headers.entries()),
+          status: res.status,
+          url: res.url
+        };
+      },
+      async waitForRequest(url) {
+        const res = await fetch(url);
+        return {
+          url: res.url,
+          method: "GET",
+          headers: Object.fromEntries(res.headers.entries()),
+          postData: ""
+        };
+      },
+      async reload() {
+        location.reload();
+        return "";
+      },
+      bringToFront: noop,
+      dragAndDrop: noop,
+      screenshot: async () => "",
+      selectOption: noop,
+      setInputFiles: noop,
+      ["keyboard.type"]: async (text) => {
+        const el = document.activeElement;
+        if (el)
+          trustedDispatch(el, new OrigInputEvent("input", { data: text, bubbles: true, cancelable: true, view: window, composed: true }));
+      },
+      ["keyboard.press"]: async (key) => {
+        const el = document.activeElement;
+        if (el) {
+          trustedDispatch(el, new OrigKeyboardEvent("keydown", { key, bubbles: true, cancelable: true, view: window, composed: true }));
+          trustedDispatch(el, new OrigKeyboardEvent("keyup", { key, bubbles: true, cancelable: true, view: window, composed: true }));
+        }
+      },
+      ["mouse.wheel"]: async (deltaX, deltaY) => {
+        window.scrollBy(deltaX, deltaY);
+      },
+      ["mouse.click"]: async (x, y) => {
+        const el = document.elementFromPoint(x, y);
+        if (el)
+          await safeClick(el);
+      },
+      ["mouse.dblclick"]: async (x, y) => {
+        const el = document.elementFromPoint(x, y);
+        if (el) {
+          await safeClick(el);
+          await lib.$.sleep(50);
+          await safeClick(el);
+        }
+      },
+      ["mouse.down"]: noop,
+      ["mouse.up"]: noop,
+      ["mouse.move"]: noop
+    };
+  }
   function createDynamicRemotePage(resolver) {
     const methods = [
       "click",
@@ -5356,7 +5499,7 @@ try {
       installAntiDetection();
     }
   });
-  const state$7 = {
+  const state$9 = {
     console: {
       listenerIds: {
         logs: 0
@@ -5438,8 +5581,8 @@ try {
             return scrollTop + clientHeight + 50 > scrollHeight;
           };
           const { div, logs } = showLogs();
-          this.offConfigChange(state$7.console.listenerIds.logs);
-          state$7.console.listenerIds.logs = this.onConfigChange("logs", (logs2) => {
+          this.offConfigChange(state$9.console.listenerIds.logs);
+          state$9.console.listenerIds.logs = this.onConfigChange("logs", (logs2) => {
             const log = createLog(logs2[logs2.length - 1]);
             div.append(log);
             setTimeout(() => {
@@ -5513,11 +5656,11 @@ try {
             }
           };
           update();
-          this.offConfigChange(state$7.app.listenerIds.sync);
-          this.offConfigChange(state$7.app.listenerIds.connected);
-          this.offConfigChange(state$7.app.listenerIds.closeSync);
-          state$7.app.listenerIds.connected = this.onConfigChange("sync_status", update);
-          state$7.app.listenerIds.closeSync = this.onConfigChange("closeSync", (closeSync) => {
+          this.offConfigChange(state$9.app.listenerIds.sync);
+          this.offConfigChange(state$9.app.listenerIds.connected);
+          this.offConfigChange(state$9.app.listenerIds.closeSync);
+          state$9.app.listenerIds.connected = this.onConfigChange("sync_status", update);
+          state$9.app.listenerIds.closeSync = this.onConfigChange("closeSync", (closeSync) => {
             if (closeSync) {
               this.cfg.sync_status = "not_open_sync";
               lib.$message.success({ content: "已关闭同步，刷新页面后生效" });
@@ -6057,7 +6200,8 @@ try {
             ZHSProject.scripts["xnk-study"].matches,
             ICourseProject.scripts.study.matches,
             IcveMoocProject.scripts.study.matches,
-            ZJYProject.scripts.study.matches
+            ZJYProject.scripts.study.matches,
+            LabsafeProject.scripts.study.matches
           ].flat().map((m) => Array.isArray(m) ? m[1] : m);
           const url = window.location.href;
           const match = matches2.some((regex) => {
@@ -6089,6 +6233,7 @@ try {
         matches: [["所有页面", /.*/]],
         async onactive() {
           const currentStudyScript = [
+            LabsafeProject.scripts.study,
             [CXProject.scripts.studyDispatcher, CXProject.scripts.study],
             CXProject.scripts.work,
             CXProject.scripts.autoRead,
@@ -6567,7 +6712,7 @@ try {
     }
   };
   const TAB_WORK_RESULTS_KEY = "common.work-results.results";
-  const state$6 = {
+  const state$8 = {
     workResult: {
       questionPositionSyncHandler: {
         cx: (index) => {
@@ -7334,8 +7479,8 @@ try {
               }
             };
             updateState();
-            this.offConfigChange(state$6.setting.listenerIds.aw);
-            state$6.setting.listenerIds.aw = this.onConfigChange("answererWrappers", (_, __, remote) => {
+            this.offConfigChange(state$8.setting.listenerIds.aw);
+            state$8.setting.listenerIds.aw = this.onConfigChange("answererWrappers", (_, __, remote) => {
               if (remote === false) {
                 updateState();
               }
@@ -7493,7 +7638,7 @@ try {
                           this.cfg.currentResultIndex = index;
                           resultContainer.replaceChildren(createResult(result));
                           if (this.cfg.questionPositionSyncHandlerType) {
-                            (_b = (_a = state$6.workResult.questionPositionSyncHandler)[this.cfg.questionPositionSyncHandlerType]) == null ? void 0 : _b.call(
+                            (_b = (_a = state$8.workResult.questionPositionSyncHandler)[this.cfg.questionPositionSyncHandlerType]) == null ? void 0 : _b.call(
                               _a,
                               index
                             );
@@ -7548,7 +7693,7 @@ try {
                             this.cfg.currentResultIndex = index;
                             resultContainer.replaceChildren(createResult(result));
                             if (this.cfg.questionPositionSyncHandlerType) {
-                              (_b = (_a = state$6.workResult.questionPositionSyncHandler)[this.cfg.questionPositionSyncHandlerType]) == null ? void 0 : _b.call(
+                              (_b = (_a = state$8.workResult.questionPositionSyncHandler)[this.cfg.questionPositionSyncHandlerType]) == null ? void 0 : _b.call(
                                 _a,
                                 index
                               );
@@ -8787,11 +8932,11 @@ try {
     return res;
   }
   function waitForElement(selector, opts) {
-    return waitFor(() => {
+    return waitFor$2(() => {
       return typeof selector === "function" ? selector() : document.querySelector(selector);
     }, opts);
   }
-  function waitFor(predicate, opts) {
+  function waitFor$2(predicate, opts) {
     return new Promise((resolve, reject) => {
       let timeout;
       const interval = setInterval(() => {
@@ -8810,7 +8955,7 @@ try {
       }
     });
   }
-  const state$5 = {
+  const state$7 = {
     study: {
       stop: false,
       currentMedia: void 0,
@@ -9488,7 +9633,7 @@ try {
             }
           });
           this.onConfigChange("volume", (curr) => {
-            state$5.study.currentMedia && (state$5.study.currentMedia.volume = curr);
+            state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
           });
           this.onConfigChange("playbackRate", (curr) => {
             if (typeof curr === "string") {
@@ -9517,7 +9662,7 @@ try {
           lib.$message.info({ content: "3秒后开始学习", duration: 3 });
           const remotePage = processor.remotePage;
           const study2 = async (opts) => {
-            if (state$5.study.stop === false) {
+            if (state$7.study.stop === false) {
               const item = processor.getNext({ next: opts.next, restudy: this.cfg.restudy });
               if (item) {
                 const msg2 = "即将学习：" + processor.getChapterName(item);
@@ -9802,7 +9947,7 @@ try {
                 return (_b = works[0]) == null ? void 0 : _b.info;
               };
               this.onConfigChange("volume", (curr) => {
-                state$5.study.currentMedia && (state$5.study.currentMedia.volume = curr);
+                state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
               });
               this.onConfigChange("playbackRate", (curr) => {
                 if (typeof curr === "string") {
@@ -9819,9 +9964,9 @@ try {
                   const nextJob = getNextJob();
                   if (nextJob) {
                     const nextJobTitle = nextJob.querySelector(".common-text");
-                    if (include_jobs.some((job) => {
+                    if (include_jobs.some((job2) => {
                       var _a;
-                      return (_a = nextJob.querySelector(".icon-box")) == null ? void 0 : _a.classList.contains(job);
+                      return (_a = nextJob.querySelector(".icon-box")) == null ? void 0 : _a.classList.contains(job2);
                     })) {
                       await safeClick(nextJobTitle);
                       await doWork();
@@ -9873,12 +10018,12 @@ try {
                     await lib.$.sleep(1e3);
                     const media = await waitForMedia({ timeout: 5 * 1e3, filter: (m) => m.src.length !== 0 });
                     await lib.$.sleep(1e3);
-                    state$5.study.currentMedia = media;
+                    state$7.study.currentMedia = media;
                     if (media) {
                       media.currentTime = 1;
                       media.volume = this.cfg.volume;
                     }
-                    return state$5.study.currentMedia;
+                    return state$7.study.currentMedia;
                   } catch (e) {
                     $console.log("视频加载失败，请尝试刷新页面！：" + e);
                     lib.$message.error({ content: "视频加载失败，请尝试刷新页面！：" + e, duration: 0 });
@@ -9894,7 +10039,7 @@ try {
                   $console.log("正在学习：" + cn);
                 });
                 video.onpause = async () => {
-                  if (!(video == null ? void 0 : video.ended) && state$5.study.stop === false) {
+                  if (!(video == null ? void 0 : video.ended) && state$7.study.stop === false) {
                     await lib.$.sleep(1e3);
                     video == null ? void 0 : video.play();
                   }
@@ -10033,7 +10178,7 @@ try {
             );
           };
           this.onConfigChange("volume", (curr) => {
-            state$5.study.currentMedia && (state$5.study.currentMedia.volume = curr);
+            state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
           });
           const nextElement = () => {
             const list = document.querySelectorAll(".file-item");
@@ -10163,7 +10308,7 @@ try {
           CommonProject.scripts.render.methods.pin(this);
           const processor = new WishdomH5();
           this.onConfigChange("volume", (curr) => {
-            state$5.study.currentMedia && (state$5.study.currentMedia.volume = curr);
+            state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
           });
           this.onConfigChange("playbackRate", async (curr) => {
             if (typeof curr === "string") {
@@ -10326,12 +10471,12 @@ try {
                 await lib.$.sleep(1e3);
                 const media = await waitForMedia({ timeout: 5 * 1e3, filter: (m) => m.src.length !== 0 });
                 await lib.$.sleep(1e3);
-                state$5.study.currentMedia = media;
+                state$7.study.currentMedia = media;
                 if (media) {
                   media.currentTime = 1;
                   media.volume = this.cfg.volume;
                 }
-                return state$5.study.currentMedia;
+                return state$7.study.currentMedia;
               } catch (e) {
                 reload(e);
               }
@@ -10371,7 +10516,7 @@ try {
             video.onpause = async () => {
               if (!(video == null ? void 0 : video.isConnected))
                 return;
-              if (!(video == null ? void 0 : video.ended) && state$5.study.stop === false) {
+              if (!(video == null ? void 0 : video.ended) && state$7.study.stop === false) {
                 await lib.$.sleep(1e3);
                 video == null ? void 0 : video.play();
               }
@@ -10428,7 +10573,7 @@ try {
           }
           const processor = new Hike();
           this.onConfigChange("volume", (curr) => {
-            state$5.study.currentMedia && (state$5.study.currentMedia.volume = curr);
+            state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
           });
           this.onConfigChange("playbackRate", async (curr) => {
             if (typeof curr === "string") {
@@ -10519,12 +10664,12 @@ try {
                 await lib.$.sleep(1e3);
                 const media = await waitForMedia({ timeout: 5 * 1e3, filter: (m) => m.src.length !== 0 });
                 await lib.$.sleep(1e3);
-                state$5.study.currentMedia = media;
+                state$7.study.currentMedia = media;
                 if (media) {
                   media.currentTime = 1;
                   media.volume = this.cfg.volume;
                 }
-                return state$5.study.currentMedia;
+                return state$7.study.currentMedia;
               } catch (e) {
                 reload(e);
               }
@@ -10561,7 +10706,7 @@ try {
             video.onpause = async () => {
               if (!(video == null ? void 0 : video.isConnected))
                 return;
-              if (!(video == null ? void 0 : video.ended) && state$5.study.stop === false) {
+              if (!(video == null ? void 0 : video.ended) && state$7.study.stop === false) {
                 await lib.$.sleep(1e3);
                 video == null ? void 0 : video.play();
               }
@@ -10612,7 +10757,7 @@ try {
           }
           const processor = new HikeV2();
           this.onConfigChange("volume", (curr) => {
-            state$5.study.currentMedia && (state$5.study.currentMedia.volume = curr);
+            state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
           });
           const next2 = async () => {
             var _a;
@@ -10685,12 +10830,12 @@ try {
                 await lib.$.sleep(1e3);
                 const media = await waitForMedia({ timeout: 5 * 1e3, filter: (m) => m.src.length !== 0 });
                 await lib.$.sleep(1e3);
-                state$5.study.currentMedia = media;
+                state$7.study.currentMedia = media;
                 if (media) {
                   media.currentTime = 1;
                   media.volume = this.cfg.volume;
                 }
-                return state$5.study.currentMedia;
+                return state$7.study.currentMedia;
               } catch (e) {
                 reload(e);
               }
@@ -10717,7 +10862,7 @@ try {
             video.onpause = async () => {
               if (!(video == null ? void 0 : video.isConnected))
                 return;
-              if (!(video == null ? void 0 : video.ended) && state$5.study.stop === false) {
+              if (!(video == null ? void 0 : video.ended) && state$7.study.stop === false) {
                 await lib.$.sleep(1e3);
                 video == null ? void 0 : video.play();
               }
@@ -10829,12 +10974,12 @@ try {
         await lib.$.sleep(1e3);
         const media = await waitForMedia({ timeout: 10 * 1e3 });
         await lib.$.sleep(1e3);
-        state$5.study.currentMedia = media;
+        state$7.study.currentMedia = media;
         if (media) {
           media.currentTime = 1;
           media.volume = options.volume;
         }
-        return state$5.study.currentMedia;
+        return state$7.study.currentMedia;
       } catch (e) {
         return await reload(e);
       }
@@ -10862,7 +11007,7 @@ try {
     }, 3e3);
     playMedia(() => video == null ? void 0 : video.play());
     video.onpause = async () => {
-      if (!(video == null ? void 0 : video.ended) && state$5.study.stop === false) {
+      if (!(video == null ? void 0 : video.ended) && state$7.study.stop === false) {
         await waitForCaptcha();
         await lib.$.sleep(1e3);
         video == null ? void 0 : video.play();
@@ -10877,7 +11022,7 @@ try {
     const media = await waitForMedia();
     media.volume = options.volume;
     media.currentTime = 1;
-    state$5.study.currentMedia = media;
+    state$7.study.currentMedia = media;
     playMedia(() => media == null ? void 0 : media.play());
     media.onpause = async () => {
       if (!(media == null ? void 0 : media.ended)) {
@@ -11792,28 +11937,28 @@ try {
   }
   function autoStop(stopTime) {
     var _a;
-    clearInterval(state$5.study.stopInterval);
-    (_a = state$5.study.stopMessage) == null ? void 0 : _a.remove();
+    clearInterval(state$7.study.stopInterval);
+    (_a = state$7.study.stopMessage) == null ? void 0 : _a.remove();
     const minutes = parseFloat(String(stopTime));
     if (!isFinite(minutes) || minutes <= 0)
       return;
     let stopCount = Math.round(minutes * 60);
-    state$5.study.stopInterval = setInterval(() => {
+    state$7.study.stopInterval = setInterval(() => {
       var _a2;
       if (stopCount > 0) {
         if (getPopupCaptcha() === null) {
           stopCount--;
         }
       } else {
-        clearInterval(state$5.study.stopInterval);
-        state$5.study.stop = true;
+        clearInterval(state$7.study.stopInterval);
+        state$7.study.stop = true;
         (_a2 = lib.$el("video")) == null ? void 0 : _a2.pause();
         lib.$modal.alert({ content: "脚本暂停，已获得今日平时分，如需继续观看，请刷新页面。" });
       }
     }, 1e3);
     const date = new Date();
     date.setSeconds(date.getSeconds() + Math.round(minutes * 60));
-    state$5.study.stopMessage = lib.$message.info({
+    state$7.study.stopMessage = lib.$message.info({
       duration: 0,
       content: `在 ${date.toLocaleTimeString()} 脚本将自动暂停（${formatStopDuration(minutes)}后）`
     });
@@ -14518,7 +14663,7 @@ try {
     top$1.currentMedia = top$1.currentMedia || void 0;
   } catch {
   }
-  const state$4 = {
+  const state$6 = {
     study: {
       videojs: /* @__PURE__ */ Object.create({}),
       hacked: false,
@@ -14721,8 +14866,8 @@ try {
           if (!((_a = CommonProject.scripts.settings.cfg.answererWrappers) == null ? void 0 : _a.length)) {
             answerWrapperEmptyWarning(10);
           }
-          this.offConfigChange(state$4.study.playbackRateWarningListenerId);
-          state$4.study.playbackRateWarningListenerId = this.onConfigChange("playbackRate", (playbackRate2) => {
+          this.offConfigChange(state$6.study.playbackRateWarningListenerId);
+          state$6.study.playbackRateWarningListenerId = this.onConfigChange("playbackRate", (playbackRate2) => {
             if (playbackRate2 > 2) {
               lib.$modal.alert({
                 title: "高倍速警告",
@@ -15139,7 +15284,7 @@ try {
           const title = workOrExamQuestionTitleTransform(elements2.title);
           if (title) {
             const typeInput = elements2.type[0];
-            const type2 = (typeInput ? getQuestionType(parseInt(typeInput.value)) : void 0) || "unknown";
+            const type2 = (typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0) || "unknown";
             return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
               await $.sleep((period != null ? period : 3) * 1e3);
               return defaultAnswerWrapperHandler(answererWrappers, {
@@ -15158,7 +15303,7 @@ try {
       work: async (ctx) => {
         var _a, _b;
         const { elements: elements2, searchInfos } = ctx;
-        const type2 = getQuestionType(
+        const type2 = getQuestionType$1(
           parseInt(((_a = elements2.type.find((t) => {
             var _a2;
             return (_a2 = t.getAttribute("name")) == null ? void 0 : _a2.match(/type\d+/);
@@ -15417,9 +15562,9 @@ try {
       });
     },
     isCurrentChapterFinished() {
-      const job = top$1 == null ? void 0 : top$1.document.querySelector(".posCatalog_active");
-      if (job) {
-        if (job.querySelector(".icon_Completed") !== null) {
+      const job2 = top$1 == null ? void 0 : top$1.document.querySelector(".posCatalog_active");
+      if (job2) {
+        if (job2.querySelector(".icon_Completed") !== null) {
           return true;
         }
       }
@@ -15427,7 +15572,7 @@ try {
     }
   };
   function rateHack() {
-    state$4.study.hacked = false;
+    state$6.study.hacked = false;
     let dragCount = 0;
     try {
       hack();
@@ -15440,10 +15585,10 @@ try {
       const videojs = lib.$gm.unsafeWindow.videojs;
       const Ext = lib.$gm.unsafeWindow.Ext;
       if (typeof videojs !== "undefined" && typeof Ext !== "undefined") {
-        if (state$4.study.hacked) {
+        if (state$6.study.hacked) {
           return;
         }
-        state$4.study.hacked = true;
+        state$6.study.hacked = true;
         const _origin = videojs.getPlugin("seekBarControl");
         const plugin = videojs.extend(videojs.getPlugin("plugin"), {
           constructor: function(videoExt, data) {
@@ -15508,10 +15653,10 @@ try {
       searching = false;
     }, Math.min(wait_timeout, 10) * 1e3);
     const runJobs = async () => {
-      const job = searchJob(opts, searchedJobs);
-      if (job && job.func) {
+      const job2 = searchJob(opts, searchedJobs);
+      if (job2 && job2.func) {
         try {
-          await job.func();
+          await job2.func();
         } catch (e) {
           $console.error("未知错误", e);
         }
@@ -15665,7 +15810,7 @@ try {
           }
           return String(attachment_jobid) === String(target_jobid);
         });
-        if (attachment && searchedJobs.find((job2) => job2.mid === attachment.property.mid) === void 0) {
+        if (attachment && searchedJobs.find((job22) => job22.mid === attachment.property.mid) === void 0) {
           const { name, title, bookname, author } = attachment.property;
           const jobName = name || title || (bookname ? bookname + author : void 0) || "未知任务";
           const work_type = attachment.job ? "job" : attachment.isPassed ? "finished" : "not-job";
@@ -15753,28 +15898,28 @@ try {
               }
             }
           }
-          const job2 = {
+          const job22 = {
             mid: attachment.property.mid,
             attachment,
             func
           };
-          searchedJobs.push(job2);
-          return job2;
+          searchedJobs.push(job22);
+          return job22;
         }
       }
     };
-    let job;
+    let job2;
     for (const iframe of searchIFrame(knowCardWin.document)) {
-      job = search(iframe);
-      if (job) {
-        return job;
+      job2 = search(iframe);
+      if (job2) {
+        return job2;
       }
     }
-    return job;
+    return job2;
   }
   function fixedVideoProgress() {
-    if (state$4.study.videojs) {
-      const { bar } = domSearch({ bar: ".vjs-control-bar" }, state$4.study.videojs);
+    if (state$6.study.videojs) {
+      const { bar } = domSearch({ bar: ".vjs-control-bar" }, state$6.study.videojs);
       if (bar) {
         bar.style.opacity = "1";
       }
@@ -15789,7 +15934,7 @@ try {
         $console.error("视频检测不到，请尝试刷新或者手动切换下一章。");
         return;
       }
-      state$4.study.videojs = videojs;
+      state$6.study.videojs = videojs;
       top$1.currentMedia = media;
       fixedVideoProgress();
       if (setting.videoQuizStrategy === "random") {
@@ -15919,7 +16064,7 @@ try {
           const title = chapterTestTaskQuestionTitleTransform(elements2.title);
           if (title) {
             const typeInput = elements2.type[0];
-            const type = (typeInput ? getQuestionType(parseInt(typeInput.value)) : void 0) || "unknown";
+            const type = (typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0) || "unknown";
             return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
               await $.sleep((period != null ? period : 3) * 1e3);
               return defaultAnswerWrapperHandler(answererWrappers, {
@@ -15936,7 +16081,7 @@ try {
           var _a;
           const { elements: elements2, searchInfos } = ctx;
           const typeInput = elements2.type[0];
-          const type = typeInput ? getQuestionType(parseInt(typeInput.value)) : void 0;
+          const type = typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0;
           if (type && (type === "completion" || type === "multiple" || type === "judgement" || type === "single")) {
             const resolver = createDefaultQuestionResolver(ctx)[type];
             const handler = (type2, answer, option, ctx2) => {
@@ -16012,7 +16157,7 @@ try {
           if (((_b = curr.result) == null ? void 0 : _b.finish) === false && curr.resolved === true) {
             const options = ((_d = (_c = curr.ctx) == null ? void 0 : _c.elements) == null ? void 0 : _d.options) || [];
             const typeInput = (_f = (_e = curr.ctx) == null ? void 0 : _e.elements) == null ? void 0 : _f.type[0];
-            const type = typeInput ? getQuestionType(parseInt(typeInput.value)) : void 0;
+            const type = typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0;
             const commonSetting = CommonProject.scripts.settings.cfg;
             if (commonSetting["randomWork-choice"] && (type === "judgement" || type === "single" || type === "multiple")) {
               $console.log("正在随机作答");
@@ -16042,7 +16187,7 @@ try {
         },
         async onElementSearched(elements2) {
           const typeInput = elements2.type[0];
-          const type = typeInput ? getQuestionType(parseInt(typeInput.value)) : void 0;
+          const type = typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0;
           if (type === "judgement") {
             elements2.options.forEach((option) => {
               var _a;
@@ -16119,7 +16264,7 @@ try {
       await $.sleep(3e3);
     }
   };
-  function getQuestionType(val) {
+  function getQuestionType$1(val) {
     return val === 0 ? "single" : val === 1 ? "multiple" : val === 3 ? "judgement" : [2, 4, 5, 6, 7, 8, 9, 10].some((t) => t === val) ? "completion" : val === 11 ? "line" : val === 14 ? "fill" : val === 15 ? "reader" : void 0;
   }
   async function readerAndFillHandle(searchInfos, list) {
@@ -16220,7 +16365,7 @@ try {
       CommonProject.scripts.render.methods.minimize();
     })
   };
-  const state$3 = {
+  const state$5 = {
     study: {
       currentMedia: void 0,
       currentStudyLockId: 0,
@@ -16236,10 +16381,10 @@ try {
     constructor() {
       _StudyLock.auto_inc++;
       this.id = _StudyLock.auto_inc;
-      state$3.study.currentStudyLockId = this.id;
+      state$5.study.currentStudyLockId = this.id;
     }
     canStudy() {
-      return this.id === state$3.study.currentStudyLockId;
+      return this.id === state$5.study.currentStudyLockId;
     }
     static getLock() {
       return new _StudyLock();
@@ -16313,9 +16458,9 @@ try {
           }
           CommonProject.scripts.render.methods.pin(this);
           this.onConfigChange("playbackRate", (playbackRate2) => {
-            state$3.study.currentMedia && (state$3.study.currentMedia.playbackRate = parseFloat(playbackRate2.toString()));
+            state$5.study.currentMedia && (state$5.study.currentMedia.playbackRate = parseFloat(playbackRate2.toString()));
           });
-          this.onConfigChange("volume", (v) => state$3.study.currentMedia && (state$3.study.currentMedia.volume = v));
+          this.onConfigChange("volume", (v) => state$5.study.currentMedia && (state$5.study.currentMedia.volume = v));
           const study2 = async () => {
             var _a;
             const res = await Promise.race([waitForElement("video, audio"), waitForElement(".docBox")]);
@@ -16325,7 +16470,7 @@ try {
               $console.log(`任务 ${jobName} 开始。`);
               if (document.querySelector("video, audio")) {
                 const media = await waitForMedia();
-                state$3.study.currentMedia = media;
+                state$5.study.currentMedia = media;
                 media.volume = this.cfg.volume;
                 await new Promise((resolve, reject) => {
                   try {
@@ -16419,8 +16564,8 @@ try {
           }
         },
         onrender() {
-          this.offConfigChange(state$3.study.playbackRateWarningListenerId);
-          state$3.study.playbackRateWarningListenerId = this.onConfigChange("playbackRate", (playbackRate2) => {
+          this.offConfigChange(state$5.study.playbackRateWarningListenerId);
+          state$5.study.playbackRateWarningListenerId = this.onConfigChange("playbackRate", (playbackRate2) => {
             if (playbackRate2 > 4) {
               lib.$modal.alert({
                 title: "高倍速警告",
@@ -16433,10 +16578,10 @@ try {
           var _a;
           CommonProject.scripts.render.methods.pin(this);
           await $.sleep(3e3);
-          this.onConfigChange("volume", (v) => state$3.study.currentMedia && (state$3.study.currentMedia.volume = v));
+          this.onConfigChange("volume", (v) => state$5.study.currentMedia && (state$5.study.currentMedia.volume = v));
           this.onConfigChange(
             "playbackRate",
-            (r) => state$3.study.currentMedia && (state$3.study.currentMedia.playbackRate = parseFloat(r.toString()))
+            (r) => state$5.study.currentMedia && (state$5.study.currentMedia.playbackRate = parseFloat(r.toString()))
           );
           const mainContentWin = (_a = lib.$el("#mainContent")) == null ? void 0 : _a.contentWindow;
           if (mainContentWin) {
@@ -16461,11 +16606,11 @@ try {
           if (this.cfg.expandAll) {
             lib.$$el(".s_sectionlist,.s_sectionwrap", mainContentWin.document).forEach((el) => el.style.display = "block");
           }
-          for (const job of lib.$$el(".s_point[itemtype]", mainContentWin.document)) {
-            job.addEventListener("click", (e) => {
+          for (const job2 of lib.$$el(".s_point[itemtype]", mainContentWin.document)) {
+            job2.addEventListener("click", (e) => {
               const lock = StudyLock.getLock();
               if (e.isTrusted) {
-                if (job.getAttribute("itemtype") === "exam") {
+                if (job2.getAttribute("itemtype") === "exam") {
                   return lib.$message.info({
                     duration: 60,
                     content: "检测到您手动选择了作业/考试章节，将不会自动跳转，请完成后手动选择其他章节，脚本会自动学习。"
@@ -16493,7 +16638,7 @@ try {
                 $console.log("视频/音频播放中...");
                 try {
                   const media = await waitForMedia({ root: doc });
-                  state$3.study.currentMedia = media;
+                  state$5.study.currentMedia = media;
                   media.playbackRate = parseFloat(this.cfg.playbackRate.toString());
                   media.volume = this.cfg.volume;
                   media.currentTime = 0;
@@ -16533,13 +16678,13 @@ try {
               let isBellowCurrentJob = false;
               const jobs = lib.$$el(".s_point[itemtype]", mainContentWin.document);
               for (let index = 0; index < jobs.length; index++) {
-                const job = jobs[index];
-                if (job.classList.contains("s_pointerct")) {
+                const job2 = jobs[index];
+                if (job2.classList.contains("s_pointerct")) {
                   isBellowCurrentJob = true;
                 } else if (isBellowCurrentJob) {
-                  if (job.querySelector(".done_icon_show") === null || this.cfg.restudy) {
-                    $console.log("下一章：", job.title || ((_a2 = lib.$el(".s_pointti", job)) == null ? void 0 : _a2.title) || "未知");
-                    nextEl = job;
+                  if (job2.querySelector(".done_icon_show") === null || this.cfg.restudy) {
+                    $console.log("下一章：", job2.title || ((_a2 = lib.$el(".s_pointti", job2)) == null ? void 0 : _a2.title) || "未知");
+                    nextEl = job2;
                     break;
                   }
                 }
@@ -16578,7 +16723,7 @@ try {
             (_a = document.querySelectorAll(`.sheet_nums [id*="sheetSeq"]`).item(0)) == null ? void 0 : _a.click();
           };
           commonWork(this, {
-            workerProvider: work,
+            workerProvider: work$1,
             beforeRunning: async () => {
               resetToBegin();
               await $.sleep(1e3);
@@ -16657,13 +16802,13 @@ try {
         async oncomplete(type) {
           CommonProject.scripts.render.methods.pin(this);
           this.onConfigChange("volume", (val) => {
-            if (state$3.study.currentMedia) {
-              state$3.study.currentMedia.volume = parseFloat(val.toString());
+            if (state$5.study.currentMedia) {
+              state$5.study.currentMedia.volume = parseFloat(val.toString());
             }
           });
           this.onConfigChange("playbackRate", (val) => {
-            if (state$3.study.currentMedia) {
-              state$3.study.currentMedia.playbackRate = parseFloat(val.toString());
+            if (state$5.study.currentMedia) {
+              state$5.study.currentMedia.playbackRate = parseFloat(val.toString());
             }
           });
           const waitForLoad2 = () => {
@@ -16860,7 +17005,7 @@ try {
     const media = await waitForMedia();
     media.volume = parseFloat(IcveMoocProject.scripts["ai-study"].cfg.volume.toString());
     media.playbackRate = parseFloat(IcveMoocProject.scripts["ai-study"].cfg.playbackRate.toString());
-    state$3.study.currentMedia = media;
+    state$5.study.currentMedia = media;
     const success = await playMedia(() => media.play());
     if (!success) {
       return;
@@ -16882,7 +17027,7 @@ try {
       });
     });
   }
-  function work({ answererWrappers, period, thread, answerSeparators }) {
+  function work$1({ answererWrappers, period, thread, answerSeparators }) {
     lib.$message.info("开始作业");
     CommonProject.scripts.workResults.methods.init();
     console.log({ answererWrappers, period, thread });
@@ -17181,7 +17326,7 @@ try {
       }, 60 * 1e3);
     });
   }
-  const state$2 = {
+  const state$4 = {
     studying: false,
     studyingId: "",
     media: null
@@ -17327,20 +17472,20 @@ try {
               if (!id) {
                 return;
               }
-              if (state$2.studying && id === state$2.studyingId) {
+              if (state$4.studying && id === state$4.studyingId) {
                 return;
               }
-              state$2.studyingId = id;
-              state$2.studying = true;
+              state$4.studyingId = id;
+              state$4.studying = true;
               CommonProject.scripts.render.methods.pin(this);
               this.onConfigChange("volume", (val) => {
-                if (state$2.media) {
-                  state$2.media.volume = parseFloat(val.toString());
+                if (state$4.media) {
+                  state$4.media.volume = parseFloat(val.toString());
                 }
               });
               this.onConfigChange("playbackRate", (val) => {
-                if (state$2.media) {
-                  state$2.media.playbackRate = parseFloat(val.toString());
+                if (state$4.media) {
+                  state$4.media.playbackRate = parseFloat(val.toString());
                 }
               });
               await waitForLoad();
@@ -17424,7 +17569,7 @@ try {
                 lib.$message.info(msg2);
                 $console.info(msg2);
                 await $.sleep(5e3);
-                await next(type);
+                await next$1(type);
               }
             }
           };
@@ -17447,7 +17592,7 @@ try {
           return {
             main: async () => {
               if (isWork() || isExam()) {
-                await waitForQuestions();
+                await waitForQuestions$1();
                 commonWork(this, {
                   workerProvider: (opt) => workOrExam(isWork() ? "work" : "exam", opt)
                 });
@@ -17462,7 +17607,7 @@ try {
     const media = await waitForMedia();
     media.volume = parseFloat(ZJYProject.scripts.study.cfg.volume.toString());
     media.playbackRate = parseFloat(ZJYProject.scripts.study.cfg.playbackRate.toString());
-    state$2.media = media;
+    state$4.media = media;
     const success = await playMedia(() => media.play());
     if (!success) {
       return;
@@ -17524,7 +17669,7 @@ try {
     var _a, _b, _c;
     return ((_a = lib.$el(".FilePreview")) == null ? void 0 : _a.__vue__) || ((_b = lib.$el(".guide")) == null ? void 0 : _b.__vue__) || ((_c = lib.$el(".teach")) == null ? void 0 : _c.__vue__);
   }
-  async function next(type) {
+  async function next$1(type) {
     var _a;
     const field = type === "classroomNow" ? "activityId" : "id";
     const id = new URL(window.location.href).searchParams.get(field);
@@ -17562,7 +17707,7 @@ try {
         duration: 0,
         extraTitle: "职教云学习脚本"
       });
-      state$2.studying = false;
+      state$4.studying = false;
     }
   }
   function getCourseDataInClassroomNowPage() {
@@ -17682,7 +17827,7 @@ try {
   function waitForLoad() {
     return waitForElement(() => getVueBindElement());
   }
-  async function waitForQuestions() {
+  async function waitForQuestions$1() {
     return waitForElement(
       [
         ".subjectList",
@@ -17769,7 +17914,7 @@ try {
     lib.$message[type](msg2);
     $console[type](msg2);
   };
-  const state$1 = {
+  const state$3 = {
     currentMedia: void 0,
     currentUrlHash: "",
     currentRunningScriptName: "",
@@ -17787,23 +17932,23 @@ try {
           setInterval(() => {
             var _a, _b;
             const hash = new URL(window.location.href).hash;
-            if (state$1.currentUrlHash !== hash) {
-              state$1.currentRunningScriptName = "";
+            if (state$3.currentUrlHash !== hash) {
+              state$3.currentRunningScriptName = "";
             }
-            state$1.currentUrlHash = hash;
+            state$3.currentUrlHash = hash;
             for (const key in ICourseProject.scripts) {
               if (Object.prototype.hasOwnProperty.call(ICourseProject.scripts, key)) {
                 const script2 = ICourseProject.scripts[key];
                 const runAtHash = Array.isArray(script2.cfg.runAtHash) ? script2.cfg.runAtHash : [script2.cfg.runAtHash];
-                if (runAtHash.length && runAtHash.some((h2) => state$1.currentUrlHash.includes(h2))) {
-                  if (state$1.currentRunningScriptName !== script2.name) {
-                    state$1.currentRunningScriptName = script2.name;
-                    state$1.current_job_id = Math.random().toString(16).slice(2);
+                if (runAtHash.length && runAtHash.some((h2) => state$3.currentUrlHash.includes(h2))) {
+                  if (state$3.currentRunningScriptName !== script2.name) {
+                    state$3.currentRunningScriptName = script2.name;
+                    state$3.current_job_id = Math.random().toString(16).slice(2);
                     (_b = (_a = script2.methods) == null ? void 0 : _a.main) == null ? void 0 : _b.call(_a, {
                       canRun: () => {
-                        return state$1.currentUrlHash && runAtHash.some((h2) => state$1.currentUrlHash.includes(h2));
+                        return state$3.currentUrlHash && runAtHash.some((h2) => state$3.currentUrlHash.includes(h2));
                       },
-                      job_id: state$1.current_job_id
+                      job_id: state$3.current_job_id
                     });
                   }
                   break;
@@ -17828,7 +17973,7 @@ try {
         methods() {
           return {
             main: async () => {
-              console.log(state$1, this.cfg.runAtHash);
+              console.log(state$3, this.cfg.runAtHash);
               CommonProject.scripts.render.methods.pin(this);
             }
           };
@@ -17881,9 +18026,9 @@ try {
         },
         oncomplete() {
           this.onConfigChange("playbackRate", (playbackRate2) => {
-            state$1.currentMedia && (state$1.currentMedia.playbackRate = parseFloat(playbackRate2.toString()));
+            state$3.currentMedia && (state$3.currentMedia.playbackRate = parseFloat(playbackRate2.toString()));
           });
-          this.onConfigChange("volume", (v) => state$1.currentMedia && (state$1.currentMedia.volume = v));
+          this.onConfigChange("volume", (v) => state$3.currentMedia && (state$3.currentMedia.volume = v));
         },
         methods() {
           return {
@@ -17895,7 +18040,7 @@ try {
               }
               $render.moveToEdge();
               const handleVideoTest = async () => {
-                if (!canRun() || job_id !== state$1.current_job_id)
+                if (!canRun() || job_id !== state$3.current_job_id)
                   return;
                 setTimeout(async () => {
                   const question = document.querySelector(".u-questionItem");
@@ -18308,7 +18453,7 @@ try {
       waitForMedia().then((video) => {
         video.playbackRate = playbackRate2;
         video.volume = volume2;
-        state$1.currentMedia = video;
+        state$3.currentMedia = video;
         playMedia(() => video == null ? void 0 : video.play());
         video.onpause = async () => {
           if (!(video == null ? void 0 : video.ended)) {
@@ -18400,7 +18545,7 @@ try {
   }
   async function networkIdleRequire(rp, cb) {
     await cb();
-    const modal2 = await waitFor(() => document.querySelector(".ux-modal_content_content"), {
+    const modal2 = await waitFor$2(() => document.querySelector(".ux-modal_content_content"), {
       check_period_ms: 200,
       timeout_seconds: 1
     });
@@ -18412,7 +18557,7 @@ try {
       msg2 == null ? void 0 : msg2.remove();
     }
   }
-  const state = {
+  const state$2 = {
     study: {
       currentMedia: void 0
     }
@@ -18714,10 +18859,10 @@ try {
           await lib.$.sleep(3e3);
           CommonProject.scripts.render.methods.pin(this);
           this.onConfigChange("volume", (curr) => {
-            state.study.currentMedia && (state.study.currentMedia.volume = curr);
+            state$2.study.currentMedia && (state$2.study.currentMedia.volume = curr);
           });
           this.onConfigChange("playbackRate", (curr) => {
-            state.study.currentMedia && (state.study.currentMedia.playbackRate = curr);
+            state$2.study.currentMedia && (state$2.study.currentMedia.playbackRate = curr);
           });
           const max_level = 5;
           for (let i = 0; i < max_level; i++) {
@@ -18731,7 +18876,7 @@ try {
           };
           const getNextJob = () => {
             let jobs = getJobs();
-            const active_index = jobs.findIndex((job) => job.classList.contains("is-active"));
+            const active_index = jobs.findIndex((job2) => job2.classList.contains("is-active"));
             if (!this.cfg.restudy) {
               jobs = jobs.splice(active_index);
               jobs = jobs.filter((el) => !el.querySelector(".icon-yuanquangou"));
@@ -18740,7 +18885,7 @@ try {
                 return !(((_a = el.querySelector(".leaf-item-tag")) == null ? void 0 : _a.textContent) || "").includes("自测");
               });
             }
-            const new_active_index = jobs.findIndex((job) => job.classList.contains("is-active"));
+            const new_active_index = jobs.findIndex((job2) => job2.classList.contains("is-active"));
             return jobs[new_active_index + 1];
           };
           try {
@@ -18828,13 +18973,13 @@ try {
       });
       console.log("media", media);
       await lib.$.sleep(1e3);
-      state.study.currentMedia = media;
+      state$2.study.currentMedia = media;
       if (media) {
         media.currentTime = 1;
         media.volume = options.volume;
         media.playbackRate = options.playbackRate;
       }
-      return state.study.currentMedia;
+      return state$2.study.currentMedia;
     };
     lib.$message.info("开始播放");
     const video = await set();
@@ -18879,9 +19024,9 @@ try {
       });
       console.log("media", media);
       await lib.$.sleep(1e3);
-      state.study.currentMedia = media;
+      state$2.study.currentMedia = media;
       media.currentTime = 1;
-      return state.study.currentMedia;
+      return state$2.study.currentMedia;
     };
     lib.$message.info("开始播放");
     const video = await set();
@@ -18901,6 +19046,2661 @@ try {
       };
     });
   }
+  const supported_question_types = {
+    discussion_group: "讨论题",
+    true_false_group: "判断题",
+    short_answer_group: "简答题",
+    single_choice_group: "单选题",
+    multi_choice_group: "多选题",
+    fill_blanks_group: "填空题",
+    fill_blanks_choice_group: "选词填空题",
+    translation_group: "翻译题",
+    fill_blanks_dropdown_group: "下拉填空题",
+    evaluation_group: "评价题"
+  };
+  const UnipusIpublishScript = new lib.Script({
+    name: "新AI版-课程学习",
+    namespace: "unipus.ipublish.study",
+    matches: [
+      ["新AI学习页面", "unipus.cn/_ipublishpc_default/pc.html"],
+      ["内部页面", "ipub.unipus.cn/learner/textbook/book"]
+    ],
+    configs: {
+      notes: {
+        defaultValue: lib.$ui.notes(["测试"]).outerHTML
+      },
+      translate: {
+        defaultValue: false
+      },
+      prompts: {
+        defaultValue: [
+          {
+            discussion_group: "请帮我写一个关于以下主题的讨论题答案，要求内容充实，逻辑清晰，字数在200字以上：\n{{question}}\n{{option}}",
+            true_false_group: "请帮我判断以下陈述是否正确，如果正确请回答“正确”，如果错误请帮我输出正确陈述句：\n{{question}}\n{{option}}"
+          }
+        ]
+      },
+      other_mode: {
+        label: "答题模式",
+        attrs: { title: "此设置包含 判断、简答、选择、填空等类型题目\n\n“跳过”则不进行该题型的自动作答" },
+        tag: "select",
+        options: [
+          ["ai", "AI答题"],
+          ["custom", "自定义回答"],
+          ["manually", "跳过"]
+        ],
+        defaultValue: "ai"
+      },
+      other_mode_custom: {
+        showIf: ["unipus.ai.study.other_mode", (val) => val === "custom"],
+        label: "自定义答题内容",
+        tag: "textarea",
+        attrs: {
+          type: "text",
+          title: "在此输入自定义回答内容，每行一个随机填写\n此设置包含 判断、简答、单选、填空等类型题目"
+        },
+        defaultValue: "不知道\n不会\n不清楚\n不懂\ni don't know\nno idea"
+      },
+      discussion_mode: {
+        label: "讨论题模式",
+        tag: "select",
+        options: [
+          ["copy", "随机复制其他讨论"],
+          ["ai", "AI生成"],
+          ["manually", "跳过"]
+        ],
+        defaultValue: "copy"
+      },
+      translation_mode: {
+        label: "翻译题模式",
+        tag: "select",
+        options: [
+          ["ai", "AI翻译"],
+          ["manually", "跳过"]
+        ],
+        defaultValue: "ai"
+      },
+      evaluation_mode: {
+        label: "自我评分题模式",
+        tag: "select",
+        options: [
+          ["random", "随机评分"],
+          ["fix", "固定评分"],
+          ["1r", "1-2分随机"],
+          ["2r", "1-3分随机"],
+          ["3r", "2-4分随机"],
+          ["4r", "3-5分随机"],
+          ["5r", "4-5分随机"],
+          ["manually", "跳过"]
+        ],
+        defaultValue: "5r"
+      },
+      evaluation_fix: {
+        showIf: ["unipus.ai.study.evaluation_mode", (val) => val === "fix"],
+        label: "固定自我评分分数",
+        defaultValue: 5,
+        attrs: {
+          type: "number",
+          min: 1,
+          max: 5,
+          step: 1
+        }
+      }
+    },
+    async oncomplete() {
+      CommonProject.scripts.render.methods.pin(this);
+      if (location.href.includes("learner/textbook/book") === false) {
+        return;
+      }
+      const rp = createLocalRemotePage();
+      await work(this.cfg, rp);
+    },
+    onbeforeunload() {
+      this.cfg.translate = false;
+    },
+    async onstart() {
+      if (location.href.includes("learner/textbook/book") === false) {
+        return;
+      }
+      this.cfg.translate = false;
+      this.onConfigChange("translate", async () => {
+        if (!this.cfg.translate) {
+          console.log("翻译已暂停");
+          return;
+        }
+        console.log("翻译中...");
+        const texts = Array.from(
+          document.querySelectorAll(
+            ".editor-unordered-list,.editor-heading,.editor-heading,.editor-paragraph,.editor-content,.question-block"
+          )
+        ).filter((el) => !el.querySelector(".speaker_svgView__kIA2V")).filter((i) => {
+          var _a;
+          return ((_a = i == null ? void 0 : i.textContent) == null ? void 0 : _a.trim()) ? /[A-Za-z0-9]/.test(i.textContent.trim()) : false;
+        }).map((el) => {
+          return Array.from(
+            el.querySelectorAll('[data-lexical-text="true"],[data-lexical-node-type="base-paragraph"]')
+          );
+        }).flat().map((el) => {
+          return findTextNodes(el);
+        }).flat();
+        console.log("翻译文本：", texts.length, "段");
+      });
+      await waitForElement(".editor");
+      async function loadVtt() {
+        const medias = await getPageMediasByElement();
+        for (const media of medias) {
+          if (media.type === "insert-video") {
+            const result = await getSubtitlesFromMedia(media);
+            const vtt = parseVTT(result, 1e3);
+            console.log({
+              el: media.element,
+              name: media.mediaFile.mediaName,
+              fileName: media.mediaFile.fileName,
+              vtt,
+              text: vtt.map((l) => l.text).map((t) => t.trim()).join("\n")
+            });
+          }
+        }
+      }
+      loadVtt();
+      lib.$gm.unsafeWindow.loadVtt = loadVtt;
+    },
+    onrender(elements2) {
+      var _a;
+      const translateBtn = lib.h(
+        "button",
+        {
+          className: "base-style-button",
+          style: { marginBottom: "10px" }
+        },
+        "整页翻译"
+      );
+      translateBtn.onclick = () => {
+        this.cfg.translate = !this.cfg.translate;
+        if (!this.cfg.translate) {
+          translateBtn.textContent = "整页翻译";
+        } else {
+          translateBtn.textContent = "翻译中...（点击暂停）";
+        }
+      };
+      (_a = elements2.panel.body) == null ? void 0 : _a.replaceWith(lib.h("div", { className: "card" }, [translateBtn]));
+    }
+  });
+  function findTextNodes(node) {
+    const textNodes = [];
+    function recurse(n) {
+      if (n.nodeType === Node.TEXT_NODE) {
+        textNodes.push(n);
+      } else {
+        n.childNodes.forEach(recurse);
+      }
+    }
+    recurse(node);
+    return textNodes;
+  }
+  async function getPageMediasByElement() {
+    var _a, _b, _c;
+    const els = Array.from(
+      document.querySelectorAll(
+        '[data-lexical-node-type="insert-video"],[data-lexical-node-type="insert-audio"],[data-lexical-node-type="insert-image"]'
+      )
+    );
+    const medias = [];
+    for (const el of els) {
+      const dataset = el.dataset;
+      const type = dataset.lexicalNodeType;
+      let media = null;
+      if (type === "insert-video") {
+        const subtitle = dataset.subtitleArray ? JSON.parse(dataset.subtitleArray) : [];
+        media = {
+          coverImage: dataset.coverImage || "",
+          duration: dataset.mediaDuration ? Number(dataset.mediaDuration) : void 0,
+          fileUrl: dataset.videoUrl || "",
+          videoSubtitleFile: subtitle,
+          fileName: ((_a = subtitle[0]) == null ? void 0 : _a.fileName) || "",
+          mediaName: dataset.title || ""
+        };
+      } else if (type === "insert-audio") {
+        media = {
+          duration: dataset.mediaDuration ? Number(dataset.mediaDuration) : void 0,
+          fileUrl: ((_b = el.querySelector("audio")) == null ? void 0 : _b.src) || ""
+        };
+      } else if (type === "insert-image") {
+        media = {
+          fileUrl: ((_c = el.querySelector("img")) == null ? void 0 : _c.src) || ""
+        };
+      }
+      if (media) {
+        medias.push({
+          element: el,
+          mediaFile: media,
+          type
+        });
+      }
+    }
+    return medias;
+  }
+  async function work(cfg, rp) {
+    const opts = CommonProject.scripts.settings.methods.getWorkOptions();
+    if (!opts.answererWrappers || opts.answererWrappers.length === 0) {
+      await answerWrapperEmptyWarning(0);
+      return;
+    }
+    await waitForElement(".editor");
+    await $.sleep(2e3);
+    const els = Array.from(
+      document.querySelectorAll(
+        Object.values(supported_question_types).map((t) => `[data-ipublish-question-group-type="${t}"]`).join(",")
+      )
+    );
+    if (els.length === 0) {
+      $msg.info("未找到题目，可能当前页面没有题目或已全部完成");
+      return;
+    }
+    $msg.info(`找到 ${els.length} 道题目，开始答题`);
+    for (let i = 0; i < els.length; i++) {
+      const el = els[i];
+      const type = el.dataset.ipublishQuestionGroupType;
+      if (!type)
+        continue;
+      $msg.info(`正在处理第 ${i + 1}/${els.length} 题：${supported_question_types[type]}`);
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      await $.sleep(500);
+      try {
+        await handleQuestion(rp, cfg, opts, el, type);
+      } catch (err) {
+        $msg.error(`第 ${i + 1} 题处理出错: ${err.message}`);
+      }
+      await $.sleep(500);
+    }
+    await submitIpublishAnswer(rp);
+    $msg.success("答题完成");
+  }
+  async function handleQuestion(rp, cfg, opts, el, type) {
+    if (isQuestionAnswered(el)) {
+      $msg.info("该题已作答，跳过");
+      return;
+    }
+    const questionText = extractQuestionText(el);
+    if (!questionText.trim()) {
+      $msg.warn("题目内容为空，跳过");
+      return;
+    }
+    switch (type) {
+      case "single_choice_group":
+        await handleChoiceQuestion(rp, cfg, opts, el, questionText, false);
+        break;
+      case "multi_choice_group":
+        await handleChoiceQuestion(rp, cfg, opts, el, questionText, true);
+        break;
+      case "true_false_group":
+        await handleTrueFalseQuestion(rp, cfg, opts, el, questionText);
+        break;
+      case "fill_blanks_group":
+      case "fill_blanks_choice_group":
+      case "fill_blanks_dropdown_group":
+        await handleFillBlanksQuestion(rp, cfg, opts, el, questionText);
+        break;
+      case "short_answer_group":
+        await handleShortAnswerQuestion(rp, cfg, opts, el, questionText);
+        break;
+      case "translation_group":
+        await handleTranslationQuestion(rp, cfg, opts, el, questionText);
+        break;
+      case "discussion_group":
+        await handleDiscussionQuestion(rp, cfg, opts, el, questionText);
+        break;
+      case "evaluation_group":
+        await handleEvaluationQuestion(rp, cfg, el);
+        break;
+      default:
+        $msg.warn(`未知题型：${type}，跳过`);
+    }
+  }
+  function isQuestionAnswered(el) {
+    const selected = el.querySelector('.selected, .checked, [aria-checked="true"], [data-checked="true"]');
+    if (selected)
+      return true;
+    const inputs = Array.from(el.querySelectorAll('input[type="text"], textarea'));
+    let filledCount = 0;
+    for (const input of inputs) {
+      if (input.value.trim())
+        filledCount++;
+    }
+    if (filledCount > 0 && filledCount === inputs.length)
+      return true;
+    return false;
+  }
+  function extractQuestionText(el) {
+    var _a, _b;
+    const stemSelectors = [
+      ".question-title",
+      ".question-stem",
+      ".ques-title",
+      '[data-lexical-node-type="question-title"]',
+      ".question-content",
+      ".question-desc",
+      ".question-block-title"
+    ];
+    for (const selector of stemSelectors) {
+      const stem = el.querySelector(selector);
+      if ((_a = stem == null ? void 0 : stem.textContent) == null ? void 0 : _a.trim())
+        return stem.textContent.trim();
+    }
+    return ((_b = el.innerText) == null ? void 0 : _b.trim()) || "";
+  }
+  function extractOptions(el) {
+    const optionSelectors = [
+      ".option-item",
+      ".option",
+      ".choice-option",
+      ".answer-option",
+      '[data-lexical-node-type="option"]',
+      '[role="radio"]',
+      '[role="checkbox"]',
+      ".question-option",
+      ".ipublish-option"
+    ];
+    for (const selector of optionSelectors) {
+      const options = Array.from(el.querySelectorAll(selector));
+      if (options.length > 0)
+        return options;
+    }
+    return [];
+  }
+  function extractInputs(el) {
+    return Array.from(
+      el.querySelectorAll(
+        'input[type="text"], textarea, [contenteditable="true"]'
+      )
+    );
+  }
+  async function searchAnswer(opts, question, type) {
+    const searchedInfos = await CommonProject.scripts.apps.methods.searchAnswerInCaches(question, async () => {
+      return defaultAnswerWrapperHandler(opts.answererWrappers, {
+        type,
+        title: question
+      });
+    });
+    if (!searchedInfos || searchedInfos.length === 0) {
+      return "";
+    }
+    for (const info of searchedInfos) {
+      if (info.results && info.results.length > 0) {
+        return info.results[0].answer || "";
+      }
+    }
+    return "";
+  }
+  function getCustomAnswer(cfg) {
+    const customs = (cfg.other_mode_custom || "").split("\n").map((s) => s.trim()).filter(Boolean);
+    if (customs.length === 0)
+      return "不知道";
+    return customs[Math.floor(Math.random() * customs.length)];
+  }
+  function matchOption(answer, options) {
+    var _a, _b;
+    const normalizedAnswer = answer.trim().toLowerCase();
+    if (!normalizedAnswer)
+      return null;
+    for (const opt of options) {
+      if (((_a = opt.textContent) == null ? void 0 : _a.trim().toLowerCase()) === normalizedAnswer) {
+        return opt;
+      }
+    }
+    for (const opt of options) {
+      const optText = ((_b = opt.textContent) == null ? void 0 : _b.trim().toLowerCase()) || "";
+      if (optText && (optText.includes(normalizedAnswer) || normalizedAnswer.includes(optText))) {
+        return opt;
+      }
+    }
+    if (/^[a-z]$/i.test(normalizedAnswer)) {
+      const index = normalizedAnswer.toUpperCase().charCodeAt(0) - 65;
+      if (index >= 0 && index < options.length) {
+        return options[index];
+      }
+    }
+    return null;
+  }
+  async function handleChoiceQuestion(rp, cfg, opts, el, questionText, isMultiple) {
+    if (cfg.other_mode === "manually") {
+      $msg.warn("选择题已跳过");
+      return;
+    }
+    const options = extractOptions(el);
+    if (options.length === 0) {
+      $msg.warn("未找到选项，跳过");
+      return;
+    }
+    let answers = [];
+    if (cfg.other_mode === "custom") {
+      answers = [getCustomAnswer(cfg)];
+    } else {
+      const answer = await searchAnswer(opts, questionText, isMultiple ? "multiple" : "single");
+      if (!answer) {
+        $msg.warn("未搜到答案，跳过");
+        return;
+      }
+      const separators = opts.answerSeparators.split(",").map((s) => s.trim()).filter(Boolean);
+      if (isMultiple) {
+        answers = [answer];
+        for (const sep of separators) {
+          if (answers.length === 1 && answers[0].includes(sep)) {
+            answers = answers[0].split(sep).map((s) => s.trim());
+            break;
+          }
+        }
+      } else {
+        answers = [answer];
+      }
+    }
+    for (const answer of answers) {
+      const option = matchOption(answer, options);
+      if (option) {
+        await rp.click(option);
+        await $.sleep(200);
+      } else {
+        $msg.warn(`未找到匹配选项: ${answer}`);
+      }
+    }
+  }
+  async function handleTrueFalseQuestion(rp, cfg, opts, el, questionText) {
+    var _a;
+    if (cfg.other_mode === "manually") {
+      $msg.warn("判断题已跳过");
+      return;
+    }
+    const options = extractOptions(el);
+    if (options.length === 0) {
+      $msg.warn("未找到选项，跳过");
+      return;
+    }
+    let answer = "";
+    if (cfg.other_mode === "custom") {
+      answer = getCustomAnswer(cfg);
+    } else {
+      answer = await searchAnswer(opts, questionText, "judgement");
+    }
+    if (!answer) {
+      $msg.warn("未搜到答案，跳过");
+      return;
+    }
+    const normalizedAnswer = answer.trim().toLowerCase();
+    const isTrue = ["正确", "对", "true", "t", "√", "yes", "y", "是"].includes(normalizedAnswer);
+    const isFalse = ["错误", "错", "false", "f", "×", "no", "n", "否"].includes(normalizedAnswer);
+    for (const opt of options) {
+      const optText = ((_a = opt.textContent) == null ? void 0 : _a.trim().toLowerCase()) || "";
+      if (isTrue && (optText.includes("正确") || optText.includes("对") || optText === "t" || optText === "true") || isFalse && (optText.includes("错误") || optText.includes("错") || optText === "f" || optText === "false")) {
+        await rp.click(opt);
+        await $.sleep(200);
+        return;
+      }
+    }
+    const option = matchOption(answer, options);
+    if (option) {
+      await rp.click(option);
+      await $.sleep(200);
+    } else {
+      $msg.warn(`未找到匹配选项: ${answer}`);
+    }
+  }
+  async function handleFillBlanksQuestion(rp, cfg, opts, el, questionText) {
+    if (cfg.other_mode === "manually") {
+      $msg.warn("填空题已跳过");
+      return;
+    }
+    const inputs = extractInputs(el);
+    if (inputs.length === 0) {
+      $msg.warn("未找到输入框，跳过");
+      return;
+    }
+    let answers = [];
+    if (cfg.other_mode === "custom") {
+      answers = inputs.map(() => getCustomAnswer(cfg));
+    } else {
+      const answer = await searchAnswer(opts, questionText, "completion");
+      if (!answer) {
+        $msg.warn("未搜到答案，跳过");
+        return;
+      }
+      const separators = opts.answerSeparators.split(",").map((s) => s.trim()).filter(Boolean);
+      answers = [answer];
+      for (const sep of separators) {
+        if (answers.length === 1 && answers[0].includes(sep)) {
+          answers = answers[0].split(sep).map((s) => s.trim());
+          break;
+        }
+      }
+      if (answers.length === 1 && inputs.length > 1) {
+        answers = answers[0].split(/\n|;|；/).map((s) => s.trim());
+      }
+    }
+    for (let i = 0; i < inputs.length && i < answers.length; i++) {
+      const input = inputs[i];
+      if (input.tagName === "TEXTAREA" || input.tagName === "INPUT") {
+        if (input.value)
+          continue;
+        await rp.click(input);
+        await rp["keyboard.type"](answers[i]);
+        await $.sleep(200);
+      } else if (input.getAttribute("contenteditable") === "true") {
+        await rp.click(input);
+        await rp["keyboard.type"](answers[i]);
+        await $.sleep(200);
+      }
+    }
+  }
+  async function handleShortAnswerQuestion(rp, cfg, opts, el, questionText) {
+    if (cfg.other_mode === "manually") {
+      $msg.warn("简答题已跳过");
+      return;
+    }
+    const inputs = extractInputs(el);
+    if (inputs.length === 0) {
+      $msg.warn("未找到输入框，跳过");
+      return;
+    }
+    let answer = "";
+    if (cfg.other_mode === "custom") {
+      answer = getCustomAnswer(cfg);
+    } else {
+      answer = await searchAnswer(opts, questionText, "completion");
+    }
+    if (!answer) {
+      $msg.warn("未搜到答案，跳过");
+      return;
+    }
+    const input = inputs[0];
+    await rp.click(input);
+    await rp["keyboard.type"](answer);
+    await $.sleep(200);
+  }
+  async function handleTranslationQuestion(rp, cfg, opts, el, questionText) {
+    var _a;
+    if (cfg.translation_mode === "manually") {
+      $msg.warn("翻译题已跳过");
+      return;
+    }
+    const inputs = extractInputs(el);
+    if (inputs.length === 0) {
+      $msg.warn("未找到输入框，跳过");
+      return;
+    }
+    let answer = await searchAnswer(opts, questionText, "completion");
+    if (!answer) {
+      const prompt = ((_a = cfg.prompts[0]) == null ? void 0 : _a.translation_group) || "";
+      if (prompt) {
+        answer = await searchAnswer(opts, prompt.replace("{{question}}", questionText), "completion");
+      }
+    }
+    if (!answer) {
+      $msg.warn("未搜到答案，跳过");
+      return;
+    }
+    const input = inputs[0];
+    await rp.click(input);
+    await rp["keyboard.type"](answer);
+    await $.sleep(200);
+  }
+  async function handleDiscussionQuestion(rp, cfg, opts, el, questionText) {
+    var _a, _b;
+    if (cfg.discussion_mode === "manually") {
+      $msg.warn("讨论题已跳过，请稍后自行手动完成");
+      return;
+    }
+    const inputs = extractInputs(el);
+    if (inputs.length === 0) {
+      $msg.warn("未找到输入框，跳过");
+      return;
+    }
+    let answer = "";
+    if (cfg.discussion_mode === "copy") {
+      const discussions = Array.from(
+        document.querySelectorAll(
+          '[data-ipublish-question-group-type="讨论题"] .discussion-content, .discussion-answer, .discussion-reply, .discussion-item'
+        )
+      );
+      const answeredDiscussions = discussions.filter((d) => {
+        var _a2;
+        return (_a2 = d.textContent) == null ? void 0 : _a2.trim();
+      });
+      if (answeredDiscussions.length > 0) {
+        answer = ((_a = answeredDiscussions[Math.floor(Math.random() * answeredDiscussions.length)].textContent) == null ? void 0 : _a.trim()) || "";
+      }
+      if (!answer) {
+        $msg.warn("未找到其他讨论内容，尝试使用AI生成");
+      }
+    }
+    if (!answer) {
+      const prompt = ((_b = cfg.prompts[0]) == null ? void 0 : _b.discussion_group) || "";
+      if (prompt) {
+        answer = await searchAnswer(opts, prompt.replace("{{question}}", questionText), "completion");
+      } else {
+        answer = await searchAnswer(opts, questionText, "completion");
+      }
+    }
+    if (!answer) {
+      $msg.warn("未搜到答案，跳过");
+      return;
+    }
+    const input = inputs[0];
+    await rp.click(input);
+    await rp["keyboard.type"](answer);
+    await $.sleep(200);
+  }
+  function getEvaluationScore(cfg) {
+    const mode = cfg.evaluation_mode;
+    if (mode === "manually")
+      return -1;
+    if (mode === "fix")
+      return cfg.evaluation_fix;
+    if (mode === "random")
+      return Math.floor(Math.random() * 5) + 1;
+    if (mode === "1r")
+      return Math.floor(Math.random() * 2) + 1;
+    if (mode === "2r")
+      return Math.floor(Math.random() * 3) + 1;
+    if (mode === "3r")
+      return Math.floor(Math.random() * 3) + 2;
+    if (mode === "4r")
+      return Math.floor(Math.random() * 3) + 3;
+    if (mode === "5r")
+      return Math.floor(Math.random() * 2) + 4;
+    return 5;
+  }
+  async function handleEvaluationQuestion(rp, cfg, el) {
+    const score = getEvaluationScore(cfg);
+    if (score < 0) {
+      $msg.warn("评价题已跳过");
+      return;
+    }
+    const ratingSelectors = [
+      ".rate-star",
+      ".star",
+      ".rating-item",
+      '[data-lexical-node-type="rating"]',
+      ".ant-rate-star",
+      ".evaluation-star",
+      ".star-item"
+    ];
+    let ratingEls = [];
+    for (const selector of ratingSelectors) {
+      ratingEls = Array.from(el.querySelectorAll(selector));
+      if (ratingEls.length > 0)
+        break;
+    }
+    if (ratingEls.length === 0) {
+      const radios = Array.from(el.querySelectorAll('input[type="radio"], [role="radio"]'));
+      if (radios.length >= score) {
+        await rp.click(radios[score - 1]);
+        await $.sleep(200);
+        return;
+      }
+      $msg.warn("未找到评分元素，跳过");
+      return;
+    }
+    if (score <= ratingEls.length) {
+      await rp.click(ratingEls[score - 1]);
+      await $.sleep(200);
+    } else {
+      $msg.warn(`评分 ${score} 超出范围，跳过`);
+    }
+  }
+  async function submitIpublishAnswer(rp) {
+    const btns = Array.from(document.querySelectorAll('button, .btn, [role="button"]'));
+    const submitBtn = btns.find((btn) => {
+      var _a;
+      const text = ((_a = btn.textContent) == null ? void 0 : _a.replace(/\s/g, "")) || "";
+      return text.includes("提交") || text.includes("保存");
+    });
+    if (submitBtn) {
+      await rp.click(submitBtn);
+      await $.sleep(3e3);
+      $msg.success("已提交答案");
+    } else {
+      $msg.warn("未找到提交按钮");
+    }
+  }
+  async function getSubtitlesFromMedia(media) {
+    let result = "";
+    for (const info of media.mediaFile.videoSubtitleFile || []) {
+      if (info.fileType === "text/vtt") {
+        const res = await request(info.fileUrl, {
+          responseType: "text",
+          type: "fetch"
+        });
+        result += res + "\n";
+      }
+    }
+    return result;
+  }
+  function parseVTT(content = "", tolerance = 0) {
+    const lines = content.split(/\r?\n/);
+    const cues = [];
+    let cue = null;
+    const timePattern = /^(\d{2}:\d{2}(?::\d{2})?\.\d{3})\s-->\s(\d{2}:\d{2}(?::\d{2})?\.\d{3})$/;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      const match = line.match(timePattern);
+      if (match) {
+        if (cue) {
+          cues.push({ ...cue, text: cue.text.trim() });
+        }
+        cue = {
+          start: toSeconds(match[1]),
+          end: toSeconds(match[2]),
+          text: ""
+        };
+      } else if (cue) {
+        if (/^\n\d+$/.test(line)) {
+          continue;
+        }
+        cue.text += (cue.text ? "\n" : "") + line;
+      }
+    }
+    if (cue) {
+      cues.push({ ...cue, text: cue.text.trim() });
+    }
+    const merged = [];
+    for (const current of cues) {
+      const last = merged[merged.length - 1];
+      if (last && current.start < last.end - tolerance) {
+        last.end = Math.max(last.end, current.end);
+        last.text += "\n" + current.text;
+      } else {
+        merged.push({ ...current });
+      }
+    }
+    return merged;
+  }
+  function toSeconds(timeStr) {
+    if (!timeStr || typeof timeStr !== "string")
+      return 0;
+    const parts = timeStr.split(":");
+    let hours = 0;
+    let minutes = 0;
+    let seconds = 0;
+    if (parts.length === 3) {
+      [hours, minutes] = parts.map(Number);
+      const [s, ms = "0"] = parts[2].split(".");
+      seconds = Number(s) + Number(ms) / 1e3;
+    } else if (parts.length === 2) {
+      [minutes] = parts.map(Number);
+      const [s, ms = "0"] = parts[1].split(".");
+      seconds = Number(s) + Number(ms) / 1e3;
+    } else {
+      return 0;
+    }
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+  const state$1 = {
+    current_media: null,
+    starting: true
+  };
+  const UnipusExplorationScript = new lib.Script({
+    name: "经典AI版-课程学习",
+    namespace: "unipus.exploration.study",
+    matches: [
+      ["经典AI学习页面", "unipus.cn/_explorationpc_default/pc.html"],
+      ["课程列表", "unipus.cn/app/cmgt/resource-detail"]
+    ],
+    configs: {
+      notes: {
+        defaultValue: lib.$ui.notes([
+          "如果脚本错乱请刷新界面",
+          ["如想选其他章节重新开始，请选择后刷新页面让脚本重新运行"],
+          "上传视频、录音等任务请自行完成"
+        ]).outerHTML
+      },
+      switchMode: {
+        label: "切换模式",
+        tag: "select",
+        options: [
+          ["auto", "自动切换下一章"],
+          ["manual", "手动跳转"]
+        ],
+        defaultValue: "auto"
+      },
+      playbackRate,
+      audioPlaybackRate: {
+        label: "音频倍速",
+        attrs: { title: "最高1.2倍" },
+        tag: "select",
+        options: [0.8, 1, 1.2].map((rate) => [rate.toString(), rate + " x"]),
+        defaultValue: 1
+      },
+      volume,
+      readTranslate: {
+        label: "精读任务显示翻译",
+        attrs: { type: "checkbox" },
+        defaultValue: true
+      },
+      enables: {
+        ...dropdownStyle,
+        label: "任务开关",
+        attrs: { type: "checkbox" },
+        defaultValue: true
+      },
+      enable_media: {
+        label: "视频/音频任务",
+        showIf: "unipus.exploration.study.enables",
+        elementClassName: "config-details",
+        defaultValue: true,
+        attrs: { type: "checkbox" }
+      },
+      enable_choice: {
+        label: "选择题",
+        showIf: "unipus.exploration.study.enables",
+        elementClassName: "config-details",
+        defaultValue: true,
+        attrs: { type: "checkbox" }
+      },
+      enable_banked_cloze: {
+        label: "选词填空题",
+        showIf: "unipus.exploration.study.enables",
+        elementClassName: "config-details",
+        defaultValue: true,
+        attrs: { type: "checkbox", title: "包含选词填空和下拉框选词填空" }
+      },
+      enable_reading: {
+        label: "阅读理解题",
+        showIf: "unipus.exploration.study.enables",
+        elementClassName: "config-details",
+        defaultValue: true,
+        attrs: { type: "checkbox" }
+      },
+      enable_completion: {
+        label: "填空、翻译题",
+        showIf: "unipus.exploration.study.enables",
+        elementClassName: "config-details",
+        defaultValue: true,
+        attrs: { type: "checkbox" }
+      },
+      enable_line_matching: {
+        label: "连线配对题",
+        showIf: "unipus.exploration.study.enables",
+        elementClassName: "config-details",
+        defaultValue: true,
+        attrs: { type: "checkbox" }
+      },
+      enable_ppt: {
+        label: "翻页PPT任务",
+        showIf: "unipus.exploration.study.enables",
+        elementClassName: "config-details",
+        defaultValue: true,
+        attrs: { type: "checkbox" }
+      }
+    },
+    async oncomplete() {
+      var _a, _b;
+      if (location.href.includes("cmgt/resource-detail")) {
+        $msg.info("请打开任意课程的章节进行自动学习");
+        return;
+      }
+      CommonProject.scripts.render.methods.pin(this);
+      const rp = createLocalRemotePage();
+      this.onConfigChange("playbackRate", (value) => {
+        if (state$1.current_media) {
+          state$1.current_media.playbackRate = value;
+        }
+      });
+      this.onConfigChange("volume", (value) => {
+        if (state$1.current_media) {
+          state$1.current_media.volume = value;
+        }
+      });
+      const checkConfirmModal = async () => {
+        await lib.$.sleep(3e3);
+        const btns = [
+          ".system-info-cloud-ok-button",
+          ".ant-modal-body .ant-btn-primary",
+          "button[class*=mask_notice]"
+        ];
+        const btn = await waitForElement(btns.join(","));
+        if (btn) {
+          await rp.click(btn);
+        }
+        await checkConfirmModal();
+      };
+      checkConfirmModal();
+      console.log("[U校园调试] oncomplete 开始执行, readyState:", document.readyState);
+      console.log("[U校园调试] 当前URL:", location.href);
+      const wrap = await waitForElement(".question-wrap", { timeout_seconds: 30 });
+      if (!wrap) {
+        console.error("[U校园调试] 未找到 .question-wrap！页面DOM可能已变更");
+        console.log("[U校园调试] body innerHTML前2000字符:", (_b = (_a = document.body) == null ? void 0 : _a.innerHTML) == null ? void 0 : _b.substring(0, 2e3));
+        $msg.error("未找到题目容器 .question-wrap，可能页面结构已变更或页面未完全加载");
+        return;
+      }
+      console.log("[U校园调试] .question-wrap 已找到，开始答题");
+      $msg.info("题目容器已找到，开始答题");
+      await job(this.cfg, rp);
+    },
+    onrender(elements2) {
+      var _a;
+      const translateBtn = lib.h(
+        "button",
+        {
+          className: "base-style-button",
+          style: { marginBottom: "10px" }
+        },
+        "开始学习"
+      );
+      translateBtn.onclick = () => {
+        state$1.starting = !state$1.starting;
+        if (!state$1.starting) {
+          translateBtn.textContent = "开始学习";
+        } else {
+          translateBtn.textContent = "学习中...（点击暂停）";
+        }
+      };
+      (_a = elements2.panel.body) == null ? void 0 : _a.replaceWith(lib.h("div", { className: "card" }, [translateBtn]));
+    },
+    async onstart() {
+      console.log(1);
+    }
+  });
+  async function job(cfg, rp) {
+    const wrap = await waitForElement(".question-wrap", { check_period_ms: 3e3 });
+    const wrap_content = wrap == null ? void 0 : wrap.childNodes[0];
+    const canRun = () => !!(wrap_content == null ? void 0 : wrap_content.isConnected);
+    await waitFor$1(() => state$1.starting);
+    const matches2 = (...selectors) => {
+      return selectors.every((selector) => {
+        return !!document.querySelector(selector);
+      });
+    };
+    console.log("[U校园调试] job 开始执行");
+    console.log("[U校园调试] wrap:", wrap);
+    console.log("[U校园调试] wrap_content:", wrap_content);
+    console.log(
+      "[U校园调试] 选择器检测:",
+      {
+        ".question-wrap": !!document.querySelector(".question-wrap"),
+        ".unipus-upload-container": !!document.querySelector(".unipus-upload-container"),
+        ".question-wrap .video-box": !!document.querySelector(".question-wrap .video-box"),
+        ".question-wrap .question-rich-text-read": !!document.querySelector(".question-wrap .question-rich-text-read"),
+        ".vocabulary-wrapper": !!document.querySelector(".vocabulary-wrapper"),
+        ".swiper-slide": !!document.querySelector(".swiper-slide"),
+        ".layout-material-container": !!document.querySelector(".layout-material-container"),
+        ".layout-reply-container": !!document.querySelector(".layout-reply-container"),
+        ".option-wrap": !!document.querySelector(".option-wrap"),
+        ".question-common-abs-choice": !!document.querySelector(".question-common-abs-choice"),
+        ".question-common-abs-reply": !!document.querySelector(".question-common-abs-reply"),
+        ".full": !!document.querySelector(".full"),
+        "textarea": !!document.querySelector("textarea"),
+        ".question-material-banked-cloze-reply": !!document.querySelector(".question-material-banked-cloze-reply"),
+        ".input-wrapper": !!document.querySelector(".input-wrapper"),
+        ".sequence-reply-view-item-text": !!document.querySelector(".sequence-reply-view-item-text"),
+        ".text-material-wrapper": !!document.querySelector(".text-material-wrapper")
+      }
+    );
+    await (async () => {
+      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+      if (!wrap_content) {
+        $msg.error("未找到任务内容区域，跳过该任务");
+        return;
+      }
+      if (matches2(".unipus-upload-container")) {
+        $msg.info("检测到上传任务，请自行手动完成，即将跳过");
+        return;
+      }
+      if (matches2(".question-wrap [class*=bgimg] [class*=picture]")) {
+        $msg.info("检测到图片任务，即将跳过");
+        return;
+      }
+      if (matches2(".layout-material-container .component-htmlview img")) {
+        $msg.error("检测到题目中包含图片，暂时无法处理，即将跳过该任务");
+        return;
+      }
+      if (matches2(".question-wrap .video-box")) {
+        $msg.info("检测到视频任务，即将播放");
+        const media = await waitForMedia();
+        if (!media) {
+          $msg.error("未找到视频，即将跳过该任务");
+          return;
+        }
+        if (!cfg.enable_media) {
+          $msg.warn("视频/音频任务已关闭，即将跳过该任务");
+          return;
+        }
+        media.currentTime = 0;
+        media.volume = cfg.volume;
+        media.playbackRate = cfg.playbackRate;
+        return await new Promise((resolve, reject) => {
+          playMedia(() => media.play()).then(() => {
+            state$1.current_media = media;
+            media.volume = cfg.volume;
+            media.playbackRate = cfg.playbackRate;
+            media.addEventListener("pause", async () => {
+              if (!canRun())
+                return;
+              $msg.info("视频已暂停，继续播放中...");
+              const el = lib.$el(".popupBox .questionBox");
+              if (el) {
+                $msg.info("检测到视频弹窗，随机答题中...");
+                await lib.$.sleep(1e3);
+                const options = Array.from(el.querySelectorAll("div.option"));
+                const randomIndex = Math.floor(Math.random() * options.length);
+                await rp.click(options[randomIndex]);
+              }
+              setTimeout(() => {
+                media.volume = cfg.volume;
+                media.playbackRate = cfg.playbackRate;
+                media.play();
+              }, 1e3);
+            });
+            media.addEventListener("ended", () => {
+              if (!canRun())
+                return;
+              $msg.success("视频播放完成，即将进入下一个任务");
+              setTimeout(resolve, 3e3);
+            });
+          }).catch(reject);
+        });
+      }
+      if (matches2(".question-wrap .question-rich-text-read")) {
+        $msg.info("检测到阅读任务，即将播放");
+        const media = await waitForMedia({ timeout: 1e4 });
+        if (!media) {
+          $msg.error("未找到阅读音频，即将跳过该任务");
+          return;
+        }
+        if (!cfg.enable_media) {
+          $msg.warn("视频/音频任务已关闭，即将跳过该任务");
+          return;
+        }
+        if (cfg.readTranslate) {
+          const btn = lib.$el(".audioBox .btn-switch.close");
+          if (btn) {
+            await rp.click(btn);
+          }
+          const btns = lib.$$el("div.audioBox .control-block.open");
+          const translateBtn = (_a = btns[1]) == null ? void 0 : _a.querySelectorAll(".btn-text")[0];
+          if (translateBtn) {
+            await rp.click(translateBtn);
+          }
+        }
+        media.currentTime = 0;
+        media.volume = cfg.volume;
+        media.playbackRate = cfg.audioPlaybackRate;
+        return await new Promise((resolve, reject) => {
+          playMedia(() => media.play()).then(() => {
+            state$1.current_media = media;
+            media.addEventListener("pause", async () => {
+              if (!canRun())
+                return;
+              $msg.info("音频已暂停，继续播放中...");
+              setTimeout(() => media.play(), 1e3);
+            });
+            media.addEventListener("ended", () => {
+              if (!canRun())
+                return;
+              $msg.success("阅读音频播放完成，即将进入下一个任务");
+              setTimeout(resolve, 3e3);
+            });
+          }).catch(reject);
+        });
+      }
+      if (matches2(".vocabulary-wrapper", ".swiper-slide")) {
+        if (!cfg.enable_ppt) {
+          $msg.warn("翻页PPT任务已关闭，即将跳过该任务");
+          return;
+        }
+        $msg.info("检测到词汇PPT任务，即将开始学习");
+        const countStr = (((_b = lib.$el(".vocabulary-wrapper .ratio")) == null ? void 0 : _b.innerText.trim()) || "").split("/")[1] || "0";
+        const totalCount = parseInt(countStr);
+        let index = 0;
+        let el = lib.$el(".vocActions .action.next:not(.disabled)");
+        while (el) {
+          await rp.click(el);
+          await lib.$.sleep(1e3);
+          el = lib.$el(".vocActions .action.next:not(.disabled)");
+          index++;
+          if (index >= totalCount) {
+            break;
+          }
+        }
+        return;
+      }
+      if (matches2('[data-row-key="Review & check"]')) {
+        $msg.info("检测到自检任务，即将开始填写");
+        const got_its = lib.$$el(".ant-table-cell .anticon-border");
+        const reviews = lib.$$el(".ant-table-cell .anticon-file-done");
+        for (const got_it of got_its) {
+          await rp.click(got_it);
+          await lib.$.sleep(500);
+        }
+        for (const review of reviews) {
+          await rp.click(review);
+          await rp.click(".modal-ok-btn");
+          await lib.$.sleep(500);
+        }
+        return;
+      }
+      if (matches2(
+        ".layout-material-container",
+        ".layout-reply-container",
+        "textarea"
+      )) {
+        if (!cfg.enable_reading) {
+          $msg.warn("阅读理解题任务开关已关闭，即将跳过该任务");
+          return;
+        }
+        if (checkUniTestIsDone()) {
+          $msg.success("阅读理解填空题任务已完成，即将跳过该任务");
+          return;
+        }
+        $msg.info("检测到阅读理解填空题任务，即将开始答题");
+        await doUnderstandingText(rp, CommonProject.scripts.settings.methods.getWorkOptions());
+        return;
+      }
+      if (matches2(
+        ".layout-material-container",
+        ".layout-reply-container",
+        ".option-wrap"
+      )) {
+        if (!cfg.enable_reading) {
+          $msg.warn("阅读理解题任务开关已关闭，即将跳过该任务");
+          return;
+        }
+        if (checkUniTestIsDone()) {
+          $msg.success("阅读理解选择题任务已完成，即将跳过该任务");
+          return;
+        }
+        $msg.info("检测到阅读理解选择题任务，即将开始答题");
+        await doReading(rp, CommonProject.scripts.settings.methods.getWorkOptions());
+        return;
+      }
+      if (matches2(".layout-reply-container", ".option-wrap")) {
+        if (!cfg.enable_choice) {
+          $msg.warn("选择题任务开关已关闭，即将跳过该任务");
+          return;
+        }
+        if (checkUniTestIsDone()) {
+          $msg.success("选择题任务已完成，即将跳过该任务");
+          return;
+        }
+        $msg.info("检测到选择题任务，即将开始答题");
+        await doChoice(rp, CommonProject.scripts.settings.methods.getWorkOptions());
+        return;
+      }
+      if (matches2(".layout-reply-container", ".full", "textarea")) {
+        if (!cfg.enable_completion) {
+          $msg.warn("填空题任务开关已关闭，即将跳过该任务");
+          return;
+        }
+        if (checkUniTestIsDone()) {
+          $msg.success("填空题任务已完成，即将跳过该任务");
+          return;
+        }
+        $msg.info("检测到填空题任务，即将开始答题");
+        await doCompletion(rp, CommonProject.scripts.settings.methods.getWorkOptions());
+        return;
+      }
+      if (matches2(
+        ".question-material-banked-cloze-reply",
+        ".input-wrapper"
+      )) {
+        if (!cfg.enable_banked_cloze) {
+          $msg.warn("选词填空任务开关已关闭，即将跳过该任务");
+          return;
+        }
+        if (checkUniTestIsDone()) {
+          $msg.success("选词填空任务已完成，即将跳过该任务");
+          return;
+        }
+        $msg.info("检测到选词填空任务，即将开始答题");
+        const direction = ((_c = lib.$el(".abs-direction")) == null ? void 0 : _c.innerText.trim()) || "";
+        const blanks = lib.$$el(".question-material-banked-cloze-reply .option-wrapper").map((el) => el.querySelector(".option") || el.querySelector(".option-placeholder")).map((el) => (el == null ? void 0 : el.textContent) || "").join("\n");
+        const questions = resoleInputWrapLines(lib.$el(".question-material-banked-cloze-scoop"));
+        if (!blanks.trim()) {
+          $msg.error("未找到题目内容，跳过该任务");
+          return;
+        }
+        try {
+          const res = await singleQuestionHandle({
+            rp,
+            question: [direction, "-".repeat(10), blanks, "-".repeat(10), questions].join("\n"),
+            type: "completion",
+            options: lib.$$el(".question-wrap .input-wrapper input"),
+            handler: async (type, answer, option) => {
+              const input = option;
+              if (input.value) {
+                return;
+              }
+              await rp.click(input);
+              await rp["keyboard.type"](answer, { delay: 20 });
+              await lib.$.sleep(200);
+            }
+          });
+          if (res.finish) {
+            $msg.success("选词填空任务答题完成");
+          } else {
+            $msg.error("选词填空任务未完成，可能是答案不匹配");
+          }
+        } catch (err) {
+          $msg.error(err.message || "选词填空任务答题出错，跳过该任务");
+        }
+        return;
+      }
+      if (matches2(
+        ".input-wrapper .ant-dropdown-trigger"
+      )) {
+        if (!cfg.enable_banked_cloze) {
+          $msg.warn("选词填空任务开关已关闭，即将跳过该任务");
+          return;
+        }
+        if (checkUniTestIsDone()) {
+          $msg.success("选词填空任务已完成，即将跳过该任务");
+          return;
+        }
+        $msg.info("检测到选词填空任务，即将开始答题");
+        const ques = (((_d = lib.$el(".question-wrap")) == null ? void 0 : _d.innerText.trim()) || "").replace(/\s\d+\)点击选择/g, " _____ ").replace(/\s\d+\)\n+[a-zA-Z]+\n+/g, " _____ ");
+        if (!ques.trim()) {
+          $msg.error("未找到题目内容，跳过该任务");
+          return;
+        }
+        const options = lib.$$el(".scoop-select-wrapper i").map((e) => e.textContent);
+        try {
+          const res = await singleQuestionHandle({
+            rp,
+            question: [ques, "-".repeat(10), ...options].join("\n"),
+            type: "completion",
+            options: lib.$$el(".scoop-select-wrapper"),
+            handler: async (type, answer, option) => {
+              await rp.click(option);
+              await lib.$.sleep(200);
+              const target = Array.from(option.querySelectorAll(".ant-dropdown-menu-item")).find(
+                (el) => {
+                  var _a2;
+                  return ((_a2 = el.textContent) == null ? void 0 : _a2.trim()) === answer.trim();
+                }
+              );
+              if (target) {
+                await rp.click(target);
+              }
+              await lib.$.sleep(200);
+            }
+          });
+          if (res.finish) {
+            $msg.success("选词填空任务答题完成");
+          } else {
+            $msg.error("选词填空任务未完成，可能是答案不匹配");
+          }
+        } catch (err) {
+          $msg.error(err.message || "选词填空任务答题出错，跳过该任务");
+        }
+        return;
+      }
+      if (matches2(
+        ".layout-reply-container",
+        ".fe-scoop .scoop-input-wrapper",
+        "input"
+      )) {
+        if (!cfg.enable_completion) {
+          $msg.warn("自由填空题任务开关已关闭，即将跳过该任务");
+          return;
+        }
+        if (checkUniTestIsDone()) {
+          $msg.success("自由填空题任务已完成，即将跳过该任务");
+          return;
+        }
+        $msg.info("检测到自由填空题任务，即将开始答题");
+        const direction = ((_e = lib.$el(".abs-direction")) == null ? void 0 : _e.innerText.trim()) || "";
+        const text_context = ((_f = lib.$el(".layout-material-container")) == null ? void 0 : _f.innerText.trim()) || "";
+        const questions = resoleInputWrapLines(lib.$el(".layout-reply-container "));
+        if (!questions.trim()) {
+          $msg.error("未找到题目内容，跳过该任务");
+          return;
+        }
+        try {
+          const res = await singleQuestionHandle({
+            rp,
+            question: [
+              direction,
+              "-".repeat(10),
+              ...text_context ? [text_context, "-".repeat(10)] : [],
+              questions
+            ].join("\n"),
+            type: "completion",
+            options: lib.$$el(".layout-reply-container .fe-scoop input"),
+            handler: async (type, answer, option) => {
+              const input = option;
+              if (input.value) {
+                return;
+              }
+              await rp.click(input);
+              await rp["keyboard.type"](answer, { delay: 20 });
+              await lib.$.sleep(200);
+            }
+          });
+          if (res.finish) {
+            $msg.success("自由填空题任务答题完成");
+          } else {
+            $msg.error("自由填空题任务未完成，可能是答案不匹配");
+          }
+        } catch (err) {
+          $msg.error(err.message || "自由填空题任务答题出错，跳过该任务");
+        }
+        return;
+      }
+      if (matches2(".sequence-reply-view-item-text")) {
+        if (!cfg.enable_line_matching) {
+          $msg.warn("连线配对任务开关已关闭，即将跳过该任务");
+          return;
+        }
+        if (checkUniTestIsDone()) {
+          $msg.success("连线配对题任务已完成，即将跳过该任务");
+          return;
+        }
+        $msg.info("检测到连线配对题任务，即将开始答题");
+        const moveOption = async (opt) => {
+          opt.setAttribute("testid", "to-move");
+          opt.scrollIntoView({ block: "center", behavior: "smooth" });
+          await rp.hover('[testid="to-move"]');
+          await rp["mouse.down"]();
+          await rp.hover(".abs-direction");
+          await rp["mouse.up"]();
+          opt.removeAttribute("testid");
+          await lib.$.sleep(500);
+        };
+        try {
+          const queryItems = () => lib.$$el(".question-wrap .sequence-reply-view-item-text");
+          $msg.warn("正在检测连线配对题顺序中...请勿操作");
+          const checkOrder = async (skip_count = 0) => {
+            const options2 = queryItems();
+            const option_data = [];
+            for (const opt of options2) {
+              const text = opt.innerText.trim();
+              const match = text.match(/^([A-Z])\./);
+              if (match) {
+                option_data.push({ el: opt, index: match[1].charCodeAt(0) });
+              }
+            }
+            const is_ordered = option_data.every((data, i, arr) => {
+              if (i === 0)
+                return true;
+              return data.index >= arr[i - 1].index;
+            });
+            if (is_ordered) {
+              return;
+            }
+            const first = option_data.slice(skip_count).sort((a, b) => b.index - a.index)[0];
+            if (!first) {
+              return;
+            }
+            await moveOption(first.el);
+            await checkOrder(skip_count + 1);
+          };
+          await checkOrder();
+          $msg.info("连线配对题选项已排序完成，开始作答");
+          const seq = ((_g = lib.$el(".sequence-view")) == null ? void 0 : _g.innerText.trim()) || "";
+          const direction = ((_h = lib.$el(".abs-direction")) == null ? void 0 : _h.innerText.trim()) || "";
+          if (!seq || !direction) {
+            $msg.error("未找到题目内容，跳过该任务");
+            return;
+          }
+          const texts = ((_i = seq.match(/\d+.+\n/g)) == null ? void 0 : _i.map((line) => line.trim())) || [];
+          const options = ((_j = seq.match(/\n[A-Z]\..+/g)) == null ? void 0 : _j.map((line) => line.trim())) || [];
+          const result_answers = [];
+          const res = await singleQuestionHandle({
+            rp,
+            question: [direction, "-".repeat(10), texts, "-".repeat(10), options].flat().join("\n"),
+            type: "completion",
+            options: queryItems(),
+            custom_upload_handler: true,
+            handler: async (type, answer, option) => {
+              if (!answer.match(/^[A-Z]$/)) {
+                throw new Error("答案格式不正确，无法作答连线配对题，跳过该任务");
+              }
+              result_answers.push(answer);
+            }
+          });
+          const msg2 = lib.$message.warn({ content: "移动顺序中...请勿操作", duration: result_answers.length * 1e3 });
+          for (const answer of result_answers.reverse()) {
+            const items = queryItems();
+            const index = items.findIndex((item) => {
+              const text = item.innerText.trim();
+              const match = text.match(/^([A-Z])\./);
+              return match && match[1] === answer;
+            });
+            await moveOption(items[index]);
+            await lib.$.sleep(500);
+          }
+          msg2 == null ? void 0 : msg2.remove();
+          if (res.finish) {
+            await submitAnswer(rp);
+            $msg.success("连线配对题任务答题完成");
+          } else {
+            $msg.error("连线配对题任务未完成，可能是答案不匹配");
+          }
+        } catch (err) {
+          $msg.error(err.message || "自由填空题任务答题出错，跳过该任务");
+        }
+      }
+      if (matches2(".text-material-wrapper")) {
+        console.log("[U校园调试] 匹配到 .text-material-wrapper");
+        const ps = lib.$$el(".text-material-wrapper .component-htmlview p");
+        console.log("[U校园调试] .text-material-wrapper .component-htmlview p 数量:", ps.length);
+        if (ps.length === 1) {
+          $msg.info("检测到文本阅读题任务，阅读10秒后跳过");
+          await lib.$.sleep(10 * 1e3);
+          return;
+        }
+      }
+      console.log("[U校园调试] 未知任务类型，输出 DOM 信息用于调试");
+      console.log("[U校园调试] wrap_content.className:", wrap_content.className);
+      console.log("[U校园调试] wrap_content innerHTML前2000字符:", wrap_content.innerHTML.substring(0, 2e3));
+      console.log("[U校园调试] iframe数量:", document.querySelectorAll("iframe").length);
+      const iframes = document.querySelectorAll("iframe");
+      iframes.forEach((iframe, i) => {
+        console.log(`[U校园调试] iframe[${i}] src:`, iframe.src, "id:", iframe.id, "className:", iframe.className);
+      });
+      console.log("[U校园调试] 额外选择器检测:", {
+        ".question-basic": !!document.querySelector(".question-basic"),
+        ".question-abs-question": !!document.querySelector(".question-abs-question"),
+        ".abs-question": !!document.querySelector(".abs-question"),
+        ".question-content": !!document.querySelector(".question-content"),
+        ".question-body": !!document.querySelector(".question-body"),
+        ".question-stem": !!document.querySelector(".question-stem"),
+        ".question-options": !!document.querySelector(".question-options"),
+        ".question-answer": !!document.querySelector(".question-answer"),
+        ".abs-direction": !!document.querySelector(".abs-direction"),
+        ".question-common-course-page": !!document.querySelector(".question-common-course-page"),
+        "input": !!document.querySelector("input"),
+        ".ant-btn": !!document.querySelector(".ant-btn"),
+        ".btn": !!document.querySelector(".btn"),
+        "button": !!document.querySelector("button")
+      });
+      $msg.info("未知任务类型，即将跳过");
+    })();
+    if (cfg.switchMode === "manual") {
+      const el = lib.$message.warn({ content: "当前为手动切换模式，已暂停，请手动切换。", duration: 0 });
+      await waitFor$1(() => !wrap_content.isConnected, { show_msg: false });
+      el == null ? void 0 : el.remove();
+      await job(cfg, rp);
+      return;
+    }
+    $msg.success("任务完成，即将进入下一个任务");
+    await lib.$.sleep(3 * 1e3);
+    await waitFor$1(() => state$1.starting);
+    if (!await next(rp)) {
+      $msg.success("已完成所有任务");
+      CommonProject.scripts.settings.methods.notificationBySetting("已完成所有任务", {
+        duration: 0,
+        extraTitle: UnipusExplorationScript.name
+      });
+      return;
+    }
+    await job(cfg, rp);
+  }
+  async function next(rp) {
+    const tasks = lib.$$el(".pc-header-tasks-row .pc-task");
+    for (let index = 0; index < tasks.length; index++) {
+      const task = tasks[index];
+      if (task.classList.contains("pc-header-task-activity")) {
+        const nextTask = tasks[index + 1];
+        if (nextTask) {
+          await rp.click(nextTask);
+          return true;
+        }
+      }
+    }
+    const tabs = lib.$$el(".pc-tab-row .tab");
+    for (let index = 0; index < tabs.length; index++) {
+      const tab = tabs[index];
+      if (tab.classList.contains("pc-header-tab-activity")) {
+        const nextTab = tabs[index + 1];
+        if (nextTab) {
+          await rp.click(nextTab);
+          return true;
+        }
+      }
+    }
+    const elements2 = lib.$$el('.pc-slider-content [data-role="micro"],.pc-slider-content [data-role="node"]');
+    for (let index = 0; index < elements2.length; index++) {
+      const element = elements2[index];
+      if (element.classList.contains("pc-menu-activity")) {
+        const nextElement = elements2[index + 1];
+        if (nextElement) {
+          await rp.click(nextElement);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+  function waitFor$1(condition, opts = { show_msg: true }) {
+    let msg2;
+    return new Promise((resolve) => {
+      const interval = setInterval(() => {
+        if (condition()) {
+          msg2 == null ? void 0 : msg2.remove();
+          clearInterval(interval);
+          resolve();
+        } else {
+          if (!msg2 && opts.show_msg) {
+            msg2 = lib.$message.info({ content: "学习已暂停，点击开始按钮继续学习", duration: 0 });
+          }
+        }
+      }, 1e3);
+    });
+  }
+  async function singleQuestionHandle({
+    rp,
+    question,
+    type,
+    options,
+    handler,
+    custom_upload_handler = false
+  }) {
+    if (!type)
+      throw new Error("未识别题目类型，无法作答");
+    const { answererWrappers, answerSeparators } = CommonProject.scripts.settings.methods.getWorkOptions();
+    if (answererWrappers === void 0 || answererWrappers.length === 0) {
+      await answerWrapperEmptyWarning(0);
+      return { finish: false };
+    }
+    const visual_state = CommonProject.scripts.render.cfg.visual;
+    CommonProject.scripts.render.methods.normal();
+    CommonProject.scripts.workResults.methods.init();
+    CommonProject.scripts.render.methods.pin(CommonProject.scripts.workResults);
+    console.log("question", question);
+    const searchedInfos = await CommonProject.scripts.apps.methods.searchAnswerInCaches(question, async () => {
+      return defaultAnswerWrapperHandler(answererWrappers, {
+        type,
+        title: question
+      });
+    });
+    if (!searchedInfos || searchedInfos.length === 0) {
+      throw new Error("未搜到到任何答案。");
+    }
+    const ctx = {
+      searchInfos: searchedInfos,
+      answerSeparators: answerSeparators.split(","),
+      type,
+      root: document.body,
+      elements: {}
+    };
+    const workResults = [
+      {
+        ctx,
+        requested: true,
+        resolved: false
+      }
+    ];
+    const update = () => {
+      CommonProject.scripts.workResults.methods.setResults(simplifyWorkResult(workResults, () => question));
+      CommonProject.scripts.workResults.methods.updateWorkStateByResults(workResults);
+    };
+    update();
+    const action = type === "completion" ? "填写" : "选择";
+    const msg2 = lib.$message.warn({ content: `正在${action}答案中...请勿操作`, duration: 0 });
+    const resolver = createDefaultQuestionResolver(ctx);
+    const result = await resolver[type](searchedInfos, options, handler);
+    msg2 == null ? void 0 : msg2.remove();
+    workResults[0].resolved = true;
+    workResults[0].result = result;
+    if (result == null ? void 0 : result.finish) {
+      CommonProject.scripts.apps.methods.addQuestionCacheFromWorkResult(
+        simplifyWorkResult([workResults[0]], () => question)
+      );
+    }
+    update();
+    if (visual_state === "minimize" && CommonProject.scripts.render.cfg.visual !== "minimize") {
+      CommonProject.scripts.render.methods.minimize();
+    }
+    const { upload } = CommonProject.scripts.settings.methods.getWorkOptions();
+    if (result.finish) {
+      if (upload !== "nomove") {
+        if (!custom_upload_handler) {
+          await submitAnswer(rp);
+        }
+        return { upload: !custom_upload_handler, finish: true };
+      } else {
+        return { upload: false, finish: true };
+      }
+    } else {
+      return { upload: false, finish: false };
+    }
+  }
+  function doChoice(rp, opts) {
+    const is_multiple = !!lib.$el(".multipleChoice");
+    return handleCommonUnitTest(rp, opts, {
+      type: is_multiple ? "multiple" : "single",
+      test_type: "choice",
+      root: ".question-common-abs-choice",
+      elements: {
+        title: ".ques-title",
+        options: ".option-wrap .option .content"
+      }
+    });
+  }
+  function doReading(rp, opts) {
+    const is_multiple = !!lib.$el(".multipleChoice");
+    return handleCommonUnitTest(rp, opts, {
+      type: is_multiple ? "multiple" : "single",
+      test_type: "reading-choice",
+      root: ".question-common-abs-choice",
+      elements: {
+        title: ".ques-title,.option-wrap",
+        options: ".option-wrap .option .content"
+      },
+      questionTitleTransform(ques) {
+        var _a, _b;
+        const direction = ((_a = lib.$el(".question-wrap .abs-direction")) == null ? void 0 : _a.innerText.trim()) || "";
+        const ctx = ((_b = lib.$el(".question-wrap .question-common-abs-material")) == null ? void 0 : _b.innerText.trim()) || "";
+        return [direction, "-".repeat(10), ctx, "-".repeat(10), ques].filter(Boolean).join("\n");
+      }
+    });
+  }
+  function doUnderstandingText(rp, opts) {
+    return handleCommonUnitTest(rp, opts, {
+      type: "completion",
+      test_type: "reading-replay",
+      root: ".question-common-abs-reply",
+      elements: {
+        title: ".question-inputbox-header",
+        options: "textarea"
+      },
+      questionTitleTransform(ques) {
+        var _a, _b;
+        const direction = ((_a = lib.$el(".question-wrap .abs-direction")) == null ? void 0 : _a.innerText.trim()) || "";
+        const ctx = ((_b = lib.$el(".question-wrap .question-common-abs-material")) == null ? void 0 : _b.innerText.trim()) || "";
+        return [direction, "-".repeat(10), ctx, "-".repeat(10), ques].filter(Boolean).join("\n");
+      }
+    });
+  }
+  function doCompletion(rp, opts) {
+    return handleCommonUnitTest(rp, opts, {
+      type: "completion",
+      test_type: "complete",
+      root: ".question-common-abs-reply",
+      elements: {
+        title: ".question-inputbox-header",
+        options: ".question-inputbox-body textarea"
+      },
+      questionTitleTransform(ques) {
+        var _a;
+        const direction = ((_a = lib.$el(".question-wrap .abs-direction")) == null ? void 0 : _a.innerText.trim()) || "";
+        return [direction, "-".repeat(10), ques].filter(Boolean).join("\n");
+      }
+    });
+  }
+  async function handleCommonUnitTest(rp, opts, config2) {
+    var _a;
+    if (opts.answererWrappers === void 0 || opts.answererWrappers.length === 0) {
+      return await answerWrapperEmptyWarning(0);
+    }
+    const visual_state = CommonProject.scripts.render.cfg.visual;
+    CommonProject.scripts.render.methods.normal();
+    CommonProject.scripts.workResults.methods.init();
+    CommonProject.scripts.render.methods.pin(CommonProject.scripts.workResults);
+    const titleTransform = (titles) => {
+      const res = titles.map((t) => t ? t.innerText : "").join("\n\n");
+      return config2.questionTitleTransform ? config2.questionTitleTransform(res) : res;
+    };
+    const worker = new OCSWorker({
+      root: config2.root,
+      elements: {
+        title: config2.elements.title,
+        options: config2.elements.options
+      },
+      thread: (_a = opts.thread) != null ? _a : 1,
+      answerSeparators: opts.answerSeparators.split(",").map((s) => s.trim()),
+      answerer: async (elements2, ctx) => {
+        const title = titleTransform(elements2.title);
+        console.log("title", title);
+        if (title.trim()) {
+          return CommonProject.scripts.apps.methods.searchAnswerInCaches(title.trim(), async () => {
+            var _a2;
+            await lib.$.sleep(((_a2 = opts.period) != null ? _a2 : 3) * 1e3);
+            return defaultAnswerWrapperHandler(opts.answererWrappers, {
+              type: ctx.type,
+              title,
+              options: ctx.type === "completion" ? "" : ctx.elements.options.map((o) => o.innerText).join("\n")
+            });
+          });
+        } else {
+          throw new Error("题目为空，请查看题目是否为空，或者忽略此题");
+        }
+      },
+      work: {
+        type(ctx) {
+          return config2.type;
+        },
+        async handler(type, answer, option, ctx) {
+          if (type === "judgement" || type === "single" || type === "multiple") {
+            const opt = option.parentElement;
+            if (opt.classList.contains("selected")) {
+              return;
+            }
+            const btn = opt.querySelector(".caption");
+            if (btn) {
+              await rp.click(btn);
+              await lib.$.sleep(200);
+            }
+          } else if (type === "completion") {
+            const input = option;
+            if (input.value) {
+              return;
+            }
+            await rp.click(input);
+            await rp["keyboard.type"](answer);
+            await lib.$.sleep(200);
+          }
+        }
+      },
+      async onResultsUpdate(curr, _, res) {
+        var _a2;
+        const readingResultTitleTransform = (t, index) => {
+          const ctx = res[index].ctx;
+          const body = [
+            `<span title="${[titleTransform((ctx == null ? void 0 : ctx.elements.title) || [])].join("\n").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}">[阅读理解上下文]</span><br>`,
+            ...config2.test_type === "reading-choice" ? [
+              ...lib.$$el(".ques-title", ctx == null ? void 0 : ctx.root).map((e) => e.innerText.trim()),
+              ...lib.$$el(".option-wrap .option .content", ctx == null ? void 0 : ctx.root).map((e) => e.innerText.trim()).map((o, i) => {
+                const charCode = 65 + i;
+                return `${String.fromCharCode(charCode)}. ${o}`;
+              })
+            ] : [],
+            ...config2.test_type === "reading-replay" ? [...lib.$$el(".question-inputbox-header", ctx == null ? void 0 : ctx.root).map((e) => e.innerText.trim())] : []
+          ];
+          return body.filter(Boolean).join("<br>");
+        };
+        if ((_a2 = curr.result) == null ? void 0 : _a2.finish) {
+          CommonProject.scripts.apps.methods.addQuestionCacheFromWorkResult(
+            simplifyWorkResult(
+              [curr],
+              config2.test_type === "reading-choice" || config2.test_type === "reading-replay" ? readingResultTitleTransform : titleTransform
+            )
+          );
+        }
+        CommonProject.scripts.workResults.methods.setResults(
+          simplifyWorkResult(
+            res,
+            config2.test_type === "reading-choice" || config2.test_type === "reading-replay" ? readingResultTitleTransform : titleTransform
+          )
+        );
+        CommonProject.scripts.workResults.methods.updateWorkStateByResults(res);
+      }
+    });
+    const results = await worker.doWork({ enable_debug: BackgroundProject.scripts.dev.cfg.enable_answerer_debug });
+    const msg2 = `答题完成，将等待 ${opts.stopSecondWhenFinish} 秒后进行保存或提交。`;
+    $msg.info({ content: msg2, duration: opts.stopSecondWhenFinish });
+    await lib.$.sleep(opts.stopSecondWhenFinish * 1e3);
+    await worker.uploadHandler({
+      type: opts.upload,
+      results,
+      async callback(finishedRate, uploadable) {
+        const msg22 = `完成率 ${finishedRate.toFixed(2)}% :  ${uploadable ? "3秒后将自动提交" : "3秒后将自动保存"} `;
+        $msg.success({ content: msg22, duration: 3 });
+        await lib.$.sleep(3e3);
+        if (config2.onUpload) {
+          await config2.onUpload(uploadable);
+        } else {
+          if (uploadable) {
+            await submitAnswer(rp);
+          }
+        }
+      }
+    });
+    if (visual_state === "minimize" && CommonProject.scripts.render.cfg.visual !== "minimize") {
+      CommonProject.scripts.render.methods.minimize();
+    }
+    worker.emit("done");
+  }
+  function checkUniTestIsDone() {
+    var _a;
+    if ((_a = lib.$el(".question-common-course-page")) == null ? void 0 : _a.innerText.includes("答题小结")) {
+      return true;
+    }
+    return false;
+  }
+  async function submitAnswer(rp) {
+    const btn = lib.$$el(".question-common-course-page .btn").find((e) => {
+      const btn2 = e.innerText.replace(/\s/g, "");
+      return btn2.includes("提交") || btn2.includes("下一题");
+    });
+    if (btn) {
+      await rp.click(btn);
+    }
+    await lib.$.sleep(3e3);
+    await waitForElement(".summary-tab-container,.question-common-course-page .btn");
+  }
+  function resoleInputWrapLines(root2) {
+    let temp_ques = "\n" + (root2 == null ? void 0 : root2.innerText.trim()) || "";
+    if (temp_ques.match(/\s\d+\)/)) {
+      temp_ques = temp_ques.replace(/\s(\d+)\)/g, " ($1) _____ ");
+    } else {
+      const wrap = root2.cloneNode(true);
+      for (const input of Array.from(wrap.querySelectorAll(".fe-scoop"))) {
+        input.replaceChildren(" _____ ");
+      }
+      document.body.appendChild(wrap);
+      temp_ques = wrap.innerText.trim();
+      document.body.removeChild(wrap);
+    }
+    return temp_ques;
+  }
+  const UnipusProject = lib.Project.create({
+    name: "U校园",
+    domains: ["unipus.cn"],
+    scripts: {
+      guid: new lib.Script({
+        name: "使用提示",
+        matches: [
+          ["我的课程页", "/app/cmgt/course-management"],
+          ["首页", "/home"]
+        ],
+        configs: {
+          notes: {
+            defaultValue: lib.$ui.notes(["打开任意课程进行自动学习！"]).outerHTML
+          }
+        },
+        onrender(elements2) {
+        },
+        oncomplete() {
+          CommonProject.scripts.render.methods.pin(this);
+        }
+      }),
+      "default-study": new lib.Script({
+        name: "普通版-课程学习",
+        namespace: "unipus.default.study",
+        matches: [["普通学习页面", "unipus.cn/_pc_default/pc.html"]],
+        configs: {
+          notes: {
+            defaultValue: lib.$ui.notes([
+              "打开任意课程进行自动学习！",
+              "如果脚本错乱请刷新界面",
+              "上传视频、录音等任务请自行完成"
+            ]).outerHTML
+          },
+          switchMode: {
+            label: "切换模式",
+            tag: "select",
+            options: [
+              ["auto", "自动切换下一章"],
+              ["manual", "手动跳转"]
+            ],
+            defaultValue: "auto"
+          }
+        },
+        async oncomplete() {
+          CommonProject.scripts.render.methods.pin(this);
+          const rp = createLocalRemotePage();
+          const opts = CommonProject.scripts.settings.methods.getWorkOptions();
+          if (!opts.answererWrappers || opts.answererWrappers.length === 0) {
+            await answerWrapperEmptyWarning(0);
+            return;
+          }
+          $msg.info("普通版课程学习已启动，正在检测题目...");
+          await waitForElement('.question-wrap, .question-container, .question, [class*="question"]', {
+            check_period_ms: 3e3
+          });
+          await $.sleep(2e3);
+          await defaultStudyJob(this.cfg, rp, opts);
+        },
+        onrender(elements2) {
+          var _a;
+          const translateBtn = lib.h(
+            "button",
+            {
+              className: "base-style-button",
+              style: { marginBottom: "10px" }
+            },
+            "开始学习"
+          );
+          translateBtn.onclick = () => {
+            translateBtn.textContent = "学习中...（点击暂停）";
+          };
+          (_a = elements2.panel.body) == null ? void 0 : _a.replaceWith(lib.h("div", { className: "card" }, [translateBtn]));
+        }
+      }),
+      "exploration-study": UnipusExplorationScript,
+      "ipublish-study": UnipusIpublishScript
+    }
+  });
+  async function defaultStudyJob(cfg, rp, opts) {
+    const wrap = await waitForElement(".question-wrap, .question-container, .question", {
+      check_period_ms: 3e3
+    });
+    const wrap_content = (wrap == null ? void 0 : wrap.childNodes[0]) || wrap;
+    if (!wrap_content) {
+      $msg.error("未找到任务内容区域，跳过该任务");
+      return;
+    }
+    const matches2 = (...selectors) => selectors.every((s) => !!document.querySelector(s));
+    await (async () => {
+      if (matches2(".question-wrap .video-box, .video-container, video")) {
+        $msg.info("检测到视频任务，请自行观看完成");
+        return;
+      }
+      if (matches2(".question-wrap [class*=bgimg] [class*=picture]")) {
+        $msg.info("检测到图片任务，即将跳过");
+        return;
+      }
+      if (matches2(".question-wrap .upload-container, .upload-box")) {
+        $msg.info("检测到上传任务，请自行手动完成，即将跳过");
+        return;
+      }
+      if (matches2(".option-wrap, .option-list, .options-container")) {
+        $msg.info("检测到选择题任务，即将开始答题");
+        await doDefaultChoice(rp, opts);
+        return;
+      }
+      if (matches2('textarea, input[type="text"]')) {
+        $msg.info("检测到填空/简答任务，即将开始答题");
+        await doDefaultFillBlanks(rp, opts);
+        return;
+      }
+      $msg.info("未知任务类型，即将跳过");
+    })();
+    if (cfg.switchMode === "manual") {
+      const el = lib.$message.warn({ content: "当前为手动切换模式，已暂停，请手动切换。", duration: 0 });
+      await waitFor(() => !wrap_content.isConnected);
+      el == null ? void 0 : el.remove();
+      await defaultStudyJob(cfg, rp, opts);
+      return;
+    }
+    $msg.success("任务完成，即将进入下一个任务");
+    await $.sleep(3 * 1e3);
+    if (!await defaultNext(rp)) {
+      $msg.success("已完成所有任务");
+      CommonProject.scripts.settings.methods.notificationBySetting("已完成所有任务", {
+        duration: 0,
+        extraTitle: "普通版-课程学习"
+      });
+      return;
+    }
+    await defaultStudyJob(cfg, rp, opts);
+  }
+  async function doDefaultChoice(rp, opts) {
+    var _a, _b;
+    const questionEls = Array.from(
+      document.querySelectorAll(".question-wrap, .question-container, .question")
+    );
+    for (const questionEl of questionEls) {
+      try {
+        const titleEl = questionEl.querySelector(
+          ".ques-title, .question-title, .question-stem, .title"
+        );
+        const title = ((_a = titleEl == null ? void 0 : titleEl.innerText) == null ? void 0 : _a.trim()) || ((_b = questionEl.innerText) == null ? void 0 : _b.trim()) || "";
+        if (!title)
+          continue;
+        const optionEls = Array.from(
+          questionEl.querySelectorAll(
+            ".option-wrap .option, .option-list .option-item, .options-container .option, .option"
+          )
+        );
+        if (optionEls.length === 0)
+          continue;
+        const isMultiple = !!questionEl.querySelector('.multipleChoice, [class*="multiple"]');
+        $msg.info(`正在搜索答案: ${title.substring(0, 50)}...`);
+        const searchedInfos = await CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
+          return defaultAnswerWrapperHandler(opts.answererWrappers, {
+            type: isMultiple ? "multiple" : "single",
+            title,
+            options: optionEls.map((o) => o.innerText).join("\n")
+          });
+        });
+        if (!searchedInfos || searchedInfos.length === 0) {
+          $msg.warn("未搜到答案，跳过该题");
+          continue;
+        }
+        let answer = "";
+        for (const info of searchedInfos) {
+          if (info.results && info.results.length > 0) {
+            answer = info.results[0].answer || "";
+            break;
+          }
+        }
+        if (!answer) {
+          $msg.warn("未搜到答案，跳过该题");
+          continue;
+        }
+        if (isMultiple) {
+          const separators = opts.answerSeparators.split(",").map((s) => s.trim()).filter(Boolean);
+          let answers = [answer];
+          for (const sep of separators) {
+            if (answers.length === 1 && answers[0].includes(sep)) {
+              answers = answers[0].split(sep).map((s) => s.trim());
+              break;
+            }
+          }
+          for (const ans of answers) {
+            const opt = findMatchingOption(ans, optionEls);
+            if (opt) {
+              await rp.click(opt);
+              await $.sleep(200);
+            }
+          }
+        } else {
+          const opt = findMatchingOption(answer, optionEls);
+          if (opt) {
+            await rp.click(opt);
+            await $.sleep(200);
+          } else {
+            $msg.warn(`未找到匹配选项: ${answer}`);
+          }
+        }
+      } catch (err) {
+        $msg.error(`选择题处理出错: ${err.message}`);
+      }
+      await $.sleep(500);
+    }
+    await submitDefaultAnswer(rp);
+  }
+  async function doDefaultFillBlanks(rp, opts) {
+    var _a, _b;
+    const questionEls = Array.from(
+      document.querySelectorAll(".question-wrap, .question-container, .question")
+    );
+    for (const questionEl of questionEls) {
+      try {
+        const titleEl = questionEl.querySelector(
+          ".ques-title, .question-title, .question-stem, .title"
+        );
+        const title = ((_a = titleEl == null ? void 0 : titleEl.innerText) == null ? void 0 : _a.trim()) || ((_b = questionEl.innerText) == null ? void 0 : _b.trim()) || "";
+        if (!title)
+          continue;
+        const inputs = Array.from(
+          questionEl.querySelectorAll('textarea, input[type="text"]')
+        ).filter((input) => !input.value || !input.value.trim());
+        if (inputs.length === 0)
+          continue;
+        $msg.info(`正在搜索答案: ${title.substring(0, 50)}...`);
+        const searchedInfos = await CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
+          return defaultAnswerWrapperHandler(opts.answererWrappers, {
+            type: "completion",
+            title
+          });
+        });
+        if (!searchedInfos || searchedInfos.length === 0) {
+          $msg.warn("未搜到答案，跳过该题");
+          continue;
+        }
+        let answer = "";
+        for (const info of searchedInfos) {
+          if (info.results && info.results.length > 0) {
+            answer = info.results[0].answer || "";
+            break;
+          }
+        }
+        if (!answer) {
+          $msg.warn("未搜到答案，跳过该题");
+          continue;
+        }
+        const separators = opts.answerSeparators.split(",").map((s) => s.trim()).filter(Boolean);
+        let answers = [answer];
+        for (const sep of separators) {
+          if (answers.length === 1 && answers[0].includes(sep)) {
+            answers = answers[0].split(sep).map((s) => s.trim());
+            break;
+          }
+        }
+        if (answers.length === 1 && inputs.length > 1) {
+          answers = answers[0].split(/\n|;|；/).map((s) => s.trim());
+        }
+        for (let i = 0; i < inputs.length && i < answers.length; i++) {
+          const input = inputs[i];
+          await rp.click(input);
+          await rp["keyboard.type"](answers[i]);
+          await $.sleep(200);
+        }
+      } catch (err) {
+        $msg.error(`填空题处理出错: ${err.message}`);
+      }
+      await $.sleep(500);
+    }
+    await submitDefaultAnswer(rp);
+  }
+  function findMatchingOption(answer, options) {
+    var _a, _b;
+    const normalizedAnswer = answer.trim().toLowerCase();
+    if (!normalizedAnswer)
+      return null;
+    for (const opt of options) {
+      if (((_a = opt.textContent) == null ? void 0 : _a.trim().toLowerCase()) === normalizedAnswer)
+        return opt;
+    }
+    for (const opt of options) {
+      const optText = ((_b = opt.textContent) == null ? void 0 : _b.trim().toLowerCase()) || "";
+      if (optText && (optText.includes(normalizedAnswer) || normalizedAnswer.includes(optText)))
+        return opt;
+    }
+    if (/^[a-z]$/i.test(normalizedAnswer)) {
+      const index = normalizedAnswer.toUpperCase().charCodeAt(0) - 65;
+      if (index >= 0 && index < options.length)
+        return options[index];
+    }
+    return null;
+  }
+  async function submitDefaultAnswer(rp) {
+    const btns = Array.from(document.querySelectorAll('button, .btn, [role="button"]'));
+    const submitBtn = btns.find((btn) => {
+      var _a;
+      const text = ((_a = btn.textContent) == null ? void 0 : _a.replace(/\s/g, "")) || "";
+      return text.includes("提交") || text.includes("保存") || text.includes("下一题");
+    });
+    if (submitBtn) {
+      await rp.click(submitBtn);
+      await $.sleep(3e3);
+      $msg.success("已提交答案");
+    }
+  }
+  async function defaultNext(rp) {
+    const tasks = Array.from(document.querySelectorAll(".pc-header-tasks-row .pc-task, .task-item"));
+    for (let i = 0; i < tasks.length; i++) {
+      if (tasks[i].classList.contains("pc-header-task-activity") || tasks[i].classList.contains("active")) {
+        const next2 = tasks[i + 1];
+        if (next2) {
+          await rp.click(next2);
+          return true;
+        }
+      }
+    }
+    const tabs = Array.from(document.querySelectorAll(".pc-tab-row .tab, .tab-item"));
+    for (let i = 0; i < tabs.length; i++) {
+      if (tabs[i].classList.contains("pc-header-tab-activity") || tabs[i].classList.contains("active")) {
+        const next2 = tabs[i + 1];
+        if (next2) {
+          await rp.click(next2);
+          return true;
+        }
+      }
+    }
+    const elements2 = Array.from(
+      document.querySelectorAll('.pc-slider-content [data-role="micro"], .pc-slider-content [data-role="node"], .chapter-item')
+    );
+    for (let i = 0; i < elements2.length; i++) {
+      if (elements2[i].classList.contains("pc-menu-activity") || elements2[i].classList.contains("active")) {
+        const next2 = elements2[i + 1];
+        if (next2) {
+          await rp.click(next2);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+  function waitFor(condition) {
+    return new Promise((resolve) => {
+      const interval = setInterval(() => {
+        if (condition()) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 1e3);
+    });
+  }
+  const API_BASE = "/exam/api/";
+  const state = {
+    running: false,
+    media: null
+  };
+  function readStorage(key) {
+    const raw = localStorage.getItem(key) || "";
+    if (!raw)
+      return "";
+    try {
+      const parsed = JSON.parse(raw);
+      return typeof parsed === "string" ? parsed : raw;
+    } catch {
+      return raw;
+    }
+  }
+  function authHeaders() {
+    const token = readStorage("Client-Access-Token");
+    const tenant = readStorage("tenant");
+    return {
+      Accept: "application/json, text/plain, */*",
+      "Content-Type": "application/json;charset=utf-8",
+      Authorization: /^Bearer\s/i.test(token) ? token : "Bearer " + token,
+      __tenant: tenant,
+      "X-Tenant-ID": tenant
+    };
+  }
+  async function api(path, init) {
+    const res = await fetch(API_BASE + path, {
+      credentials: "include",
+      ...init,
+      headers: { ...authHeaders(), ...init && init.headers || {} }
+    });
+    if (res.status === 204)
+      return null;
+    const text = await res.text();
+    if (!text)
+      return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  }
+  async function getTaskInfo() {
+    const data = await api("app/user-exam-task/user-information-and-task");
+    const task = data && data.data && data.data.examTasks && data.data.examTasks[0];
+    if (!task)
+      return null;
+    return {
+      duration: Number(task.learningDuration) || 0,
+      target: Number(task.targetLearningDuration) || 0,
+      name: String(task.dataName || "")
+    };
+  }
+  function getChapterId() {
+    const query = location.hash.split("?")[1] || "";
+    return new URLSearchParams(query).get("subChapterId") || "";
+  }
+  function getChapterItems() {
+    return Array.from(document.querySelectorAll(".ant-menu-root .ant-menu-sub .ant-menu-item"));
+  }
+  function getSelectedChapterIndex(items) {
+    return items.findIndex((el) => el.classList.contains("ant-menu-item-selected"));
+  }
+  async function waitChapterSwitch(fromId, timeout = 2e4) {
+    const start2 = Date.now();
+    while (Date.now() - start2 < timeout) {
+      const id = getChapterId();
+      if (id && id !== fromId)
+        return id;
+      await $.sleep(500);
+    }
+    return "";
+  }
+  const QUESTION_ROOT = ".questionBox";
+  function getQuestions() {
+    return Array.from(document.querySelectorAll(QUESTION_ROOT));
+  }
+  function getQuestionTypeLabel(root2) {
+    var _a;
+    return (((_a = root2.querySelector(".classTitle .ant-tag")) == null ? void 0 : _a.textContent) || "").trim();
+  }
+  function getQuestionType(root2) {
+    const label = getQuestionTypeLabel(root2);
+    if (label.includes("多选"))
+      return "multiple";
+    if (label.includes("判断"))
+      return "judgement";
+    if (label.includes("填空"))
+      return "completion";
+    if (root2.querySelector(".ant-checkbox-wrapper"))
+      return "multiple";
+    const radios = Array.from(root2.querySelectorAll(".ant-radio-wrapper"));
+    if (radios.length === 2) {
+      const texts = radios.map((r) => (r.innerText || "").replace(/^[A-Za-z]\s*[.、，,]?\s*/, "").trim());
+      if (texts.every((t) => /^(对|错|正确|错误|是|否|√|×|T|F)$/i.test(t)))
+        return "judgement";
+    }
+    return "single";
+  }
+  function getQuestionTitle(root2) {
+    const spans = Array.from(root2.querySelectorAll(".classTitle span")).filter(
+      (s) => !s.classList.contains("ant-tag")
+    );
+    const texts = spans.map((s) => (s.innerText || "").trim()).filter((t) => t && !/^\d+\s*[.、]?$/.test(t));
+    return texts.sort((a, b) => b.length - a.length)[0] || "";
+  }
+  async function waitForQuestions(timeout = 9e4) {
+    if (getQuestions().length > 0)
+      return true;
+    const start2 = Date.now();
+    while (Date.now() - start2 < timeout) {
+      await $.sleep(1e3);
+      if (getQuestions().length > 0)
+        return true;
+    }
+    return false;
+  }
+  function clickConfirmButton() {
+    const scope = document.querySelector(".ant-popover:not(.ant-popover-hidden)") || document.querySelector('.ant-modal-wrap:not([style*="display: none"])') || document.body;
+    return Array.from(scope.querySelectorAll("button")).find(
+      (b) => /^确\s*(定|认)$/.test((b.innerText || "").trim())
+    ) || null;
+  }
+  async function submitExamPaper() {
+    const submit = Array.from(document.querySelectorAll("button")).find(
+      (b) => /^提\s*交$/.test((b.innerText || "").trim())
+    );
+    if (!submit) {
+      lib.$message.warn("未找到提交按钮，请手动交卷");
+      return;
+    }
+    submit.click();
+    await $.sleep(1200);
+    const ok = clickConfirmButton();
+    if (ok) {
+      ok.click();
+      lib.$message.success("已自动交卷");
+    } else {
+      lib.$message.warn("未找到交卷确认按钮，请手动确认");
+    }
+  }
+  function labsafeExamWork({ answererWrappers, period, thread, answerSeparators }) {
+    lib.$message.info("开始自动答题");
+    CommonProject.scripts.workResults.methods.init();
+    const titleTransform = (titles) => titles.filter((t) => t == null ? void 0 : t.innerText).map((t) => t ? (t.innerText || "").trim() : "").join(",");
+    const worker = new OCSWorker({
+      root: QUESTION_ROOT,
+      elements: {
+        title: (root2) => {
+          const spans = Array.from(
+            root2.querySelectorAll(".classTitle span")
+          ).filter((s) => !s.classList.contains("ant-tag"));
+          const candidates = spans.filter((s) => {
+            const t = (s.innerText || "").trim();
+            return t && !/^\d+\s*[.、]?$/.test(t);
+          });
+          if (!candidates.length)
+            return [];
+          return [candidates.sort((a, b) => (b.innerText || "").length - (a.innerText || "").length)[0]];
+        },
+        options: ".ant-radio-wrapper, .ant-checkbox-wrapper"
+      },
+      thread: thread != null ? thread : 1,
+      answerSeparators: answerSeparators.split(",").map((s) => s.trim()).filter(Boolean),
+      answerer: (elements2, ctx) => {
+        const title = getQuestionTitle(ctx.root);
+        if (!title)
+          throw new Error("题目为空，已跳过");
+        const type = getQuestionType(ctx.root);
+        return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
+          await $.sleep((period != null ? period : 3) * 1e3);
+          return defaultAnswerWrapperHandler(answererWrappers, {
+            type,
+            title,
+            options: (ctx.elements.options || []).map((o) => (o.innerText || "").trim()).join("\n")
+          });
+        });
+      },
+      work: {
+        type: (ctx) => getQuestionType(ctx.root),
+        handler(type, answer, option) {
+          if (type === "single" || type === "multiple" || type === "judgement") {
+            const input = option.querySelector("input");
+            if (!input || !input.checked)
+              option.click();
+          } else if (type === "completion" && answer.trim()) {
+            const input = option.querySelector("input, textarea");
+            if (input) {
+              input.value = answer;
+              input.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+          }
+        }
+      },
+      onResultsUpdate(_current, _index, results) {
+        CommonProject.scripts.workResults.methods.setResults(simplifyWorkResult(results, titleTransform));
+        CommonProject.scripts.workResults.methods.updateWorkStateByResults(results);
+      }
+    });
+    (async () => {
+      try {
+        if (!await waitForQuestions()) {
+          lib.$message.error({ content: "等待题目加载超时，请确认已进入答题页面后重试。", duration: 0 });
+          return;
+        }
+        const results = await worker.doWork();
+        const finished = results.filter((r) => {
+          var _a;
+          return (_a = r.result) == null ? void 0 : _a.finish;
+        }).length;
+        lib.$message.success({
+          content: `答题完成：共 ${results.length} 题，成功作答 ${finished} 题，请检查后提交。`,
+          duration: 0
+        });
+      } catch (err) {
+        lib.$message.error({ content: `答题出错：${(err == null ? void 0 : err.message) || err}`, duration: 0 });
+      } finally {
+        worker.emit("done");
+      }
+    })();
+    return worker;
+  }
+  const LabsafeProject = lib.Project.create({
+    name: "实验室安全考试平台",
+    domains: ["labsafe.shiep.edu.cn"],
+    scripts: {
+      study: new lib.Script({
+        name: "在线学习",
+        namespace: "labsafe.study",
+        matches: [["实验室安全考试平台", "labsafe.shiep.edu.cn"]],
+        notes: ["请在“在线学习中心”中打开任意一节课的视频页面后再运行。"],
+        configs: {
+          notes: {
+            defaultValue: lib.$ui.notes([
+              "自动播放右侧目录中的小节，播完自动切换下一节。",
+              "平台的学习时长按真实时间累计，倍速只会加快视频进度，不会缩短总时长。",
+              ["快速完成模式会直接提交学习时长，", "属于伪造学习记录，请自行评估风险。"]
+            ]).outerHTML
+          },
+          mode: {
+            label: "运行模式",
+            tag: "select",
+            defaultValue: "play",
+            options: [
+              ["play", "自动播放（真实挂机）"],
+              ["fast", "快速完成（提交时长）"]
+            ]
+          },
+          playbackRate,
+          volume,
+          autoNext: {
+            label: "播完自动切下一节",
+            attrs: { type: "checkbox" },
+            defaultValue: true
+          },
+          batchMinutes: {
+            label: "快速模式每批提交（分钟）",
+            attrs: { type: "number", step: "5", min: "5", max: "120" },
+            defaultValue: 30
+          }
+        },
+        oncomplete() {
+          this.onConfigChange("playbackRate", (rate) => {
+            if (state.media)
+              state.media.playbackRate = parseFloat(rate.toString());
+          });
+          this.onConfigChange("volume", (v) => {
+            if (state.media) {
+              state.media.volume = parseFloat(v.toString());
+              state.media.muted = parseFloat(v.toString()) === 0;
+            }
+          });
+        },
+        methods() {
+          return {
+            playOne: async (id, rate, vol) => {
+              const media = await waitForElement("video.video-player", {
+                timeout_seconds: 20
+              });
+              if (!media) {
+                lib.$message.error("未找到视频播放器，请确认当前页面已加载完成");
+                return false;
+              }
+              state.media = media;
+              media.muted = vol === 0;
+              media.volume = vol;
+              media.playbackRate = rate;
+              await playMedia(() => media.play());
+              const start2 = Date.now();
+              while (state.running) {
+                if (getChapterId() !== id)
+                  return true;
+                if (media.ended)
+                  break;
+                if (media.paused && Date.now() - start2 > 5e3) {
+                  await playMedia(() => media.play());
+                }
+                await $.sleep(1e3);
+              }
+              await $.sleep(2e3);
+              return true;
+            },
+            play: async () => {
+              const rate = parseFloat(this.cfg.playbackRate.toString());
+              const vol = parseFloat(this.cfg.volume.toString());
+              const autoNext = Boolean(this.cfg.autoNext);
+              let guard = 0;
+              while (state.running && guard++ < 500) {
+                const id = getChapterId();
+                if (!id) {
+                  lib.$message.error("当前不在视频播放页面，请进入课程视频后再运行");
+                  return;
+                }
+                lib.$message.info("正在学习当前小节…");
+                const done = await this.methods.playOne(id, rate, vol);
+                if (!done || !state.running)
+                  return;
+                if (!autoNext) {
+                  lib.$message.success("当前小节已播放完毕");
+                  return;
+                }
+                const items = getChapterItems();
+                const index = getSelectedChapterIndex(items);
+                const next2 = index >= 0 ? items[index + 1] : void 0;
+                if (!next2) {
+                  lib.$message.success("本课程所有小节已播放完毕，请返回课程列表继续下一门课程");
+                  return;
+                }
+                next2.click();
+                const nextId = await waitChapterSwitch(id);
+                if (!nextId) {
+                  lib.$message.error("切换小节超时，请手动点击右侧目录的下一节");
+                  return;
+                }
+                await $.sleep(1500);
+              }
+            },
+            fast: async () => {
+              const contentId = getChapterId();
+              if (!contentId) {
+                lib.$message.error("请先打开任意一节课的视频页面，再运行快速完成");
+                return;
+              }
+              const info = await getTaskInfo();
+              if (!info) {
+                lib.$message.error("获取学习任务信息失败，请刷新页面后重试");
+                return;
+              }
+              if (!(info.target > 0)) {
+                lib.$message.error("未找到学习时长要求");
+                return;
+              }
+              let remain = Math.round((info.target - info.duration) * 60);
+              if (remain <= 0) {
+                lib.$message.success(`学习时长已达标（${info.duration}/${info.target} 分钟）`);
+                return;
+              }
+              const batch = Math.max(60, Math.min(7200, Math.round(Number(this.cfg.batchMinutes) * 60)));
+              lib.$message.info(`需补 ${Math.ceil(remain / 60)} 分钟，开始提交…`);
+              while (remain > 0 && state.running) {
+                const duration = Math.min(batch, remain);
+                await api("app/user-exam-task/student-learning-duration", {
+                  method: "POST",
+                  body: JSON.stringify({ contentId, contentType: 0, duration })
+                });
+                remain -= duration;
+                await $.sleep(600);
+              }
+              const after = await getTaskInfo();
+              if (after) {
+                lib.$message.success(`已提交完成，当前学习时长 ${after.duration.toFixed(1)}/${after.target} 分钟`);
+              } else {
+                lib.$message.success("已提交完成");
+              }
+            },
+            main: async () => {
+              if (state.running) {
+                state.running = false;
+                if (state.media && !state.media.paused)
+                  state.media.pause();
+                lib.$message.warning("已停止");
+                return;
+              }
+              state.running = true;
+              CommonProject.scripts.render.methods.pin(this);
+              try {
+                if (this.cfg.mode === "fast") {
+                  await this.methods.fast();
+                } else {
+                  await this.methods.play();
+                }
+              } catch (err) {
+                lib.$message.error("运行出错：" + String(err));
+              } finally {
+                state.running = false;
+              }
+            }
+          };
+        },
+        onrender({ panel }) {
+          const body = panel.body;
+          if (!body)
+            return;
+          const btn = lib.h(
+            "button",
+            { className: "base-style-button", style: { width: "100%" } },
+            "开始学习"
+          );
+          const tip = lib.h(
+            "div",
+            { className: "secondary", style: { marginTop: "8px", textAlign: "center" } },
+            "未运行"
+          );
+          btn.onclick = () => {
+            void this.methods.main();
+          };
+          body.replaceChildren(lib.h("div", { className: "card" }, [btn, tip]));
+          const timer = setInterval(() => {
+            if (!tip.isConnected) {
+              clearInterval(timer);
+              return;
+            }
+            btn.textContent = state.running ? "停止" : "开始学习";
+            tip.textContent = !state.running ? "未运行" : this.cfg.mode === "fast" ? "正在提交学习时长…" : "正在学习中…";
+          }, 500);
+        }
+      }),
+      exam: new lib.Script({
+        name: "考试脚本",
+        namespace: "labsafe.exam",
+        matches: [["实验室安全考试平台", "labsafe.shiep.edu.cn"]],
+        notes: ["请在“安全考试”进入答题页面后再运行。"],
+        configs: {
+          notes: {
+            defaultValue: lib.$ui.notes([
+              "自动识别单题题型（单选/多选/判断），按题库答案点击对应选项。",
+              "进入答题页后面板会等待题目加载，加载完成即开始答题。",
+              "每题作答后平台会立即保存，交卷需要你确认或开启下方自动交卷。",
+              ["考试通常只有一次机会，", "请务必在练习页面先验证题库匹配效果。"]
+            ]).outerHTML
+          },
+          autoSubmit: {
+            label: "答完自动交卷",
+            attrs: { type: "checkbox", title: "开启：所有题目答完后自动提交试卷" },
+            defaultValue: false
+          }
+        },
+        async oncomplete() {
+          if (getQuestions().length === 0 && !await waitForQuestions(3e5))
+            return;
+          commonWork(this, {
+            workerProvider: (opts) => labsafeExamWork(opts),
+            enable_control_panel: true,
+            onWorkerCreated: (worker) => {
+              worker.on("done", () => {
+                if (this.cfg.autoSubmit)
+                  void submitExamPaper();
+              });
+            }
+          });
+        }
+      })
+    }
+  });
   function definedProjects() {
     return [
       ZHSProject,
@@ -18909,6 +21709,8 @@ try {
       ZJYProject,
       ICourseProject,
       YKTProject,
+      UnipusProject,
+      LabsafeProject,
       CommonProject,
       BackgroundProject
     ];
@@ -18926,10 +21728,12 @@ try {
   exports2.CustomOCSWorker = CustomOCSWorker;
   exports2.ICourseProject = ICourseProject;
   exports2.IcveMoocProject = IcveMoocProject;
+  exports2.LabsafeProject = LabsafeProject;
   exports2.OCSWorker = OCSWorker;
   exports2.RemotePlaywright = RemotePlaywright;
   exports2.RenderScript = RenderScript;
   exports2.StringUtils = StringUtils;
+  exports2.UnipusProject = UnipusProject;
   exports2.YKTProject = YKTProject;
   exports2.ZHSProject = ZHSProject;
   exports2.ZJYProject = ZJYProject;

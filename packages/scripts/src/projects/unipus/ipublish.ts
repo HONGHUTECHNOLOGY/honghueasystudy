@@ -2,11 +2,12 @@
 
 import { Script, $message, $ui, h, $gm } from 'easy-us';
 import { CommonProject } from '../common';
-import { $, RemotePage, request } from '@ocsjs/core';
+import { $, RemotePage, request, defaultAnswerWrapperHandler } from '@ocsjs/core';
 import { waitForElement } from '../../utils/study';
-import { $playwright } from '../../utils/app';
+import { createLocalRemotePage } from '../../utils/app';
 import { BackgroundProject } from '../background';
-import { CommonWorkOptions } from '../../utils';
+import { CommonWorkOptions, $msg } from '../../utils';
+import { answerWrapperEmptyWarning } from '../../utils/work';
 import { translate } from './cloud';
 
 const supported_question_types = {
@@ -141,8 +142,13 @@ export const UnipusIpublishScript = new Script({
 			}
 		}
 	},
-	oncomplete() {
+	async oncomplete() {
 		CommonProject.scripts.render.methods.pin(this);
+		if (location.href.includes('learner/textbook/book') === false) {
+			return;
+		}
+		const rp: RemotePage = createLocalRemotePage();
+		await work(this.cfg, rp);
 	},
 	onbeforeunload() {
 		this.cfg.translate = false;
@@ -151,12 +157,8 @@ export const UnipusIpublishScript = new Script({
 		if (location.href.includes('learner/textbook/book') === false) {
 			return;
 		}
-		// 检查是否为软件环境
-		const rp: RemotePage | undefined = await BackgroundProject.scripts.dev.methods.getRemotePlaywrightCurrentPage();
-		// 检查是否为软件环境
-		if (!rp) {
-			return $playwright.showError();
-		}
+		// 纯浏览器扩展环境即可运行
+		const rp: RemotePage = createLocalRemotePage();
 		// 初始化设置
 		this.cfg.translate = false;
 
@@ -343,7 +345,17 @@ async function getPageMediasByElement() {
 	return medias;
 }
 
-function work(cfg: typeof UnipusIpublishScript.cfg, opts: CommonWorkOptions) {
+async function work(cfg: typeof UnipusIpublishScript.cfg, rp: RemotePage) {
+	const opts = CommonProject.scripts.settings.methods.getWorkOptions();
+
+	if (!opts.answererWrappers || opts.answererWrappers.length === 0) {
+		await answerWrapperEmptyWarning(0);
+		return;
+	}
+
+	await waitForElement('.editor');
+	await $.sleep(2000);
+
 	const els = Array.from(
 		document.querySelectorAll<HTMLElement>(
 			Object.values(supported_question_types)
@@ -352,23 +364,559 @@ function work(cfg: typeof UnipusIpublishScript.cfg, opts: CommonWorkOptions) {
 		)
 	);
 
-	for (const el of els) {
-		const dataset = el.dataset;
-		const type = dataset.ipublishQuestionGroupType as keyof typeof supported_question_types;
+	if (els.length === 0) {
+		$msg.info('未找到题目，可能当前页面没有题目或已全部完成');
+		return;
+	}
+
+	$msg.info(`找到 ${els.length} 道题目，开始答题`);
+
+	for (let i = 0; i < els.length; i++) {
+		const el = els[i];
+		const type = el.dataset.ipublishQuestionGroupType as keyof typeof supported_question_types;
 		if (!type) continue;
+
+		$msg.info(`正在处理第 ${i + 1}/${els.length} 题：${supported_question_types[type]}`);
 		el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-		$message.info(`即将开始做：${type}`);
+		await $.sleep(500);
 
-		if (type === 'discussion_group') {
-			if (cfg.discussion_mode === 'manually') {
-				$message.warn('讨论题已跳过，请稍后自行手动完成');
-				continue;
+		try {
+			await handleQuestion(rp, cfg, opts, el, type);
+		} catch (err) {
+			$msg.error(`第 ${i + 1} 题处理出错: ${(err as Error).message}`);
+		}
+		await $.sleep(500);
+	}
+
+	await submitIpublishAnswer(rp);
+	$msg.success('答题完成');
+}
+
+async function handleQuestion(
+	rp: RemotePage,
+	cfg: typeof UnipusIpublishScript.cfg,
+	opts: CommonWorkOptions,
+	el: HTMLElement,
+	type: keyof typeof supported_question_types
+) {
+	if (isQuestionAnswered(el)) {
+		$msg.info('该题已作答，跳过');
+		return;
+	}
+
+	const questionText = extractQuestionText(el);
+	if (!questionText.trim()) {
+		$msg.warn('题目内容为空，跳过');
+		return;
+	}
+
+	switch (type) {
+		case 'single_choice_group':
+			await handleChoiceQuestion(rp, cfg, opts, el, questionText, false);
+			break;
+		case 'multi_choice_group':
+			await handleChoiceQuestion(rp, cfg, opts, el, questionText, true);
+			break;
+		case 'true_false_group':
+			await handleTrueFalseQuestion(rp, cfg, opts, el, questionText);
+			break;
+		case 'fill_blanks_group':
+		case 'fill_blanks_choice_group':
+		case 'fill_blanks_dropdown_group':
+			await handleFillBlanksQuestion(rp, cfg, opts, el, questionText);
+			break;
+		case 'short_answer_group':
+			await handleShortAnswerQuestion(rp, cfg, opts, el, questionText);
+			break;
+		case 'translation_group':
+			await handleTranslationQuestion(rp, cfg, opts, el, questionText);
+			break;
+		case 'discussion_group':
+			await handleDiscussionQuestion(rp, cfg, opts, el, questionText);
+			break;
+		case 'evaluation_group':
+			await handleEvaluationQuestion(rp, cfg, el);
+			break;
+		default:
+			$msg.warn(`未知题型：${type}，跳过`);
+	}
+}
+
+function isQuestionAnswered(el: HTMLElement): boolean {
+	const selected = el.querySelector('.selected, .checked, [aria-checked="true"], [data-checked="true"]');
+	if (selected) return true;
+	const inputs = Array.from(el.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[type="text"], textarea'));
+	let filledCount = 0;
+	for (const input of inputs) {
+		if (input.value.trim()) filledCount++;
+	}
+	if (filledCount > 0 && filledCount === inputs.length) return true;
+	return false;
+}
+
+function extractQuestionText(el: HTMLElement): string {
+	const stemSelectors = [
+		'.question-title',
+		'.question-stem',
+		'.ques-title',
+		'[data-lexical-node-type="question-title"]',
+		'.question-content',
+		'.question-desc',
+		'.question-block-title'
+	];
+	for (const selector of stemSelectors) {
+		const stem = el.querySelector(selector);
+		if (stem?.textContent?.trim()) return stem.textContent.trim();
+	}
+	return el.innerText?.trim() || '';
+}
+
+function extractOptions(el: HTMLElement): HTMLElement[] {
+	const optionSelectors = [
+		'.option-item',
+		'.option',
+		'.choice-option',
+		'.answer-option',
+		'[data-lexical-node-type="option"]',
+		'[role="radio"]',
+		'[role="checkbox"]',
+		'.question-option',
+		'.ipublish-option'
+	];
+	for (const selector of optionSelectors) {
+		const options = Array.from(el.querySelectorAll<HTMLElement>(selector));
+		if (options.length > 0) return options;
+	}
+	return [];
+}
+
+function extractInputs(el: HTMLElement): (HTMLInputElement | HTMLTextAreaElement | HTMLElement)[] {
+	return Array.from(
+		el.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLElement>(
+			'input[type="text"], textarea, [contenteditable="true"]'
+		)
+	);
+}
+
+async function searchAnswer(opts: CommonWorkOptions, question: string, type: string): Promise<string> {
+	const searchedInfos = await CommonProject.scripts.apps.methods.searchAnswerInCaches(question, async () => {
+		return defaultAnswerWrapperHandler(opts.answererWrappers, {
+			type: type,
+			title: question
+		});
+	});
+
+	if (!searchedInfos || searchedInfos.length === 0) {
+		return '';
+	}
+
+	for (const info of searchedInfos) {
+		if (info.results && info.results.length > 0) {
+			return info.results[0].answer || '';
+		}
+	}
+	return '';
+}
+
+function getCustomAnswer(cfg: typeof UnipusIpublishScript.cfg): string {
+	const customs = (cfg.other_mode_custom || '').split('\n').map((s) => s.trim()).filter(Boolean);
+	if (customs.length === 0) return '不知道';
+	return customs[Math.floor(Math.random() * customs.length)];
+}
+
+function matchOption(answer: string, options: HTMLElement[]): HTMLElement | null {
+	const normalizedAnswer = answer.trim().toLowerCase();
+	if (!normalizedAnswer) return null;
+
+	for (const opt of options) {
+		if (opt.textContent?.trim().toLowerCase() === normalizedAnswer) {
+			return opt;
+		}
+	}
+
+	for (const opt of options) {
+		const optText = opt.textContent?.trim().toLowerCase() || '';
+		if (optText && (optText.includes(normalizedAnswer) || normalizedAnswer.includes(optText))) {
+			return opt;
+		}
+	}
+
+	if (/^[a-z]$/i.test(normalizedAnswer)) {
+		const index = normalizedAnswer.toUpperCase().charCodeAt(0) - 65;
+		if (index >= 0 && index < options.length) {
+			return options[index];
+		}
+	}
+
+	return null;
+}
+
+async function handleChoiceQuestion(
+	rp: RemotePage,
+	cfg: typeof UnipusIpublishScript.cfg,
+	opts: CommonWorkOptions,
+	el: HTMLElement,
+	questionText: string,
+	isMultiple: boolean
+) {
+	if (cfg.other_mode === 'manually') {
+		$msg.warn('选择题已跳过');
+		return;
+	}
+
+	const options = extractOptions(el);
+	if (options.length === 0) {
+		$msg.warn('未找到选项，跳过');
+		return;
+	}
+
+	let answers: string[] = [];
+
+	if (cfg.other_mode === 'custom') {
+		answers = [getCustomAnswer(cfg)];
+	} else {
+		const answer = await searchAnswer(opts, questionText, isMultiple ? 'multiple' : 'single');
+		if (!answer) {
+			$msg.warn('未搜到答案，跳过');
+			return;
+		}
+		const separators = opts.answerSeparators.split(',').map((s) => s.trim()).filter(Boolean);
+		if (isMultiple) {
+			answers = [answer];
+			for (const sep of separators) {
+				if (answers.length === 1 && answers[0].includes(sep)) {
+					answers = answers[0].split(sep).map((s) => s.trim());
+					break;
+				}
 			}
+		} else {
+			answers = [answer];
+		}
+	}
 
-			if (cfg.discussion_mode === 'copy') {
-				// 随机复制其他讨论
+	for (const answer of answers) {
+		const option = matchOption(answer, options);
+		if (option) {
+			await rp.click(option);
+			await $.sleep(200);
+		} else {
+			$msg.warn(`未找到匹配选项: ${answer}`);
+		}
+	}
+}
+
+async function handleTrueFalseQuestion(
+	rp: RemotePage,
+	cfg: typeof UnipusIpublishScript.cfg,
+	opts: CommonWorkOptions,
+	el: HTMLElement,
+	questionText: string
+) {
+	if (cfg.other_mode === 'manually') {
+		$msg.warn('判断题已跳过');
+		return;
+	}
+
+	const options = extractOptions(el);
+	if (options.length === 0) {
+		$msg.warn('未找到选项，跳过');
+		return;
+	}
+
+	let answer = '';
+	if (cfg.other_mode === 'custom') {
+		answer = getCustomAnswer(cfg);
+	} else {
+		answer = await searchAnswer(opts, questionText, 'judgement');
+	}
+
+	if (!answer) {
+		$msg.warn('未搜到答案，跳过');
+		return;
+	}
+
+	const normalizedAnswer = answer.trim().toLowerCase();
+	const isTrue = ['正确', '对', 'true', 't', '√', 'yes', 'y', '是'].includes(normalizedAnswer);
+	const isFalse = ['错误', '错', 'false', 'f', '×', 'no', 'n', '否'].includes(normalizedAnswer);
+
+	for (const opt of options) {
+		const optText = opt.textContent?.trim().toLowerCase() || '';
+		if (
+			(isTrue && (optText.includes('正确') || optText.includes('对') || optText === 't' || optText === 'true')) ||
+			(isFalse && (optText.includes('错误') || optText.includes('错') || optText === 'f' || optText === 'false'))
+		) {
+			await rp.click(opt);
+			await $.sleep(200);
+			return;
+		}
+	}
+
+	const option = matchOption(answer, options);
+	if (option) {
+		await rp.click(option);
+		await $.sleep(200);
+	} else {
+		$msg.warn(`未找到匹配选项: ${answer}`);
+	}
+}
+
+async function handleFillBlanksQuestion(
+	rp: RemotePage,
+	cfg: typeof UnipusIpublishScript.cfg,
+	opts: CommonWorkOptions,
+	el: HTMLElement,
+	questionText: string
+) {
+	if (cfg.other_mode === 'manually') {
+		$msg.warn('填空题已跳过');
+		return;
+	}
+
+	const inputs = extractInputs(el);
+	if (inputs.length === 0) {
+		$msg.warn('未找到输入框，跳过');
+		return;
+	}
+
+	let answers: string[] = [];
+
+	if (cfg.other_mode === 'custom') {
+		answers = inputs.map(() => getCustomAnswer(cfg));
+	} else {
+		const answer = await searchAnswer(opts, questionText, 'completion');
+		if (!answer) {
+			$msg.warn('未搜到答案，跳过');
+			return;
+		}
+		const separators = opts.answerSeparators.split(',').map((s) => s.trim()).filter(Boolean);
+		answers = [answer];
+		for (const sep of separators) {
+			if (answers.length === 1 && answers[0].includes(sep)) {
+				answers = answers[0].split(sep).map((s) => s.trim());
+				break;
 			}
 		}
+
+		if (answers.length === 1 && inputs.length > 1) {
+			answers = answers[0].split(/\n|;|；/).map((s) => s.trim());
+		}
+	}
+
+	for (let i = 0; i < inputs.length && i < answers.length; i++) {
+		const input = inputs[i];
+		if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
+			if ((input as HTMLInputElement | HTMLTextAreaElement).value) continue;
+			await rp.click(input);
+			await rp['keyboard.type'](answers[i]);
+			await $.sleep(200);
+		} else if (input.getAttribute('contenteditable') === 'true') {
+			await rp.click(input);
+			await rp['keyboard.type'](answers[i]);
+			await $.sleep(200);
+		}
+	}
+}
+
+async function handleShortAnswerQuestion(
+	rp: RemotePage,
+	cfg: typeof UnipusIpublishScript.cfg,
+	opts: CommonWorkOptions,
+	el: HTMLElement,
+	questionText: string
+) {
+	if (cfg.other_mode === 'manually') {
+		$msg.warn('简答题已跳过');
+		return;
+	}
+
+	const inputs = extractInputs(el);
+	if (inputs.length === 0) {
+		$msg.warn('未找到输入框，跳过');
+		return;
+	}
+
+	let answer = '';
+	if (cfg.other_mode === 'custom') {
+		answer = getCustomAnswer(cfg);
+	} else {
+		answer = await searchAnswer(opts, questionText, 'completion');
+	}
+
+	if (!answer) {
+		$msg.warn('未搜到答案，跳过');
+		return;
+	}
+
+	const input = inputs[0];
+	await rp.click(input);
+	await rp['keyboard.type'](answer);
+	await $.sleep(200);
+}
+
+async function handleTranslationQuestion(
+	rp: RemotePage,
+	cfg: typeof UnipusIpublishScript.cfg,
+	opts: CommonWorkOptions,
+	el: HTMLElement,
+	questionText: string
+) {
+	if (cfg.translation_mode === 'manually') {
+		$msg.warn('翻译题已跳过');
+		return;
+	}
+
+	const inputs = extractInputs(el);
+	if (inputs.length === 0) {
+		$msg.warn('未找到输入框，跳过');
+		return;
+	}
+
+	let answer = await searchAnswer(opts, questionText, 'completion');
+	if (!answer) {
+		const prompt = cfg.prompts[0]?.translation_group || '';
+		if (prompt) {
+			answer = await searchAnswer(opts, prompt.replace('{{question}}', questionText), 'completion');
+		}
+	}
+
+	if (!answer) {
+		$msg.warn('未搜到答案，跳过');
+		return;
+	}
+
+	const input = inputs[0];
+	await rp.click(input);
+	await rp['keyboard.type'](answer);
+	await $.sleep(200);
+}
+
+async function handleDiscussionQuestion(
+	rp: RemotePage,
+	cfg: typeof UnipusIpublishScript.cfg,
+	opts: CommonWorkOptions,
+	el: HTMLElement,
+	questionText: string
+) {
+	if (cfg.discussion_mode === 'manually') {
+		$msg.warn('讨论题已跳过，请稍后自行手动完成');
+		return;
+	}
+
+	const inputs = extractInputs(el);
+	if (inputs.length === 0) {
+		$msg.warn('未找到输入框，跳过');
+		return;
+	}
+
+	let answer = '';
+
+	if (cfg.discussion_mode === 'copy') {
+		const discussions = Array.from(
+			document.querySelectorAll<HTMLElement>(
+				'[data-ipublish-question-group-type="讨论题"] .discussion-content, .discussion-answer, .discussion-reply, .discussion-item'
+			)
+		);
+		const answeredDiscussions = discussions.filter((d) => d.textContent?.trim());
+		if (answeredDiscussions.length > 0) {
+			answer = answeredDiscussions[Math.floor(Math.random() * answeredDiscussions.length)].textContent?.trim() || '';
+		}
+		if (!answer) {
+			$msg.warn('未找到其他讨论内容，尝试使用AI生成');
+		}
+	}
+
+	if (!answer) {
+		const prompt = cfg.prompts[0]?.discussion_group || '';
+		if (prompt) {
+			answer = await searchAnswer(opts, prompt.replace('{{question}}', questionText), 'completion');
+		} else {
+			answer = await searchAnswer(opts, questionText, 'completion');
+		}
+	}
+
+	if (!answer) {
+		$msg.warn('未搜到答案，跳过');
+		return;
+	}
+
+	const input = inputs[0];
+	await rp.click(input);
+	await rp['keyboard.type'](answer);
+	await $.sleep(200);
+}
+
+function getEvaluationScore(cfg: typeof UnipusIpublishScript.cfg): number {
+	const mode = cfg.evaluation_mode;
+	if (mode === 'manually') return -1;
+	if (mode === 'fix') return cfg.evaluation_fix;
+	if (mode === 'random') return Math.floor(Math.random() * 5) + 1;
+	if (mode === '1r') return Math.floor(Math.random() * 2) + 1;
+	if (mode === '2r') return Math.floor(Math.random() * 3) + 1;
+	if (mode === '3r') return Math.floor(Math.random() * 3) + 2;
+	if (mode === '4r') return Math.floor(Math.random() * 3) + 3;
+	if (mode === '5r') return Math.floor(Math.random() * 2) + 4;
+	return 5;
+}
+
+async function handleEvaluationQuestion(
+	rp: RemotePage,
+	cfg: typeof UnipusIpublishScript.cfg,
+	el: HTMLElement
+) {
+	const score = getEvaluationScore(cfg);
+	if (score < 0) {
+		$msg.warn('评价题已跳过');
+		return;
+	}
+
+	const ratingSelectors = [
+		'.rate-star',
+		'.star',
+		'.rating-item',
+		'[data-lexical-node-type="rating"]',
+		'.ant-rate-star',
+		'.evaluation-star',
+		'.star-item'
+	];
+
+	let ratingEls: HTMLElement[] = [];
+	for (const selector of ratingSelectors) {
+		ratingEls = Array.from(el.querySelectorAll<HTMLElement>(selector));
+		if (ratingEls.length > 0) break;
+	}
+
+	if (ratingEls.length === 0) {
+		const radios = Array.from(el.querySelectorAll<HTMLElement>('input[type="radio"], [role="radio"]'));
+		if (radios.length >= score) {
+			await rp.click(radios[score - 1]);
+			await $.sleep(200);
+			return;
+		}
+		$msg.warn('未找到评分元素，跳过');
+		return;
+	}
+
+	if (score <= ratingEls.length) {
+		await rp.click(ratingEls[score - 1]);
+		await $.sleep(200);
+	} else {
+		$msg.warn(`评分 ${score} 超出范围，跳过`);
+	}
+}
+
+async function submitIpublishAnswer(rp: RemotePage) {
+	const btns = Array.from(document.querySelectorAll<HTMLElement>('button, .btn, [role="button"]'));
+	const submitBtn = btns.find((btn) => {
+		const text = btn.textContent?.replace(/\s/g, '') || '';
+		return text.includes('提交') || text.includes('保存');
+	});
+
+	if (submitBtn) {
+		await rp.click(submitBtn);
+		await $.sleep(3000);
+		$msg.success('已提交答案');
+	} else {
+		$msg.warn('未找到提交按钮');
 	}
 }
 

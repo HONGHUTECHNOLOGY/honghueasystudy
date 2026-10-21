@@ -18,7 +18,7 @@ import {
 import semver_gt from 'semver/functions/gt';
 import semver_valid from 'semver/functions/valid';
 import { CommonProject } from './common';
-import { CXProject, definedProjects, ICourseProject, IcveMoocProject, YKTProject, ZHSProject, ZJYProject } from '..';
+import { CXProject, definedProjects, ICourseProject, IcveMoocProject, LabsafeProject, YKTProject, ZHSProject, ZJYProject } from '..';
 import { RenderScript } from '../render';
 import { SearchInfosElement } from '../elements/search.infos';
 import { $render } from '../utils/render';
@@ -837,7 +837,8 @@ export const BackgroundProject = Project.create({
 					ZHSProject.scripts['xnk-study'].matches,
 					ICourseProject.scripts.study.matches,
 					IcveMoocProject.scripts.study.matches,
-					ZJYProject.scripts.study.matches
+					ZJYProject.scripts.study.matches,
+					LabsafeProject.scripts.study.matches
 				]
 					.flat()
 					.map((m) => (Array.isArray(m) ? m[1] : m));
@@ -875,6 +876,8 @@ export const BackgroundProject = Project.create({
 			matches: [['所有页面', /.*/]],
 			async onactive() {
 				const currentStudyScript = [
+					// 放在最前：域名精确匹配，不会影响其它平台，但能保证「学习」快捷页指向本平台的学习脚本
+					LabsafeProject.scripts.study,
 					[CXProject.scripts.studyDispatcher, CXProject.scripts.study],
 					CXProject.scripts.work,
 					CXProject.scripts.autoRead,

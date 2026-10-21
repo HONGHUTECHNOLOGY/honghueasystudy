@@ -7,6 +7,8 @@ import { IcveMoocProject } from './projects/icve';
 import { ZJYProject } from './projects/zjy';
 import { ICourseProject } from './projects/icourse';
 import { YKTProject } from './projects/yuketang';
+import { UnipusProject } from './projects/unipus';
+import { LabsafeProject } from './projects/labsafe';
 
 /** 导出所有的鸿鹄易学核心模块 */
 export * from '@ocsjs/core';
@@ -21,6 +23,8 @@ export { ZJYProject } from './projects/zjy';
 export { IcveMoocProject } from './projects/icve';
 export { ICourseProject } from './projects/icourse';
 export { YKTProject } from './projects/yuketang';
+export { UnipusProject } from './projects/unipus';
+export { LabsafeProject } from './projects/labsafe';
 export { RenderScript } from './render';
 
 export function definedProjects(): Project[] {
@@ -31,6 +35,8 @@ export function definedProjects(): Project[] {
 		ZJYProject,
 		ICourseProject,
 		YKTProject,
+		UnipusProject,
+		LabsafeProject,
 		CommonProject,
 		BackgroundProject
 	];
