@@ -37,7 +37,7 @@ const TEXT_EXT = new Set([
   '.html', '.htm', '.css', '.js', '.mjs', '.json', '.xml', '.txt', '.svg', '.webmanifest', '.map', '.woff2',
 ]);
 // 复制时跳过的目录 / 文件
-const SKIP = new Set(['node_modules', '.git', '.DS_Store', 'dist', 'dist-web']);
+const SKIP = new Set(['node_modules', '.git', '.DS_Store', 'dist', 'dist-web', 'build.mjs']);
 
 function parseArgs(argv) {
   const out = { out: 'dist-web', serve: false, port: 4321 };
