@@ -2,7 +2,7 @@ packages:
   - 'packages/**'
   - '!**/dist/**'
 allowBuilds:
-  es5-ext: set this to true or false
-  esbuild: set this to true or false
+  es5-ext: true
+  esbuild: true
 patchedDependencies:
   easy-us@0.0.66: patches/easy-us@0.0.66.patch

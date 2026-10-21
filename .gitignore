@@ -141,6 +141,8 @@ dist/
 .yarn/install-state.gz
 .pnp.*
 # 项目特定
+# website 构建产物（Cloudflare Pages 输出目录）
+dist-web/
 .DS_Store
 nul
 extensionicon/

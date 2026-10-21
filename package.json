@@ -2,6 +2,7 @@
 	"name": "honghueasystudy",
   "version": "5.1.5",
 	"description": "鸿鹄易学 - 在线网络课程辅助工具",
+	"packageManager": "pnpm@11.21.0",
 	"types": "./lib/src/core/index.d.ts",
 	"main": "./lib/src/core/index.js",
 	"files": [
@@ -12,6 +13,8 @@
 		"dev": "gulp -f ./scripts/dev-core.js & npm run changelog:simplify",
 		"build": "gulp -f ./scripts/build-core.js",
 		"build:ext": "gulp -f ./scripts/build-extension.js",
+		"build:web": "node scripts/build-website.js",
+		"dev:web": "node scripts/build-website.js --serve",
 		"tsc": "pnpm lint && gulp -f ./scripts/tsc.js",
 		"lint": "pnpm format && eslint  ./packages --ext .ts,.tsx,.js,.jsx --fix",
 		"format": "prettier -c ./.prettierrc.json  **/*.ts  **/*.js  **/*.css  --write",

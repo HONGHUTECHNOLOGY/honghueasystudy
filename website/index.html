@@ -13,6 +13,8 @@
   <meta property="og:image" content="assets/img/icon.png">
   <meta name="twitter:card" content="summary">
   <meta name="theme-color" content="#1E6FFF">
+  <!-- 构建时由 scripts/build-website.js 注入，勿手工改 -->
+  <meta name="app-version" content="{{VERSION}}">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="assets/img/icon300w.png">
   <link rel="stylesheet" href="assets/css/base.css">
@@ -58,7 +60,7 @@
         <div class="hero-copy">
           <span class="badge" data-reveal="fade">
             <i class="dot" aria-hidden="true"></i>
-            v5.0.0 · MIT 开源
+            v{{VERSION}} · MIT 开源
           </span>
           <h1 class="hero-title" data-reveal="lines" style="--dl:.1s" aria-label="鸿鹄易学，让网课学习，交给 AI。">
             <span class="hl-mask"><span class="hl">鸿鹄易学</span></span>
@@ -260,7 +262,7 @@
         <div class="desktop-copy" data-reveal="head">
           <span class="section-eyebrow">Desktop</span>
           <h2 class="section-title on-dark"><span class="hl-mask"><span class="hl">鸿鹄易学 · 桌面版</span></span><span class="hl-mask"><span class="hl text-grad">一键刷课工作站</span></span></h2>
-          <p class="section-sub on-dark-sub">v3.0.0 · Windows / macOS / Linux。当单个浏览器不够用时，桌面版给你一支"浏览器舰队"。</p>
+          <p class="section-sub on-dark-sub">v{{DESKTOP_VERSION}} · Windows / macOS / Linux。当单个浏览器不够用时，桌面版给你一支"浏览器舰队"。</p>
           <ul class="desktop-points" style="--dl:.35s">
             <li data-reveal="slide-left" style="--i:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>多账号批量刷课</strong><span>浏览器多开分身，独立登录态、分组、拖拽、标签管理</span></div></li>
             <li data-reveal="slide-left" style="--i:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>自动登录 · 验证码破解</strong><span>OCR 图形验证码 + 滑块自动识别，覆盖四大平台</span></div></li>
@@ -351,7 +353,7 @@
           <div class="dl-card card" data-reveal="card-rise" style="--i:0">
             <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17"/><path d="M3.5 15h17"/><path d="M12 3a15 15 0 0 1 0 18"/><path d="M12 3a15 15 0 0 0 0 18"/></svg></div>
             <h3>浏览器插件</h3>
-            <span class="badge">v5.0.0 · MV3 · Chrome 111+</span>
+            <span class="badge">v{{VERSION}} · MV3 · Chrome 111+</span>
             <p>MV3 浏览器扩展，已上架 Microsoft Edge 加载项商店，一键安装。</p>
             <a class="btn btn-primary" href="https://microsoftedge.microsoft.com/addons/detail/ocidllankdjkcieeefhgmgnkppcbdfhh" target="_blank" rel="noopener">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
@@ -373,7 +375,7 @@
           <div class="dl-card card" data-reveal="card-rise" style="--i:1">
             <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg></div>
             <h3>桌面版</h3>
-            <span class="badge">v3.0.0 · Win / macOS / Linux</span>
+            <span class="badge">v{{DESKTOP_VERSION}} · Win / macOS / Linux</span>
             <p>一键刷课、多账号分身、自动登录、实时监控的工作站级体验，内置 Chrome 开箱即用。</p>
             <a class="btn btn-primary" href="https://gitcode.com/honghutech/honghueasystudy/releases" target="_blank" rel="noopener">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
