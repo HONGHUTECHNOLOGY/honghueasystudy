@@ -19932,7 +19932,6 @@ try {
       }
     },
     async oncomplete() {
-      var _a, _b;
       if (location.href.includes("cmgt/resource-detail")) {
         $msg.info("请打开任意课程的章节进行自动学习");
         return;
@@ -19949,26 +19948,37 @@ try {
           state$1.current_media.volume = value;
         }
       });
-      const checkConfirmModal = async () => {
-        await lib.$.sleep(3e3);
-        const btns = [
-          ".system-info-cloud-ok-button",
-          ".ant-modal-body .ant-btn-primary",
-          "button[class*=mask_notice]"
-        ];
-        const btn = await waitForElement(btns.join(","));
-        if (btn) {
-          await rp.click(btn);
-        }
-        await checkConfirmModal();
+      const pickConfirmButton = () => {
+        const direct = lib.$el(".system-info-cloud-ok-button, button[class*=mask_notice]");
+        if (direct)
+          return direct;
+        const modal2 = lib.$el('.ant-modal-wrap:not([style*="display: none"])');
+        if (!modal2)
+          return null;
+        if (/提交|交卷|删除/.test(modal2.innerText || ""))
+          return null;
+        return modal2.querySelector(".ant-modal-body .ant-btn-primary");
       };
-      checkConfirmModal();
+      (async () => {
+        for (; ; ) {
+          await lib.$.sleep(2e3);
+          const btn = pickConfirmButton();
+          if (!btn)
+            continue;
+          try {
+            await rp.click(btn);
+          } catch {
+          }
+          if (btn.isConnected) {
+            btn.click();
+          }
+        }
+      })();
       console.log("[U校园调试] oncomplete 开始执行, readyState:", document.readyState);
       console.log("[U校园调试] 当前URL:", location.href);
       const wrap = await waitForElement(".question-wrap", { timeout_seconds: 30 });
       if (!wrap) {
         console.error("[U校园调试] 未找到 .question-wrap！页面DOM可能已变更");
-        console.log("[U校园调试] body innerHTML前2000字符:", (_b = (_a = document.body) == null ? void 0 : _a.innerHTML) == null ? void 0 : _b.substring(0, 2e3));
         $msg.error("未找到题目容器 .question-wrap，可能页面结构已变更或页面未完全加载");
         return;
       }
@@ -20000,6 +20010,42 @@ try {
       console.log(1);
     }
   });
+  const QUESTION_ROOT$1 = ".question-common-abs-reply";
+  function getQuestionKind(root2) {
+    if (root2.querySelector(".option-wrap .option"))
+      return "choice";
+    if (root2.querySelector("textarea"))
+      return "textarea";
+    if (root2.querySelector(".question-common-abs-scoop"))
+      return "scoop";
+    if (root2.querySelector(".evaluation-slider-reply-wrapper"))
+      return "slider";
+    if (root2.querySelector("input"))
+      return "input";
+    return "other";
+  }
+  function markQuestions(kind) {
+    const attr = `data-ocs-qk-${kind}`;
+    lib.$$el(QUESTION_ROOT$1).forEach((root2) => {
+      if (getQuestionKind(root2) === kind) {
+        root2.setAttribute(attr, "1");
+      }
+    });
+    return {
+      selector: `[${attr}="1"]`,
+      clear() {
+        lib.$$el(`[${attr}]`).forEach((root2) => root2.removeAttribute(attr));
+      }
+    };
+  }
+  async function withMarkedQuestions(kind, run) {
+    const mark = markQuestions(kind);
+    try {
+      return await run(mark.selector);
+    } finally {
+      mark.clear();
+    }
+  }
   async function job(cfg, rp) {
     const wrap = await waitForElement(".question-wrap", { check_period_ms: 3e3 });
     const wrap_content = wrap == null ? void 0 : wrap.childNodes[0];
@@ -20010,33 +20056,13 @@ try {
         return !!document.querySelector(selector);
       });
     };
-    console.log("[U校园调试] job 开始执行");
-    console.log("[U校园调试] wrap:", wrap);
-    console.log("[U校园调试] wrap_content:", wrap_content);
-    console.log(
-      "[U校园调试] 选择器检测:",
-      {
-        ".question-wrap": !!document.querySelector(".question-wrap"),
-        ".unipus-upload-container": !!document.querySelector(".unipus-upload-container"),
-        ".question-wrap .video-box": !!document.querySelector(".question-wrap .video-box"),
-        ".question-wrap .question-rich-text-read": !!document.querySelector(".question-wrap .question-rich-text-read"),
-        ".vocabulary-wrapper": !!document.querySelector(".vocabulary-wrapper"),
-        ".swiper-slide": !!document.querySelector(".swiper-slide"),
-        ".layout-material-container": !!document.querySelector(".layout-material-container"),
-        ".layout-reply-container": !!document.querySelector(".layout-reply-container"),
-        ".option-wrap": !!document.querySelector(".option-wrap"),
-        ".question-common-abs-choice": !!document.querySelector(".question-common-abs-choice"),
-        ".question-common-abs-reply": !!document.querySelector(".question-common-abs-reply"),
-        ".full": !!document.querySelector(".full"),
-        "textarea": !!document.querySelector("textarea"),
-        ".question-material-banked-cloze-reply": !!document.querySelector(".question-material-banked-cloze-reply"),
-        ".input-wrapper": !!document.querySelector(".input-wrapper"),
-        ".sequence-reply-view-item-text": !!document.querySelector(".sequence-reply-view-item-text"),
-        ".text-material-wrapper": !!document.querySelector(".text-material-wrapper")
-      }
-    );
+    const debugKinds = lib.$$el(QUESTION_ROOT$1).map(getQuestionKind);
+    console.log("[U校园调试] 题目根数量:", debugKinds.length, "题型分布:", debugKinds.reduce((acc, k) => {
+      acc[k] = (acc[k] || 0) + 1;
+      return acc;
+    }, {}));
     await (async () => {
-      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
       if (!wrap_content) {
         $msg.error("未找到任务内容区域，跳过该任务");
         return;
@@ -20049,7 +20075,7 @@ try {
         $msg.info("检测到图片任务，即将跳过");
         return;
       }
-      if (matches2(".layout-material-container .component-htmlview img")) {
+      if (matches2(".question-common-abs-reply .component-htmlview img, .option-wrap .option img, textarea ~ .component-htmlview img")) {
         $msg.error("检测到题目中包含图片，暂时无法处理，即将跳过该任务");
         return;
       }
@@ -20178,64 +20204,67 @@ try {
         }
         return;
       }
-      if (matches2(
-        ".layout-material-container",
-        ".layout-reply-container",
-        "textarea"
-      )) {
-        if (!cfg.enable_reading) {
-          $msg.warn("阅读理解题任务开关已关闭，即将跳过该任务");
-          return;
-        }
+      const questionRoots = lib.$$el(QUESTION_ROOT$1);
+      const questionKinds = questionRoots.map(getQuestionKind);
+      const countKind = (kind) => questionKinds.filter((k) => k === kind).length;
+      const choiceCount = countKind("choice");
+      const blankCount = countKind("textarea");
+      const scaleCount = countKind("scoop") + countKind("slider") + countKind("input");
+      const hasMaterial = !!(questionRoots.length && lib.$el(".question-common-abs-material, .layout-material-container"));
+      if (choiceCount + blankCount + scaleCount > 0) {
         if (checkUniTestIsDone()) {
-          $msg.success("阅读理解填空题任务已完成，即将跳过该任务");
+          $msg.success("当前任务已完成，即将跳过该任务");
           return;
         }
-        $msg.info("检测到阅读理解填空题任务，即将开始答题");
-        await doUnderstandingText(rp, CommonProject.scripts.settings.methods.getWorkOptions());
-        return;
-      }
-      if (matches2(
-        ".layout-material-container",
-        ".layout-reply-container",
-        ".option-wrap"
-      )) {
-        if (!cfg.enable_reading) {
-          $msg.warn("阅读理解题任务开关已关闭，即将跳过该任务");
+        const groups = [];
+        if (choiceCount > 0) {
+          if (!cfg.enable_choice) {
+            $msg.warn("选择题任务开关已关闭，跳过选择题");
+          } else if (hasMaterial) {
+            groups.push({
+              label: "阅读理解选择题",
+              run: (sub) => withMarkedQuestions("choice", (root2) => doReading(rp, sub, root2))
+            });
+          } else {
+            groups.push({
+              label: "选择题",
+              run: (sub) => withMarkedQuestions("choice", (root2) => doChoice(rp, sub, root2))
+            });
+          }
+        }
+        if (blankCount > 0) {
+          if (hasMaterial && cfg.enable_reading) {
+            groups.push({
+              label: "阅读理解填空题",
+              run: (sub) => withMarkedQuestions("textarea", (root2) => doUnderstandingText(rp, sub, root2))
+            });
+          } else if (cfg.enable_completion) {
+            groups.push({
+              label: "填空题",
+              run: (sub) => withMarkedQuestions("textarea", (root2) => doCompletion(rp, sub, root2))
+            });
+          } else {
+            $msg.warn("填空题任务开关已关闭，跳过填空题");
+          }
+        }
+        if (scaleCount > 0) {
+          if (!cfg.enable_completion) {
+            $msg.warn("表格填分任务开关已关闭，跳过表格填分");
+          } else {
+            groups.push({ label: "表格填分", run: () => doRatingScale(rp) });
+          }
+        }
+        if (groups.length === 0) {
+          $msg.warn("当前任务的所有题型均已关闭，即将跳过该任务");
           return;
         }
-        if (checkUniTestIsDone()) {
-          $msg.success("阅读理解选择题任务已完成，即将跳过该任务");
-          return;
+        const workOptions = CommonProject.scripts.settings.methods.getWorkOptions();
+        for (let index = 0; index < groups.length; index++) {
+          const group = groups[index];
+          const sub = index === groups.length - 1 ? workOptions : { ...workOptions, upload: "save" };
+          $msg.info(`检测到${group.label}任务，即将开始作答（${index + 1}/${groups.length}）`);
+          await group.run(sub);
         }
-        $msg.info("检测到阅读理解选择题任务，即将开始答题");
-        await doReading(rp, CommonProject.scripts.settings.methods.getWorkOptions());
-        return;
-      }
-      if (matches2(".layout-reply-container", ".option-wrap")) {
-        if (!cfg.enable_choice) {
-          $msg.warn("选择题任务开关已关闭，即将跳过该任务");
-          return;
-        }
-        if (checkUniTestIsDone()) {
-          $msg.success("选择题任务已完成，即将跳过该任务");
-          return;
-        }
-        $msg.info("检测到选择题任务，即将开始答题");
-        await doChoice(rp, CommonProject.scripts.settings.methods.getWorkOptions());
-        return;
-      }
-      if (matches2(".layout-reply-container", ".full", "textarea")) {
-        if (!cfg.enable_completion) {
-          $msg.warn("填空题任务开关已关闭，即将跳过该任务");
-          return;
-        }
-        if (checkUniTestIsDone()) {
-          $msg.success("填空题任务已完成，即将跳过该任务");
-          return;
-        }
-        $msg.info("检测到填空题任务，即将开始答题");
-        await doCompletion(rp, CommonProject.scripts.settings.methods.getWorkOptions());
         return;
       }
       if (matches2(
@@ -20479,39 +20508,20 @@ try {
           $msg.error(err.message || "自由填空题任务答题出错，跳过该任务");
         }
       }
-      if (matches2(".text-material-wrapper")) {
-        console.log("[U校园调试] 匹配到 .text-material-wrapper");
-        const ps = lib.$$el(".text-material-wrapper .component-htmlview p");
-        console.log("[U校园调试] .text-material-wrapper .component-htmlview p 数量:", ps.length);
-        if (ps.length === 1) {
-          $msg.info("检测到文本阅读题任务，阅读10秒后跳过");
+      if (matches2(".text-material-wrapper") || matches2(".question-common-abs-material")) {
+        const textLength = (((_k = lib.$el(".text-material-wrapper, .question-common-abs-material")) == null ? void 0 : _k.innerText) || "").trim().length;
+        if (textLength > 0) {
+          $msg.info("检测到文本阅读任务，阅读 10 秒后跳过");
           await lib.$.sleep(10 * 1e3);
           return;
         }
       }
-      console.log("[U校园调试] 未知任务类型，输出 DOM 信息用于调试");
-      console.log("[U校园调试] wrap_content.className:", wrap_content.className);
-      console.log("[U校园调试] wrap_content innerHTML前2000字符:", wrap_content.innerHTML.substring(0, 2e3));
-      console.log("[U校园调试] iframe数量:", document.querySelectorAll("iframe").length);
-      const iframes = document.querySelectorAll("iframe");
-      iframes.forEach((iframe, i) => {
-        console.log(`[U校园调试] iframe[${i}] src:`, iframe.src, "id:", iframe.id, "className:", iframe.className);
-      });
-      console.log("[U校园调试] 额外选择器检测:", {
-        ".question-basic": !!document.querySelector(".question-basic"),
-        ".question-abs-question": !!document.querySelector(".question-abs-question"),
-        ".abs-question": !!document.querySelector(".abs-question"),
-        ".question-content": !!document.querySelector(".question-content"),
-        ".question-body": !!document.querySelector(".question-body"),
-        ".question-stem": !!document.querySelector(".question-stem"),
-        ".question-options": !!document.querySelector(".question-options"),
-        ".question-answer": !!document.querySelector(".question-answer"),
-        ".abs-direction": !!document.querySelector(".abs-direction"),
-        ".question-common-course-page": !!document.querySelector(".question-common-course-page"),
-        "input": !!document.querySelector("input"),
-        ".ant-btn": !!document.querySelector(".ant-btn"),
-        ".btn": !!document.querySelector(".btn"),
-        "button": !!document.querySelector("button")
+      console.log("[U校园调试] 未识别的任务内容:", {
+        className: wrap_content.className,
+        text: (wrap_content.innerText || "").replace(/\s+/g, " ").slice(0, 200),
+        video: document.querySelectorAll("video").length,
+        audio: document.querySelectorAll("audio").length,
+        iframe: document.querySelectorAll("iframe").length
       });
       $msg.info("未知任务类型，即将跳过");
     })();
@@ -20535,39 +20545,45 @@ try {
     }
     await job(cfg, rp);
   }
+  async function waitHashChange(hash, timeout = 8e3) {
+    const start2 = Date.now();
+    while (Date.now() - start2 < timeout) {
+      await lib.$.sleep(500);
+      if (location.hash !== hash)
+        return true;
+    }
+    return false;
+  }
   async function next(rp) {
-    const tasks = lib.$$el(".pc-header-tasks-row .pc-task");
-    for (let index = 0; index < tasks.length; index++) {
-      const task = tasks[index];
-      if (task.classList.contains("pc-header-task-activity")) {
-        const nextTask = tasks[index + 1];
-        if (nextTask) {
-          await rp.click(nextTask);
+    const hash = location.hash;
+    const go = async (el) => {
+      if (!el)
+        return false;
+      await rp.click(el);
+      if (await waitHashChange(hash, 5e3))
+        return true;
+      if (el.isConnected) {
+        el.click();
+        if (await waitHashChange(hash, 5e3))
           return true;
+      }
+      return false;
+    };
+    const findNext = async (selector, activeClass) => {
+      const elements2 = lib.$$el(selector);
+      for (let index = 0; index < elements2.length; index++) {
+        if (elements2[index].classList.contains(activeClass)) {
+          return await go(elements2[index + 1]);
         }
       }
-    }
-    const tabs = lib.$$el(".pc-tab-row .tab");
-    for (let index = 0; index < tabs.length; index++) {
-      const tab = tabs[index];
-      if (tab.classList.contains("pc-header-tab-activity")) {
-        const nextTab = tabs[index + 1];
-        if (nextTab) {
-          await rp.click(nextTab);
-          return true;
-        }
-      }
-    }
-    const elements2 = lib.$$el('.pc-slider-content [data-role="micro"],.pc-slider-content [data-role="node"]');
-    for (let index = 0; index < elements2.length; index++) {
-      const element = elements2[index];
-      if (element.classList.contains("pc-menu-activity")) {
-        const nextElement = elements2[index + 1];
-        if (nextElement) {
-          await rp.click(nextElement);
-          return true;
-        }
-      }
+      return false;
+    };
+    if (await findNext(".pc-header-tasks-row .pc-task", "pc-header-task-activity"))
+      return true;
+    if (await findNext(".pc-tab-row .tab", "pc-header-tab-activity"))
+      return true;
+    if (await findNext('.pc-slider-content [data-role="micro"],.pc-slider-content [data-role="node"]', "pc-menu-activity")) {
+      return true;
     }
     return false;
   }
@@ -20665,24 +20681,24 @@ try {
       return { upload: false, finish: false };
     }
   }
-  function doChoice(rp, opts) {
+  function doChoice(rp, opts, root2 = ".question-common-abs-choice") {
     const is_multiple = !!lib.$el(".multipleChoice");
     return handleCommonUnitTest(rp, opts, {
       type: is_multiple ? "multiple" : "single",
       test_type: "choice",
-      root: ".question-common-abs-choice",
+      root: root2,
       elements: {
         title: ".ques-title",
         options: ".option-wrap .option .content"
       }
     });
   }
-  function doReading(rp, opts) {
+  function doReading(rp, opts, root2 = ".question-common-abs-choice") {
     const is_multiple = !!lib.$el(".multipleChoice");
     return handleCommonUnitTest(rp, opts, {
       type: is_multiple ? "multiple" : "single",
       test_type: "reading-choice",
-      root: ".question-common-abs-choice",
+      root: root2,
       elements: {
         title: ".ques-title,.option-wrap",
         options: ".option-wrap .option .content"
@@ -20695,11 +20711,11 @@ try {
       }
     });
   }
-  function doUnderstandingText(rp, opts) {
+  function doUnderstandingText(rp, opts, root2 = ".question-common-abs-reply") {
     return handleCommonUnitTest(rp, opts, {
       type: "completion",
       test_type: "reading-replay",
-      root: ".question-common-abs-reply",
+      root: root2,
       elements: {
         title: ".question-inputbox-header",
         options: "textarea"
@@ -20712,11 +20728,11 @@ try {
       }
     });
   }
-  function doCompletion(rp, opts) {
+  function doCompletion(rp, opts, root2 = ".question-common-abs-reply") {
     return handleCommonUnitTest(rp, opts, {
       type: "completion",
       test_type: "complete",
-      root: ".question-common-abs-reply",
+      root: root2,
       elements: {
         title: ".question-inputbox-header",
         options: ".question-inputbox-body textarea"
@@ -20727,6 +20743,52 @@ try {
         return [direction, "-".repeat(10), ques].filter(Boolean).join("\n");
       }
     });
+  }
+  async function doRatingScale(rp) {
+    var _a, _b;
+    const marks = [markQuestions("scoop"), markQuestions("slider"), markQuestions("input")];
+    try {
+      let filled = 0;
+      const sliderRoots = lib.$$el('[data-ocs-qk-slider="1"]');
+      for (const root2 of sliderRoots) {
+        const items = Array.from(
+          root2.querySelectorAll(".evaluation-slider-reply-component-wrapper_option_item")
+        );
+        if (items.length === 0)
+          continue;
+        await rp.click(items[Math.floor((items.length - 1) / 2)]);
+        await lib.$.sleep(300);
+        filled++;
+      }
+      if (sliderRoots.length > 0) {
+        $msg.success(`打分题已选择 ${filled}/${sliderRoots.length} 项（统一选中间档位）`);
+      }
+      const inputRoots = lib.$$el(`${marks[0].selector},${marks[2].selector}`);
+      const inputs = inputRoots.flatMap((root2) => Array.from(root2.querySelectorAll("input"))).filter((input) => !input.disabled && !["radio", "checkbox", "file", "hidden"].includes(input.type));
+      if (inputs.length > 0) {
+        const legend = ((_a = lib.$el(".question-common-abs-scoop")) == null ? void 0 : _a.innerText) || ((_b = lib.$el(".question-common-abs-material")) == null ? void 0 : _b.innerText) || "";
+        const scaleValues = (legend.match(/(?:^|\s)(\d{1,2})\s*=/g) || []).map((s) => parseInt(s.replace(/\D/g, ""), 10)).filter((n) => n >= 1 && n <= 10);
+        const max = scaleValues.length ? Math.max(...scaleValues) : 5;
+        const value = String(Math.round((1 + max) / 2));
+        let inputFilled = 0;
+        for (const input of inputs) {
+          if (input.value)
+            continue;
+          await rp.click(input);
+          await rp["keyboard.type"](value);
+          await lib.$.sleep(200);
+          if (input.value)
+            inputFilled++;
+        }
+        filled += inputFilled;
+        if (inputFilled > 0) {
+          $msg.success(`表格填分已填写 ${inputFilled}/${inputs.length} 项（量表 1~${max}，统一填 ${value}）`);
+        }
+      }
+      return filled;
+    } finally {
+      marks.forEach((mark) => mark.clear());
+    }
   }
   async function handleCommonUnitTest(rp, opts, config2) {
     var _a;
@@ -21617,7 +21679,7 @@ try {
                 state.running = false;
                 if (state.media && !state.media.paused)
                   state.media.pause();
-                lib.$message.warning("已停止");
+                lib.$message.warn("已停止");
                 return;
               }
               state.running = true;

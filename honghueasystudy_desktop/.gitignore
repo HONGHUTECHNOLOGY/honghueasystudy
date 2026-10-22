@@ -12,6 +12,11 @@ package-lock.json
 
 lib/
 
+# 内置扩展是随安装包分发的资源，其中 lib/index.js 必须纳入版本库
+# （否则干净检出打包出来的扩展会缺失核心库，浏览器加载即失败）
+!packages/app/resources/extension/lib/
+!packages/app/resources/extension/lib/**
+
 # Logs
 logs
 *.log

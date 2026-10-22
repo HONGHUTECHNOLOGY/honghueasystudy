@@ -4,6 +4,7 @@ const zip = require('gulp-zip');
 const { execOut } = require('./utils');
 const { readFileSync } = require('fs');
 const chromeInstall = require('./chrome.install').default;
+const syncExtension = require('./sync-extension');
 const { version } = JSON.parse(readFileSync('../packages/app/package.json').toString());
 
 function buildWeb() {
@@ -31,4 +32,5 @@ function packResource() {
 		.pipe(dest('../packages/app/dist'));
 }
 
-exports.default = series(cleanOutput, buildWeb, chromeInstall, buildApp, packResource);
+// syncExtension 放第一位：打包前把仓库根 extension/ 同步成内置扩展，避免带上旧版本
+exports.default = series(syncExtension, cleanOutput, buildWeb, chromeInstall, buildApp, packResource);

@@ -15,6 +15,7 @@
 		"build:ext": "gulp -f ./scripts/build-extension.js",
 		"build:web": "node scripts/build-website.js",
 		"dev:web": "node scripts/build-website.js --serve",
+		"build:desktop": "pnpm build:ext && pnpm -C honghueasystudy_desktop build",
 		"tsc": "pnpm lint && gulp -f ./scripts/tsc.js",
 		"lint": "pnpm format && eslint  ./packages --ext .ts,.tsx,.js,.jsx --fix",
 		"format": "prettier -c ./.prettierrc.json  **/*.ts  **/*.js  **/*.css  --write",

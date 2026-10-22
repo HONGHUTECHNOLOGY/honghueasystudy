@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { Logger } from '../logger';
 import { store } from '../store';
 import { valid, coerce, clean, gt, SemVer } from 'semver';
@@ -31,6 +32,33 @@ function copyDirSync(src: string, dest: string) {
 			fs.copyFileSync(s, d);
 		}
 	}
+}
+
+/** 递归累加目录内容哈希（跳过 .zip / .DS_Store，与 copyDir 的复制范围无关，仅用于比对） */
+function collectHash(dir: string, base: string, hash: crypto.Hash) {
+	const entries = fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
+	for (const entry of entries) {
+		if (entry.name === '.DS_Store' || entry.name.toLowerCase().endsWith('.zip')) continue;
+		const p = path.join(dir, entry.name);
+		if (entry.isDirectory()) {
+			collectHash(p, base, hash);
+		} else if (entry.isFile()) {
+			hash.update(path.relative(base, p).replace(/\\/g, '/'));
+			hash.update('\0');
+			hash.update(fs.readFileSync(p));
+		}
+	}
+}
+
+/**
+ * 目录内容指纹。
+ * 只比版本号是不够的：桌面版主版本没变、扩展重新构建（版本号相同）时，
+ * 老逻辑会认为"已是最新"而拒绝覆盖，导致浏览器一直加载旧扩展。
+ */
+function fingerprint(dir: string): string {
+	const hash = crypto.createHash('sha1');
+	collectHash(dir, dir, hash);
+	return hash.digest('hex').slice(0, 16);
 }
 
 /** 清理旧版本自动下载的脚本管理器，避免浏览器继续加载脚本猫/篡改猴等扩展 */
@@ -88,7 +116,13 @@ export async function initExtension() {
 			try {
 				const destManifest = JSON.parse(fs.readFileSync(destManifestPath, 'utf-8'));
 				const destVersion: string = destManifest.version || '0.0.0';
-				needRelease = gt(parseVersion(extVersion), parseVersion(destVersion));
+				const versionNewer = gt(parseVersion(extVersion), parseVersion(destVersion));
+				// 同版本号但内容不同（扩展被重新构建过）同样需要覆盖释放
+				const contentChanged = fingerprint(src) !== fingerprint(dest);
+				needRelease = versionNewer || contentChanged;
+				if (contentChanged && !versionNewer) {
+					logger.log(`内置扩展 v${extVersion} 内容已变化（同版本号重新构建），重新释放`);
+				}
 			} catch {
 				needRelease = true;
 			}
