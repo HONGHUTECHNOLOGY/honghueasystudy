@@ -1,4 +1,5 @@
 {
+	"root": true,
 	"env": {
 		"node": true,
 		"commonjs": true,
@@ -43,6 +44,7 @@
 	},
 	"globals": {
 		"core": "readonly",
-		"scripts": "readonly"
+		"scripts": "readonly",
+		"ParentNode": "readonly"
 	}
 }

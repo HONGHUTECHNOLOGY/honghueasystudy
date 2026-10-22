@@ -7,3 +7,8 @@ public
 stats.html
 .md
 .chrome-temp/*
+
+# 内置扩展是构建产物副本，必须与仓库根 extension/ 逐字节一致，禁止格式化
+packages/app/resources/extension
+# 第三方打包产物（ocs / easy-us），不参与格式化
+packages/web/src/vendor

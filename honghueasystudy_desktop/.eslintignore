@@ -8,3 +8,8 @@ stats.html
 tests/*
 .md
 .chrome-temp/*
+
+# 内置扩展是构建产物副本，与仓库根 extension/ 一致，不参与 lint
+packages/app/resources/extension
+# 第三方打包产物（ocs / easy-us）
+packages/web/src/vendor
