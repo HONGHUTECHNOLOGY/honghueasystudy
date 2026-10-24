@@ -1323,7 +1323,7 @@ container-element {
 container-element * {
   scroll-behavior: smooth !important;
 }
-@keyframes ocs-panel-in {
+@keyframes hh-panel-in {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -1333,7 +1333,7 @@ container-element * {
     transform: translateY(0);
   }
 }
-@keyframes ocs-card-in {
+@keyframes hh-card-in {
   from {
     opacity: 0;
     transform: translateY(8px) scale(0.99);
@@ -1343,7 +1343,7 @@ container-element * {
     transform: translateY(0) scale(1);
   }
 }
-@keyframes ocs-modal-in {
+@keyframes hh-modal-in {
   from {
     opacity: 0;
     transform: scale(0.9) translateY(12px);
@@ -1353,7 +1353,7 @@ container-element * {
     transform: scale(1) translateY(0);
   }
 }
-@keyframes ocs-dropdown-in {
+@keyframes hh-dropdown-in {
   from {
     opacity: 0;
     transform: scaleY(0.92) translateY(-6px);
@@ -1363,7 +1363,7 @@ container-element * {
     transform: scaleY(1) translateY(0);
   }
 }
-@keyframes ocs-msg-in {
+@keyframes hh-msg-in {
   from {
     opacity: 0;
     transform: translateX(24px);
@@ -1373,7 +1373,7 @@ container-element * {
     transform: translateX(0);
   }
 }
-@keyframes ocs-cfg-in {
+@keyframes hh-cfg-in {
   from {
     opacity: 0;
     transform: translateY(6px);
@@ -1384,7 +1384,7 @@ container-element * {
   }
 }
 script-panel-element {
-  animation: ocs-panel-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  animation: hh-panel-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 .base-style-button {
   transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
@@ -1424,20 +1424,20 @@ header-element .extra-menu-bar button:active {
     box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease !important;
 }
 .card {
-  animation: ocs-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+  animation: hh-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both !important;
 }
 .modal-wrapper {
-  animation: ocs-modal-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  animation: hh-modal-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 .dropdown-content {
-  animation: ocs-dropdown-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  animation: hh-dropdown-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
   transform-origin: top center !important;
 }
 .message-container > * {
-  animation: ocs-msg-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  animation: hh-msg-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 .configs-container > * {
-  animation: ocs-cfg-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+  animation: hh-cfg-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both !important;
 }
 .configs-container > *:nth-child(1) {
   animation-delay: 0s !important;

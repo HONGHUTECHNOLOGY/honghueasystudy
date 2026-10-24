@@ -49,7 +49,6 @@ async function buildResources() {
 		homepage: pkg.homepage,
 		source: 'https://easystudy.honghutech.eu.org',
 		icon: 'https://easystudy.honghutech.eu.org/assets/img/icon.png',
-		connect: ['easystudy.honghutech.eu.org', 'enncy.cn', 'icodef.com', 'ocsjs.com', 'zaizhexue.top', 'localhost', '127.0.0.1'],
 		'run-at': 'document-start'
 	};
 
@@ -59,7 +58,7 @@ async function buildResources() {
 		resources: { STYLE: css }
 	};
 
-	const content = 'var __OCS_RESOURCES__ = ' + JSON.stringify(res) + ';\n';
+	const content = 'var __HH_RESOURCES__ = ' + JSON.stringify(res) + ';\n';
 	fs.writeFileSync(path.join(contentDir, 'resources.js'), content, 'utf8');
 	console.log('[build-extension] resources.js 已生成, STYLE 长度:', css.length);
 }
@@ -68,7 +67,7 @@ async function buildBridgeKey() {
 	const key = crypto.randomUUID();
 	const content = [
 		'/* 鸿鹄易学 · 构建时随机通道名（自动生成，请勿手改） */',
-		'globalThis.__OCS_BRIDGE_KEY__ = ' + JSON.stringify(key) + ';',
+		'globalThis.__HH_BRIDGE_KEY__ = ' + JSON.stringify(key) + ';',
 		''
 	].join('\n');
 	fs.writeFileSync(path.join(contentDir, 'bridge-key.js'), content, 'utf8');

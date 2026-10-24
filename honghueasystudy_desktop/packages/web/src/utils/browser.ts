@@ -10,7 +10,7 @@ import { Folder } from '../fs/folder';
 import { Browser } from '../fs/browser';
 import { Entity } from '../fs/entity';
 import { currentFolder } from '../fs';
-import { RawAutomationScript } from '@ocs-desktop/app/lib/src/tasks/remote.register';
+import { RawAutomationScript } from '@honghu-desktop/app/lib/src/tasks/remote.register';
 import { resetSearch } from './entity';
 const { shell } = electron;
 

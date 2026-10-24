@@ -71,7 +71,7 @@ export interface BookmarkResource {
 
 export interface Infos {
 	userjs: {
-		ocsjs: string;
+		honghu: string;
 	};
 	resourceGroups: ResourceGroup[];
 	bookmark: BookmarkResource[];
@@ -80,9 +80,22 @@ export interface Infos {
 	versions: UpdateInformationResource[];
 }
 
-export class OCSApi {
+/** 桌面端远程配置：由官网（website/api/，Cloudflare Pages）托管，不再依赖上游 CDN */
+export const APP_INFOS_URL = 'https://easystudy.honghutech.eu.org/api/honghu-app-infos.json';
+/** 旧文件名（内容与新文件一致）：官网尚未部署新文件名或旧版客户端在线时的回退 */
+export const LEGACY_APP_INFOS_URL = 'https://easystudy.honghutech.eu.org/api/ocs-app-infos.json';
+
+export class HonghuApi {
 	static async getInfos(): Promise<Infos> {
-		const { data } = await axios.get('https://cdn.ocsjs.com/api/ocs-app-infos.json?t=' + Date.now());
-		return data;
+		// 站点对未知路径会回退返回 index.html（状态码 200），必须校验响应形状
+		for (const url of [APP_INFOS_URL, LEGACY_APP_INFOS_URL]) {
+			try {
+				const { data } = await axios.get(url + '?t=' + Date.now());
+				if (data && typeof data === 'object' && Array.isArray((data as Infos).bookmark)) {
+					return data as Infos;
+				}
+			} catch {}
+		}
+		return { userjs: {}, resourceGroups: [], bookmark: [], notify: [], banners: [], versions: [] } as unknown as Infos;
 	}
 }

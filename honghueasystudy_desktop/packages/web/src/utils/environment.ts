@@ -1,7 +1,7 @@
 import { getRemoteInfos } from '.';
 import { store } from '../store';
 import { remote } from './remote';
-import { Infos, ResourceFile } from '@ocs-desktop/common';
+import { Infos, ResourceFile } from '@honghu-desktop/common';
 import { ResourceLoader } from './resources.loader';
 import _get from 'lodash/get';
 import { ref } from 'vue';

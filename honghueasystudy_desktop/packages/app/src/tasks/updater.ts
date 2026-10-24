@@ -1,16 +1,16 @@
-import { app, dialog, clipboard } from 'electron';
+import { app, dialog, clipboard, shell } from 'electron';
 import { gt } from 'semver';
 import { Logger } from '../logger';
 import AdmZip from 'adm-zip';
 import { join } from 'path';
 import { downloadFile, getCurrentWebContents, moveWindowToTop } from '../utils';
-import { OCSApi, UpdateInformationResource } from '@ocs-desktop/common';
+import { HonghuApi, UpdateInformationResource } from '@honghu-desktop/common';
 import { writeFileSync, rmSync } from 'fs';
 
 const logger = Logger('updater');
 
 export async function updater() {
-	const infos = await OCSApi.getInfos();
+	const infos = await HonghuApi.getInfos();
 
 	const versions = infos.versions || [];
 
@@ -28,6 +28,24 @@ export async function updater() {
 export async function updateApp(newVersion: UpdateInformationResource) {
 	logger.info('更新  : ' + JSON.stringify(newVersion));
 	const { tag, url } = newVersion;
+
+	// 就地解压更新只支持 Windows：
+	// - versions[].url 指向的 app.zip 是 Windows 构建产物，覆盖后 mac/linux 的原生模块（keytar 等）会失配
+	// - Linux AppImage 运行目录只读，无法删除/重写自身
+	if (process.platform !== 'win32') {
+		const installerUrl = (newVersion.app_downloads as Record<string, string | undefined> | undefined)?.[
+			process.platform
+		];
+		await shell.openExternal(installerUrl || 'https://easystudy.honghutech.eu.org');
+		dialog.showMessageBox({
+			title: '鸿鹄易学更新程序',
+			message: `新版本 ${tag} 需要手动安装：已为你打开下载页面，请下载对应系统的最新安装包，覆盖安装后即可完成更新。`,
+			type: 'info',
+			noLink: true
+		});
+		return;
+	}
+
 	const appPath = app.getAppPath();
 	/** 日志路径 */
 	const logPath = join(appPath, `../update-${tag}.log`);

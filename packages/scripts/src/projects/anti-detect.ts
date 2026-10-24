@@ -34,9 +34,9 @@ const HIDDEN_GLOBALS = [
 	'GM_saveTab',
 	'GM_getResourceText',
 	'unsafeWindow',
-	'__OCS_RESOURCES__',
-	'__OCS_GM_READY__',
-	'OCS'
+	'__HH_RESOURCES__',
+	'__HH_GM_READY__',
+	'HH'
 ];
 
 const HANDLER_PROPS = [

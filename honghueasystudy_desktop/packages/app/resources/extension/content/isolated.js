@@ -1,7 +1,7 @@
 /* 鸿鹄易学 · ISOLATED world 桥接 + 注入器
  *
  * 通信/注入机制参考脚本猫（ScriptCat）：
- *   1) 构建时随机 __OCS_BRIDGE_KEY__ 作为初始通道
+ *   1) 构建时随机 __HH_BRIDGE_KEY__ 作为初始通道
  *   2) 运行时再协商一个随机 eventFlag，所有消息事件名由它派生
  *   3) 消息走 performance 上的 CustomEvent，不再依赖 window expando
  *   4) 优先由 background 用 chrome.userScripts.register({world:"MAIN"}) 注册
@@ -12,7 +12,7 @@
 (function () {
 	'use strict';
 
-	var BRIDGE_KEY = globalThis.__OCS_BRIDGE_KEY__;
+	var BRIDGE_KEY = globalThis.__HH_BRIDGE_KEY__;
 	if (!BRIDGE_KEY) return;
 
 	var perf = performance;
@@ -82,7 +82,7 @@
 
 			try {
 				chrome.runtime.sendMessage(
-					{ __OCS__: data.type, payload: data.payload },
+					{ __HH__: data.type, payload: data.payload },
 					function (result) {
 						var err = chrome.runtime.lastError;
 						fire(RES_EVENT, {
@@ -127,7 +127,7 @@
 
 	// ---------- 4. 决定注入方式 ----------
 	try {
-		chrome.runtime.sendMessage({ __OCS__: 'getInjectionMode' }, function (res) {
+		chrome.runtime.sendMessage({ __HH__: 'getInjectionMode' }, function (res) {
 			var mode = res && res.mode;
 			if (mode === 'fallback') {
 				fallbackInject();
@@ -151,7 +151,7 @@
 		// files: ["content/main-world.js"] }) 注入。浏览器注入文件不受
 		// 页面 CSP 限制，也不需要扩展资源可被 fetch。
 		try {
-			chrome.runtime.sendMessage({ __OCS__: 'injectMainWorld' }, function (res) {
+			chrome.runtime.sendMessage({ __HH__: 'injectMainWorld' }, function (res) {
 				if (res && res.ok) return;
 				inlineFallback(res && res.error);
 			});
@@ -164,7 +164,7 @@
 	// 适用于没有 scripting 权限或 scripting 注入失败的旧环境；会被页面 CSP 拦截。
 	function inlineFallback(reason) {
 		try {
-			chrome.runtime.sendMessage({ __OCS__: 'getInjectionCode' }, function (res) {
+			chrome.runtime.sendMessage({ __HH__: 'getInjectionCode' }, function (res) {
 				if (res && res.code) {
 					injectCode(res.code);
 				} else {

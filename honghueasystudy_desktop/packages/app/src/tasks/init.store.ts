@@ -2,7 +2,8 @@
 
 import { app } from 'electron';
 import { existsSync, mkdirSync } from 'fs';
-import { OriginalAppStore, store } from '../store';
+import { OriginalAppStore, store, getDecryptedRenderData } from '../store';
+import { encryptRenderString } from '../crypto';
 import { valid, coerce, clean, gt, SemVer } from 'semver';
 import defaultsDeep from 'lodash/defaultsDeep';
 import { Logger } from '../logger';
@@ -35,6 +36,24 @@ export function initStore() {
 		store.store = OriginalAppStore;
 
 		logger.log('store', store.store);
+	}
+
+	// 迁移：旧版本配置键 render.setting.ocs → render.setting.hh（一次性，保留用户的题库配置等数据）
+	try {
+		const wasEncrypted = typeof store.store.render === 'string';
+		const renderData = getDecryptedRenderData(store) as { setting?: Record<string, unknown> } | undefined;
+		const legacySetting = renderData?.setting;
+		if (legacySetting && legacySetting.ocs !== undefined) {
+			if (legacySetting.hh === undefined) {
+				legacySetting.hh = legacySetting.ocs;
+			}
+			delete legacySetting.ocs;
+			// 保持原有存储格式（明文对象 / 加密字符串）
+			store.set('render', wasEncrypted ? encryptRenderString(JSON.stringify(renderData)) : renderData);
+			logger.log('已迁移旧配置键 setting.ocs → setting.hh');
+		}
+	} catch (e) {
+		logger.error('迁移旧配置键失败', e);
 	}
 
 	/**

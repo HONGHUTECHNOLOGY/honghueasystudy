@@ -1,7 +1,8 @@
 import { $, $elements, Project, Script, $message, $modal, $el, h, cors, $ui } from 'easy-us';
+// 雨课堂字体映射随脚本打包，不再从 CDN 拉取
+import yuketangFontMapRaw from '../resources/font/yuketang_font_map.json?raw';
 import { trustedDispatch, OrigEvent } from '../utils/safe-click';
 import { $msg, playMedia } from '../utils';
-import { request } from '@ocsjs/core';
 import { restudy, volume } from '../utils/configs';
 import { waitForElement } from '../utils/study';
 import { CommonProject } from './common';
@@ -460,16 +461,9 @@ export const YKTProject = Project.create({
 });
 
 async function loadFontMapping() {
-	try {
-		$msg.info('正在解析字体');
-		return await request('https://cdn.ocsjs.com/resources/font/yuketang_font_map.json', {
-			type: 'GM_xmlhttpRequest',
-			method: 'get',
-			responseType: 'json'
-		});
-	} catch (err) {
-		$msg.error('载繁体字库加载失败，请刷新页面重试：' + String(err));
-	}
+	// 字体映射随脚本打包，不再从 CDN 拉取
+	$msg.info('正在解析字体');
+	return JSON.parse(yuketangFontMapRaw) as Record<string, string>;
 }
 
 /**

@@ -2,19 +2,21 @@
 
 import { trustedDispatch, OrigEvent } from '../utils/safe-click';
 import {
-	OCSWorker,
+	HonghuWorker,
 	defaultAnswerWrapperHandler,
 	$,
 	StringUtils,
-	request,
 	createDefaultQuestionResolver,
 	DefaultWork,
 	splitAnswer,
 	domSearch,
 	domSearchAll,
 	SearchInformation
-} from '@ocsjs/core';
+} from '@honghu/core';
 import { $modal, h, $store, MessageElement, Project, Script, $el, $gm, $$el, $ui, cors, $message } from 'easy-us';
+
+// 超星繁体字库随脚本打包，不再从 CDN 拉取
+import cxFontTableRaw from '../resources/font/table.json?raw';
 
 import { CommonProject } from './common';
 import { workNotes, volume, playbackRate, dropdownStyle } from '../utils/configs';
@@ -796,7 +798,7 @@ function workOrExam(
 
 	// 这里跟章节测试的连线题不一样，章节测试是新版连线题
 	/** 新建答题器 */
-	const worker = new OCSWorker({
+	const worker = new HonghuWorker({
 		root: '.questionLi',
 		elements: {
 			title: (root) =>
@@ -1068,16 +1070,8 @@ async function mappingRecognize(doc: Document = document) {
 }
 
 async function loadTyprMapping() {
-	try {
-		$console.log('正在加载繁体字库。');
-		return await request('https://cdn.ocsjs.com/resources/font/table.json', {
-			type: 'GM_xmlhttpRequest',
-			method: 'get',
-			responseType: 'json'
-		});
-	} catch (err) {
-		$console.error('载繁体字库加载失败，请刷新页面重试：', String(err));
-	}
+	$console.log('正在加载繁体字库。');
+	return JSON.parse(cxFontTableRaw) as Record<string, number>;
 }
 
 /**
@@ -1864,7 +1858,7 @@ const JobRunner = {
 		};
 
 		/** 新建答题器 */
-		const worker = new OCSWorker({
+		const worker = new HonghuWorker({
 			root: TiMu,
 			elements: {
 				title: [

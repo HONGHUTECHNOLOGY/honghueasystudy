@@ -9,13 +9,13 @@
 					/>
 					<span class="fw-bold"> 鸿鹄易学脚本配置 </span>
 				</template>
-				<!-- 这里tooltip不删除、兼容旧版浏览器的提示 setting_browser_ocs_config_sync_tip -->
+				<!-- 这里tooltip不删除、兼容旧版浏览器的提示 setting_browser_hh_config_sync_tip -->
 				<!-- <a-tooltip
 					:content="
-						lang('setting_browser_ocs_config_sync_tip', '开启后，修改鸿鹄易学配置后会同步到全部由鸿鹄易学桌面端启动的浏览器中')
+						lang('setting_browser_hh_config_sync_tip', '开启后，修改鸿鹄易学配置后会同步到全部由鸿鹄易学桌面端启动的浏览器中')
 					"
 				>
-					<a-switch v-model="store.render.setting.ocs.openSync">
+					<a-switch v-model="store.render.setting.hh.openSync">
 						<template #checked> 同步到各浏览器 </template>
 						<template #unchecked> 同步到各浏览器 </template>
 					</a-switch>
@@ -45,20 +45,20 @@
 						@cancel="syncNote"
 						@ok="
 							() => {
-								store.render.setting.ocs.openSync = true;
+								store.render.setting.hh.openSync = true;
 							}
 						"
 					>
 						<div
-							id="ocs-global-configs"
+							id="hh-global-configs"
 							class="m-2"
 						>
-							<OCSConfigs
-								v-model:store="store.render.setting.ocs.store"
+							<HonghuConfigs
+								v-model:store="store.render.setting.hh.store"
 								@error="(err) => (state.configs.error = err)"
 								@loading="() => (state.configs.loading = true)"
 								@loaded="() => (state.configs.loading = false)"
-							></OCSConfigs>
+							></HonghuConfigs>
 						</div>
 					</a-modal>
 				</div>
@@ -172,7 +172,7 @@ import Path from './Path.vue';
 import { lang, store } from '../store';
 import { remote } from '../utils/remote';
 import BrowserPath from './setting/BrowserPath.vue';
-import OCSConfigs from './OCSConfigs.vue';
+import HonghuConfigs from './HonghuConfigs.vue';
 import { reactive } from 'vue';
 import { changeTheme } from '../utils';
 import Icon from './Icon.vue';
@@ -217,9 +217,9 @@ async function onUserDataDirsFolderChange(previous: string, current: string) {
 }
 
 function syncNote() {
-	store.render.setting.ocs.openSync = false;
+	store.render.setting.hh.openSync = false;
 	Message.info({
-		content: lang('setting_browser_ocs_config_sync_tip_v2', '修改全局设置后并且同步到各浏览器才会生效哦~'),
+		content: lang('setting_browser_hh_config_sync_tip_v2', '修改全局设置后并且同步到各浏览器才会生效哦~'),
 		duration: 10 * 1000
 	});
 }
@@ -231,7 +231,7 @@ function syncNote() {
 	max-width: 800px;
 }
 
-#ocs-global-configs {
+#hh-global-configs {
 	overflow: overlay;
 	max-width: 600px;
 	max-height: calc(100vh - 200px);

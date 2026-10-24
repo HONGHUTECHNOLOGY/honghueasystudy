@@ -104,7 +104,7 @@ function importData() {
 		.call('showOpenDialog', {
 			title: '选择导入的数据文件',
 			buttonLabel: '导入',
-			filters: [{ extensions: ['honghu', 'ocsdata'], name: '鸿鹄易学数据' }]
+			filters: [{ extensions: ['honghu', 'hhdata'], name: '鸿鹄易学数据' }]
 		})
 		.then(async ({ canceled, filePaths }) => {
 			if (canceled === false && filePaths.length) {
@@ -230,7 +230,7 @@ function exportData() {
 
 function openDevTools() {
 	// @ts-ignore
-	window.ocs = {
+	window.hh = {
 		currentBrowser,
 		currentEntities,
 		currentFolder,

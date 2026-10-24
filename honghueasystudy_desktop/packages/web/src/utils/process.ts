@@ -3,7 +3,7 @@ import { remote } from './remote';
 import { store } from '../store';
 import { LaunchOptions } from 'playwright-core';
 import { reactive } from 'vue';
-import type { ScriptWorker } from '@ocs-desktop/app';
+import type { ScriptWorker } from '@honghu-desktop/app';
 import { Browser } from '../fs/browser';
 import { Message } from '@arco-design/web-vue';
 import EventEmitter from 'events';
@@ -54,7 +54,7 @@ export class Process extends EventEmitter {
 	}
 
 	/**
-	 * 使用 child_process 运行 ocs 命令
+	 * 使用 child_process 运行鸿鹄易学命令
 	 */
 	async init(onConsole?: (data: any) => void) {
 		this.shell = child_process.fork(
@@ -182,7 +182,7 @@ export class Process extends EventEmitter {
 	/** 显示当前的浏览器  */
 	bringToFront() {
 		if (this.status === 'launched' && this.launchOptions) {
-			const action = `http://localhost:${store.server.port}/ocs-action_bring-to-top`;
+			const action = `http://localhost:${store.server.port}/hh-action_bring-to-top`;
 			child_process.exec(
 				`"${this.launchOptions.executablePath}" --user-data-dir="${this.browser.cachePath}" "${action}"`
 			);

@@ -19,13 +19,19 @@ dotenv.config();
 export default defineConfig({
 	resolve: {
 		alias: {
-			'@ocsjs/core': '../core/src/index.ts'
+			'@honghu/core': '../core/src/index.ts'
 		}
 	},
 	esbuild: {
 		charset: 'utf8'
 	},
 	build: {
+		// easy-us 已本地化为 workspace 包（CJS 产物），符号链接 realpath 在 node_modules 之外，
+		// 需显式纳入 rollup 的 commonjs 转换范围，否则命名导出解析失败
+		commonjsOptions: {
+			include: [/node_modules/, /[\\/]packages[\\/]easy-us[\\/]/],
+			extensions: ['.js', '.cjs']
+		},
 		/** 取消css代码分离 */
 		cssCodeSplit: false,
 		/** @ts-ignore 输出路径 */
@@ -35,10 +41,10 @@ export default defineConfig({
 		/** 是否压缩代码 */
 		minify: false,
 
-		/** 打包库， 全局名字为 OCS */
+		/** 打包库， 全局名字为 HH */
 		lib: {
 			entry: './src/index.ts',
-			name: 'OCS',
+			name: 'HH',
 			fileName: () => 'index.js',
 			formats: ['umd']
 		}

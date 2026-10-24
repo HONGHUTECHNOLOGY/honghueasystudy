@@ -95,7 +95,7 @@ import Description from '../Description.vue';
 import Icon from '../Icon.vue';
 import { forceClearBrowserCache } from '../../utils/browser';
 import { onMounted, reactive } from 'vue';
-import { ValidBrowser } from '@ocs-desktop/common/lib/src/interface';
+import { ValidBrowser } from '@honghu-desktop/common/lib/src/interface';
 import { processes } from '../../utils/process';
 import { lang } from '../../store/index';
 

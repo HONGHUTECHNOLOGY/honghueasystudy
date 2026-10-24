@@ -8,9 +8,9 @@ import {
 	WorkUploadType,
 	AnswerWrapperHandlerConfig,
 	setSizeErrorRetryHandler
-} from '@ocsjs/core';
+} from '@honghu/core';
 import { $message, h, $gm, $store, Project, Script, $modal, StoreListenerType, $ui } from 'easy-us';
-import type { AnswererWrapper, SearchInformation } from '@ocsjs/core';
+import type { AnswererWrapper, SearchInformation } from '@honghu/core';
 import { CXProject, ICourseProject, IcveMoocProject, YKTProject, ZHSProject, ZJYProject } from '../index';
 import { markdown } from '../utils/markdown';
 import { enableCopy } from '../utils';
@@ -1637,7 +1637,7 @@ export const CommonProject = Project.create({
 						{
 							innerText: '导出全部设置',
 							style: btnStyle,
-							title: '导出全部页面的设置，包括全局设置，题库配置，学习设置等等。（文件后缀名为：.ocssetting）'
+							title: '导出全部页面的设置，包括全局设置，题库配置，学习设置等等。（文件后缀名为：.hhsetting）'
 						},
 						(btn) => {
 							btn.onclick = () => {
@@ -1650,7 +1650,7 @@ export const CommonProject = Project.create({
 								}
 								const blob = new Blob([JSON.stringify(setting, null, 2)], { type: 'text/plain' });
 								const url = URL.createObjectURL(blob);
-								const a = h('a', { href: url, download: 'ocs-setting-export.ocssetting' });
+								const a = h('a', { href: url, download: 'hh-setting-export.hhsetting' });
 								a.click();
 								URL.revokeObjectURL(url);
 							};
@@ -1664,11 +1664,11 @@ export const CommonProject = Project.create({
 						{
 							innerText: '导入全部设置',
 							style: btnStyle,
-							title: '导入并且覆盖当前的全部设置。（文件后缀名为：.ocssetting）'
+							title: '导入并且覆盖当前的全部设置。（文件后缀名为：.hhsetting）'
 						},
 						(btn) => {
 							btn.onclick = () => {
-								const input = h('input', { type: 'file', accept: '.ocssetting' });
+								const input = h('input', { type: 'file', accept: '.hhsetting' });
 								input.onchange = async () => {
 									const file = input.files?.[0];
 									if (file) {
@@ -2215,7 +2215,7 @@ function aiTestConnection(endpoint: string, apiKey: string, model: string) {
 
 function createAiConfigCard() {
 	const aiCfg = CommonProject.scripts.aiSettings.cfg;
-	const aiCss = `.ai-cfg-card{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:16px;margin-top:12px;box-shadow:0 1px 3px rgba(0,0,0,.04);animation:ocs-card-in .45s cubic-bezier(0.16,1,0.3,1) both;}
+	const aiCss = `.ai-cfg-card{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:16px;margin-top:12px;box-shadow:0 1px 3px rgba(0,0,0,.04);animation:hh-card-in .45s cubic-bezier(0.16,1,0.3,1) both;}
 .ai-cfg-title{font-size:15px;font-weight:600;margin-bottom:4px;color:#1d1d1f;}
 .ai-cfg-desc{color:#6e6e73;font-size:12px;margin-bottom:6px;line-height:1.5;}
 .ai-cfg-label{display:block;color:#1d1d1f;font-size:12px;font-weight:500;margin:12px 0 5px;}

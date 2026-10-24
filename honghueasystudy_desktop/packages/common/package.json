@@ -1,7 +1,7 @@
 {
-	"name": "@ocs-desktop/common",
+	"name": "@honghu-desktop/common",
 	"version": "0.0.1",
-	"description": "common package of ocs-desktop",
+	"description": "common package of honghueasystudy-desktop",
 	"main": "./lib/index.js",
 	"types": "./lib/index.d.ts",
 	"scripts": {
@@ -10,18 +10,17 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/ocsjs/ocs-desktop.git"
+		"url": "git+https://github.com/HONGHUTECHNOLOGY/honghueasystudy.git"
 	},
 	"keywords": [
-		"ocs",
 		"typescript"
 	],
 	"author": "enncy",
 	"license": "MIT",
 	"bugs": {
-		"url": "https://github.com/ocsjs/ocs-desktop/issues"
+		"url": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/issues"
 	},
-	"homepage": "https://github.com/ocsjs/ocs-desktop#readme",
+	"homepage": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy#readme",
 	"dependencies": {
 		"axios": "^0.25.0"
 	}

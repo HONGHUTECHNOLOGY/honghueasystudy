@@ -3,7 +3,7 @@
  * 把 content/resources.js + content/gm-polyfill.js + lib/index.js + content/entry.js
  * 合并成单文件 extension/content/main.js，并统一包进一个 IIFE。
  *
- * 目的：让 GM_* 与核心包的 OCS 导出对象只存在于闭包里。
+ * 目的：让 GM_* 与核心包的 HH 导出对象只存在于闭包里。
  *   - 不在 window 上        → Object.keys / getOwnPropertyNames / in 都探不到
  *   - 不在全局词法环境里    → 页面连「按名字取值」都做不到（这是相比分散注入的关键提升）
  *
@@ -37,25 +37,25 @@ const BANNER = [
 ].join('\n');
 
 // 遮蔽 exports / module / define，强制核心包的 UMD 走「浏览器全局」分支；
-// 再用 getter/setter 拦截 OCS 的全局写入，把导出对象接进闭包。
+// 再用 getter/setter 拦截 HH 的全局写入，把导出对象接进闭包。
 const LIB_PRELUDE = [
 	'/* ===== 3/4 核心包 lib/index.js（UMD） ===== */',
 	'var exports = void 0;',
 	'var module = void 0;',
 	'var define = void 0;',
 	'',
-	'var __csPrevOCS = null;',
-	'var __csCapturedOCS = null;',
+	'var __csPrevHH = null;',
+	'var __csCapturedHH = null;',
 	'var __csHooked = false;',
 	'try {',
-	"\t__csPrevOCS = Object.getOwnPropertyDescriptor(globalThis, 'OCS') || null;",
-	"\tObject.defineProperty(globalThis, 'OCS', {",
+	"\t__csPrevHH = Object.getOwnPropertyDescriptor(globalThis, 'HH') || null;",
+	"\tObject.defineProperty(globalThis, 'HH', {",
 	'\t\tconfigurable: true,',
 	'\t\tget: function () {',
-	'\t\t\treturn __csCapturedOCS;',
+	'\t\t\treturn __csCapturedHH;',
 	'\t\t},',
 	'\t\tset: function (v) {',
-	'\t\t\t__csCapturedOCS = v;',
+	'\t\t\t__csCapturedHH = v;',
 	'\t\t}',
 	'\t});',
 	'\t__csHooked = true;',
@@ -67,17 +67,17 @@ const LIB_PRELUDE = [
 
 const LIB_POSTLUDE = [
 	'',
-	'// 取出导出对象后立刻把 globalThis.OCS 还原成进入前的状态（通常就是不存在）',
-	'var OCS = __csHooked ? __csCapturedOCS : globalThis.OCS;',
+	'// 取出导出对象后立刻把 globalThis.HH 还原成进入前的状态（通常就是不存在）',
+	'var HH = __csHooked ? __csCapturedHH : globalThis.HH;',
 	'if (__csHooked) {',
-	'\tif (__csPrevOCS) {',
-	"\t\ttry { Object.defineProperty(globalThis, 'OCS', __csPrevOCS); } catch (e) {}",
+	'\tif (__csPrevHH) {',
+	"\t\ttry { Object.defineProperty(globalThis, 'HH', __csPrevHH); } catch (e) {}",
 	'\t} else {',
-	"\t\ttry { delete globalThis.OCS; } catch (e) {}",
+	"\t\ttry { delete globalThis.HH; } catch (e) {}",
 	'\t}',
 	'}',
-	'if (!OCS) {',
-	"\tconsole.error('[鸿鹄易学] 核心包加载失败：未捕获到 OCS 导出对象。');",
+	'if (!HH) {',
+	"\tconsole.error('[鸿鹄易学] 核心包加载失败：未捕获到 HH 导出对象。');",
 	'\treturn;',
 	'}',
 	'',
@@ -148,16 +148,16 @@ function bundleMain() {
 	const runtimeFile = path.join(contentDir, 'inject-runtime.js');
 	if (!fs.existsSync(keyFile)) throw new Error('[bundle-main] 缺少 bridge-key.js');
 	if (!fs.existsSync(runtimeFile)) throw new Error('[bundle-main] 缺少 inject-runtime.js');
-	const keyMatch = read(keyFile).match(/__OCS_BRIDGE_KEY__\s*=\s*["']([^"']+)["']/);
-	if (!keyMatch) throw new Error('[bundle-main] bridge-key.js 缺少 __OCS_BRIDGE_KEY__');
+	const keyMatch = read(keyFile).match(/__HH_BRIDGE_KEY__\s*=\s*["']([^"']+)["']/);
+	if (!keyMatch) throw new Error('[bundle-main] bridge-key.js 缺少 __HH_BRIDGE_KEY__');
 	const runtime = read(runtimeFile);
 	const mainWorldFile = path.join(contentDir, 'main-world.js');
 	const mainWorldOutput = [
 		'(function(){',
 		'"use strict";',
-		'var __OCS_BRIDGE_KEY__=' + JSON.stringify(keyMatch[1]) + ';',
+		'var __HH_BRIDGE_KEY__=' + JSON.stringify(keyMatch[1]) + ';',
 		runtime.trim(),
-		'var __ocsMarker=Symbol.for("__"+__OCS_BRIDGE_KEY__);',
+		'var __ocsMarker=Symbol.for("__"+__HH_BRIDGE_KEY__);',
 		'if (globalThis[__ocsMarker]) return;',
 		'try { Object.defineProperty(globalThis, __ocsMarker, {value:1, configurable:true}); } catch(e) {}',
 		'var __ocs_sandbox__=__ocsCreateSandbox();',

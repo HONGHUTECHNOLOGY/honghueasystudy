@@ -1,0 +1,109 @@
+{
+    "notes": [
+        "此为鸿鹄易学桌面端信息文件",
+        "resources: 软件资源下载信息",
+        "bookmark: 软件导航页信息",
+        "versions: 软件更新信息（发布新版本时在此追加，tag 为版本号，url 为更新包，app_downloads 为各系统安装包）",
+        "banner 格式： {title,content,info}"
+    ],
+    "banners": [],
+    "resourceGroups": [
+        {
+            "name": "extensions",
+            "description": "用户脚本管理器",
+            "showInResourcePage": true,
+            "files": [
+                {
+                    "id": "scriptcat",
+                    "name": "ScriptCat 脚本猫",
+                    "description": "脚本猫,一个可以执行用户脚本的浏览器扩展,万物皆可脚本化,让你的浏览器可以做更多的事情!",
+                    "url": "https://cdn.ocsjs.com/extensions/scriptcat-1.1.2_0.zip",
+                    "icon": "https://docs.scriptcat.org/img/logo.png",
+                    "homepage": "https://docs.scriptcat.org"
+                },
+                {
+                    "id": "tampermonkey",
+                    "name": "Tampermonkey 油猴",
+                    "description": "一款免费的浏览器扩展和流行的用户脚本管理器",
+                    "url": "https://cdn.ocsjs.com/extensions/tampermonkey-5.4.0_0.zip",
+                    "icon": "https://tampermonkey.net/favicon.ico",
+                    "homepage": "https://tampermonkey.net"
+                }
+            ]
+        },
+        {
+            "name": "apps",
+            "description": "应用模块",
+            "showInResourcePage": true,
+            "files": [
+                {
+                    "id": "ocr",
+                    "name": "OCR验证码识别模块",
+                    "description": "用于鸿鹄易学自动化脚本中的验证码识别。",
+                    "url": "https://cdn.ocsjs.com/app/download/ocr.zip",
+                    "platforms": [
+                        {
+                            "platform": "darwin",
+                            "url": "https://cdn.ocsjs.com/app/download/extensions/ocr-darwin.zip"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "userjs",
+            "description": "用户脚本",
+            "showInResourcePage": false,
+            "files": [
+                {
+                    "id": "honghueasystudy",
+                    "name": "鸿鹄易学",
+                    "description": "鸿鹄易学用户脚本，配合脚本管理器在浏览器中直接使用。",
+                    "url": "https://easystudy.honghutech.eu.org/honghueasystudy.user.js",
+                    "icon": "https://easystudy.honghutech.eu.org/favicon.png",
+                    "homepage": "https://easystudy.honghutech.eu.org"
+                }
+            ]
+        }
+    ],
+    "bookmark": [
+        {
+            "group": "网课网站",
+            "values": [
+                {
+                    "name": "超星学习通",
+                    "url": "https://chaoxing.com",
+                    "icon": "https://p.cldisk.com/star4/dcb106498481d321698946d8dc01ec20/origin.png"
+                },
+                {
+                    "name": "知道智慧树",
+                    "url": "https://www.zhihuishu.com",
+                    "icon": "https://assets.zhihuishu.com/icon/favicon.ico"
+                },
+                {
+                    "name": "智慧职教（MOOC学院）",
+                    "url": "https://mooc.icve.com.cn/cms/index.do",
+                    "icon": "https://mooc.icve.com.cn/favicon.ico"
+                },
+                {
+                    "name": "职教云",
+                    "url": "https://zjy2.icve.com.cn/",
+                    "icon": "https://zjy2.icve.com.cn/favicon.ico"
+                },
+                {
+                    "name": "中国大学MOOC",
+                    "url": "https://www.icourse163.org/",
+                    "description": "如果打开白屏，请手动输入链接访问：https://www.icourse163.org/",
+                    "icon": "https://edu-image.nosdn.127.net/32a8dd2a-b9aa-4ec9-abd5-66cd8751befb.png"
+                },
+                {
+                    "name": "雨课堂",
+                    "url": "https://www.yuketang.cn/web",
+                    "icon": "https://www.yuketang.cn/static/images/favicon.ico"
+                }
+            ]
+        }
+    ],
+    "versions": [],
+    "notify": []
+}

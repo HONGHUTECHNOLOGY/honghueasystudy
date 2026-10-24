@@ -1,7 +1,7 @@
 import { Button, Notification } from '@arco-design/web-vue';
 import { h, VNodeChild } from 'vue';
 import { electron } from './node';
-import { StringUtils } from '@ocs-desktop/common/src/utils/string';
+import { StringUtils } from '@honghu-desktop/common/src/utils/string';
 const { clipboard } = electron;
 
 interface NotifyOptions {

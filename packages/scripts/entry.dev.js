@@ -29,7 +29,7 @@ if (
 	return;
 }
 
-const { start, definedProjects, CommonProject, RenderScript } = OCS;
+const { start, definedProjects, CommonProject, RenderScript } = HH;
 
 const infos = GM_info;
 

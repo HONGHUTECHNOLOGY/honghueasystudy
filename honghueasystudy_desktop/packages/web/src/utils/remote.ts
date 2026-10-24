@@ -1,13 +1,13 @@
 import { BrowserWindow, App, Dialog, WebContents } from 'electron';
 import { notify } from './notify';
-import type { RemoteMethods } from '@ocs-desktop/app';
+import type { RemoteMethods } from '@honghu-desktop/app';
 import type fs from 'fs';
 import type os from 'os';
 import type path from 'path';
 import type crypto from 'crypto';
 import type Store from 'electron-store';
 import { electron } from './node';
-import type { OCSApi } from '@ocs-desktop/common';
+import type { HonghuApi } from '@honghu-desktop/common';
 const { ipcRenderer } = electron;
 
 /**
@@ -94,7 +94,7 @@ export const remote = {
 	crypto: registerRemote<typeof crypto>('crypto'),
 
 	// 公共 api
-	OCSApi: registerRemote<typeof OCSApi>('OCSApi'),
+	HonghuApi: registerRemote<typeof HonghuApi>('HonghuApi'),
 
 	// 注册 window 通信
 	win: registerRemote<BrowserWindow>('win'),

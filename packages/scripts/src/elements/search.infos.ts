@@ -1,4 +1,4 @@
-import { SimplifyWorkResult, splitAnswer, $, QuestionTypes } from '@ocsjs/core';
+import { SimplifyWorkResult, splitAnswer, $, QuestionTypes } from '@honghu/core';
 import { $ui, h } from 'easy-us';
 import { createQuestionTitleExtra } from '../utils';
 

@@ -5,7 +5,7 @@ import { sleep, unzip } from '../utils';
 import { Logger } from '../logger';
 import { glob } from 'glob';
 import child_process from 'child_process';
-import { getBuiltinChromeRoot } from '@ocs-desktop/common';
+import { getBuiltinChromeRoot } from '@honghu-desktop/common';
 import { store } from '../store';
 
 const logger = Logger('chrome-init');
@@ -50,11 +50,7 @@ export async function initChrome(win: BrowserWindow): Promise<boolean> {
 			signal: ab.signal
 		});
 		try {
-			if (process.platform === 'darwin') {
-				child_process.execSync('unzip -o "' + chromeZipPath + '" -d "' + chromeTempPath + '"');
-			} else {
-				await unzip(chromeZipPath, chromeTempPath);
-			}
+			await extractChromeZip(chromeZipPath, chromeTempPath);
 			const searchPattern =
 				process.platform === 'darwin' ? '**/*/' + 'Google Chrome for Testing.app' : '**/*/' + chrome_filename;
 
@@ -125,6 +121,23 @@ function ensureChromeExecutablePermission(chromeFinalPath: string) {
 			logger.error('chmod chrome executable failed', { executablePath, error: String(e) });
 		}
 	}
+}
+
+/**
+ * 解压内置浏览器压缩包。
+ * mac/linux 优先用系统 unzip：JS 解压库不保留可执行权限与符号链接（.app 内部含链接，linux 二进制需要 +x），
+ * 系统命令缺失（部分精简发行版）时回退到 JS 解压 + ensureChromeExecutablePermission 补权限。
+ */
+async function extractChromeZip(chromeZipPath: string, chromeTempPath: string) {
+	if (process.platform !== 'win32') {
+		try {
+			child_process.execFileSync('unzip', ['-o', chromeZipPath, '-d', chromeTempPath], { stdio: 'ignore' });
+			return;
+		} catch (e) {
+			logger.warn('系统 unzip 不可用，回退到内置解压', e);
+		}
+	}
+	await unzip(chromeZipPath, chromeTempPath);
 }
 
 function migrateLegacyBuiltinBrowserPath(chromeFinalPath: string) {

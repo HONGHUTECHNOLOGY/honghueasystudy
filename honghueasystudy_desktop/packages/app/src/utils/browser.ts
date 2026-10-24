@@ -46,7 +46,10 @@ export function getBrowserMajorVersion(executablePath: string) {
 		return parseInt(manifest.split('.')[0]);
 	}
 
-	if (process.platform === 'linux') {
+	// mac 上普通浏览器的 Framework 目录名与内置浏览器不同（如 Google Chrome Framework），
+	// 目录查找对第三方浏览器也不可靠，兜底直接运行 --version 获取
+	// （Windows 下该命令无输出且可能闪窗，仅限 mac/linux 使用）
+	if (process.platform !== 'win32') {
 		try {
 			const versionOutput = child_process.execFileSync(executablePath, ['--version'], {
 				encoding: 'utf-8'

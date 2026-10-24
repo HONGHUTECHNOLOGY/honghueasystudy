@@ -151,7 +151,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onActivated } from 'vue';
-import { ResourceFile, ResourceGroup } from '@ocs-desktop/common/src/api';
+import { ResourceFile, ResourceGroup } from '@honghu-desktop/common/src/api';
 import { resourceLoader } from '../../utils/resources.loader';
 import Icon from '../../components/Icon.vue';
 import { lang, store } from '../../store/index';

@@ -1,4 +1,4 @@
-import { SimplifyWorkResult, WorkerEvents, WorkResult } from '@ocsjs/core';
+import { SimplifyWorkResult, WorkerEvents, WorkResult } from '@honghu/core';
 import { $ui, $message, MessageElement, Script, h, CommonEventEmitter, cors, $elements } from 'easy-us';
 import { CommonProject } from '../projects/common';
 import { CommonWorkOptions, workPreCheckMessage } from '.';

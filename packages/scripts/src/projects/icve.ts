@@ -3,11 +3,11 @@ import {
 	$,
 	SimplifyWorkResult,
 	defaultAnswerWrapperHandler,
-	OCSWorker,
+	HonghuWorker,
 	createDefaultQuestionResolver,
 	splitAnswer,
 	QuestionTypes
-} from '@ocsjs/core';
+} from '@honghu/core';
 import { $gm, cors, $message, $$el, $modal, $el, Project, Script, $ui, h } from 'easy-us';
 import { optimizationElementWithImage, commonWork, simplifyWorkResult } from '../utils/work';
 import { playbackRate, restudy, volume } from '../utils/configs';
@@ -808,7 +808,7 @@ function work({ answererWrappers, period, thread, answerSeparators }: CommonWork
 			: undefined;
 	}
 
-	const worker = new OCSWorker({
+	const worker = new HonghuWorker({
 		root: '.q_content',
 		elements: {
 			title:
@@ -991,7 +991,7 @@ function aiWork({ answererWrappers, period, thread, answerSeparators }: CommonWo
 			: undefined;
 	}
 
-	const worker = new OCSWorker({
+	const worker = new HonghuWorker({
 		root: '.content-item',
 		elements: {
 			title: '.questions-content [class*=title-content]',

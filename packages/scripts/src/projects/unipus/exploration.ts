@@ -9,10 +9,10 @@ import {
 	RemotePage,
 	QuestionTypes,
 	WorkResult,
-	OCSWorker,
+	HonghuWorker,
 	WorkOptions,
 	WorkContext
-} from '@ocsjs/core';
+} from '@honghu/core';
 import { BackgroundProject } from '../background';
 import { createLocalRemotePage } from '../../utils/app';
 import { answerWrapperEmptyWarning, simplifyWorkResult } from '../../utils/work';
@@ -228,11 +228,11 @@ function getQuestionKind(root: Element): QuestionKind {
 }
 
 /**
- * 给某一类题目根打临时标记，返回可用于 OCSWorker 的 root 选择器。
+ * 给某一类题目根打临时标记，返回可用于 HonghuWorker 的 root 选择器。
  * 新版一份试卷里可能混排选择题和填空题，只能先分组再分别作答。
  */
 function markQuestions(kind: QuestionKind) {
-	const attr = `data-ocs-qk-${kind}`;
+	const attr = `data-hh-qk-${kind}`;
 	$$el(QUESTION_ROOT).forEach((root) => {
 		if (getQuestionKind(root) === kind) {
 			root.setAttribute(attr, '1');
@@ -1140,7 +1140,7 @@ async function doRatingScale(rp: RemotePage) {
 		let filled = 0;
 
 		// ===== 点击打分：每题点中间档位 =====
-		const sliderRoots = $$el<HTMLElement>('[data-ocs-qk-slider="1"]') as HTMLElement[];
+		const sliderRoots = $$el<HTMLElement>('[data-hh-qk-slider="1"]') as HTMLElement[];
 		for (const root of sliderRoots) {
 			const items = Array.from(
 				root.querySelectorAll<HTMLElement>('.evaluation-slider-reply-component-wrapper_option_item')
@@ -1217,7 +1217,7 @@ async function handleCommonUnitTest(
 	};
 
 	/** 新建答题器 */
-	const worker = new OCSWorker({
+	const worker = new HonghuWorker({
 		root: config.root,
 		elements: {
 			title: config.elements.title,

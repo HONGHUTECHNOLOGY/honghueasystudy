@@ -1,4 +1,4 @@
-import { UpdateInformationResource } from '@ocs-desktop/common';
+import { UpdateInformationResource } from '@honghu-desktop/common';
 import { store } from '../store';
 import { electron } from '../utils/node';
 import { notify } from './notify';

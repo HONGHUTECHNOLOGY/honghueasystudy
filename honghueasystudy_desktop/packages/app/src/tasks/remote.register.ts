@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
-import { OCSApi, getValidBrowsers } from '@ocs-desktop/common';
+import { HonghuApi, getValidBrowsers } from '@honghu-desktop/common';
 import si from 'systeminformation';
 import { store } from '../store';
 import { exportExcel } from '../utils/index';
@@ -151,7 +151,7 @@ export function remoteRegister(_win: BrowserWindow) {
 	registerRemoteEvent('os', os);
 	registerRemoteEvent('path', path);
 	registerRemoteEvent('crypto', crypto);
-	registerRemoteEvent('OCSApi', OCSApi);
+	registerRemoteEvent('HonghuApi', HonghuApi);
 
 	registerRemoteEvent('win', _win);
 	registerRemoteEvent('webContents', _win.webContents);

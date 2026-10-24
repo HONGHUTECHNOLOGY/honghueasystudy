@@ -1,4 +1,4 @@
-import type { RemotePage } from '@ocsjs/core';
+import type { RemotePage } from '@honghu/core';
 import { $message, $modal, h, $ } from 'easy-us';
 import { safeClick, trustedDispatch, hidePanel, OrigMouseEvent, OrigKeyboardEvent, OrigEvent, OrigInputEvent } from './safe-click';
 
@@ -102,7 +102,8 @@ export function createLocalRemotePage(): RemotePage {
 			}
 		},
 		async waitForResponse(url) {
-			const res = await fetch(url);
+			// url 参数兼容 playwright 风格的 RegExp / 谓词，此实现仅支持字符串
+			const res = await fetch(url as string);
 			const body = await res.text();
 			return {
 				body,
@@ -112,7 +113,7 @@ export function createLocalRemotePage(): RemotePage {
 			};
 		},
 		async waitForRequest(url) {
-			const res = await fetch(url);
+			const res = await fetch(url as string);
 			return {
 				url: res.url,
 				method: 'GET',
@@ -126,8 +127,9 @@ export function createLocalRemotePage(): RemotePage {
 		},
 		bringToFront: noop as RemotePage['bringToFront'],
 		dragAndDrop: noop as RemotePage['dragAndDrop'],
-		screenshot: (async () => '') as RemotePage['screenshot'],
-		selectOption: noop as RemotePage['selectOption'],
+		// 浏览器端无法真正截图/选择，仅为满足接口类型的占位实现
+		screenshot: (async () => '') as unknown as RemotePage['screenshot'],
+		selectOption: noop as unknown as RemotePage['selectOption'],
 		setInputFiles: noop as RemotePage['setInputFiles'],
 		['keyboard.type']: async (text) => {
 			const el = document.activeElement as HTMLElement | null;

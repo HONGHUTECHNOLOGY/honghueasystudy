@@ -4,5 +4,3 @@ packages:
 allowBuilds:
   es5-ext: true
   esbuild: true
-patchedDependencies:
-  easy-us@0.0.66: patches/easy-us@0.0.66.patch

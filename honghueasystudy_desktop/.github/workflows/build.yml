@@ -1,3 +1,6 @@
+# 注意：本目录是主仓库的子目录，此 workflow 不会被 GitHub Actions 识别执行。
+# 桌面端全平台构建请使用主仓库根目录的 .github/workflows/desktop-build.yml。
+# （若单独把本目录作为独立仓库使用，此文件才会生效）
 name: Build and Upload
 
 on:
@@ -138,14 +141,14 @@ jobs:
           ---
           ## 📦 下载地址
           ### Windows (不支持Win7)
-          - [64位安装包](${DL}ocs-${VER}-setup-win-x64.exe)
+          - [64位安装包](${DL}honghueasystudy-${VER}-setup-win-x64.exe)
           ### macOS
-          - [M系列芯片(ARM64)](${DL}ocs-${VER}-setup-mac-arm64.dmg) | [Intel芯片(x64)](${DL}ocs-${VER}-setup-mac-x64.dmg)
+          - [M系列芯片(ARM64)](${DL}honghueasystudy-${VER}-setup-mac-arm64.dmg) | [Intel芯片(x64)](${DL}honghueasystudy-${VER}-setup-mac-x64.dmg)
           ### Linux
-          - [AppImage](${DL}ocs-${VER}-setup-linux-x64.AppImage)
+          - [AppImage](${DL}honghueasystudy-${VER}-setup-linux-x64.AppImage)
           ### 🔗 快捷访问
-          - [官网](https://docs.ocsjs.com/)
-          - [官网软件下载（更快）](https://docs.ocsjs.com/docs/app)
+          - [官网](https://honghueasystudy.honghutech.eu.org/)
+          - [官网软件下载（更快）](https://honghueasystudy.honghutech.eu.org/docs/app)
           > Created at ${BT}."
           gh release edit "$TAG_NAME" --notes "${EXISTING_BODY}${CUSTOM_NOTES}"
 

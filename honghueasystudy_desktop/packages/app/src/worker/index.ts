@@ -131,20 +131,18 @@ export class ScriptWorker {
 			return await this.close();
 		}
 
-		if (process.platform === 'win32') {
-			const major = getBrowserMajorVersion(options.executablePath);
-			console.log('major', major);
-			const isEdge = options.executablePath.toLowerCase().includes('edge');
-			// Chrome 138+ 禁止 --load-extension 命令行加载扩展；Edge 不受此限制
-			if (major && major > 137 && !isEdge) {
-				console.error(
-					ScriptWorker.lang(
-						'error_when_browser_version_too_high',
-						'当前浏览器版本过高，无法自动加载鸿鹄易学扩展，请在设置-浏览器路径中切换“软件内置”浏览器，如果没有内置浏览器，请重新在官网下载最新鸿鹄易学软件并安装'
-					)
-				);
-				return await this.close();
-			}
+		const major = getBrowserMajorVersion(options.executablePath);
+		console.log('major', major);
+		const isEdge = options.executablePath.toLowerCase().includes('edge');
+		// Chrome 138+ 禁止 --load-extension 命令行加载扩展；Edge 不受此限制（全平台生效）
+		if (major && major > 137 && !isEdge) {
+			console.error(
+				ScriptWorker.lang(
+					'error_when_browser_version_too_high',
+					'当前浏览器版本过高，无法自动加载鸿鹄易学扩展，请在设置-浏览器路径中切换“软件内置”浏览器，如果没有内置浏览器，请重新在官网下载最新鸿鹄易学软件并安装'
+				)
+			);
+			return await this.close();
 		}
 
 		/** =============================== 检测拓展是否可用 =============================== */
@@ -182,7 +180,7 @@ export class ScriptWorker {
 
 					/** URL事件解析器 */
 					this.browser?.on('page', (page) => {
-						const match = page.url().match(/ocs-action_(.+)/);
+						const match = page.url().match(/hh-action_(.+)/);
 						if (match?.[1]) {
 							const action = match[1];
 							const actions: any = {
@@ -355,7 +353,7 @@ export async function launchBrowser({
 	automationScripts: AS[];
 	/** 初始导航页地址 */
 	bookmarksPageUrl?: string;
-	/** OCS服务器端口 */
+	/** 鸿鹄易学服务器端口 */
 	serverPort: number;
 	/** 软件辅助权限认证 */
 	authToken: string;
@@ -397,7 +395,7 @@ export async function launchBrowser({
 						const { loading = true, warn = false } = opts || {};
 						await blankPage.evaluate(
 							(state) => {
-								// @ts-ignore OCS官方导航页自带的方法
+								// @ts-ignore 鸿鹄易学导航页自带的方法
 								const setState = window.setBookmarkLoadingState;
 								if (setState) {
 									setState(state);
@@ -541,7 +539,7 @@ async function waitAndCloseExtensionHomepage(opts: { browser: BrowserContext; cl
 }
 
 function browserNetworkRoute(authToken: string, browser: BrowserContext) {
-	browser.route(/ocs-environment/, async (route) => {
+	browser.route(/hh-environment/, async (route) => {
 		await route.fulfill({
 			status: 200,
 			body: JSON.stringify({
@@ -549,7 +547,7 @@ function browserNetworkRoute(authToken: string, browser: BrowserContext) {
 			})
 		});
 	});
-	browser.route(/ocs-script-actions/, async (route) => {
+	browser.route(/hh-script-actions/, async (route) => {
 		const req = route.request();
 		if (req.method().toLocaleUpperCase() !== 'POST') {
 			return;

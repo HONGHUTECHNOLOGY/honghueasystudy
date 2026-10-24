@@ -1,7 +1,7 @@
 import { Message } from '@arco-design/web-vue';
 import { resourceLoader } from './resources.loader';
 import { notify } from './notify';
-import { ResourceFile } from '@ocs-desktop/common/src/api';
+import { ResourceFile } from '@honghu-desktop/common/src/api';
 
 type Extension = ResourceFile & {
 	installed?: boolean;

@@ -1,11 +1,12 @@
 // @ts-check
-import { BrowserWindow, shell } from 'electron';
+import { BrowserWindow, shell, app } from 'electron';
 import path from 'path';
 
 export function createWindow() {
 	const win = new BrowserWindow({
 		title: '鸿鹄易学',
-		icon: path.resolve('./public/favicon.ico'),
+		// 打包后 cwd 不一定是应用目录，基于 appPath 解析；mac/linux 窗口图标用 png（.ico 不可用）
+		icon: path.join(app.getAppPath(), process.platform === 'win32' ? './public/favicon.ico' : './public/favicon.png'),
 		minWidth: 700,
 		minHeight: 400,
 		width: 900,

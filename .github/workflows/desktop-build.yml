@@ -1,0 +1,88 @@
+name: Desktop Build (win/mac/linux)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows x64
+          - os: windows-latest
+            platform: win
+            arch: x64
+
+          # macOS ARM64（Apple Silicon 原生）
+          - os: macos-latest
+            platform: mac
+            arch: arm64
+
+          # macOS x64（Intel）：GitHub 已无 Intel runner，在 arm64 机器上交叉编译
+          - os: macos-latest
+            platform: mac
+            arch: x64
+
+          # Linux x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.14"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/pnpm/store
+            ~/AppData/Local/pnpm/store
+            ~/Library/pnpm/store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      # 桌面端打包前需要先构建仓库根的内置扩展（extension/）
+      - name: Install root dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build extension
+        run: pnpm build:ext
+
+      - name: Install desktop dependencies
+        run: pnpm -C honghueasystudy_desktop install --frozen-lockfile
+
+      - name: Build desktop app
+        run: pnpm -C honghueasystudy_desktop build
+        env:
+          USE_HARD_LINKS: false
+          PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            honghueasystudy_desktop/packages/app/dist/*.exe
+            honghueasystudy_desktop/packages/app/dist/*.dmg
+            honghueasystudy_desktop/packages/app/dist/*.AppImage
+            honghueasystudy_desktop/packages/app/dist/*.deb
+            honghueasystudy_desktop/packages/app/dist/*.rpm
+          if-no-files-found: error
+          retention-days: 7

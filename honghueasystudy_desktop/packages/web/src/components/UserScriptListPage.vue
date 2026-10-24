@@ -493,7 +493,7 @@ function getSourceType(script: StoreUserScript): ScriptSourceType {
 
 	const host = new URL(script.url).host;
 
-	if (host.includes('ocsjs.com')) {
+	if (host.includes('honghutech.eu.org')) {
 		return 'official';
 	} else if (host.includes('greasyfork')) {
 		return 'greasyfork';

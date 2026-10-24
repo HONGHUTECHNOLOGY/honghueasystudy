@@ -1,0 +1,30 @@
+/** 桌面端内置默认语言包：内容镜像 website/api/honghu-app-langs.json（官网托管版本作为远端覆盖）。
+ *  修改文案时两处同步；远端获取失败时应用仍有完整文案，不再弹错误。 */
+export const DEFAULT_LANGS: Record<string, string> = {
+	"error_when_browser_version_too_high": `当前浏览器版本过高，无法自动加载鸿鹄易学扩展，解决方法：<br><b>步骤1</b>：前往官网下载最新版鸿鹄易学并安装：<a href='https://easystudy.honghutech.eu.org'>https://easystudy.honghutech.eu.org</a><br><b>步骤2</b>：进入新版软件 设置->切换内置浏览器，然后重新启动浏览器即可：<br/>  <img width='200px'  src='https://easystudy.honghutech.eu.org/api/imgs/change_browser_step_1.png'/> <br/> <img width='100%'  src='https://easystudy.honghutech.eu.org/api/imgs/change_browser_step_2.png'/> `,
+	"error_when_browser_launch_failed_too_fast": `异常启动，可能原因：<br>1.关闭过快，请重新启动<br>2.当前浏览器版本过高，请前往官网 <a href='https://easystudy.honghutech.eu.org'>https://easystudy.honghutech.eu.org</a> 下载最新版鸿鹄易学，使用软件内置浏览器即可 <br> {{error}}`,
+	"error_when_extension_version_too_low": `该拓展版本较低：<b>{{name}}</b> 请前往软件左侧-应用中心，卸载并重新安装即可。<br><b>步骤1</b>：<img width='100%' src='https://easystudy.honghutech.eu.org/api/imgs/extension_version_too_low_step_1.png'><br><b>步骤2</b>：<img width='100%' src='https://easystudy.honghutech.eu.org/api/imgs/extension_version_too_low_step_2.png'>`,
+	"error_when_playwright_selector_timeout": `页面元素查找超时，请检查元素是否存在/可见或选择器是否正确。  <br> 操作：{{property}}  <br> 参数： {{args}} <br> 页面：{{url}} <br/> 如果反复出现，请重启浏览器或更新软件后重试。`,
+	"error_when_script_not_found": `本地脚本 {{name}}：({{url}}) 不存在，请检查脚本路径`,
+	"notice_user_scripts_page_usage": `在<code>浏览器列表</code>中启动浏览器后将会 <code>自动</code><code>加载/更新</code>以下脚本到浏览器，如果不想开启自动加载/更新，可以关闭。<br />如果想 <code>彻底删除</code>浏览器里面的脚本，请打开相应的浏览器，在右上角浏览器拓展中找到脚本管理器，然后进入管理器中删除<br /> 注意：目前本地脚本只能使用油猴脚本管理器才能正常安装`,
+	"notice_resources_page_usage": `以下是官方提供的资源软件，你可以安装以下使你的浏览器具备更多的功能。<br /><code>用户脚本管理器</code> 只能安装一个，否则可能造成脚本之间的冲突。`,
+	"notice_dashboard_monitor_page_usage": `浏览器多开的数量取决于电脑的配置，自行根据实际情况尝试。建议全部浏览器加载完成后再开启监控。<br />监控需要占用内存和CPU，配置不好的建议不要监控。<br> 如果监控无法加载，可能是电脑环境有问题，想使用的话请尝试重装、更换、更新电脑系统。`,
+	"notice_resources_page_other_extensions_add": `加载原理；浏览器启动时会默认加载资源文件夹中 extensions 下面的所有文件夹拓展。<br>所以步骤如下：<br>1. 浏览器中打开拓展管理，查看需要安装到软件的拓展ID，找到本地对应的拓展文件夹（指的是文件夹里面有 manifest.json 文件的才算一个拓展文件夹，这里不过多阐述查找办法，请百度）<br>2. 将拓展文件复制粘贴到左侧按钮显示的文件夹里的 extensions 文件夹即可。`,
+	"setting_browser_path_custom_tip": `由于谷歌浏览器持续更新导致无法自动安装浏览器拓展，鸿鹄易学采用内置特定版本谷歌浏览器的方案，如果你需要修改路径请确保浏览器版本低于137，否则将会出现一系列的问题。`,
+	"setting_browser_hh_config_sync_tip": `开启后，修改鸿鹄易学配置后会同步到全部由鸿鹄易学桌面端启动的浏览器中`,
+	"setting_browser_hh_config_sync_tip_v2": `修改全局设置后并且同步到各浏览器才会生效哦~`,
+	"setting_hh_sync_notes": `<b>多浏览器共用同一个鸿鹄易学配置</b>：如果你需要修改多个浏览器脚本设置、直接修改下面，然后点击同步按钮，这样每个浏览器的鸿鹄易学设置都会应用下面的设置~`,
+	"setup_modal_notice": `点击下方按钮开始，初始化您的软件设置，如果不满意官方提供的设置，可稍后自行在软件左侧的各栏中手动设置，设置完成后即可创建浏览器进行网课学习。
+如果想重新打开此窗口： 左上角 -> 工具 -> 初始化设置`,
+	"setup_finish_notice": `软件初始化已完成，您可以点击右上方的新建浏览器，并启动运行脚本 。`,
+	"setup_error_auto_download_new_version_when_no_valid_browser": `无可用的浏览器，正在下载并更新软件至最新版本： {{version}}`,
+	"setup_error_un_support_platform_when_auto_download_new_version": `当前系统不支持自动更新软件，请手动前往官网下载最新软件并安装和启动。`,
+	"setup_error_no_windows_download_url_when_auto_download_new_version": `未找到当前系统版本的下载地址，请前往官网下载最新软件并安装和启动。`,
+	"setup_error_auto_download_new_extension_when_version_too_low": `当前拓展 {{name}} 版本较低，需要更新拓展到最新MV3版本`,
+	"browser_page_environment_error_notice": `软件环境存在问题，将会影响浏览器的正常启动`,
+	"browser_page_environment_error_current_browser_not_supported": `当前浏览器版本不受支持`,
+	"browser_page_environment_error_no_browser_detected": `未检测到可用的浏览器`,
+	"browser_page_environment_error_no_extension_detected": `没安装脚本管理器`,
+	"webrtc_page_loading_notice": `正在获取图像中，请勿操作...`,
+	"simple_mode_index_browser_usage": `启动浏览器、打开任意网课后即可自动执行脚本。<br> 右键浏览器/空白处可打开菜单`,
+};

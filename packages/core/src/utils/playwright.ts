@@ -267,8 +267,8 @@ export class RemotePlaywright {
 				configs?.logger?.('[RP]: ', JSON.stringify(data));
 
 				try {
-					// 这里为什么不写前缀 http://localhost:15319，因为有 Content-Security-Policy ， 这里我们借用后台的URL代理去进行处理，只要包含 ocs-script-actions 即可轻松绕过 Content-Security-Policy 限制
-					const res = await request('/ocs-script-actions', {
+					// 这里为什么不写前缀 http://localhost:15319，因为有 Content-Security-Policy ， 这里我们借用后台的URL代理去进行处理，只要包含 hh-script-actions 即可轻松绕过 Content-Security-Policy 限制
+					const res = await request('/hh-script-actions', {
 						type: 'fetch',
 						method: 'post',
 						responseType: ['waitForRequest', 'waitForResponse', 'reload'].includes(property) ? 'json' : 'text',

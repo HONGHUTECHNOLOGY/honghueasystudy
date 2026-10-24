@@ -1,6 +1,6 @@
 {
-  "name": "@ocs-desktop/app",
-  "version": "3.0.4",
+  "name": "@honghu-desktop/app",
+  "version": "3.1.0",
   "description": "desktop for userscript",
   "main": "./lib/index.js",
   "types": "./lib/types.d.ts",
@@ -22,7 +22,7 @@
     "electron-builder": "^23.1.0"
   },
   "dependencies": {
-    "@ocs-desktop/common": "workspace:^0.0.1",
+    "@honghu-desktop/common": "workspace:^0.0.1",
     "@types/express": "^4.17.13",
     "@types/minimatch": "^6.0.0",
     "adm-zip": "^0.5.12",
@@ -43,10 +43,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ocsjs/ocs-desktop.git"
+    "url": "git+https://github.com/HONGHUTECHNOLOGY/honghueasystudy.git"
   },
   "keywords": [
-    "ocs",
+    "script",
     "script",
     "playwright",
     "electron",

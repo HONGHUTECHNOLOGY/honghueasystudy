@@ -1,4 +1,4 @@
-import { $, OCSWorker, defaultAnswerWrapperHandler } from '@ocsjs/core';
+import { $, HonghuWorker, defaultAnswerWrapperHandler } from '@honghu/core';
 import { Project, Script, $ui, $el, $message, $modal, h } from 'easy-us';
 import { trustedDispatch, OrigEvent } from '../utils/safe-click';
 import { volume } from '../utils/configs';
@@ -654,7 +654,7 @@ function workOrExam(type: 'work' | 'exam', { answererWrappers, period, thread, a
 			.join(',');
 	};
 
-	const worker = new OCSWorker({
+	const worker = new HonghuWorker({
 		root: '.subjectDet',
 		elements: {
 			title: type === 'work' ? 'h2,h3,h4,h5,h6' : '.titleTest span:not(.xvhao)',

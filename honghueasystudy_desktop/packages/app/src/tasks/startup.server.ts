@@ -156,26 +156,26 @@ export async function startupServer() {
 		});
 	});
 
-	app.get('/ocs-global-setting', (req, res) => {
+	app.get('/hh-global-setting', (req, res) => {
 		const render = getDecryptedRenderData(store);
-		res.json(render.setting.ocs);
+		res.json(render.setting.hh);
 	});
 
 	/** 获取 browser 数据 */
 	app.get('/browser', (req, res) => {
 		const render = getDecryptedRenderData(store);
 		// 如果开启了同步配置，就返回，否则返回空对象
-		const data = render?.setting?.ocs?.openSync ? render?.setting?.ocs?.store : {};
+		const data = render?.setting.hh?.openSync ? render?.setting.hh?.store : {};
 		res.json(data);
 	});
 
 	app.get('/is-browser-config-sync', (req, res) => {
 		const render = getDecryptedRenderData(store);
-		res.end(String(render.setting.ocs.openSync));
+		res.end(String(render.setting.hh.openSync));
 	});
 
 	/** 脚本操作 */
-	app.get('/ocs-script-actions', (req, res) => {
+	app.get('/hh-script-actions', (req, res) => {
 		res.json({ allow: true });
 	});
 
@@ -274,7 +274,7 @@ export async function startupServer() {
 			});
 	});
 
-	app.get(/\/ocs-action_.+/, (req, res) => {
+	app.get(/\/hh-action_.+/, (req, res) => {
 		res.send('正在执行脚本 : ' + req.path + ' 请勿操作。');
 	});
 

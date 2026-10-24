@@ -4,7 +4,8 @@ import { existsSync, statSync } from 'fs';
 
 export function globalListenerRegister(win: BrowserWindow) {
 	app.on('second-instance', (e, argv) => {
-		if (win && process.platform === 'win32') {
+		if (win) {
+			// 全平台生效：再次启动时把已有窗口带回前台（mac 的文件打开走 open-file 事件，argv 仅 win/linux 有意义）
 			if (win.isMinimized()) {
 				win.restore();
 			}

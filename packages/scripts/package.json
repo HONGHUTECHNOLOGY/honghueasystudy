@@ -1,5 +1,5 @@
 {
-	"name": "@ocsjs/scripts",
+	"name": "@honghu/scripts",
 	"version": "4.0.1",
 	"description": "scripts package of honghu",
 	"main": "./lib/index.js",
@@ -9,7 +9,7 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/ocsjs/ocsjs.git"
+		"url": "git+https://github.com/HONGHUTECHNOLOGY/honghueasystudy.git"
 	},
 	"keywords": [
 		"honghu",
@@ -24,10 +24,11 @@
 	"author": "enncy",
 	"license": "MIT",
 	"bugs": {
-		"url": "https://github.com/ocsjs/ocsjs/issues"
+		"url": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/issues"
 	},
-	"homepage": "https://github.com/ocsjs/ocsjs#readme",
+	"homepage": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy#readme",
 	"devDependencies": {
+		"@types/lodash": "^4.17.24",
 		"@types/marked": "^4.0.8",
 		"@types/md5": "^2.3.2",
 		"@types/semver": "^7.5.0",
@@ -38,10 +39,10 @@
 		"vite-plugin-banner": "^0.6.1"
 	},
 	"dependencies": {
-		"@ocsjs/core": "workspace:*",
+		"@honghu/core": "workspace:*",
 		"@rollup/plugin-commonjs": "^24.0.0",
 		"browser-env": "^3.3.0",
-		"easy-us": "^0.0.66",
+		"easy-us": "workspace:*",
 		"lodash": "^4.17.21",
 		"markdown-it": "^13.0.1",
 		"marked": "^4.2.12",

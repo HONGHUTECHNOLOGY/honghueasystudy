@@ -29,9 +29,9 @@ var __ocsListen = __ocsPerf ? __ocsPerf.addEventListener.bind(__ocsPerf) : null;
 var __ocsUnlisten = __ocsPerf ? __ocsPerf.removeEventListener.bind(__ocsPerf) : null;
 var __ocsCustomEvent = typeof CustomEvent !== 'undefined' ? CustomEvent : null;
 var __ocsBridgeKey =
-	typeof __OCS_BRIDGE_KEY__ !== 'undefined'
-		? __OCS_BRIDGE_KEY__
-		: globalThis.__OCS_BRIDGE_KEY__ || '';
+	typeof __HH_BRIDGE_KEY__ !== 'undefined'
+		? __HH_BRIDGE_KEY__
+		: globalThis.__HH_BRIDGE_KEY__ || '';
 
 // 必须先于核心包（easy-us）初始化，$store 才会选 GMStoreProvider。
 // globalThis.window 是真实页面 window；bundle 只把局部 window 参数换成了沙箱。
@@ -45,7 +45,7 @@ var GM = (function () {
 	'use strict';
 
 	var RES =
-		typeof __OCS_RESOURCES__ !== 'undefined' && __OCS_RESOURCES__ ? __OCS_RESOURCES__ : {};
+		typeof __HH_RESOURCES__ !== 'undefined' && __HH_RESOURCES__ ? __HH_RESOURCES__ : {};
 	var VERSION = RES.version || '0.0.0';
 	var META = RES.metadata || {};
 

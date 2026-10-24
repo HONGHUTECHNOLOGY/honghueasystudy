@@ -1,0 +1,20 @@
+{
+	"name": "easy-us",
+	"version": "0.0.66",
+	"description": "easy user-script framework（鸿鹄易学本地化版本，由 npm easy-us@0.0.66 + 品牌补丁固化而来）",
+	"main": "./lib/index.js",
+	"types": "./lib/index.d.ts",
+	"files": [
+		"lib",
+		"dist",
+		"assets"
+	],
+	"private": true,
+	"license": "MIT",
+	"dependencies": {
+		"events": "^3.3.0",
+		"lodash": "^4.17.21",
+		"semver": "^7.3.5",
+		"string-similarity": "^4.0.4"
+	}
+}

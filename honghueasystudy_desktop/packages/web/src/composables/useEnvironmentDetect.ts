@@ -1,6 +1,6 @@
 import { reactive, watch } from 'vue';
 import { Environment } from '../utils/environment';
-import type { ValidBrowser } from '@ocs-desktop/common/lib/src/interface';
+import type { ValidBrowser } from '@honghu-desktop/common/lib/src/interface';
 import { store } from '../store';
 
 const state = reactive({

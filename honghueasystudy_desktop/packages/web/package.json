@@ -1,5 +1,5 @@
 {
-	"name": "@ocs-desktop/web",
+	"name": "@honghu-desktop/web",
 	"version": "0.0.1",
 	"description": "desktop for userscript",
 	"scripts": {
@@ -9,15 +9,14 @@
 		"serve": "vite preview"
 	},
 	"dependencies": {
-		"@ocs-desktop/app": "workspace:^2.1.3",
-		"@ocs-desktop/common": "workspace:^0.0.1",
-		"@ocsjs/scripts": "^4.0.1",
+		"@honghu-desktop/app": "workspace:^2.1.3",
+		"@honghu-desktop/common": "workspace:^0.0.1",
 		"@types/minimatch": "^6.0.0",
 		"axios": "^0.25.0",
 		"chalk": "4.1.0",
 		"colorpicker-v3": "^2.10.2",
 		"dayjs": "^1.10.7",
-		"easy-us": "^0.0.56",
+		"easy-us": "file:../../../packages/easy-us",
 		"events": "^3.3.0",
 		"highlight.js": "^11.11.1",
 		"markdown-it": "^13.0.1",
@@ -26,7 +25,6 @@
 		"markdown-it-emoji": "^2.0.2",
 		"marked": "^4.2.12",
 		"material-icons": "^1.13.1",
-		"ocsjs": "^4.8.13",
 		"playwright-core": "^1.28.0",
 		"video.js": "^8.0.4",
 		"vue": "^3.3.2",
@@ -54,10 +52,9 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/ocsjs/ocs-desktop.git"
+		"url": "git+https://github.com/HONGHUTECHNOLOGY/honghueasystudy.git"
 	},
 	"keywords": [
-		"ocs",
 		"script",
 		"playwright",
 		"electron",
@@ -68,7 +65,7 @@
 	"author": "enncy",
 	"license": "MIT",
 	"bugs": {
-		"url": "https://github.com/ocsjs/ocs-desktop/issues"
+		"url": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/issues"
 	},
-	"homepage": "https://github.com/ocsjs/ocs-desktop#readme"
+	"homepage": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy#readme"
 }

@@ -6,7 +6,9 @@ import { Logger } from './logger';
 const logger = Logger('crypto');
 
 // --- 常量 ---
-const SERVICE_NAME = 'ocs-desktop';
+const SERVICE_NAME = 'honghueasystudy';
+/** 旧版服务名：老用户的 AES 密钥存在其下，读到后搬移到新服务名（迁移逻辑勿删，否则老用户加密数据全部解不开） */
+const LEGACY_SERVICE_NAME = 'ocs-desktop';
 const ACCOUNT_NAME = 'aes-key';
 
 // --- 状态 ---
@@ -32,6 +34,16 @@ export async function initAesKey(): Promise<void> {
 		if (hex) {
 			cachedAesKey = Buffer.from(hex, 'hex');
 			logger.info('从密钥链加载 AES 密钥');
+			return;
+		}
+
+		// 迁移：旧版本把密钥存在旧服务名下，搬到新服务名后清理旧条目
+		const legacyHex = await keytar.getPassword(LEGACY_SERVICE_NAME, ACCOUNT_NAME).catch(() => null);
+		if (legacyHex) {
+			cachedAesKey = Buffer.from(legacyHex, 'hex');
+			await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, legacyHex);
+			await keytar.deletePassword(LEGACY_SERVICE_NAME, ACCOUNT_NAME).catch(() => {});
+			logger.info('已迁移旧密钥链服务名下的 AES 密钥');
 			return;
 		}
 

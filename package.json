@@ -1,6 +1,6 @@
 {
 	"name": "honghueasystudy",
-  "version": "5.1.5",
+  "version": "5.2.0",
 	"description": "鸿鹄易学 - 在线网络课程辅助工具",
 	"packageManager": "pnpm@11.21.0",
 	"types": "./lib/src/core/index.d.ts",
@@ -50,7 +50,7 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/ocsjs/ocsjs.git"
+		"url": "git+https://github.com/HONGHUTECHNOLOGY/honghueasystudy.git"
 	},
 	"keywords": [
 		"honghu",
@@ -65,7 +65,7 @@
 	"author": "enncy",
 	"license": "MIT",
 	"bugs": {
-		"url": "https://github.com/ocsjs/ocsjs/issues"
+		"url": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/issues"
 	},
 	"homepage": "https://easystudy.honghutech.eu.org",
 	"dependencies": {

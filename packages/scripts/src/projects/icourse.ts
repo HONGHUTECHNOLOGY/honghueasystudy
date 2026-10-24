@@ -1,4 +1,4 @@
-import { $, OCSWorker, RemotePage, defaultAnswerWrapperHandler } from '@ocsjs/core';
+import { $, HonghuWorker, RemotePage, defaultAnswerWrapperHandler } from '@honghu/core';
 import { $message, Project, Script, $ui, $store } from 'easy-us';
 import { CommonWorkOptions, playMedia } from '../utils';
 import { CommonProject } from './common';
@@ -501,7 +501,7 @@ function workAndExam(
 	const work_type = type;
 
 	/** 新建答题器 */
-	const worker = new OCSWorker({
+	const worker = new HonghuWorker({
 		root: type === 'exam' ? '[class*=questionBody]' : '.u-questionItem',
 		elements: {
 			title: type === 'exam' ? '[class*=questionInfo]' : '.j-title .j-richTxt',

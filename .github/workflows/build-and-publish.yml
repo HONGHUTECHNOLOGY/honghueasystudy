@@ -28,7 +28,7 @@ jobs:
           echo 'VITE_BUILD_PATH="../../release"' > ./packages/scripts/.env
           echo "BUILDTIME=$(TZ=Asia/Shanghai date)" >> $GITHUB_ENV
           echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
-          echo "DOWNLOAD_URL=https://github.com/ocsjs/ocsjs/releases/download/${GITHUB_REF_NAME}/" >> $GITHUB_ENV
+          echo "DOWNLOAD_URL=https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/${GITHUB_REF_NAME}/" >> $GITHUB_ENV
 
       - name: Install Dependencies
         run: |
@@ -37,7 +37,7 @@ jobs:
           cd packages/scripts && pnpm install && cd ../../
           npm run tsc
 
-      - name: Build ocs scripts
+      - name: Build 鸿鹄易学 scripts
         run: npm run build
 
       - name: Generate simplified changelog
@@ -49,9 +49,9 @@ jobs:
           tag: ${{ env.VERSION }}
           artifactContentType: "text/html"
           artifacts: |
-            ./release/ocs.user.js
-            ./release/ocs.meta.js
-            ./release/ocs.common.user.js
+            ./release/honghu.user.js
+            ./release/honghu.meta.js
+            ./release/honghu.common.user.js
             ./release/core.js
             ./release/index.js
             ./CHANGELOG_SIMPLIFIED.md
@@ -75,14 +75,14 @@ jobs:
 
           ## 资源下载列表
 
-          - [用户脚本](${DL}ocs.user.js)
-          - [用户脚本(全域名通用版)](${DL}ocs.common.user.js)
+          - [用户脚本](${DL}honghu.user.js)
+          - [用户脚本(全域名通用版)](${DL}honghu.common.user.js)
           - [核心库](${DL}core.js)
           - [简洁更新日志](${DL}CHANGELOG_SIMPLIFIED.md)
-          - [META](${DL}ocs.meta.js)
+          - [META](${DL}honghu.meta.js)
 
           ### 快捷访问
-          - [官网](https://docs.ocsjs.com/)
+          - [官网](https://honghueasystudy.honghutech.eu.org/)
 
           Created at ${BT}.
           "

@@ -1,11 +1,12 @@
 import { reactive } from 'vue';
 import { remote } from '../utils/remote';
 import defaultsDeep from 'lodash/defaultsDeep';
-import type { AppStore, UserScripts } from '@ocs-desktop/app';
+import type { AppStore, UserScripts } from '@honghu-desktop/app';
 import { CommonUserScript } from '../types/user.script';
 import { FolderOptions } from '../fs/interface';
 import { Browser } from '../fs/browser';
 import { Folder } from '../fs/folder';
+import { DEFAULT_LANGS } from '../config/default-langs';
 
 export type StoreUserScript = { info?: CommonUserScript } & Omit<UserScripts, 'info'>;
 
@@ -54,13 +55,13 @@ export type WebStore = {
 		theme: {
 			dark: boolean;
 		};
-		/** ocs 特殊配置 */
-		ocs: {
+		/** 鸿鹄易学特殊配置 */
+		hh: {
 			/** 当前配置名 */
 			currentProjectName: string;
 			/** 全局配置 */
 			store: any;
-			/** 是否同步OCS配置 */
+			/** 是否同步鸿鹄易学配置 */
 			openSync: boolean;
 		};
 		browser: {
@@ -139,7 +140,7 @@ const _store: AppStore & { render: WebStore } = defaultsDeep(remote['electron-st
 			theme: {
 				dark: false
 			},
-			ocs: {
+			hh: {
 				currentProjectName: '',
 				store: {},
 				openSync: false
@@ -151,7 +152,7 @@ const _store: AppStore & { render: WebStore } = defaultsDeep(remote['electron-st
 				autoInitNewBrowser: true
 			}
 		},
-		langs: {},
+		langs: { ...DEFAULT_LANGS },
 		state: {
 			first: true,
 			setup: true,

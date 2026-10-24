@@ -2,14 +2,14 @@
  *
  * 【重要】本文件不是独立脚本。它会被 scripts/bundle-main.js 内联进 content/main.js 的统一 IIFE，
  * 与 resources.js / gm-polyfill.js / lib/index.js 共享同一个函数作用域，可直接引用：
- *   OCS、GM_info、GM_getTab ... GM_getResourceText、__bootReady__
+ *   HH、GM_info、GM_getTab ... GM_getResourceText、__bootReady__
  *
  * 变量名统一加 __cs 前缀：核心包 lib/index.js 顶层已声明 infos / projects / start 等同名变量，
  * 合并到同一个函数作用域后若重名会互相覆盖，导致核心包行为异常。
  */
 
-// OCS 由 bundle-main.js 的包装层捕获后声明；这里只做兜底判断
-if (!OCS) {
+// HH 由 bundle-main.js 的包装层捕获后声明；这里只做兜底判断
+if (!HH) {
 	console.error('[鸿鹄易学] 核心包未就绪，跳过启动。');
 } else {
 	var __csReady = typeof __bootReady__ !== 'undefined' ? __bootReady__ : null;
@@ -33,14 +33,14 @@ if (!OCS) {
 			return;
 		}
 
-		var __csProjects = OCS.definedProjects();
+		var __csProjects = HH.definedProjects();
 
-		OCS.start({
+		HH.start({
 			projects: __csProjects,
 			renderConfig: {
-				renderScript: OCS.RenderScript,
+				renderScript: HH.RenderScript,
 				styles: [GM_getResourceText('STYLE') || ''],
-				defaultPanelName: OCS.CommonProject.scripts.guide.namespace,
+				defaultPanelName: HH.CommonProject.scripts.guide.namespace,
 				title: '鸿鹄易学-' + GM_info.script.version
 			}
 		});

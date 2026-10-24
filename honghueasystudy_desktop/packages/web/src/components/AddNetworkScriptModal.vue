@@ -78,7 +78,7 @@ import { ref, onMounted } from 'vue';
 import { Environment } from '../utils/environment';
 import { addScriptFromUrl } from '../utils/user-scripts';
 import { Message } from '@arco-design/web-vue';
-import type { ResourceFile } from '@ocs-desktop/common/src/api';
+import type { ResourceFile } from '@honghu-desktop/common/src/api';
 import { goto } from '../utils';
 
 const visible = defineModel<boolean>('visible', { default: false });

@@ -1,4 +1,4 @@
-import { request } from '@ocsjs/core';
+import { request } from '@honghu/core';
 
 /**
  * 文字识别

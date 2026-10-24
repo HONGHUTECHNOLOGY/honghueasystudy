@@ -91,6 +91,26 @@ export const config = reactive({
 				title: '简洁模式',
 				hideInMenu: true
 			}
+		},
+		{
+			name: 'guide',
+			path: '/guide',
+			component: () => import('@/pages/guide.vue'),
+			meta: {
+				icon: 'menu_book',
+				title: '使用指南',
+				hideInMenu: true
+			}
+		},
+		{
+			name: 'about',
+			path: '/about',
+			component: () => import('@/pages/about.vue'),
+			meta: {
+				icon: 'info',
+				title: '关于鸿鹄易学',
+				hideInMenu: true
+			}
 		}
 	] as RouteRecordRaw[],
 	/** 主题预设 */

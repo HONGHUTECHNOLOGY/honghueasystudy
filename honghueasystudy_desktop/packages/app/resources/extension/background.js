@@ -123,8 +123,8 @@ chrome.runtime.onStartup.addListener(function () {
 ensureMainWorldScript(false);
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-	if (!msg || msg.__OCS__ == null) return false;
-	const type = msg.__OCS__;
+	if (!msg || msg.__HH__ == null) return false;
+	const type = msg.__HH__;
 	const payload = msg.payload;
 
 	if (type === 'getInjectionMode') {

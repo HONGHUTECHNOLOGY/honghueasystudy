@@ -8,10 +8,10 @@
 		"esModuleInterop": true,
 		"skipLibCheck": true,
 		"forceConsistentCasingInFileNames": true,
-		"lib": ["DOM", "ES2020"],
+		"lib": ["DOM", "DOM.Iterable", "ES2020"],
 		"jsx": "preserve",
 		"resolveJsonModule": true
 	},
 	"include": ["./src/**/*.ts"],
-	"files": ["./global.d.ts"]
+	"files": ["./global.d.ts", "./vite-raw.d.ts"]
 }

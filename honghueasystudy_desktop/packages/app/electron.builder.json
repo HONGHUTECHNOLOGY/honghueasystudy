@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/electron-builder.json",
-  "appId": "ocs.enncy.cn",
+  "appId": "cn.honghutech.honghueasystudy",
   "extraMetadata": {
     "name": "鸿鹄易学",
     "description": "鸿鹄易学 — 浏览器自动化神器，一键浏览器多开，用户脚本环境一键配置。"
@@ -43,6 +43,13 @@
         "filter": [
           "**/*.zip"
         ]
+      },
+      {
+        "from": "../../bin/ocr/win-${arch}/",
+        "to": "bin/ocr",
+        "filter": [
+          "**/*.zip"
+        ]
       }
     ]
   },
@@ -54,10 +61,19 @@
         "target": "dmg"
       }
     ],
+    "identity": null,
+    "category": "public.app-category.productivity",
     "extraResources": [
       {
         "from": "../../bin/chrome/mac-${arch}/",
         "to": "bin/chrome",
+        "filter": [
+          "**/*.zip"
+        ]
+      },
+      {
+        "from": "../../bin/ocr/mac-${arch}/",
+        "to": "bin/ocr",
         "filter": [
           "**/*.zip"
         ]
@@ -70,8 +86,15 @@
     "target": [
       {
         "target": "AppImage"
+      },
+      {
+        "target": "deb"
+      },
+      {
+        "target": "rpm"
       }
     ],
+    "category": "Utility",
     "extraResources": [
       {
         "from": "../../bin/chrome/linux-${arch}/",

@@ -1,5 +1,5 @@
-import { RemotePlaywright, request } from '@ocsjs/core';
-import type { RemotePage } from '@ocsjs/core';
+import { RemotePlaywright, request } from '@honghu/core';
+import type { RemotePage } from '@honghu/core';
 import { createDynamicRemotePage } from '../utils/app';
 import {
 	$ui,
@@ -274,7 +274,7 @@ export const BackgroundProject = Project.create({
 						// 自鸿鹄易学软件 2.8.21 版本后特殊字段，用于标记不进行同步的字段
 						// 通过鸿鹄易学 playwright 启动的浏览器会自动返回数据
 						// 不使用 http 防止某些 Content-Security-Policy 限制
-						const environment_res = await request('/ocs-environment', {
+						const environment_res = await request('/hh-environment', {
 							type: 'fetch',
 							method: 'get'
 						});

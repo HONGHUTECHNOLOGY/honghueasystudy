@@ -1,5 +1,5 @@
 {
-	"name": "@ocsjs/core",
+	"name": "@honghu/core",
 	"version": "4.0.4",
 	"description": "core package of honghu",
 	"main": "./lib/index.js",
@@ -10,7 +10,7 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/ocsjs/ocsjs.git"
+		"url": "git+https://github.com/HONGHUTECHNOLOGY/honghueasystudy.git"
 	},
 	"keywords": [
 		"honghu",
@@ -25,9 +25,9 @@
 	"author": "enncy",
 	"license": "MIT",
 	"bugs": {
-		"url": "https://github.com/ocsjs/ocsjs/issues"
+		"url": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/issues"
 	},
-	"homepage": "https://github.com/ocsjs/ocsjs#readme",
+	"homepage": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy#readme",
 	"devDependencies": {
 		"@types/event-emitter": "^0.3.3",
 		"@types/lodash": "^4.14.194",
@@ -40,7 +40,7 @@
 		"vite-plugin-banner": "^0.6.1"
 	},
 	"dependencies": {
-		"easy-us": "^0.0.66",
+		"easy-us": "workspace:*",
 		"events": "^3.3.0",
 		"lodash": "^4.17.21",
 		"playwright-core": "^1.40.1",

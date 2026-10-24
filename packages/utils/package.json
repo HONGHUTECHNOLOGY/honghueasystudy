@@ -1,5 +1,5 @@
 {
-	"name": "@ocsjs/utils",
+	"name": "@honghu/utils",
 	"version": "1.0.0",
 	"description": "utils package of honghu",
 	"main": "./lib/index.js",
@@ -7,7 +7,7 @@
 	"scripts": {},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/ocsjs/ocsjs.git"
+		"url": "git+https://github.com/HONGHUTECHNOLOGY/honghueasystudy.git"
 	},
 	"keywords": [
 		"honghu",
@@ -22,9 +22,9 @@
 	"author": "enncy",
 	"license": "MIT",
 	"bugs": {
-		"url": "https://github.com/ocsjs/ocsjs/issues"
+		"url": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/issues"
 	},
-	"homepage": "https://github.com/ocsjs/ocsjs#readme",
+	"homepage": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy#readme",
 	"devDependencies": {
 		"@types/node-fetch": "^2.6.2"
 	},

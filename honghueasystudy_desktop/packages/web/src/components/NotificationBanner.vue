@@ -22,7 +22,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { getRemoteInfos } from '../utils';
-import type { BannerResource } from '@ocs-desktop/common/src/api';
+import type { BannerResource } from '@honghu-desktop/common/src/api';
 
 const visibleBanners = ref<BannerResource[]>([]);
 const closedBanners = ref<Set<string>>(new Set());

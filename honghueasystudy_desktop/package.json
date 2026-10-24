@@ -1,6 +1,6 @@
 {
-  "name": "ocs-desktop",
-  "version": "3.0.4",
+  "name": "honghueasystudy-desktop",
+  "version": "3.1.0",
   "description": "鸿鹄易学 - desktop for userscript",
   "packageManager": "pnpm@10.21.0",
   "files": [
@@ -13,10 +13,10 @@
     "lint": "pnpm format && eslint ./packages --ext .ts,.tsx,.js,.jsx,.vue --fix",
     "format": "prettier -c ./.prettierrc.json **/*.ts **/*.js **/*.vue **/*.css --write",
     "prepare": "husky",
-    "dev:common": "pnpm --filter @ocs-desktop/common tsc",
-    "dev:app": "pnpm --filter @ocs-desktop/common tsc && pnpm --filter @ocs-desktop/app dev",
-    "dev:web": "pnpm --filter @ocs-desktop/common tsc && pnpm --filter @ocs-desktop/web dev",
-    "dev": "concurrently --kill-others-on-fail \"pnpm --filter @ocs-desktop/common tsc\" \"pnpm --filter @ocs-desktop/web dev\" \"pnpm --filter @ocs-desktop/app dev\""
+    "dev:common": "pnpm --filter @honghu-desktop/common tsc",
+    "dev:app": "pnpm --filter @honghu-desktop/common tsc && pnpm --filter @honghu-desktop/app dev",
+    "dev:web": "pnpm --filter @honghu-desktop/common tsc && pnpm --filter @honghu-desktop/web dev",
+    "dev": "concurrently --kill-others-on-fail \"pnpm --filter @honghu-desktop/common tsc\" \"pnpm --filter @honghu-desktop/web dev\" \"pnpm --filter @honghu-desktop/app dev\""
   },
   "devDependencies": {
     "@commitlint/cli": "^19.0.0",
@@ -47,7 +47,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ocsjs/ocs-desktop.git"
+    "url": "git+https://github.com/HONGHUTECHNOLOGY/honghueasystudy.git"
   },
   "keywords": [
     "ocs",
@@ -61,9 +61,9 @@
   "author": "enncy",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ocsjs/ocs-desktop/issues"
+    "url": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/issues"
   },
-  "homepage": "https://github.com/ocsjs/ocs-desktop#readme",
+  "homepage": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy#readme",
   "engines": {
     "node": ">=22.0.0",
     "pnpm": ">=10.0.0"

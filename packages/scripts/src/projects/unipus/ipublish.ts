@@ -2,7 +2,7 @@
 
 import { Script, $message, $ui, h, $gm } from 'easy-us';
 import { CommonProject } from '../common';
-import { $, RemotePage, request, defaultAnswerWrapperHandler } from '@ocsjs/core';
+import { $, RemotePage, request, defaultAnswerWrapperHandler } from '@honghu/core';
 import { waitForElement } from '../../utils/study';
 import { createLocalRemotePage } from '../../utils/app';
 import { BackgroundProject } from '../background';

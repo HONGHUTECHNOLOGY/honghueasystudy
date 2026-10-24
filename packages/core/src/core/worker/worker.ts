@@ -22,7 +22,7 @@ import { AnswerWrapperHandlerConfig } from '../answer-wrapper';
  * @param answerer  查题器, : 默认是 {@link defaultAnswerWrapperHandler}
  *
  */
-export class OCSWorker<E extends RawElements = RawElements> extends CommonEventEmitter<WorkerEvents> {
+export class HonghuWorker<E extends RawElements = RawElements> extends CommonEventEmitter<WorkerEvents> {
 	opts: WorkOptions<E>;
 	isRunning = false;
 	isClose = false;
@@ -360,7 +360,7 @@ export class OCSWorker<E extends RawElements = RawElements> extends CommonEventE
 	}
 }
 
-export class CustomOCSWorker extends CommonEventEmitter<WorkerEvents> {
+export class CustomHonghuWorker extends CommonEventEmitter<WorkerEvents> {
 	opts: CustomWorkOptions;
 	isRunning = false;
 	isClose = false;

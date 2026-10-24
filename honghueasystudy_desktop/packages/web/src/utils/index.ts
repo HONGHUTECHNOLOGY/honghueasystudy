@@ -4,9 +4,9 @@ import { Message } from '@arco-design/web-vue';
 import { remote } from './remote';
 import { notify } from './notify';
 import { electron } from './node';
-import { OCSApi } from '@ocs-desktop/common/src/api';
+import { HonghuApi } from '@honghu-desktop/common/src/api';
 import axios from 'axios';
-import { Infos } from '@ocs-desktop/common';
+import { Infos } from '@honghu-desktop/common';
 
 const { ipcRenderer } = electron;
 
@@ -69,20 +69,27 @@ export function datetime(time: number) {
  * 获取远程语言文件
  */
 export async function fetchRemoteLangs() {
-	try {
-		const infos = await axios.get('https://cdn.ocsjs.com/api/ocs-app-langs.json?t=' + Date.now(), {
-			headers: {
-				'content-type': 'application/json'
-			}
-		});
-
+	const urls = [
+		'https://easystudy.honghutech.eu.org/api/honghu-app-langs.json',
+		// 旧文件名（内容一致）：官网尚未部署新文件名时的回退
+		'https://easystudy.honghutech.eu.org/api/ocs-app-langs.json'
+	];
+	for (const url of urls) {
 		try {
-			JSON.parse(JSON.stringify(infos.data));
-			store.render.langs = infos.data;
+			const infos = await axios.get(url + '?t=' + Date.now(), {
+				headers: {
+					'content-type': 'application/json'
+				}
+			});
+			// 站点对未知路径会回退返回 index.html（状态码 200），必须校验响应形状
+			if (infos.data && typeof infos.data === 'object' && !Array.isArray(infos.data) && Object.keys(infos.data).length > 0) {
+				store.render.langs = infos.data;
+				return;
+			}
 		} catch {}
-	} catch (e) {
-		Message.error('获取语言文件失败：' + e);
 	}
+	// 内置默认语言包已覆盖，远端获取失败静默降级即可，不打扰用户
+	console.info('远端语言包获取失败，使用内置默认语言包');
 }
 
 /**
@@ -93,7 +100,7 @@ export async function getRemoteInfos() {
 	if (temp_infos) {
 		return temp_infos;
 	}
-	temp_infos = await OCSApi.getInfos();
+	temp_infos = await HonghuApi.getInfos();
 	return temp_infos;
 }
 
@@ -217,6 +224,8 @@ export function goto(link: string) {
 /** 通过本地服务代理加载图标，解决跨域问题 */
 export function iconUrl(url?: string): string {
 	if (!url) return '';
+	// 以 / 开头的路径视为本地静态资源（与页面同源，由本地服务器托管），不做图标代理
+	if (url.startsWith('/')) return url;
 	const port = 15319;
 	return `http://localhost:${port}/icon?url=${encodeURIComponent(url)}`;
 }

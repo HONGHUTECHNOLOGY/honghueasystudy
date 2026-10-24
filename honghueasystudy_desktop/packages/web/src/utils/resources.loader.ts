@@ -1,6 +1,6 @@
 import { store } from '../store';
 import { remote } from './remote';
-import { ResourceFile, ResourceLoaderOptions } from '@ocs-desktop/common/src/api';
+import { ResourceFile, ResourceLoaderOptions } from '@honghu-desktop/common/src/api';
 
 export interface LocalResourceFile {
 	groupname: string;
