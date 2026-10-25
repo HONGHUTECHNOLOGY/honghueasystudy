@@ -89,7 +89,8 @@ def build_binary(venv_python: Path, output_dir: Path) -> Path:
             '-m',
             'PyInstaller',
             '--clean',
-            '--yes',
+            # PyInstaller 确认选项为 -y/--noconfirm，无 --yes 长格式
+            '--noconfirm',
             '--name',
             'ocr',
             # 收集 ddddocr 包数据（自带 ONNX 模型 common_old.onnx），避免打包后模型缺失
