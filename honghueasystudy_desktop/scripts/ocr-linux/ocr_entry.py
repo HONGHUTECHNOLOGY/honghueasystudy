@@ -33,7 +33,8 @@ def main() -> int:
             return 1
         try:
             # show_ad=False：与 win/mac 入口一致，关闭 ddddocr 广告输出
-            ocr = ddddocr.DdddOcr(show_ad=False)
+            # old=True：加载 common_old.onnx 旧版模型，与 win 包对齐（win 包内仅含该模型）
+            ocr = ddddocr.DdddOcr(show_ad=False, old=True)
             print(ocr.classification(image))
         except Exception as e:  # noqa: BLE001 推理异常统一转非零退出码
             print('ocr inference error: %s' % e, file=sys.stderr)
@@ -50,7 +51,8 @@ def main() -> int:
             print('read image error: %s' % e, file=sys.stderr)
             return 1
         try:
-            ocr = ddddocr.DdddOcr(show_ad=False)
+            # old=True：与 --ocr 路径一致加载 common_old.onnx（slide_match 纯 cv2 不依赖模型）
+            ocr = ddddocr.DdddOcr(show_ad=False, old=True)
             result = ocr.slide_match(target, background)
             # dict 直接 print 即单引号字面量：{'target_y': n, 'target': [x1, y1, x2, y2]}
             print(result)

@@ -30,8 +30,8 @@ jobs:
             arch: x64
 
           # Linux ARM64（原生 arm64 runner；QEMU 下全量桌面打包过慢，不设仿真回退。
-          # 注意：本任务依赖 bin/ocr/linux-arm64/ocr.zip 入库（来自 ocr-linux-build.yml
-          # 的 ocr-linux-arm64.zip Artifact），未入库时会被 verifyLinuxOcr 守卫拦截）
+          # OCR 资源由下方「Fetch Linux OCR bundle」步骤从 GitHub Release
+          # （tag: ocr-linux，由 ocr-linux-build.yml 维护）拉取，Release 缺失时该步骤报错）
           - os: ubuntu-24.04-arm
             platform: linux
             arch: arm64
@@ -44,6 +44,20 @@ jobs:
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v4
+
+      # Linux OCR 纯内置：资源包超 git 单文件 100MB 限制不入库，
+      # 从 GitHub Release（ocr-linux-build.yml 维护的预发布 tag: ocr-linux）拉取对应架构 zip。
+      # Release 缺失时此处快速失败（提示先触发 OCR Linux Build），避免装完依赖才被守卫拦截。
+      # gh 在 checkout 后无需 GH_REPO；下载的 zip 即 ocr.zip 内容（ocr 二进制位于 zip 根）
+      - name: Fetch Linux OCR bundle
+        if: matrix.platform == 'linux'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download ocr-linux --pattern "ocr-linux-${{ matrix.arch }}.zip" --dir /tmp/ocr
+          mkdir -p honghueasystudy_desktop/bin/ocr/linux-${{ matrix.arch }}
+          mv /tmp/ocr/ocr-linux-${{ matrix.arch }}.zip honghueasystudy_desktop/bin/ocr/linux-${{ matrix.arch }}/ocr.zip
+          ls -lh honghueasystudy_desktop/bin/ocr/linux-${{ matrix.arch }}/
 
       - name: Install Node.js
         uses: actions/setup-node@v4

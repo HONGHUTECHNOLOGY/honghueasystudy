@@ -8,8 +8,10 @@ Linux OCR 二进制构建脚本
     2. 安装 requirements.txt 锁定版本依赖
     3. PyInstaller onedir 打包 ocr_entry.py 为 `ocr` 入口
        （5.x onedir 布局：可执行文件与依赖同级，无 _internal/，与 win 包一致）
-    4. 归档 dist/ocr/ 内容为 ocr-linux-<arch>.zip（zip 根即 ocr 二进制，保留 +x 权限位）
-    5. 冒烟自校验：对产物执行 CLI 契约测试（--ocr / --det-target + --det-bg）
+    4. 剔除 CLI 契约不使用的模型（common.onnx / common_det.onnx，
+       保留 common_old.onnx 与 win 包模型对齐，每包约减 74MB）
+    5. 归档 dist/ocr/ 内容为 ocr-linux-<arch>.zip（zip 根即 ocr 二进制，保留 +x 权限位）
+    6. 冒烟自校验：对产物执行 CLI 契约测试（--ocr / --det-target + --det-bg）
 
 用法（Linux 环境，Python 3.8）：
     python3 build.py                     # 输出到 <脚本目录>/dist/
@@ -111,6 +113,22 @@ def build_binary(venv_python: Path, output_dir: Path) -> Path:
         raise SystemExit('打包失败：未找到产物 %s' % binary)
     binary.chmod(0o755)
     return app_dir
+
+
+def prune_unused_models(app_dir: Path):
+    """剔除 CLI 契约不使用的模型文件，控制产物体积（每包约减 74MB）：
+    - common.onnx：新版字识别模型（ocr_entry.py 使用 old=True 旧版模型，与 win 包对齐）
+    - common_det.onnx：目标检测模型（CLI 契约仅用 slide_match，纯 cv2 不依赖模型）
+    保留 common_old.onnx（old=True 加载，缺失即致命错误）。"""
+    keep = app_dir / 'ddddocr' / 'common_old.onnx'
+    if not keep.exists():
+        raise SystemExit('未找到必需模型 common_old.onnx: %s' % keep)
+    for name in ('common.onnx', 'common_det.onnx'):
+        p = app_dir / 'ddddocr' / name
+        if p.exists():
+            size = p.stat().st_size
+            p.unlink()
+            print('[ok] 剔除未使用模型: %s (%d bytes)' % (p, size))
 
 
 def archive(app_dir: Path, output_dir: Path, arch: str) -> Path:
@@ -226,6 +244,7 @@ def main():
 
     venv_python = build_venv(output_dir / 'venv')
     app_dir = build_binary(venv_python, output_dir)
+    prune_unused_models(app_dir)
     zip_path = archive(app_dir, output_dir, arch)
     if not args.skip_smoke:
         smoke_test(app_dir / 'ocr', venv_python, output_dir)

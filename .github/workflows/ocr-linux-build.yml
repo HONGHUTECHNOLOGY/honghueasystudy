@@ -1,9 +1,12 @@
 name: OCR Linux Build (x64/arm64)
 
 # Linux OCR 二进制构建流水线（ddddocr + PyInstaller）
-# 产物：ocr-linux-x64.zip / ocr-linux-arm64.zip，仅以 Actions Artifact 交付，不上传 CDN、无发布环节。
-# 入库流程：下载对应架构 Artifact → 放入 honghueasystudy_desktop/bin/ocr/linux-<arch>/ 并重命名为
-# ocr.zip → 提交仓库，由 electron-builder extraResources 内嵌进 Linux 安装包
+# 产物：ocr-linux-x64.zip / ocr-linux-arm64.zip（x64 ~229MB / arm64 ~157MB，
+# 超过 git 单文件 100MB 限制，不入库）。
+# 交付：双架构 zip 由 release job 自动上传至 GitHub Release（预发布 tag: ocr-linux，
+# 永久有效）；desktop-build.yml 的 linux job 打包前 gh release download 拉取内嵌。
+# Actions Artifact 仅作短期调试用途（14 天保留期），非交付通道。
+# 运行时分发保持纯内置：安装包内嵌 ocr.zip，运行时零网络请求
 # （详见 honghueasystudy_desktop/scripts/ocr-linux/README.md）
 on:
   workflow_dispatch:
@@ -104,3 +107,35 @@ jobs:
           path: build-arm64/ocr-linux-arm64.zip
           if-no-files-found: error
           retention-days: 14
+
+  # 双架构产物发布到 GitHub Release（预发布 tag: ocr-linux）
+  # 产物超过 git 单文件 100MB 限制无法入库，Release 资产是 Linux 打包的唯一来源
+  release:
+    needs: [build-x64, build-arm64-native, build-arm64-qemu]
+    if: ${{ !cancelled() && needs.build-x64.result == 'success' && (needs.build-arm64-native.result == 'success' || needs.build-arm64-qemu.result == 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ocr-linux-*.zip
+          merge-multiple: true
+          path: dist
+
+      # gh 在无 checkout 环境需 GH_REPO 定位仓库；release 已存在时 create 静默跳过，
+      # upload --clobber 覆盖同名资产
+      - name: "Upload to GitHub Release (tag: ocr-linux)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create ocr-linux \
+            --title "Linux OCR 资源包" \
+            --prerelease \
+            --notes "由 OCR Linux Build 自动产出（run: ${{ github.run_id }}）。双架构 PyInstaller 产物，供 desktop-build linux job 打包期内嵌，运行时纯内置零网络请求。" \
+            || true
+          gh release upload ocr-linux dist/ocr-linux-x64.zip dist/ocr-linux-arm64.zip --clobber
+          gh release view ocr-linux --json assets --jq '.assets[] | "\(.name) \(.size) bytes"'

@@ -44,7 +44,9 @@ function packResource() {
 
 /**
  * Linux 打包前置防呆：仅本地校验内嵌 OCR 包存在（不下载）。
- * bin/ocr/linux-<arch>/ocr.zip 为手工入库文件（CI Artifact 下载后放入），
+ * bin/ocr/linux-<arch>/ocr.zip 体积超 git 单文件 100MB 限制，不入库：
+ * 由 GitHub Release（tag: ocr-linux，ocr-linux-build.yml 维护）提供，
+ * CI（desktop-build.yml）打包前自动拉取；本地打包需手动下载放入。
  * 缺失时构建期报错，防止产出无 OCR 能力的 Linux 安装包；win/mac 不受影响。
  */
 function verifyLinuxOcr(done) {
@@ -59,8 +61,8 @@ function verifyLinuxOcr(done) {
 		done(
 			new Error(
 				`[build-app] Linux 打包缺少内嵌 OCR 资源包：${ocrZip}\n` +
-					'Linux OCR 为纯内置分发，不提供在线下载。请从 CI Artifact 获取' +
-					`（.github/workflows/ocr-linux-build.yml 产物 ocr-linux-${arch}.zip），` +
+					'Linux OCR 为纯内置分发，不提供在线下载。请从 GitHub Release（tag: ocr-linux）下载 ' +
+					`ocr-linux-${arch}.zip（由 .github/workflows/ocr-linux-build.yml 产出），` +
 					`放入 honghueasystudy_desktop/bin/ocr/linux-${arch}/ 并重命名为 ocr.zip 后重试。`
 			)
 		);

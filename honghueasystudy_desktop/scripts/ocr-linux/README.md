@@ -1,8 +1,9 @@
 # Linux OCR 构建流水线（scripts/ocr-linux）
 
 将桌面端 OCR 能力（ddddocr 验证码识别 + 滑块缺口检测）适配到 Linux（x64 / arm64 双架构），
-产出与 win / mac 包同构的 PyInstaller onedir 包。Linux 为**纯内置分发**：产物仅以 CI Artifact 交付，
-维护者下载入库后由 electron-builder 内嵌进安装包，供启动初始化使用（无 CDN 上传/下载、离线可用）。
+产出与 win / mac 包同构的 PyInstaller onedir 包。Linux 为**纯内置分发**：产物以 GitHub Release
+资产交付（体积超 git 单文件 100MB 限制，不入库），打包期内嵌进安装包，供启动初始化使用
+（运行时无 CDN 上传/下载、离线可用）。
 
 ## 版本对齐基准（T001，提取自现有 win 包）
 
@@ -29,23 +30,29 @@
 - 参数 / 文件错误：非 0 退出码
 - 入口文件名：Linux 为 `ocr`（无扩展名），已由消费端 `process.platform === 'win32' ? './ocr.exe' : './ocr'` 覆盖
 
-## 产物命名与分发（v2：纯内置，与 plan.md Decision 3 一致）
+## 产物命名与分发（v2：纯内置运行时；构建产物走 GitHub Release，不入库）
 
-Linux OCR 为**纯内置分发**：构建产物仅以 Actions Artifact 交付，**不上传 CDN**。
+Linux OCR **运行时分发为纯内置**：安装包内嵌 `ocr.zip`，运行时零网络请求，**不上传 CDN**。
+构建产物体积超过 git 单文件 100MB 限制，**不入库**，以 GitHub Release 资产交付：
 
 | 平台            | 产物                  | 分发方式                                          |
 | --------------- | --------------------- | ------------------------------------------------- |
 | win（x64）      | `ocr.zip`             | CDN（保持现状，与 Linux 无关）                    |
 | mac（x64/arm64）| `ocr-darwin.zip`      | CDN（保持现状，与 Linux 无关）                    |
-| linux x64       | `ocr-linux-x64.zip`   | CI Artifact → 入库 `bin/ocr/linux-x64/ocr.zip`    |
-| linux arm64     | `ocr-linux-arm64.zip` | CI Artifact → 入库 `bin/ocr/linux-arm64/ocr.zip`  |
+| linux x64       | `ocr-linux-x64.zip`   | GitHub Release（tag: `ocr-linux`）→ 打包期拉取内嵌 |
+| linux arm64     | `ocr-linux-arm64.zip` | GitHub Release（tag: `ocr-linux`）→ 打包期拉取内嵌 |
 
-**入库流程**：`.github/workflows/ocr-linux-build.yml`（workflow_dispatch 手动触发）产出双架构
-Actions Artifact（`ocr-linux-x64.zip` / `ocr-linux-arm64.zip`）→ 维护者下载对应架构 Artifact →
-放入 `honghueasystudy_desktop/bin/ocr/linux-<arch>/` 并重命名为 `ocr.zip` → 提交仓库。
-入库后的 zip 由 electron-builder extraResources（`electron.builder.json` linux 块）内嵌进 Linux
-安装包，运行时 `init.ocr.ts` 仅从内置资源解压安装（纯离线可用，零网络请求）；
-Linux 打包前置存在性校验见 `scripts/build-app.js`（缺失时构建期报错，提示从 CI Artifact 获取）。
+**交付流程**：`.github/workflows/ocr-linux-build.yml`（workflow_dispatch 手动触发）产出双架构
+zip，由 release job 自动上传至 GitHub Release（预发布 tag: `ocr-linux`，永久有效；Actions
+Artifact 仅作 14 天短期调试，非交付通道）。`desktop-build.yml` 的 linux job 在打包前通过
+`gh release download` 拉取对应架构 zip 放入 `bin/ocr/linux-<arch>/ocr.zip`，由
+electron-builder extraResources（`electron.builder.json` linux 块）内嵌进 Linux 安装包；
+运行时 `init.ocr.ts` 仅从内置资源解压安装（纯离线可用）。本地打包需手动从 Release 下载
+放入同路径；缺失时 `scripts/build-app.js` 构建期报错拦截。
+
+**模型对齐**：CLI 使用 `common_old.onnx`（`ocr_entry.py` 中 `DdddOcr(old=True)`），与 win 包
+一致；`common.onnx`（新版字识别模型）/ `common_det.onnx`（目标检测模型）为 CLI 契约不使用的
+模型，构建期剔除以控制体积（每包约减 74MB）。
 
 ## 使用
 
