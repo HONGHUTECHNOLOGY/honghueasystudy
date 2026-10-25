@@ -1,5 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html
+	lang="zh-CN"
+	data-theme="dark"
+>
 	<head>
 		<meta charset="UTF-8" />
 		<meta
@@ -8,7 +11,17 @@
 		/>
 		<meta
 			name="theme-color"
-			content="#07090D"
+			content="#08090c"
+			media="(prefers-color-scheme: dark)"
+		/>
+		<meta
+			name="theme-color"
+			content="#f4f5f8"
+			media="(prefers-color-scheme: light)"
+		/>
+		<meta
+			name="color-scheme"
+			content="dark light"
 		/>
 		<meta
 			name="apple-mobile-web-app-capable"
@@ -22,10 +35,101 @@
 			name="format-detection"
 			content="telephone=no"
 		/>
-		<title>鸿鹄易学 · 远程控制</title>
+		<meta
+			name="referrer"
+			content="no-referrer"
+		/>
+		<title>鸿鹄易学 · 远程控制台</title>
+
+		<!-- 图标：由 icon/icon300w.png 生成，public/ 内文件原样输出到构建根目录 -->
+		<link
+			rel="icon"
+			type="image/png"
+			sizes="32x32"
+			href="./favicon-32.png"
+		/>
+		<link
+			rel="icon"
+			type="image/png"
+			sizes="64x64"
+			href="./favicon-64.png"
+		/>
+		<link
+			rel="icon"
+			sizes="any"
+			href="./favicon.ico"
+		/>
+		<link
+			rel="apple-touch-icon"
+			sizes="180x180"
+			href="./apple-touch-icon.png"
+		/>
+		<link
+			rel="manifest"
+			href="./manifest.webmanifest"
+		/>
+
+		<script>
+			/* 尽早应用主题，避免首屏在深浅之间跳一下 */
+			(function () {
+				try {
+					var saved = localStorage.getItem('hh-remote:theme');
+					var mode = saved ? JSON.parse(saved) : 'auto';
+					var dark =
+						mode === 'dark' || (mode === 'auto' && !window.matchMedia('(prefers-color-scheme: light)').matches);
+					document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+				} catch (e) {
+					/* 隐私模式下 localStorage 可能不可用，保持默认深色 */
+				}
+			})();
+		</script>
+
+		<!-- 首屏占位：脚本与样式表加载前避免白闪 -->
+		<style>
+			html {
+				background: #08090c;
+			}
+			html[data-theme='light'] {
+				background: #f4f5f8;
+			}
+			body {
+				margin: 0;
+			}
+			#boot {
+				position: fixed;
+				inset: 0;
+				display: grid;
+				place-items: center;
+				font: 500 13px/1.6 Inter, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+				color: rgba(243, 244, 248, 0.4);
+				letter-spacing: 0.02em;
+			}
+			html[data-theme='light'] #boot {
+				color: #8d939e;
+			}
+			#boot span {
+				width: 20px;
+				height: 20px;
+				border-radius: 50%;
+				border: 2px solid rgba(255, 255, 255, 0.14);
+				border-top-color: #7c6cff;
+				animation: boot-spin 0.8s linear infinite;
+			}
+			html[data-theme='light'] #boot span {
+				border-color: rgba(20, 24, 32, 0.12);
+				border-top-color: #635bff;
+			}
+			@keyframes boot-spin {
+				to {
+					transform: rotate(360deg);
+				}
+			}
+		</style>
 	</head>
 	<body>
-		<div id="app"></div>
+		<div id="app">
+			<div id="boot"><span></span></div>
+		</div>
 		<script
 			type="module"
 			src="/src/main.ts"

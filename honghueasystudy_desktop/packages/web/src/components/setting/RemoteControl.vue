@@ -65,12 +65,28 @@
 				class="rc-addresses"
 			>
 				<div
-					v-for="url in status.addresses"
+					v-for="(url, index) in status.addresses"
 					:key="url"
 					class="rc-address"
 					@click="copy(url)"
 				>
-					<span class="ellipsis">{{ url }}</span>
+					<span class="ellipsis">
+						{{ url }}
+					</span>
+					<em
+						v-if="index === 0 && status.addresses.length > 1"
+						class="rc-addr-badge"
+					>
+						推荐
+					</em>
+					<a-tag
+						v-if="status.addresses.length > 1"
+						size="small"
+						:bordered="false"
+						@click.stop="useUrl(url)"
+					>
+						生成二维码
+					</a-tag>
 					<a-tag
 						size="small"
 						:bordered="false"
@@ -245,10 +261,16 @@
 					<p>手机扫码打开远程控制台</p>
 					<p class="rc-faint">{{ qrTip }}</p>
 					<p
-						v-if="qrTarget"
+						v-if="qrFullTarget"
 						class="rc-faint rc-qr-target ellipsis"
 					>
-						{{ qrTarget }}
+						{{ qrFullTarget }}
+					</p>
+					<p
+						v-if="status.addresses.length > 1 && !qrTarget"
+						class="rc-faint"
+					>
+						扫码打不开？用上方其他地址重新生成二维码。
 					</p>
 					<a-button
 						v-if="qrTarget"
@@ -452,6 +474,13 @@ const qrTip = computed(() => {
 	return '扫码后配对码已自动填充，点「连接设备」即可';
 });
 
+/**
+ * 二维码当前指向的地址。
+ * 默认用后端算出的推荐地址（隧道运行时为公网地址），手动选地址时显示所选地址——
+ * 让用户一眼看出码扫的是哪个 IP，出问题时能直接判断是不是选错了网卡。
+ */
+const qrFullTarget = computed(() => qrTarget.value || status.preferredUrl || '');
+
 let timer: ReturnType<typeof setInterval> | undefined;
 /**
  * 上次与后端同步过的访问方式。
@@ -459,6 +488,9 @@ let timer: ReturnType<typeof setInterval> | undefined;
  * 否则用户刚点开「密码」还没来得及设置，就会被 3 秒轮询重置回配对码。
  */
 let lastSyncedMode: 'pair' | 'password' | 'none' = 'pair';
+
+/** 上次见到的推荐地址，用于判断网络变化后是否需要重建二维码 */
+let lastPreferredUrl = '';
 
 // ------------------------------------------------------------------ 数据
 
@@ -478,6 +510,17 @@ async function loadStatus() {
 			authModeDraft.value = serverMode;
 		}
 		lastSyncedMode = serverMode;
+
+		/**
+		 * 推荐地址会随网络变化（切换 Wi-Fi、插拔网线、开隧道）。
+		 * 用户没有手动指定地址时，让它自动跟着重建二维码；手动指定过就不打扰。
+		 */
+		const preferred = data.preferredUrl || '';
+		if (!qrTarget.value && preferred && preferred !== lastPreferredUrl) {
+			const isFirstSync = !lastPreferredUrl;
+			lastPreferredUrl = preferred;
+			if (!isFirstSync) await loadQR();
+		}
 	} catch (e) {
 		console.error('获取远程控制状态失败', e);
 	}
@@ -822,6 +865,17 @@ onBeforeUnmount(() => {
 .rc-address > span:first-child {
 	flex: 1;
 	min-width: 0;
+}
+
+.rc-addr-badge {
+	flex: none;
+	padding: 0 5px;
+	border-radius: 4px;
+	background: rgb(var(--primary-1));
+	color: rgb(var(--primary-6));
+	font-size: 10px;
+	font-style: normal;
+	line-height: 16px;
 }
 
 .rc-tunnel {

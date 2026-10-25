@@ -1,6 +1,7 @@
 import os from 'os';
 import axios from 'axios';
 import { Logger } from '../../logger';
+import { collectIpv4InterfacesSync, detectPrimaryAddress, rankIpv4Interfaces } from './network.addr';
 
 const logger = Logger('remote-network');
 
@@ -109,29 +110,35 @@ export async function detectNetwork(port: number): Promise<NetworkReport> {
 	const publicIpv4: string[] = [];
 	const publicIpv6: string[] = [];
 
+	/**
+	 * 走统一的网卡采集/排序：排除 APIPA 与代理 TUN 段，物理网卡优先。
+	 * 这样「网络检测」里列出的地址顺序与二维码推荐地址保持一致。
+	 */
+	try {
+		const primary = await detectPrimaryAddress();
+		const ipv4List = rankIpv4Interfaces(collectIpv4InterfacesSync(), primary);
+		ipv4List.forEach((item) => {
+			if (item.private) lanAddresses.push(item.address);
+			else publicIpv4.push(item.address);
+		});
+	} catch (e) {
+		logger.error('枚举网卡失败', e);
+	}
+
 	try {
 		const interfaces = os.networkInterfaces();
 		Object.keys(interfaces).forEach((name) => {
 			const list = interfaces[name] || [];
 			list.forEach((item) => {
 				if (item.internal) return;
-				// @types/node 不同版本下 family 可能是 'IPv4' 或 4，统一转字符串判断
 				const family = String(item.family);
-				if (family === 'IPv4' || family === '4') {
-					if (isPrivateIpv4(item.address)) {
-						lanAddresses.push(item.address);
-					} else {
-						publicIpv4.push(item.address);
-					}
-				} else if (family === 'IPv6' || family === '6') {
-					if (isPublicIpv6(item.address)) {
-						publicIpv6.push(item.address);
-					}
+				if (family === 'IPv6' || family === '6') {
+					if (isPublicIpv6(item.address)) publicIpv6.push(item.address);
 				}
 			});
 		});
 	} catch (e) {
-		logger.error('枚举网卡失败', e);
+		logger.error('枚举 IPv6 网卡失败', e);
 	}
 
 	const lanUrls = lanAddresses.map((ip) => `http://${ip}:${port}`);

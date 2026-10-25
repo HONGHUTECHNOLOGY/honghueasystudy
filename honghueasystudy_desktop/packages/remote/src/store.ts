@@ -1,11 +1,14 @@
 import { reactive } from 'vue';
 import { api, AuthError, BrowserSnapshot, RemoteSnapshot, ServiceInfo, TunnelStatus } from './api';
+import { copyText } from './utils';
 
 export interface ToastItem {
 	id: number;
 	text: string;
 	type: 'info' | 'success' | 'error';
 }
+
+export type ThemeMode = 'auto' | 'dark' | 'light';
 
 interface State {
 	ready: boolean;
@@ -26,6 +29,8 @@ interface State {
 	error: string;
 	toasts: ToastItem[];
 	pending: { [uid: string]: string };
+	/** 最近一次收到快照的时间 */
+	lastUpdate: number;
 }
 
 export const state = reactive<State>({
@@ -45,13 +50,15 @@ export const state = reactive<State>({
 	connected: false,
 	error: '',
 	toasts: [],
-	pending: {}
+	pending: {},
+	lastUpdate: 0
 });
 
 /** 界面态（与业务数据分开） */
 export const ui = reactive({
 	tab: 'home' as 'home' | 'logs' | 'about',
-	detailUid: ''
+	detailUid: '',
+	theme: 'auto' as ThemeMode
 });
 
 // ------------------------------------------------------------------ Toast
@@ -67,6 +74,80 @@ export function toast(text: string, type: ToastItem['type'] = 'info') {
 	}, 3200);
 }
 
+/** 复制并给出反馈；非安全上下文下会走 execCommand 回退 */
+export async function copyWithToast(text: string, label = '已复制') {
+	const ok = await copyText(text);
+	toast(ok ? label : '复制失败，请长按手动选择', ok ? 'success' : 'error');
+}
+
+// ------------------------------------------------------------------ 主题
+
+const THEME_KEY = 'hh-remote:theme';
+
+function readTheme(): ThemeMode {
+	try {
+		const raw = localStorage.getItem(THEME_KEY);
+		if (!raw) return 'auto';
+		let value: unknown = raw;
+		try {
+			value = JSON.parse(raw);
+		} catch {
+			/* 兼容直接写入裸字符串的旧值 */
+		}
+		if (value === 'dark' || value === 'light' || value === 'auto') return value;
+	} catch {
+		/* 隐私模式 */
+	}
+	return 'auto';
+}
+
+function preferDark(): boolean {
+	if (typeof window === 'undefined' || !window.matchMedia) return true;
+	return !window.matchMedia('(prefers-color-scheme: light)').matches;
+}
+
+export function resolveDark(): boolean {
+	if (ui.theme === 'dark') return true;
+	if (ui.theme === 'light') return false;
+	return preferDark();
+}
+
+export function applyTheme(): void {
+	const dark = resolveDark();
+	const root = document.documentElement;
+	root.setAttribute('data-theme', dark ? 'dark' : 'light');
+	/** 让移动端浏览器地址栏 / 状态栏跟随主题 */
+	const metas = document.querySelectorAll('meta[name="theme-color"]');
+	for (let i = 0; i < metas.length; i++) {
+		metas[i].removeAttribute('media');
+		metas[i].setAttribute('content', dark ? '#08090c' : '#f4f5f8');
+	}
+}
+
+export function setTheme(mode: ThemeMode): void {
+	ui.theme = mode;
+	try {
+		localStorage.setItem(THEME_KEY, JSON.stringify(mode));
+	} catch {
+		/* 忽略写入失败 */
+	}
+	applyTheme();
+}
+
+/** 启动时初始化主题，并跟随系统变化 */
+export function initTheme(): void {
+	ui.theme = readTheme();
+	applyTheme();
+	if (typeof window !== 'undefined' && window.matchMedia) {
+		const media = window.matchMedia('(prefers-color-scheme: light)');
+		const onChange = () => {
+			if (ui.theme === 'auto') applyTheme();
+		};
+		if (media.addEventListener) media.addEventListener('change', onChange);
+		else if (media.addListener) media.addListener(onChange);
+	}
+}
+
 // ------------------------------------------------------------------ SSE
 
 let source: EventSource | null = null;
@@ -78,6 +159,7 @@ function applySnapshot(snapshot: RemoteSnapshot | null) {
 	if (!snapshot) return;
 	state.browsers = snapshot.browsers || [];
 	state.logs = snapshot.logs || {};
+	state.lastUpdate = Date.now();
 }
 
 export function connect() {
@@ -215,6 +297,12 @@ export async function refresh() {
 			state.error = e instanceof Error ? e.message : String(e);
 		}
 	}
+}
+
+/** 手动刷新（带反馈） */
+export async function refreshManually() {
+	await refresh();
+	if (!state.error) toast('已同步最新状态', 'success');
 }
 
 /** 验证访问（配对码或密码，由服务端按当前模式判定） */

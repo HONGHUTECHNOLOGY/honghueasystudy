@@ -4,146 +4,172 @@
 		class="mask"
 		@click.self="emit('close')"
 	>
-		<div class="sheet">
-			<div class="grabber"></div>
+		<section
+			class="sheet"
+			role="dialog"
+			aria-modal="true"
+			:aria-label="browser.name"
+		>
+			<span class="grabber"></span>
 
 			<header class="head">
-				<div class="head-main">
-					<div class="title-row">
-						<span
-							class="dot"
-							:class="statusMeta.dot"
-						></span>
-						<h2>{{ browser.name }}</h2>
-					</div>
-					<p class="muted">
+				<span
+					class="dot"
+					:class="statusMeta.dot"
+				></span>
+				<div class="head__text">
+					<h2 class="ellipsis">{{ browser.name }}</h2>
+					<p class="faint ellipsis">
 						{{ statusMeta.label }}
-						<span v-if="browser.notes"> · {{ browser.notes }}</span>
+						<span v-if="browser.tags.length"> · {{ browser.tags.map((t) => t.name).join(' / ') }}</span>
+						<span v-else-if="browser.notes"> · {{ browser.notes }}</span>
 					</p>
 				</div>
 				<button
+					type="button"
 					class="close-btn"
 					aria-label="关闭"
 					@click="emit('close')"
 				>
 					<Icon
 						name="close"
-						:size="18"
+						:size="17"
 					/>
 				</button>
 			</header>
 
-			<div
-				class="screen"
-				@click="fullscreen = true"
-			>
-				<img
-					v-if="thumb"
-					:src="thumb"
-					alt=""
-				/>
-				<div
-					v-else
-					class="screen-empty"
-				>
-					<Icon
-						name="image"
-						:size="26"
-					/>
-					<span>{{ browser.status === 'launched' ? '正在获取画面…' : '实例未运行' }}</span>
-				</div>
-				<div
-					v-if="thumb"
-					class="screen-tip faint"
-				>
-					点击查看大图
-				</div>
-			</div>
+			<div class="grid">
+				<div class="col">
+					<div
+						class="screen"
+						:class="{ ready: !!thumb }"
+						@click="openFullscreen"
+					>
+						<img
+							v-if="thumb"
+							:src="thumb"
+							alt=""
+						/>
+						<div
+							v-else
+							class="screen-empty"
+						>
+							<span class="screen-empty__icon"
+								><Icon
+									name="image"
+									:size="24"
+							/></span>
+							<span>{{ browser.status === 'launched' ? '正在获取画面…' : '实例未运行' }}</span>
+						</div>
+						<span
+							v-if="thumb"
+							class="screen-tip"
+						>
+							<Icon
+								name="expand"
+								:size="12"
+							/>
+							查看大图
+						</span>
+					</div>
 
-			<div
-				v-if="browser.pages.length"
-				class="pages"
-			>
-				<div
-					v-for="(page, index) in browser.pages"
-					:key="index"
-					class="page-item"
-				>
-					<span class="page-index num">{{ index + 1 }}</span>
-					<div class="page-text">
-						<p class="page-title ellipsis">{{ page.title || '（无标题）' }}</p>
-						<p class="page-url faint ellipsis">{{ page.url }}</p>
+					<div class="actions">
+						<button
+							v-if="browser.status === 'closed'"
+							type="button"
+							class="btn btn-primary"
+							:disabled="!!pending"
+							@click="launch"
+						>
+							<Icon
+								name="play"
+								:size="15"
+							/>
+							启动浏览器
+						</button>
+
+						<template v-else>
+							<button
+								type="button"
+								class="btn"
+								:disabled="!!pending || browser.status !== 'launched'"
+								@click="bringToFront"
+							>
+								<Icon
+									name="top"
+									:size="15"
+								/>
+								置于最前
+							</button>
+							<button
+								type="button"
+								class="btn btn-danger"
+								:disabled="!!pending"
+								@click="closeBrowser"
+							>
+								<Icon
+									name="stop"
+									:size="15"
+								/>
+								关闭
+							</button>
+						</template>
+
+						<span
+							v-if="pending"
+							class="spinner"
+						></span>
+					</div>
+				</div>
+
+				<div class="col">
+					<div
+						v-if="browser.pages.length"
+						class="block"
+					>
+						<p class="block__title">
+							<span>打开的页面</span>
+							<span class="faint num">{{ browser.pages.length }}</span>
+						</p>
+						<div class="pages">
+							<div
+								v-for="(page, index) in browser.pages"
+								:key="index"
+								class="page-item"
+							>
+								<span class="page-index num">{{ index + 1 }}</span>
+								<span class="page-text">
+									<span class="page-title ellipsis">{{ page.title || '（无标题）' }}</span>
+									<span class="page-url faint ellipsis">{{ page.url }}</span>
+								</span>
+							</div>
+						</div>
+					</div>
+
+					<div class="block block--log">
+						<p class="block__title">
+							<span>最近日志</span>
+							<span class="faint num">{{ logLines.length }} 行</span>
+						</p>
+						<div class="log-body">
+							<p
+								v-for="(line, index) in logLines"
+								:key="index"
+								class="log-line"
+							>
+								{{ line }}
+							</p>
+							<p
+								v-if="logLines.length === 0"
+								class="faint log-empty"
+							>
+								暂无日志输出
+							</p>
+						</div>
 					</div>
 				</div>
 			</div>
-
-			<div class="actions">
-				<button
-					v-if="browser.status === 'closed'"
-					class="btn btn-primary"
-					:disabled="!!pending"
-					@click="launch"
-				>
-					<Icon
-						name="play"
-						:size="16"
-					/>
-					启动浏览器
-				</button>
-
-				<template v-else>
-					<button
-						class="btn"
-						:disabled="!!pending || browser.status !== 'launched'"
-						@click="bringToFront"
-					>
-						<Icon
-							name="top"
-							:size="16"
-						/>
-						置顶
-					</button>
-					<button
-						class="btn btn-danger"
-						:disabled="!!pending"
-						@click="closeBrowser"
-					>
-						<Icon
-							name="stop"
-							:size="16"
-						/>
-						关闭
-					</button>
-				</template>
-
-				<span
-					v-if="pending"
-					class="spinner"
-				></span>
-			</div>
-
-			<div class="log-block">
-				<div class="log-head">
-					<span class="muted">最近日志</span>
-					<span class="faint num">{{ logLines.length }} 行</span>
-				</div>
-				<div class="log-body">
-					<p
-						v-for="(line, index) in logLines"
-						:key="index"
-						class="log-line"
-					>
-						{{ line }}
-					</p>
-					<p
-						v-if="logLines.length === 0"
-						class="faint log-empty"
-					>
-						暂无日志输出
-					</p>
-				</div>
-			</div>
-		</div>
+		</section>
 
 		<div
 			v-if="fullscreen && thumb"
@@ -239,15 +265,30 @@ function onVisibility() {
 	}
 }
 
+function onKeydown(event: KeyboardEvent) {
+	if (event.key !== 'Escape') return;
+	if (fullscreen.value) {
+		fullscreen.value = false;
+		return;
+	}
+	emit('close');
+}
+
+function openFullscreen() {
+	if (thumb.value) fullscreen.value = true;
+}
+
 onMounted(() => {
 	document.body.style.overflow = 'hidden';
 	document.addEventListener('visibilitychange', onVisibility);
+	document.addEventListener('keydown', onKeydown);
 	startPolling();
 });
 
 onBeforeUnmount(() => {
 	document.body.style.overflow = '';
 	document.removeEventListener('visibilitychange', onVisibility);
+	document.removeEventListener('keydown', onKeydown);
 	stopPolling();
 });
 
@@ -283,12 +324,13 @@ async function bringToFront() {
 	position: fixed;
 	inset: 0;
 	z-index: 60;
-	background: rgba(0, 0, 0, 0.55);
-	backdrop-filter: blur(4px);
+	background: var(--overlay);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
 	display: flex;
 	align-items: flex-end;
 	justify-content: center;
-	animation: fade-in 0.2s var(--ease);
+	animation: fade-in 0.22s var(--ease);
 }
 
 @keyframes fade-in {
@@ -302,22 +344,23 @@ async function bringToFront() {
 
 .sheet {
 	width: 100%;
-	max-width: 640px;
+	max-width: 660px;
 	max-height: 92vh;
 	overflow-y: auto;
-	background: linear-gradient(180deg, rgba(22, 27, 37, 0.98), rgba(12, 16, 22, 0.99));
+	background: var(--sheet-bg);
 	border: 1px solid var(--line);
 	border-bottom: none;
-	border-radius: 24px 24px 0 0;
-	padding: 8px 16px calc(var(--safe-bottom) + 20px);
-	animation: slide-up 0.28s var(--ease);
+	border-radius: 22px 22px 0 0;
+	padding: 8px 16px calc(var(--safe-bottom) + 18px);
+	animation: slide-up 0.3s var(--ease);
 	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
 }
 
 @keyframes slide-up {
 	from {
-		transform: translateY(24px);
-		opacity: 0.4;
+		transform: translateY(26px);
+		opacity: 0.5;
 	}
 	to {
 		transform: translateY(0);
@@ -326,68 +369,92 @@ async function bringToFront() {
 }
 
 .grabber {
-	width: 36px;
+	width: 34px;
 	height: 4px;
 	border-radius: 999px;
-	background: rgba(255, 255, 255, 0.18);
+	background: var(--line-strong);
 	margin: 2px auto 12px;
 }
+
+/* ------------------------------------------------------------------ 头部 */
 
 .head {
 	display: flex;
 	align-items: flex-start;
-	gap: 12px;
+	gap: 9px;
 	margin-bottom: 14px;
+	padding-top: 2px;
 }
 
-.head-main {
+.head .dot {
+	margin-top: 8px;
+}
+
+.head__text {
 	flex: 1;
 	min-width: 0;
 }
 
-.title-row {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-h2 {
+.head h2 {
 	margin: 0;
-	font-size: 17px;
-	font-weight: 600;
+	font-size: 16.5px;
+	font-weight: 650;
+	letter-spacing: -0.01em;
 }
 
 .head p {
-	margin: 2px 0 0 16px;
-	font-size: 12px;
+	margin: 2px 0 0;
+	font-size: 11.5px;
 }
 
 .close-btn {
-	width: 36px;
-	height: 36px;
-	border-radius: 50%;
+	width: 32px;
+	height: 32px;
+	border-radius: 10px;
 	display: grid;
 	place-items: center;
-	background: rgba(255, 255, 255, 0.06);
+	background: var(--surface-2);
 	color: var(--text-2);
 	flex: none;
+	transition: background 0.18s var(--ease), color 0.18s var(--ease);
+}
+
+.close-btn:hover {
+	background: var(--surface-2);
+	color: var(--text);
+}
+
+/* ------------------------------------------------------------------ 内容 */
+
+.grid {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.col {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
 }
 
 .screen {
 	position: relative;
 	width: 100%;
 	aspect-ratio: 16 / 10;
-	border-radius: 16px;
+	border-radius: 14px;
 	overflow: hidden;
-	background: rgba(0, 0, 0, 0.4);
+	background: var(--preview-bg);
 	border: 1px solid var(--line);
-	margin-bottom: 14px;
+	cursor: zoom-in;
 }
 
 .screen img {
 	width: 100%;
 	height: 100%;
 	object-fit: contain;
+	background: rgba(0, 0, 0, 0.2);
 }
 
 .screen-empty {
@@ -397,63 +464,41 @@ h2 {
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 8px;
+	gap: 9px;
 	color: var(--text-3);
 	font-size: 12px;
+	cursor: default;
+}
+
+.screen-empty__icon {
+	width: 44px;
+	height: 44px;
+	border-radius: 14px;
+	display: grid;
+	place-items: center;
+	background: var(--surface);
+	border: 1px solid var(--line);
 }
 
 .screen-tip {
 	position: absolute;
 	right: 8px;
 	bottom: 8px;
-	font-size: 11px;
-	padding: 2px 8px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 10.5px;
+	padding: 3px 8px;
 	border-radius: 999px;
-	background: rgba(0, 0, 0, 0.45);
-}
-
-.pages {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin-bottom: 14px;
-}
-
-.page-item {
-	display: flex;
-	gap: 10px;
-	padding: 10px 12px;
-	border-radius: 12px;
-	background: var(--card);
-	border: 1px solid var(--line);
-}
-
-.page-index {
-	font-size: 11px;
-	color: var(--text-3);
-	padding-top: 2px;
-	flex: none;
-}
-
-.page-text {
-	min-width: 0;
-	flex: 1;
-}
-
-.page-title {
-	margin: 0;
-	font-size: 13px;
-}
-
-.page-url {
-	margin: 2px 0 0;
-	font-size: 11px;
+	background: rgba(0, 0, 0, 0.5);
+	color: rgba(255, 255, 255, 0.86);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
 }
 
 .actions {
 	display: flex;
-	gap: 10px;
-	margin-bottom: 16px;
+	gap: 9px;
 	align-items: center;
 }
 
@@ -461,56 +506,111 @@ h2 {
 	flex: 1;
 }
 
-.log-block {
+/* ------------------------------------------------------------------ 页面 / 日志 */
+
+.block {
 	border-radius: 14px;
-	background: rgba(0, 0, 0, 0.28);
 	border: 1px solid var(--line);
+	background: var(--surface);
 	overflow: hidden;
 }
 
-.log-head {
+.block__title {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 10px 12px;
-	font-size: 12px;
+	margin: 0;
+	padding: 9px 12px;
+	font-size: 11.5px;
+	font-weight: 550;
+	color: var(--text-2);
 	border-bottom: 1px solid var(--line);
 }
 
-.log-body {
-	max-height: 180px;
+.pages {
+	display: flex;
+	flex-direction: column;
+	padding: 6px;
+	gap: 2px;
+	max-height: 168px;
 	overflow-y: auto;
-	padding: 10px 12px;
-	font-family: 'SF Mono', 'JetBrains Mono', Consolas, monospace;
+}
+
+.page-item {
+	display: flex;
+	gap: 8px;
+	padding: 7px 8px;
+	border-radius: 9px;
+	transition: background 0.16s var(--ease);
+}
+
+.page-item:hover {
+	background: var(--surface-2);
+}
+
+.page-index {
+	font-size: 10.5px;
+	color: var(--text-3);
+	padding-top: 2px;
+	flex: none;
+	width: 14px;
+}
+
+.page-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1;
+	line-height: 1.45;
+}
+
+.page-title {
+	font-size: 12.5px;
+}
+
+.page-url {
+	font-size: 10.5px;
+}
+
+.block--log .log-body {
+	max-height: 168px;
+	overflow-y: auto;
+	padding: 9px 11px;
+	font-family: var(--font-mono);
 	font-size: 11px;
 	line-height: 1.6;
+	background: var(--inset);
 }
 
 .log-line {
 	margin: 0 0 2px;
 	white-space: pre-wrap;
 	word-break: break-all;
-	color: rgba(242, 245, 250, 0.7);
+	color: var(--text-2);
 }
 
 .log-empty {
 	margin: 0;
 	text-align: center;
 	font-family: inherit;
-	padding: 12px 0;
+	padding: 14px 0;
+	font-size: 11.5px;
 }
+
+/* ------------------------------------------------------------------ 大图 */
 
 .fullscreen {
 	position: fixed;
 	inset: 0;
 	z-index: 70;
-	background: rgba(0, 0, 0, 0.92);
+	background: rgba(0, 0, 0, 0.93);
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
 	gap: 16px;
-	padding: 16px;
+	padding: 18px;
+	animation: fade-in 0.2s var(--ease);
 }
 
 .fullscreen img {
@@ -521,7 +621,75 @@ h2 {
 }
 
 .fullscreen p {
-	font-size: 12px;
+	font-size: 11.5px;
 	margin: 0;
+	color: rgba(255, 255, 255, 0.5);
+}
+
+/* ------------------------------------------------------------------ 桌面弹窗 */
+
+@media (min-width: 900px) {
+	.mask {
+		align-items: center;
+		padding: 28px;
+	}
+
+	.sheet {
+		max-width: 1040px;
+		max-height: 88vh;
+		border-radius: 22px;
+		border-bottom: 1px solid var(--line);
+		padding: 16px 22px 20px;
+		box-shadow: 0 40px 100px -40px rgba(0, 0, 0, 0.7);
+		animation: pop-in 0.28s var(--ease);
+	}
+
+	@keyframes pop-in {
+		from {
+			transform: translateY(14px) scale(0.985);
+			opacity: 0;
+		}
+		to {
+			transform: translateY(0) scale(1);
+			opacity: 1;
+		}
+	}
+
+	.grabber {
+		display: none;
+	}
+
+	.head {
+		margin-bottom: 16px;
+	}
+
+	.grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1.6fr) minmax(288px, 1fr);
+		gap: 18px;
+		align-items: start;
+	}
+
+	.screen {
+		cursor: zoom-in;
+	}
+
+	.block--log .log-body {
+		max-height: 300px;
+	}
+
+	.pages {
+		max-height: 200px;
+	}
+}
+
+@media (min-width: 1200px) {
+	.sheet {
+		padding: 18px 26px 24px;
+	}
+
+	.block--log .log-body {
+		max-height: 360px;
+	}
 }
 </style>

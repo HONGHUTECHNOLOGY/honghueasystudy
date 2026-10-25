@@ -1,0 +1,33 @@
+{
+	"name": "鸿鹄易学 · 远程控制台",
+	"short_name": "鸿鹄易学",
+	"description": "在手机上查看并操作电脑端正在运行的浏览器实例",
+	"lang": "zh-CN",
+	"dir": "ltr",
+	"start_url": "./",
+	"scope": "./",
+	"display": "standalone",
+	"orientation": "portrait",
+	"background_color": "#08090c",
+	"theme_color": "#08090c",
+	"icons": [
+		{
+			"src": "./favicon-64.png",
+			"sizes": "64x64",
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "./apple-touch-icon.png",
+			"sizes": "180x180",
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "./logo.png",
+			"sizes": "300x300",
+			"type": "image/png",
+			"purpose": "any"
+		}
+	]
+}

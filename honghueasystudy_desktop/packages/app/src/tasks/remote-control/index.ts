@@ -9,6 +9,7 @@ import { hasBuiltinCloudflared } from '@honghu-desktop/common';
 import { AuthMode, RemoteAuth, RemoteSession } from './auth';
 import { CommandBridge, CommandResultPayload } from './command';
 import { detectNetwork, NetworkReport } from './network';
+import { buildLanUrls, buildLanUrlsSync, normalizeClientIp } from './network.addr';
 import { createQRCodeSafe, QRCodeResult } from './qr';
 import { RemoteServer, RemoteSnapshot, ServiceInfo } from './server';
 import { CloudflaredTunnel, TunnelStatus } from './tunnel';
@@ -70,6 +71,21 @@ export class RemoteControlService {
 	private networkReport?: { report: NetworkReport; ts: number };
 	private listeners: ((status: RemoteControlStatus) => void)[] = [];
 	private inited = false;
+
+	/**
+	 * 局域网地址缓存。
+	 *
+	 * 排序需要一次异步的「默认路由网卡」探测，而 getStatus() 是同步的，
+	 * 因此把探测结果缓存下来：启动时刷新一次，之后定时刷新（Wi-Fi 切换、插拔网线）。
+	 * 缓存未就绪时 buildUrls 会退回同步排序，至少保证物理网卡排在虚拟网卡前面。
+	 */
+	private lanCache: { port: number; urls: string[]; primary: string; ts: number } = {
+		port: 0,
+		urls: [],
+		primary: '',
+		ts: 0
+	};
+	private lanTimer?: ReturnType<typeof setInterval>;
 
 	private _auth?: RemoteAuth;
 	private _bridge?: CommandBridge;
@@ -161,6 +177,10 @@ export class RemoteControlService {
 			await this.server.listen(settings.port, settings.allowLan);
 			this.running = true;
 
+			/** 先算出排序后的访问地址，保证二维码一打开就是可用的那个 */
+			await this.refreshAddresses(true);
+			this.startAddressWatcher();
+
 			if (settings.tunnel.enabled) {
 				this.startTunnel().catch((e) => logger.error('隧道启动失败', e));
 			}
@@ -181,6 +201,8 @@ export class RemoteControlService {
 
 	/** 停止服务（含隧道） */
 	async stop(): Promise<RemoteControlStatus> {
+		this.stopAddressWatcher();
+
 		if (this._tunnel) {
 			this._tunnel.stop();
 		}
@@ -204,6 +226,7 @@ export class RemoteControlService {
 
 	/** 退出时清理 */
 	dispose(): void {
+		this.stopAddressWatcher();
 		if (this._tunnel) this._tunnel.stop();
 		if (this._bridge) this._bridge.disposeAll();
 		if (this.server) {
@@ -550,30 +573,100 @@ export class RemoteControlService {
 		this.emitStatus();
 	}
 
-	/** 生成本机可访问地址 */
+	/**
+	 * 重新计算局域网访问地址（按「默认路由网卡 > 物理网卡 > 虚拟网卡」排序）。
+	 * 返回地址列表是否发生变化（变化时上层需要推送状态，让二维码/列表跟着更新）。
+	 */
+	private async refreshAddresses(force = false): Promise<boolean> {
+		const settings = this.settings();
+		const port = settings.port;
+
+		/** 4 秒内重复调用直接复用，避免状态轮询把探测打满 */
+		if (!force && this.lanCache.ts && Date.now() - this.lanCache.ts < 4000) return false;
+
+		let urls: string[] = [];
+		let primary = '';
+		if (settings.allowLan) {
+			/**
+			 * 已连接设备的 IP 是「手机真的连通过」的证据：
+			 * 与它在同一网段的本机地址，优先作为二维码目标。
+			 * 这样用户第一次手动换成正确 IP 之后，二维码会自动记住，不用每次都试。
+			 */
+			let confirmed: string[] = [];
+			try {
+				confirmed = this.auth
+					.list()
+					.map((session) => normalizeClientIp(session.ip))
+					.filter((ip) => !!ip && ip.indexOf(':') === -1);
+			} catch (e) {
+				/** 会话读取失败不影响地址枚举 */
+				confirmed = [];
+			}
+
+			try {
+				urls = await buildLanUrls(port, confirmed);
+				primary = urls.length ? urls[0].replace(/^http:\/\//, '').split(':')[0] : '';
+			} catch (e) {
+				logger.error('获取局域网地址失败', e);
+				urls = [];
+			}
+		} else {
+			urls = [`http://127.0.0.1:${port}`];
+			primary = '127.0.0.1';
+		}
+
+		const changed = urls.join(',') !== this.lanCache.urls.join(',') || port !== this.lanCache.port;
+		this.lanCache = { port, urls, primary, ts: Date.now() };
+
+		if (changed) {
+			logger.info(`可用访问地址已更新：${urls.join(', ') || '（无）'}`);
+		}
+		return changed;
+	}
+
+	/** 定时刷新地址：覆盖切换 Wi-Fi、插拔网线、开关 VPN 等场景 */
+	private startAddressWatcher(): void {
+		this.stopAddressWatcher();
+		this.lanTimer = setInterval(() => {
+			if (!this.running) return;
+			this.refreshAddresses()
+				.then((changed) => {
+					if (changed) this.emitStatus();
+				})
+				.catch(() => {});
+		}, 20000);
+		/** 不阻塞进程退出 */
+		if (this.lanTimer.unref) this.lanTimer.unref();
+	}
+
+	private stopAddressWatcher(): void {
+		if (this.lanTimer) {
+			clearInterval(this.lanTimer);
+			this.lanTimer = undefined;
+		}
+	}
+
+	/**
+	 * 生成本机可访问地址（同步）。
+	 *
+	 * 优先用缓存（含默认路由网卡判定）；缓存未就绪时退回同步排序——
+	 * 即便没有出口探测，物理网卡也已排在虚拟网卡（VMware/VirtualBox/Docker/WSL 等）前面。
+	 */
 	private buildUrls(port: number): string[] {
 		if (!this.settings().allowLan) {
 			return [`http://127.0.0.1:${port}`];
 		}
 
-		const urls: string[] = [];
-		try {
-			const interfaces = os.networkInterfaces();
-			Object.keys(interfaces).forEach((name) => {
-				const list = interfaces[name] || [];
-				list.forEach((item) => {
-					if (item.internal) return;
-					const family = String(item.family);
-					if (family === 'IPv4' || family === '4') {
-						urls.push(`http://${item.address}:${port}`);
-					}
-				});
-			});
-		} catch (e) {
-			logger.error('枚举网卡失败', e);
+		if (this.lanCache.port === port && this.lanCache.urls.length) {
+			return this.lanCache.urls;
 		}
 
-		return urls;
+		try {
+			return buildLanUrlsSync(port);
+		} catch (e) {
+			logger.error('枚举网卡失败', e);
+			return [];
+		}
 	}
 
 	private serviceInfo(): ServiceInfo {
