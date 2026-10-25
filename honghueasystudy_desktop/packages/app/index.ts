@@ -13,6 +13,7 @@ import { initExtension } from './src/tasks/init.extension';
 import { initOcr } from './src/tasks/init.ocr';
 import { store } from './src/store';
 import { initAesKey } from './src/crypto';
+import { initRemoteControl, remoteControl } from './src/tasks/remote-control';
 
 app.setName('鸿鹄易学');
 
@@ -89,6 +90,9 @@ function bootstrap() {
 				});
 
 				task('初始化远程通信模块', () => remoteRegister(window));
+				task('初始化远程控制服务', () =>
+					initRemoteControl(window).catch((e) => console.error('远程控制服务初始化失败', e))
+				);
 				task('注册app事件监听器', () => globalListenerRegister(window));
 
 				if (app.isPackaged) {
@@ -104,3 +108,19 @@ function bootstrap() {
 		])
 	);
 }
+
+/**
+ * 进程真正退出时清理远程控制服务与隧道子进程。
+ *
+ * 注意：不能放在 app 的 before-quit / quit 中。
+ * 主进程的 quit 事件会 preventDefault 并交由渲染层处理（可能因浏览器拒绝关闭而取消退出），
+ * 一旦在 before-quit 里停掉服务，用户取消退出后远程控制将无法恢复。
+ * process 的 exit 事件只在确定退出时同步触发，是唯一安全的位置。
+ */
+process.on('exit', () => {
+	try {
+		remoteControl.dispose();
+	} catch (e) {
+		console.error('清理远程控制服务失败', e);
+	}
+});

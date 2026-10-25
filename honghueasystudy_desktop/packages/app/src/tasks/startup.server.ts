@@ -126,6 +126,20 @@ async function fetchIcon(iconUrl: string): Promise<{ data: Buffer; contentType: 
 	return FALLBACK_ICON;
 }
 
+/**
+ * 判定 OCR 调用错误是否为二进制执行层面的失败（无法启动）。
+ * - ENOENT / EACCES / ENOEXEC：找不到二进制、无执行权限、可执行格式错误（exec spawn 失败）
+ * - 127：shell 下命令缺失，或 linux 加载器缺动态库（glibc / onnxruntime so 缺失时的经典退出码）
+ * 其余错误（推理异常、参数文件错误的非 0 退出码等）视为模块可用但识别失败。
+ */
+function isBinaryExecError(err: unknown): boolean {
+	if (!err || typeof err !== 'object' || !('code' in err)) {
+		return false;
+	}
+	const code = (err as { code?: unknown }).code;
+	return code === 'ENOENT' || code === 'EACCES' || code === 'ENOEXEC' || code === 127;
+}
+
 export async function startupServer() {
 	const app = express();
 
@@ -294,7 +308,13 @@ export async function startupServer() {
 					res.send({ error: '参数缺失!' });
 				}
 			} catch (err) {
-				res.json({ canOCR: true, error: err });
+				// 二进制执行层面的失败（找不到/无权限/缺依赖库导致无法启动）按模块不可用降级，
+				// 自动化脚本走 canOCR=false 降级路径；其余（推理失败等）保持原有错误返回
+				if (isBinaryExecError(err)) {
+					res.json({ canOCR: false });
+				} else {
+					res.json({ canOCR: true, error: err });
+				}
 			}
 		} else {
 			res.json({ canOCR: false });

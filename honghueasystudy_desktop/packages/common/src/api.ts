@@ -12,6 +12,8 @@ export interface ResourceFile {
 	platforms?: {
 		// eslint-disable-next-line no-undef
 		platform: NodeJS.Platform;
+		/** 可选架构标识（process.arch，如 x64/arm64）：同平台多架构资源（linux x64/arm64）区分用；缺省视为平台默认资源 */
+		arch?: string;
 		url: string;
 	}[];
 }

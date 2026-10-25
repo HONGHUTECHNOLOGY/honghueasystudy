@@ -10,7 +10,9 @@ import { app } from 'electron';
  *   （scripts/ocr.install.js 的下载输出到该平台子目录）
  *
  * 平台串 `<platform>-<arch>` 与 ocr.install.js 的 `${PLATFORM || 'win'}-${ARCH || 'x64'}` 保持一致。
- * 上游只有 win / mac 两种构建（mac 包 x64/arm64 通用），linux 无 OCR 包。
+ * 三平台均有 OCR 构建：win（`ocr.zip`）、mac（`ocr-darwin.zip`，x64/arm64 通用）、
+ * linux（CI Artifact `ocr-linux-<arch>.zip` 入库为 `bin/ocr/linux-<arch>/ocr.zip`，纯内置分发，
+ * 由 scripts/ocr-linux/ 流水线产出，不上传 CDN）。
  */
 export function getBuiltinOcrRoot(): string {
 	if (app.isPackaged) {

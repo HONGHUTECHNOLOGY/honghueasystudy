@@ -30,9 +30,12 @@ export class Process extends EventEmitter {
 	launchOptions: Required<LaunchOptions>;
 	/** 输出 */
 	logs: string[] = [];
+	/** 当前所有页面（远程控制展示用） */
+	pages: { url: string; title: string }[] = [];
 
 	video: HTMLVideoElement | undefined = undefined;
 	stream: MediaStream | undefined = undefined;
+	private pagesTimer: ReturnType<typeof setTimeout> | undefined;
 
 	static from(uid: string) {
 		return processes.find((p) => p.uid === uid);
@@ -86,6 +89,7 @@ export class Process extends EventEmitter {
 			/** 浏览器启动 */
 			launched: async () => {
 				this.status = 'launched';
+				this.refreshPages();
 			},
 			/**
 			 * 浏览器关闭
@@ -96,6 +100,10 @@ export class Process extends EventEmitter {
 				console.log('browser-closed', this.uid);
 				// 从进程列表中移除
 				Process.remove(this.uid);
+			},
+			/** 页面新增/跳转/关闭，节流后刷新页面列表 */
+			'page-changed': () => {
+				this.refreshPages();
 			}
 		};
 
@@ -123,6 +131,66 @@ export class Process extends EventEmitter {
 			},
 			langs: store.render.langs as any
 		});
+	}
+
+	/**
+	 * 调用子进程方法并等待返回值
+	 *
+	 * 用于远程控制：截图、获取页面列表等需要拿到结果的场景。
+	 * 子进程侧通过 replyId 回传，见 packages/app/script.js。
+	 */
+	callWorker(event: string, ...args: any[]): Promise<any> {
+		return new Promise((resolve, reject) => {
+			const shell = this.shell;
+			if (!shell || !shell.connected) {
+				reject(new Error('浏览器进程未运行'));
+				return;
+			}
+
+			const replyId = `rpc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+			let cleanup = () => {};
+
+			const handler = (message: any) => {
+				if (!message || message.event !== '__reply__') return;
+				if (!message.args || message.args[0] !== replyId) return;
+				cleanup();
+				const payload = message.args[1] || {};
+				if (payload.error) {
+					reject(new Error(String(payload.error)));
+				} else {
+					resolve(payload.data);
+				}
+			};
+
+			const timer = setTimeout(() => {
+				cleanup();
+				reject(new Error('操作超时，可能是浏览器页面无响应'));
+			}, 15000);
+
+			cleanup = () => {
+				clearTimeout(timer);
+				shell.removeListener('message', handler);
+			};
+
+			shell.on('message', handler);
+			shell.send({ event, args, replyId });
+		});
+	}
+
+	/** 节流刷新页面列表 */
+	refreshPages() {
+		if (this.pagesTimer) clearTimeout(this.pagesTimer);
+		this.pagesTimer = setTimeout(async () => {
+			try {
+				const pages = await this.callWorker('getPages');
+				if (Array.isArray(pages)) {
+					this.pages = pages;
+				}
+			} catch {
+				// 浏览器可能正在关闭，忽略
+			}
+		}, 500);
 	}
 
 	async launchPreCheck() {

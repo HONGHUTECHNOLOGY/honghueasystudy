@@ -1,0 +1,106 @@
+name: OCR Linux Build (x64/arm64)
+
+# Linux OCR 二进制构建流水线（ddddocr + PyInstaller）
+# 产物：ocr-linux-x64.zip / ocr-linux-arm64.zip，仅以 Actions Artifact 交付，不上传 CDN、无发布环节。
+# 入库流程：下载对应架构 Artifact → 放入 honghueasystudy_desktop/bin/ocr/linux-<arch>/ 并重命名为
+# ocr.zip → 提交仓库，由 electron-builder extraResources 内嵌进 Linux 安装包
+# （详见 honghueasystudy_desktop/scripts/ocr-linux/README.md）
+on:
+  workflow_dispatch:
+    inputs:
+      # arm64 构建方式：native 使用 GitHub 原生 arm runner（公开仓库免费）；
+      # qemu 在 x64 runner 上以 QEMU + arm64v8/ubuntu:20.04 容器模拟执行（较慢，作为无 arm 配额时的回退）
+      arm64-mode:
+        description: "arm64 构建方式（native / qemu）"
+        required: false
+        default: "native"
+        type: choice
+        options:
+          - native
+          - qemu
+
+jobs:
+  # Linux x64：ubuntu 原生 runner + Python 3.8
+  build-x64:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install Python 3.8
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - name: Build ocr-linux-x64
+        run: python3 honghueasystudy_desktop/scripts/ocr-linux/build.py --output-dir build-x64
+
+      - name: Upload artifact (ocr-linux-x64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-linux-x64.zip
+          path: build-x64/ocr-linux-x64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  # Linux arm64：原生 arm runner（ubuntu-24.04-arm）
+  build-arm64-native:
+    if: ${{ github.event.inputs.arm64-mode != 'qemu' }}
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install Python 3.8
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - name: Build ocr-linux-arm64
+        run: python3 honghueasystudy_desktop/scripts/ocr-linux/build.py --output-dir build-arm64
+
+      - name: Upload artifact (ocr-linux-arm64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-linux-arm64.zip
+          path: build-arm64/ocr-linux-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  # Linux arm64 回退：QEMU + arm64v8/ubuntu:20.04 容器（python3 即 3.8）
+  build-arm64-qemu:
+    if: ${{ github.event.inputs.arm64-mode == 'qemu' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build ocr-linux-arm64 (QEMU)
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v "${{ github.workspace }}:/src" -w /src \
+            arm64v8/ubuntu:20.04 bash -c "
+              apt-get update &&
+              apt-get install -y --no-install-recommends python3 python3-venv python3-pip zip ca-certificates &&
+              python3 honghueasystudy_desktop/scripts/ocr-linux/build.py --output-dir build-arm64
+            "
+
+      - name: Upload artifact (ocr-linux-arm64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocr-linux-arm64.zip
+          path: build-arm64/ocr-linux-arm64.zip
+          if-no-files-found: error
+          retention-days: 14

@@ -97,6 +97,16 @@ export type WebStore = {
 };
 
 const _store: AppStore & { render: WebStore } = defaultsDeep(remote['electron-store'].get('store'), {
+	remoteControl: {
+		enabled: false,
+		port: 15320,
+		allowLan: true,
+		tunnel: {
+			enabled: false,
+			provider: 'cloudflared'
+		},
+		sessionSecret: ''
+	},
 	render: {
 		scripts: [],
 		notifies: [],

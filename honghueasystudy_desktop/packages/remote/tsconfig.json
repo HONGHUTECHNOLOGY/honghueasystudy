@@ -1,0 +1,16 @@
+{
+	"compilerOptions": {
+		"target": "es2019",
+		"module": "esnext",
+		"moduleResolution": "node",
+		"strict": false,
+		"jsx": "preserve",
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"lib": ["es2019", "dom"],
+		"types": ["vite/client"]
+	},
+	"include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts"]
+}

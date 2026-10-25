@@ -194,6 +194,17 @@ export class ScriptWorker {
 						}
 					});
 
+					/**
+					 * 远程控制：页面新增/跳转/关闭时通知渲染进程刷新页面列表。
+					 * 只发送轻量信号，具体数据由渲染进程按需调用 getPages() 拉取。
+					 */
+					const notifyPageChange = () => send('page-changed', this.uid);
+					this.browser?.on('page', (page) => {
+						page.on('framenavigated', notifyPageChange);
+						page.on('close', notifyPageChange);
+						notifyPageChange();
+					});
+
 					// 浏览器启动完成
 					send('launched');
 				},
@@ -257,6 +268,53 @@ export class ScriptWorker {
 		this.browser?.pages().at(-1)?.bringToFront();
 	}
 
+	/**
+	 * 获取当前活动页面的截图（JPEG base64）
+	 *
+	 * 使用 Playwright 截图而非系统窗口截图：
+	 * 能精确对应浏览器实例，且窗口被遮挡、最小化时依然可用。
+	 */
+	async snapshot(options?: { quality?: number }): Promise<string> {
+		const pages = this.browser?.pages() || [];
+		if (pages.length === 0) {
+			throw new Error('浏览器尚未打开任何页面');
+		}
+
+		const page = pages[pages.length - 1];
+		const quality = options && options.quality ? Math.min(Math.max(options.quality, 20), 90) : 55;
+
+		const buffer = await page.screenshot({
+			type: 'jpeg',
+			quality,
+			timeout: 10000,
+			animations: 'disabled',
+			caret: 'hide'
+		});
+
+		return Buffer.isBuffer(buffer) ? buffer.toString('base64') : '';
+	}
+
+	/** 获取当前浏览器实例的所有页面 */
+	async getPages(): Promise<{ url: string; title: string }[]> {
+		const pages = this.browser?.pages() || [];
+		const result: { url: string; title: string }[] = [];
+
+		for (const page of pages) {
+			let title = '';
+			try {
+				title = await Promise.race([
+					page.title(),
+					new Promise<string>((resolve) => setTimeout(() => resolve(''), 1500))
+				]);
+			} catch {
+				title = '';
+			}
+			result.push({ url: page.url(), title });
+		}
+
+		return result;
+	}
+
 	/** 跳转到特殊图像共享浏览器窗口 */
 	async gotoWebRTCPage() {
 		const page = await this.browser?.newPage();
@@ -318,9 +376,7 @@ export class ScriptWorker {
 /** 格式化浏览器拓展启动参数 */
 function formatExtensionArguments(extensionPaths: string[]) {
 	const paths = extensionPaths.map((p) => p.replace(/\\/g, '/')).join(',');
-	return paths.length === 0
-		? []
-		: [`--disable-extensions-except=${paths}`, `--load-extension=${paths}`];
+	return paths.length === 0 ? [] : [`--disable-extensions-except=${paths}`, `--load-extension=${paths}`];
 }
 
 function loggerPrefix() {

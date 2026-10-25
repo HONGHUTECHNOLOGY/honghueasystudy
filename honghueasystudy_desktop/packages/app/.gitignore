@@ -3,6 +3,8 @@
 pnpm-lock.yaml
 package-lock.json
 public/
+# 远程控制台构建产物（由 packages/remote 构建生成）
+public-remote/
 bin/
 tests/
 

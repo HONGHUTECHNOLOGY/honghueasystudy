@@ -29,6 +29,13 @@ jobs:
             platform: linux
             arch: x64
 
+          # Linux ARM64（原生 arm64 runner；QEMU 下全量桌面打包过慢，不设仿真回退。
+          # 注意：本任务依赖 bin/ocr/linux-arm64/ocr.zip 入库（来自 ocr-linux-build.yml
+          # 的 ocr-linux-arm64.zip Artifact），未入库时会被 verifyLinuxOcr 守卫拦截）
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+
     runs-on: ${{ matrix.os }}
     defaults:
       run:

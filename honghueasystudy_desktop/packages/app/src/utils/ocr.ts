@@ -1,4 +1,4 @@
-import { writeFile, mkdirSync, existsSync, rmSync, writeFileSync } from 'fs';
+import { writeFile, mkdirSync, existsSync, rmSync, writeFileSync, accessSync, constants } from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import child_process from 'child_process';
@@ -23,7 +23,8 @@ export function ocr(base64: string) {
 		const img = path.join(img_cache, uuid + '.png');
 		writeFile(img, base64, 'base64', () => {
 			// 要使用 "" 去包裹路径，防止出现空格
-			const cmd = [`".${path.join(getOcrFolder(), getOCRFileName())}"`, '--ocr', `"${img}"`].join(' ');
+			// （与下方 det() 拼接保持一致；此前多拼的前置 "." 会导致 ".<绝对路径>" 无法被 shell 解析，二进制无法执行）
+			const cmd = [`"${path.join(getOcrFolder(), getOCRFileName())}"`, '--ocr', `"${img}"`].join(' ');
 			logger.log('cmd', cmd);
 
 			child_process.exec(cmd, (err, stdout, stderr) => {
@@ -89,9 +90,23 @@ export function det(det_target_base64: string, det_bg_base64: string) {
 	});
 }
 
-/** 判断是否能够进行验证码识别 */
+/**
+ * 判断是否能够进行验证码识别
+ *
+ * 非 Windows 平台需同时校验二进制具备可执行权限（access X_OK）：
+ * JS 解压库丢 +x、安装损坏、架构不符等场景下返回 false，不抛出未捕获异常。
+ */
 export function canOCR() {
-	return existsSync(path.join(getOcrFolder(), getOCRFileName()));
+	const binary = path.join(getOcrFolder(), getOCRFileName());
+	if (!existsSync(binary)) return false;
+	if (process.platform !== 'win32') {
+		try {
+			accessSync(binary, constants.X_OK);
+		} catch {
+			return false;
+		}
+	}
+	return true;
 }
 
 function getOCRFileName() {

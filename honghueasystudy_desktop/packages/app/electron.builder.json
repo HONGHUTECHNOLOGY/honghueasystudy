@@ -50,6 +50,13 @@
         "filter": [
           "**/*.zip"
         ]
+      },
+      {
+        "from": "../../bin/cloudflared/win-${arch}/",
+        "to": "bin/cloudflared",
+        "filter": [
+          "cloudflared*"
+        ]
       }
     ]
   },
@@ -77,6 +84,13 @@
         "filter": [
           "**/*.zip"
         ]
+      },
+      {
+        "from": "../../bin/cloudflared/mac-${arch}/",
+        "to": "bin/cloudflared",
+        "filter": [
+          "cloudflared*"
+        ]
       }
     ]
   },
@@ -101,6 +115,20 @@
         "to": "bin/chrome",
         "filter": [
           "**/*.zip"
+        ]
+      },
+      {
+        "from": "../../bin/ocr/linux-${arch}/",
+        "to": "bin/ocr",
+        "filter": [
+          "**/*.zip"
+        ]
+      },
+      {
+        "from": "../../bin/cloudflared/linux-${arch}/",
+        "to": "bin/cloudflared",
+        "filter": [
+          "cloudflared*"
         ]
       }
     ]

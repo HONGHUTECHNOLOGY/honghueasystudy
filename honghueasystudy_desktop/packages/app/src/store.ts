@@ -37,6 +37,29 @@ export const OriginalAppStore = {
 		port: 15319,
 		authToken: ''
 	},
+	/**
+	 * 远程控制服务设置
+	 * 独立于 render，不参与加密，便于主进程直接读写。
+	 */
+	remoteControl: {
+		/** 是否开启远程控制 */
+		enabled: false,
+		/** 远程控制面板端口 */
+		port: 15320,
+		/** 是否允许局域网设备访问（false 时只监听 127.0.0.1） */
+		allowLan: true,
+		/** 访问验证方式：pair=随机配对码 / password=自设密码 / none=免验证 */
+		authMode: 'pair' as 'pair' | 'password' | 'none',
+		/** 访问密码的 scrypt 哈希，格式 scrypt$salt$hash（仅 password 模式使用） */
+		passwordHash: '',
+		/** 内网穿透设置 */
+		tunnel: {
+			enabled: false,
+			provider: 'cloudflared'
+		},
+		/** 会话 Cookie 签名密钥，首次启动生成 */
+		sessionSecret: ''
+	},
 	/** 渲染进程数据 */
 	render: {} as { [x: string]: any }
 };

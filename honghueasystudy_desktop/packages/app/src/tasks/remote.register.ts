@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
+import child_process from 'child_process';
 import { HonghuApi, getValidBrowsers } from '@honghu-desktop/common';
 import si from 'systeminformation';
 import { store } from '../store';
@@ -18,9 +19,9 @@ import { AutomationScript } from '../scripts/script';
 import { getBrowserMajorVersion, getBuiltinExtensionPaths, getExtensionPaths } from '../utils/browser';
 import { AppStore } from '../../types';
 import { encryptRenderString, decryptRenderString } from '../crypto';
+import { remoteControl } from './remote-control';
 
 export type RawAutomationScript = Pick<AutomationScript, 'configs' | 'name'>;
-
 /**
  * 注册主进程远程通信事件
  * @param name 事件前缀名称
@@ -93,6 +94,38 @@ function registerRemoteEvent(name: string, target: any) {
 
 let win: BrowserWindow | undefined;
 
+const unzipLogger = Logger('remote-unzip');
+
+/**
+ * 应用中心资源解压（web 端 resourceLoader.unzip 远程调用入口）。
+ * linux 优先用系统 unzip：JS 解压库不保留可执行权限与符号链接（参照 init.chrome.ts / init.ocr.ts 先例）；
+ * 系统命令缺失时回退 JS 解压，并对解压产物中的 ocr 二进制补 chmod 0o755 兜底
+ * （顺带修复 darwin 下应用中心安装 OCR 后因 +x 丢失导致 canOCR=false 的潜在问题）。
+ * win32 保持原有行为（直接 JS 解压）。
+ */
+async function unzipResource(input: string, output: string) {
+	if (process.platform === 'linux') {
+		try {
+			child_process.execFileSync('unzip', ['-o', input, '-d', output], { stdio: 'ignore' });
+			return;
+		} catch (e) {
+			unzipLogger.warn('系统 unzip 不可用，回退到内置解压', e);
+		}
+	}
+	await unzip(input, output);
+	if (process.platform !== 'win32') {
+		// JS 解压丢执行权限兜底：解压产物中存在 ocr 二进制时补 +x
+		const binary = path.join(output, 'ocr');
+		if (fs.existsSync(binary)) {
+			try {
+				fs.chmodSync(binary, 0o755);
+			} catch (e) {
+				unzipLogger.warn('补 OCR 可执行权限失败', e);
+			}
+		}
+	}
+}
+
 /** 需远程共享的方法 */
 const methods = {
 	autoLaunch,
@@ -107,7 +140,7 @@ const methods = {
 		});
 	},
 	zip: zip,
-	unzip: unzip,
+	unzip: unzipResource,
 	getValidBrowsers: getValidBrowsers,
 	getBrowserMajorVersion: getBrowserMajorVersion,
 	getExtensionPaths: getExtensionPaths,
@@ -116,6 +149,7 @@ const methods = {
 	exportExcel: exportExcel,
 	statisticFolderSize: statisticFolderSize,
 	getPlatform: () => process.platform,
+	getArch: () => process.arch,
 	updateApp: updateApp,
 	moveWindowToTop: moveWindowToTop,
 	isEncryptionAvailable: () => {
@@ -136,7 +170,25 @@ const methods = {
 			storeData.render = encryptRenderString(JSON.stringify(storeData.render));
 		}
 		store.store = storeData;
-	}
+	},
+
+	// ------------------------------------------------------------ 远程控制
+	// 注意：remote 通道只支持一层方法名，因此这里全部扁平化为 rc* 前缀。
+	rcStatus: () => remoteControl.getStatus(),
+	rcStart: () => remoteControl.start(),
+	rcStop: () => remoteControl.stop(),
+	rcDetectNetwork: (force?: boolean) => remoteControl.detectNetwork(force),
+	rcGetQRCode: (url?: string) => remoteControl.getQRCode(url),
+	rcRefreshPairCode: () => remoteControl.refreshPairCode(),
+	rcSetAuthMode: (mode: 'pair' | 'password' | 'none') => remoteControl.setAuthMode(mode),
+	rcSetPassword: (password: string) => remoteControl.setPassword(password),
+	rcClearPassword: () => remoteControl.clearPassword(),
+	rcListSessions: () => remoteControl.listSessions(),
+	rcRevokeSession: (id: string) => remoteControl.revokeSession(id),
+	rcSetTunnel: (enabled: boolean) => remoteControl.setTunnel(enabled),
+	rcSetPort: (port: number) => remoteControl.setPort(port),
+	rcSetAllowLan: (allowLan: boolean) => remoteControl.setAllowLan(allowLan),
+	rcGetExternalTestUrl: () => remoteControl.getExternalTestUrl()
 };
 
 export type RemoteMethods = typeof methods;
@@ -160,6 +212,23 @@ export function remoteRegister(_win: BrowserWindow) {
 	registerRemoteEvent('methods', methods);
 	registerRemoteEvent('logger', Logger('render'));
 	registerRemoteEvent('desktopCapturer', desktopCapturer);
+
+	/** 远程控制：渲染进程上报状态 / 回传命令结果 */
+	ipcMain.on('remote-ctl:state', (_event, snapshot) => {
+		try {
+			remoteControl.handleState(snapshot);
+		} catch (e) {
+			Logger('remote-ctl').error('state 处理失败', e);
+		}
+	});
+
+	ipcMain.on('remote-ctl:result', (_event, payload) => {
+		try {
+			remoteControl.handleCommandResult(payload);
+		} catch (e) {
+			Logger('remote-ctl').error('result 处理失败', e);
+		}
+	});
 }
 
 const _registerRemoteEvent = registerRemoteEvent;

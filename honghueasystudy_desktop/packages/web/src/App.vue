@@ -66,6 +66,7 @@ import { electron } from './utils/node';
 import { closeAllBrowser, showClearBrowserCachesModal } from './utils/browser';
 import { changeTheme, fetchRemoteLangs, setAlwaysOnTop, setAutoLaunch } from './utils';
 import { activeIpcRenderListener } from './utils/ipc';
+import { activeRemoteControlBridge } from './utils/remoteControl';
 import { getWindowsRelease } from './utils/os';
 import { observeVisibleBrand } from './utils/brand-sanitizer';
 import { currentBrowser } from './fs';
@@ -106,6 +107,9 @@ onMounted(async () => {
 
 	/** 开启 Ipc 通道监听 */
 	activeIpcRenderListener();
+
+	/** 开启远程控制桥接（状态上报 + 命令执行） */
+	activeRemoteControlBridge();
 
 	/** 设置窗口边框 */
 	remote.os.call('platform').then(async (platform) => {

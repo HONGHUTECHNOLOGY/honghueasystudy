@@ -89,6 +89,8 @@
 			</Description>
 		</a-card>
 
+		<RemoteControl />
+
 		<a-card title="基本设置">
 			<Description label="开机自启">
 				<a-switch v-model="store.window.autoLaunch" />
@@ -172,6 +174,7 @@ import Path from './Path.vue';
 import { lang, store } from '../store';
 import { remote } from '../utils/remote';
 import BrowserPath from './setting/BrowserPath.vue';
+import RemoteControl from './setting/RemoteControl.vue';
 import HonghuConfigs from './HonghuConfigs.vue';
 import { reactive } from 'vue';
 import { changeTheme } from '../utils';

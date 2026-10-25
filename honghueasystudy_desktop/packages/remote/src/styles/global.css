@@ -1,0 +1,218 @@
+:root {
+	--bg-0: #07090d;
+	--bg-1: #0e1219;
+	--card: rgba(255, 255, 255, 0.04);
+	--card-strong: rgba(255, 255, 255, 0.07);
+	--line: rgba(255, 255, 255, 0.08);
+	--line-strong: rgba(255, 255, 255, 0.14);
+	--text-1: #f2f5fa;
+	--text-2: rgba(242, 245, 250, 0.62);
+	--text-3: rgba(242, 245, 250, 0.36);
+	--accent-a: #4f8cff;
+	--accent-b: #7c5cff;
+	--ok: #3ddc97;
+	--warn: #ffb648;
+	--danger: #ff5c7a;
+	--radius: 20px;
+	--radius-sm: 12px;
+	--ease: cubic-bezier(0.22, 1, 0.36, 1);
+	--safe-bottom: env(safe-area-inset-bottom, 0px);
+	--safe-top: env(safe-area-inset-top, 0px);
+}
+
+* {
+	box-sizing: border-box;
+	-webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	height: 100%;
+}
+
+body {
+	background: radial-gradient(120% 80% at 50% -10%, rgba(79, 140, 255, 0.16), transparent 60%),
+		radial-gradient(90% 60% at 100% 100%, rgba(124, 92, 255, 0.12), transparent 55%),
+		linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 100%);
+	background-attachment: fixed;
+	color: var(--text-1);
+	font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI',
+		Roboto, sans-serif;
+	font-size: 14px;
+	line-height: 1.55;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+	overscroll-behavior-y: none;
+}
+
+#app {
+	min-height: 100%;
+}
+
+button {
+	font-family: inherit;
+	font-size: inherit;
+	color: inherit;
+	border: none;
+	background: none;
+	cursor: pointer;
+	padding: 0;
+}
+
+input {
+	font-family: inherit;
+	color: inherit;
+	border: none;
+	background: none;
+	outline: none;
+}
+
+img {
+	display: block;
+	max-width: 100%;
+}
+
+::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
+/* ------------------------------------------------------------------ 通用 */
+
+.card {
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	backdrop-filter: blur(20px);
+	-webkit-backdrop-filter: blur(20px);
+}
+
+.num {
+	font-variant-numeric: tabular-nums;
+}
+
+.muted {
+	color: var(--text-2);
+}
+
+.faint {
+	color: var(--text-3);
+}
+
+.ellipsis {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 44px;
+	padding: 0 16px;
+	border-radius: var(--radius-sm);
+	background: var(--card-strong);
+	border: 1px solid var(--line);
+	color: var(--text-1);
+	font-size: 14px;
+	font-weight: 500;
+	transition: transform 0.16s var(--ease), background 0.16s var(--ease), opacity 0.16s var(--ease);
+}
+
+.btn:active {
+	transform: scale(0.97);
+}
+
+.btn:disabled {
+	opacity: 0.45;
+}
+
+.btn-primary {
+	background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+	border-color: transparent;
+	color: #fff;
+	box-shadow: 0 8px 24px -12px rgba(79, 140, 255, 0.9);
+}
+
+.btn-danger {
+	background: rgba(255, 92, 122, 0.12);
+	border-color: rgba(255, 92, 122, 0.28);
+	color: var(--danger);
+}
+
+.btn-sm {
+	min-height: 36px;
+	padding: 0 12px;
+	font-size: 13px;
+	border-radius: 10px;
+}
+
+/* 状态点 */
+.dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--text-3);
+	flex: none;
+}
+
+.dot.ok {
+	background: var(--ok);
+	box-shadow: 0 0 0 0 rgba(61, 220, 151, 0.6);
+	animation: pulse 2s var(--ease) infinite;
+}
+
+.dot.warn {
+	background: var(--warn);
+	animation: pulse 1.4s var(--ease) infinite;
+}
+
+.dot.off {
+	background: rgba(255, 255, 255, 0.22);
+}
+
+@keyframes pulse {
+	0% {
+		box-shadow: 0 0 0 0 rgba(61, 220, 151, 0.5);
+	}
+	70% {
+		box-shadow: 0 0 0 7px rgba(61, 220, 151, 0);
+	}
+	100% {
+		box-shadow: 0 0 0 0 rgba(61, 220, 151, 0);
+	}
+}
+
+@keyframes fade-up {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.fade-up {
+	animation: fade-up 0.32s var(--ease) both;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.spinner {
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	border: 2px solid rgba(255, 255, 255, 0.16);
+	border-top-color: var(--accent-a);
+	animation: spin 0.8s linear infinite;
+}

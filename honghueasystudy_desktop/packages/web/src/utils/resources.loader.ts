@@ -63,13 +63,27 @@ export class ResourceLoader {
 			await remote.fs.call('unlinkSync', downloadPath);
 		}
 		const platform = await remote.methods.call('getPlatform');
-		const url =
-			platform === 'win32'
-				? file.url
-				: // 优先安装对应平台的资源。如果没有对应平台的资源，则使用默认资源
-				  file.platforms?.find((p) => p.platform === platform)?.url || file.url;
+		const arch = await remote.methods.call('getArch');
+		// 优先安装对应平台的资源。同平台命中多条目时优先 arch 匹配的条目（如 linux x64/arm64），
+		// 其次取无 arch 字段的平台默认条目。
+		// 回退防护：资源声明了平台条目但当前平台无匹配条目时，不得回退资源默认 URL
+		// （防止如 Linux 下载到不可用的 win 默认包），该资源在当前平台不可安装
+		const platformEntries = file.platforms?.filter((p) => p.platform === platform) ?? [];
+		const matched =
+			platformEntries.find((p) => p.arch === arch) || platformEntries.find((p) => !p.arch) || platformEntries[0];
+		let url: string;
+		if (platform === 'win32') {
+			// win 始终使用资源默认地址（历史行为不变）
+			url = file.url;
+		} else if (file.platforms?.length) {
+			// 声明了平台条目的资源仅允许从当前平台的匹配条目安装
+			url = matched?.url || '';
+		} else {
+			// 未声明平台条目的资源（如脚本管理器）各平台均使用默认地址
+			url = file.url;
+		}
 		if (!url) {
-			throw new Error('资源下载失败，路径为空');
+			throw new Error('资源下载失败，当前平台无该资源的可用版本');
 		}
 		// 下载
 		await remote.methods.call('download', 'download-file-' + file.id, url, downloadPath);

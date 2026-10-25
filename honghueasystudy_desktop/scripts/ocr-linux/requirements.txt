@@ -1,0 +1,12 @@
+# Linux OCR 构建依赖（Python 3.8）
+# 版本对齐基准：提取自现有 win 包 honghueasystudy_desktop/bin/ocr/win-x64/ocr.zip
+# 详见同目录 README.md「版本对齐基准」一节
+#
+# 注意：opencv 使用 headless 变体（无 GUI 依赖，适配最小化 CI 容器环境）
+ddddocr==1.4.11
+onnxruntime==1.14.0
+opencv-python-headless==4.7.0.72
+Pillow==9.4.0
+numpy==1.24.2
+# 打包器：5.x onedir 布局（可执行文件与依赖同级目录，无 _internal/），与 win 包布局一致
+pyinstaller==5.13.2
