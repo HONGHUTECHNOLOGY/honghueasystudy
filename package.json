@@ -13,6 +13,7 @@
 		"dev": "gulp -f ./scripts/dev-core.js & npm run changelog:simplify",
 		"build": "gulp -f ./scripts/build-core.js",
 		"build:ext": "gulp -f ./scripts/build-extension.js",
+		"pack:ext": "node scripts/pack-extension.js",
 		"build:web": "node scripts/build-website.js",
 		"dev:web": "node scripts/build-website.js --serve",
 		"build:desktop": "pnpm build:ext && pnpm -C honghueasystudy_desktop build",
