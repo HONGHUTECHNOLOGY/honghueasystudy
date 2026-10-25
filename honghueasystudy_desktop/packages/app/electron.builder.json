@@ -95,6 +95,7 @@
     ]
   },
   "linux": {
+    "packageName": "honghueasystudy",
     "icon": "public/favicon.png",
     "artifactName": "鸿鹄易学-${version}-setup-${os}-${arch}.${ext}",
     "target": [
