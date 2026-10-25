@@ -66,7 +66,9 @@ def build_venv(venv_dir: Path) -> Path:
     if venv_dir.exists():
         shutil.rmtree(venv_dir)
     run([sys.executable, '-m', 'venv', str(venv_dir)])
-    venv_python = venv_dir / ('Scripts' / 'python.exe' if os.name == 'nt' else 'bin' / 'python')
+    # 注意：条件表达式优先级低于 /，子路径必须先拼成字符串再与 venv_dir 连接
+    # （写成 'bin' / 'python' 会先求值为 str/str 的 TypeError）
+    venv_python = venv_dir / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
     # 先升级 pip，避免旧 pip 解析 wheel 元数据失败
     run([venv_python, '-m', 'pip', 'install', '--upgrade', 'pip'])
     run([venv_python, '-m', 'pip', 'install', '-r', str(SCRIPT_DIR / 'requirements.txt')])
