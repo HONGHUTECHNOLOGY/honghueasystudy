@@ -52,6 +52,7 @@ export class AuthError extends Error {
 	}
 }
 
+// eslint-disable-next-line no-undef -- RequestInit 为 TS lib.dom 类型，no-undef 对 TS 类型误报
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	const res = await fetch(path, {
 		credentials: 'same-origin',

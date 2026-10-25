@@ -4,8 +4,12 @@ packages:
   - "!**/dist-*/**"
   - "!**/dist-links/**"
 
-# pnpm v10 供应链安全策略：fsevents（electron 35 的 macOS 可选依赖）构建脚本
-# 默认被阻止，CI 的 mac 任务中 pnpm install 以 ERR_PNPM_IGNORED_BUILDS 硬失败。
-# 明确声明忽略：fsevents 仅用于 mac 文件系统事件优化，Electron 主进程不依赖其构建产物。
+# pnpm 11 供应链安全策略（strict-dep-builds 默认开启，CI 使用的 pnpm 版本）：
+# fsevents（electron 35 的 macOS 可选依赖）显式声明 false 跳过构建脚本，
+# 未声明时 CI mac 任务 pnpm install 以 ERR_PNPM_IGNORED_BUILDS 硬失败。
+# fsevents 仅用于 mac 文件系统事件优化，Electron 不依赖其构建产物。
+allowBuilds:
+  fsevents: false
+# pnpm 10 兼容（本地 corepack 按 desktop packageManager 使用 10.x 的场景）
 ignoredBuiltDependencies:
   - fsevents

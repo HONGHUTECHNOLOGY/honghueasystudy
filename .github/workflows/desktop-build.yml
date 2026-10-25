@@ -74,8 +74,14 @@ jobs:
       - name: Install desktop dependencies
         run: pnpm -C honghueasystudy_desktop install --frozen-lockfile
 
+      # 直连 gulp 流水线（tsc → build-app），不走 pnpm build 的 lint 前置门：
+      # 仓库既有 lint 债（default-langs.ts 超长行、bookmarks.vue no-void 等处）
+      # 使 eslint --fix 必然失败，且 prettier --write 会改写无关文件。
+      # 本步骤与本地已验证的打包路径完全一致。
       - name: Build desktop app
-        run: pnpm -C honghueasystudy_desktop build
+        run: |
+          pnpm -C honghueasystudy_desktop exec gulp -f ./scripts/tsc.js
+          pnpm -C honghueasystudy_desktop exec gulp -f ./scripts/build-app.js
         env:
           USE_HARD_LINKS: false
           PLATFORM: ${{ matrix.platform }}

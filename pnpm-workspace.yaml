@@ -1,11 +1,15 @@
 packages:
   - 'packages/**'
   - '!**/dist/**'
+# pnpm 11 供应链安全策略（strict-dep-builds 默认开启）：
+# 构建脚本必须经 allowBuilds 声明——true 运行 / false 显式跳过（不报错）/ 未声明在 CI 中报
+# ERR_PNPM_IGNORED_BUILDS。注意 pnpm 11 已移除 v10 的 ignoredBuiltDependencies 字段。
+# fsevents 为 macOS 可选依赖（gulp4→chokidar2），显式 false 跳过：chokidar2 回退 fs 轮询，
+# 构建流程为一次性任务（无 watch），无功能影响。
 allowBuilds:
   es5-ext: true
   esbuild: true
-# pnpm v10 供应链安全策略：fsevents（gulp4→chokidar2 / electron 的 macOS 可选依赖）
-# 构建脚本默认被阻止，CI 中以 ERR_PNPM_IGNORED_BUILDS 硬失败。
-# 明确声明忽略：chokidar2 回退 fs 轮询，构建流程为一次性任务（无 watch），无功能影响。
+  fsevents: false
+# pnpm 10 兼容（本地 corepack 按本仓库 packageManager 使用 10.x 的场景）
 ignoredBuiltDependencies:
   - fsevents
