@@ -8955,6 +8955,164 @@ try {
       }
     });
   }
+  const DEFAULT_ANSWER_SEPARATORS = ["===", "#", "---", "###", "|", ";", "；"];
+  const QUIZ_NOISE_TEXT = /(提交答案|提交|确定|确认|取消|关闭|跳过|下一题|上一题|交卷)/g;
+  function normalizeQuizText(text) {
+    return String(text || "").replace(/\u00a0/g, " ").replace(/\s+/g, "").replace(/^[A-Za-z][.、．,，)）:：]/, "").replace(/[，。、；;：:？！,.?!"'“”‘’`（）()【】\[\]《》<>]/g, "").toLowerCase();
+  }
+  function getQuizOptionText(el) {
+    const clean = (text2) => String(text2 || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    let text = "";
+    try {
+      text = clean(optimizationElementWithImage(el, true).innerText);
+    } catch {
+      text = "";
+    }
+    return text || clean(el.textContent || "");
+  }
+  function extractVideoQuizTitle(root2, optionTexts) {
+    const normalizedOptions = optionTexts.map(normalizeQuizText).filter(Boolean);
+    let text = "";
+    try {
+      const clone = root2.cloneNode(true);
+      const nodes = Array.from(clone.querySelectorAll("*")).reverse();
+      for (const node of nodes) {
+        const nodeText = normalizeQuizText(node.textContent || "");
+        if (!nodeText)
+          continue;
+        if (normalizedOptions.includes(nodeText)) {
+          node.remove();
+        }
+      }
+      text = clone.textContent || "";
+    } catch {
+      text = root2.textContent || "";
+    }
+    return text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").replace(/\d+(\.\d+)?\s*分/g, " ").replace(/[（(【\[]?\s*(单选题|多选题|判断题|填空题)\s*[)）】\]]?/g, " ").replace(QUIZ_NOISE_TEXT, " ").replace(/\s+/g, " ").trim().replace(/^(\d+[、.．)）]\s*|第\s*\d+\s*题\s*[:：]?\s*)/, "").replace(/^[[【(（]\s*(单选题|多选题|判断题|填空题)\s*[\]】)）]\s*/, "").trim();
+  }
+  function guessVideoQuizType(optionElements, root2) {
+    const first = optionElements[0];
+    if (!first)
+      return "single";
+    const hasCheckbox = (el) => {
+      var _a;
+      return !!el.querySelector('input[type="checkbox"]') || !!((_a = el.closest("label")) == null ? void 0 : _a.querySelector('input[type="checkbox"]'));
+    };
+    let node = first;
+    while (node) {
+      const cls = typeof node.className === "string" ? node.className : "";
+      if (/checkbox|multiple|多选/i.test(cls))
+        return "multiple";
+      if (root2 && node === root2)
+        break;
+      node = node.parentElement;
+    }
+    return optionElements.some(hasCheckbox) ? "multiple" : "single";
+  }
+  function getAnswerSeparators() {
+    try {
+      return String(CommonProject.scripts.settings.cfg.answerSeparators || "").split(",").map((s) => s.trim()).filter(Boolean);
+    } catch {
+      return DEFAULT_ANSWER_SEPARATORS;
+    }
+  }
+  function getAnswererWrappers(explicit) {
+    if (explicit && explicit.length)
+      return explicit;
+    try {
+      return CommonProject.scripts.settings.methods.getWorkOptions().answererWrappers || [];
+    } catch {
+      try {
+        return CommonProject.scripts.settings.cfg.answererWrappers || [];
+      } catch {
+        return [];
+      }
+    }
+  }
+  const quizAnswerCache = /* @__PURE__ */ new Map();
+  const QUIZ_ANSWER_CACHE_MAX = 200;
+  let quizNoWrapperWarned = false;
+  async function searchVideoQuizAnswer(opts) {
+    const cacheKey = normalizeQuizText(opts.title);
+    if (cacheKey && quizAnswerCache.has(cacheKey)) {
+      return quizAnswerCache.get(cacheKey);
+    }
+    const wrappers = getAnswererWrappers(opts.answererWrappers);
+    if (wrappers.length === 0) {
+      if (!quizNoWrapperWarned) {
+        quizNoWrapperWarned = true;
+        try {
+          lib.$message.warn({
+            content: "视频内题目已选择 AI题库答题，但还没有配置题库，本次将随机作答。请前往 通用-全局设置 配置题库或 AI 答题。",
+            duration: 10
+          });
+        } catch {
+        }
+      }
+      throw new Error("未配置题库，请前往 通用-全局设置 配置题库或 AI 答题");
+    }
+    const infos = await defaultAnswerWrapperHandler(wrappers, {
+      title: opts.title,
+      options: opts.optionTexts.join("\n"),
+      type: opts.type
+    });
+    if (cacheKey && infos.some((info) => info.results.length > 0)) {
+      quizAnswerCache.set(cacheKey, infos);
+      if (quizAnswerCache.size > QUIZ_ANSWER_CACHE_MAX) {
+        const first = quizAnswerCache.keys().next().value;
+        if (first)
+          quizAnswerCache.delete(first);
+      }
+    }
+    return infos;
+  }
+  async function answerVideoQuiz(opts) {
+    const optionElements = opts.optionElements.filter((el) => !!el);
+    if (optionElements.length === 0) {
+      return { ok: false, title: "", answers: [], error: "未找到选项" };
+    }
+    const optionTexts = optionElements.map(getQuizOptionText);
+    const title = extractVideoQuizTitle(opts.root, optionTexts);
+    if (!title) {
+      return { ok: false, title: "", answers: [], error: "未识别到题干" };
+    }
+    const type = opts.type || guessVideoQuizType(optionElements, opts.root);
+    let infos = [];
+    try {
+      infos = await searchVideoQuizAnswer({
+        title,
+        optionTexts,
+        type,
+        answererWrappers: opts.answererWrappers
+      });
+    } catch (error) {
+      return { ok: false, title, answers: [], error: error && error.message || String(error) };
+    }
+    if (!infos.some((info) => info.results.length > 0)) {
+      return { ok: false, title, answers: [], error: "题库未返回答案" };
+    }
+    const picked = [];
+    try {
+      const resolver = createDefaultQuestionResolver({
+        answerSeparators: getAnswerSeparators()
+      })[type];
+      await resolver(infos, optionElements, async (_t, _answer, option) => {
+        if (option && picked.indexOf(option) === -1) {
+          picked.push(option);
+        }
+      });
+    } catch (error) {
+      return { ok: false, title, answers: [], error: error && error.message || String(error) };
+    }
+    if (picked.length === 0) {
+      return { ok: false, title, answers: [], error: "答案与选项不匹配" };
+    }
+    for (const el of picked) {
+      await opts.click(el);
+      await lib.$.sleep(200);
+    }
+    return { ok: true, title, answers: picked.map(getQuizOptionText) };
+  }
   const state$7 = {
     study: {
       stop: false,
@@ -8977,6 +9135,44 @@ try {
   class StudyVideoH5 {
     constructor() {
       this.remotePage = void 0;
+      this.quizStrategy = "random";
+    }
+    async answerQuiz(options) {
+      const { root: root2, optionElements, type, remotePage } = options;
+      if (optionElements.length === 0)
+        return false;
+      const click = async (el) => {
+        if (remotePage) {
+          await remotePage.click(el);
+        } else {
+          await trustedClick(el);
+        }
+        await lib.$.sleep(300);
+      };
+      if (this.quizStrategy === "ai") {
+        try {
+          $console.log("正在使用 AI 题库作答视频内题目...");
+          const ret = await answerVideoQuiz({
+            root: root2,
+            optionElements,
+            type,
+            click
+          });
+          if (ret.ok) {
+            $console.log(`AI 题库作答成功：${ret.title} => ${ret.answers.join(" / ")}`);
+            return true;
+          }
+          $console.warn(`AI 题库未匹配到答案（${ret.error || "未知原因"}），将随机作答：${ret.title}`);
+        } catch (error) {
+          $console.error("AI 题库作答失败：" + (error && error.message || String(error)));
+        }
+      }
+      const target = optionElements[Math.floor(Math.random() * optionElements.length)];
+      if (target) {
+        await click(target);
+        return true;
+      }
+      return false;
     }
     async init() {
       this.remotePage = await BackgroundProject.scripts.dev.methods.getRemotePlaywrightCurrentPage();
@@ -9061,6 +9257,7 @@ try {
       });
     }
     async handleTestDialog() {
+      var _a;
       const items = lib.$$el("#playTopic-dialog .el-pager .number");
       if (items.length) {
         for (const item of items) {
@@ -9068,17 +9265,32 @@ try {
             await safeClick(item);
             await lib.$.sleep(500);
           }
-          const options = lib.$$el("#playTopic-dialog ul .topic-item");
-          if (options.length !== 0) {
+          const groups = [];
+          for (const topicItem of lib.$$el("#playTopic-dialog .topic-item")) {
+            const li = topicItem.closest("li") || topicItem;
+            const root2 = li.closest(".topic") || li.closest(".radio, .checkbox") || li.parentElement;
+            if (!root2)
+              continue;
+            const exist = groups.find((g) => g.root === root2);
+            if (exist) {
+              if (exist.optionElements.indexOf(li) === -1)
+                exist.optionElements.push(li);
+            } else {
+              groups.push({ root: root2, optionElements: [li] });
+            }
+          }
+          if (groups.length !== 0) {
             await waitForCaptcha();
             $render.moveToEdge();
-            const random = Math.floor(Math.random() * options.length);
             await lib.$.sleep(1e3);
-            const btn_selector = `#playTopic-dialog .topic .radio ul > li:nth-child(${random + 1})`;
-            if (this.remotePage) {
-              await this.remotePage.click(btn_selector);
-            } else {
-              trustedClick(lib.$el(btn_selector));
+            for (const group of groups) {
+              await this.answerQuiz({
+                root: group.root,
+                optionElements: group.optionElements,
+                type: ((_a = group.optionElements[0]) == null ? void 0 : _a.closest(".checkbox")) ? "multiple" : "single",
+                remotePage: this.remotePage || void 0
+              });
+              await lib.$.sleep(500);
             }
             await lib.$.sleep(1e3);
           }
@@ -9232,13 +9444,13 @@ try {
           if (options.length !== 0) {
             await waitForCaptcha();
             $render.moveToEdge();
-            const random = Math.floor(Math.random() * options.length);
             await lib.$.sleep(1e3);
-            if (remotePage) {
-              await remotePage.click(options[random]);
-            } else {
-              trustedClick(options[random]);
-            }
+            await this.answerQuiz({
+              root: question_box,
+              optionElements: options,
+              type: question_box.querySelector(".checkbox") ? "multiple" : "single",
+              remotePage: remotePage || void 0
+            });
             await lib.$.sleep(1e3);
           }
           await lib.$.sleep(1e3);
@@ -9306,18 +9518,36 @@ try {
     async handleTestDialog(remotePage) {
       const question_box = lib.$el(".ai-class-exercise-dialog");
       if (question_box) {
-        const options = lib.$$el(".ques-list .item .option");
         lib.$message.info("正在关闭弹窗测验...");
-        if (options.length !== 0) {
+        const questions = lib.$$el(".ques-list .item", question_box);
+        const groups = [];
+        if (questions.length > 1) {
+          for (const question of questions) {
+            const options = lib.$$el(".option", question);
+            if (options.length) {
+              groups.push({ root: question, optionElements: options });
+            }
+          }
+        }
+        if (groups.length === 0) {
+          const options = lib.$$el(".ques-list .item .option", question_box);
+          if (options.length) {
+            groups.push({ root: questions[0] || question_box, optionElements: options });
+          }
+        }
+        if (groups.length !== 0) {
           await waitForCaptcha();
           CommonProject.scripts.render.methods.minimize();
           CommonProject.scripts.render.methods.setPosition(100, 200);
-          const random = Math.floor(Math.random() * options.length);
           await lib.$.sleep(1e3);
-          if (remotePage) {
-            await remotePage.click(options[random]);
-          } else {
-            trustedClick(options[random]);
+          for (const group of groups) {
+            await this.answerQuiz({
+              root: group.root,
+              optionElements: group.optionElements,
+              type: group.root.querySelector(".checkbox") ? "multiple" : "single",
+              remotePage: remotePage || void 0
+            });
+            await lib.$.sleep(500);
           }
           await lib.$.sleep(1e3);
         }
@@ -9516,6 +9746,18 @@ try {
               ["1.25", "1.25 x"],
               ["1.5", "1.5 x"]
             ]
+          },
+          videoQuizStrategy: {
+            label: "视频内题目",
+            tag: "select",
+            defaultValue: "random",
+            options: [
+              ["ai", "AI题库答题", "连接题库（含AI答题）自动选择答案，题库未配置或未匹配时随机作答"],
+              ["random", "随机答题"]
+            ],
+            attrs: {
+              title: "视频播放过程中弹出的测验题。选择 AI题库答题 后会自动连接题库选择答案（需先在 通用-全局设置 中配置题库或 AI 答题），题库搜不到时回退为随机作答。"
+            }
           }
         },
         methods() {
@@ -9593,6 +9835,7 @@ try {
           const type = location.href.includes("fusioncourseh5") ? "AI课程" : location.href.includes("studyplush5") ? "新共享课" : location.href.includes("studywisdomh5") ? "新智慧共享课" : "共享课";
           const ProcessorConstructor = location.href.includes("fusioncourseh5") ? FusionCourseH5 : location.href.includes("studyplush5") || location.href.includes("studywisdomh5") ? StudyPlusH5 : StudyVideoH5;
           const processor = new ProcessorConstructor();
+          processor.quizStrategy = this.cfg.videoQuizStrategy || "random";
           setTimeout(() => {
             if (processor.hasJob() === false) {
               finishAlert();
@@ -10287,6 +10530,18 @@ try {
               ["1.25", "1.25 x"],
               ["1.5", "1.5 x"]
             ]
+          },
+          videoQuizStrategy: {
+            label: "视频内题目",
+            tag: "select",
+            defaultValue: "random",
+            options: [
+              ["ai", "AI题库答题", "连接题库（含AI答题）自动选择答案，题库未配置或未匹配时随机作答"],
+              ["random", "随机答题"]
+            ],
+            attrs: {
+              title: "视频播放过程中弹出的测验题。选择 AI题库答题 后会自动连接题库选择答案（需先在 通用-全局设置 中配置题库或 AI 答题），题库搜不到时回退为随机作答。"
+            }
           }
         },
         async oncomplete() {
@@ -10295,6 +10550,7 @@ try {
           }
           CommonProject.scripts.render.methods.pin(this);
           const processor = new WishdomH5();
+          processor.quizStrategy = this.cfg.videoQuizStrategy || "random";
           this.onConfigChange("volume", (curr) => {
             state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
           });
@@ -14947,11 +15203,12 @@ try {
             label: "视频内题目",
             tag: "select",
             options: [
+              ["ai", "AI题库答题", "连接题库（含AI答题）自动选择答案，题库未匹配时随机作答"],
               ["random", "随机答题"],
               ["ignore", "忽略"]
             ],
             attrs: {
-              title: "视频有时在学习过程中会弹出题目，这个好像并不计算在分数内，所以可以忽略，视频可以正常观看，这里提供几个方法处理题目"
+              title: "视频有时在学习过程中会弹出题目，这个好像并不计算在分数内，所以可以忽略，视频可以正常观看。选择 AI题库答题 需要先在 通用-全局设置 中配置题库或 AI 答题。"
             },
             defaultValue: "random"
           },
@@ -16109,14 +16366,44 @@ try {
       state$6.study.videojs = videojs;
       top$1.currentMedia = media;
       fixedVideoProgress();
-      if (setting.videoQuizStrategy === "random") {
+      if (setting.videoQuizStrategy === "random" || setting.videoQuizStrategy === "ai") {
+        const strategy = setting.videoQuizStrategy;
+        const answerByAI = async (list) => {
+          var _a;
+          const container2 = doc.querySelector("#video .ans-videoquiz") || doc.querySelector(".ans-videoquiz") || list[0].parentElement;
+          if (!container2)
+            return false;
+          $console.info("正在使用 AI 题库作答视频内题目...");
+          try {
+            const ret = await answerVideoQuiz({
+              root: container2,
+              optionElements: list,
+              click: (el) => el.click(),
+              answererWrappers: (_a = setting.workOptions) == null ? void 0 : _a.answererWrappers
+            });
+            if (ret.ok) {
+              $console.log(`AI 题库作答成功：${ret.title} => ${ret.answers.join(" / ")}`);
+              return true;
+            }
+            $console.warn(`AI 题库未匹配到答案（${ret.error || "未知原因"}），将随机作答：${ret.title}`);
+          } catch (error) {
+            $console.error("AI 题库作答失败：" + (error && error.message || String(error)));
+          }
+          return false;
+        };
         const loop = async () => {
           var _a;
           const submitBtn = () => doc.querySelector("#videoquiz-submit");
           if (submitBtn()) {
             const list = Array.from(doc.querySelectorAll(".ans-videoquiz-opt label"));
-            const answer = list[Math.floor(Math.random() * list.length)];
-            answer == null ? void 0 : answer.click();
+            let answered = false;
+            if (strategy === "ai" && list.length) {
+              answered = await answerByAI(list);
+            }
+            if (!answered) {
+              const answer = list[Math.floor(Math.random() * list.length)];
+              answer == null ? void 0 : answer.click();
+            }
             (_a = submitBtn()) == null ? void 0 : _a.click();
             await $.sleep(3e3);
             const container2 = doc.querySelector("#video .ans-videoquiz");

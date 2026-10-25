@@ -32,6 +32,7 @@ import md5 from 'md5';
 import Typr from 'typr.js';
 import { $console, BackgroundProject } from './background';
 import { CommonWorkOptions, playMedia } from '../utils';
+import { answerVideoQuiz, VideoQuizStrategy } from '../utils/video-quiz';
 import { waitForElement, waitForMedia } from '../utils/study';
 
 // @ts-ignore
@@ -65,8 +66,6 @@ const state = {
 		playbackRateWarningListenerId: 0
 	}
 };
-
-type VideoQuizStrategy = 'random' | 'ignore';
 
 type Attachment = {
 	/** 只有当 module 为 音视频（并且已经播放完成）时才会有这个属性 */
@@ -205,12 +204,13 @@ export const CXProject = Project.create({
 					label: '视频内题目',
 					tag: 'select',
 					options: [
+						['ai', 'AI题库答题', '连接题库（含AI答题）自动选择答案，题库未匹配时随机作答'],
 						['random', '随机答题'],
 						['ignore', '忽略']
 					],
 					attrs: {
 						title:
-							'视频有时在学习过程中会弹出题目，这个好像并不计算在分数内，所以可以忽略，视频可以正常观看，这里提供几个方法处理题目'
+							'视频有时在学习过程中会弹出题目，这个好像并不计算在分数内，所以可以忽略，视频可以正常观看。选择 AI题库答题 需要先在 通用-全局设置 中配置题库或 AI 答题。'
 					},
 					defaultValue: 'random' as VideoQuizStrategy
 				},
@@ -1679,6 +1679,7 @@ const JobRunner = {
 			playbackRate: number;
 			volume: number;
 			videoQuizStrategy: VideoQuizStrategy;
+			workOptions?: CommonWorkOptions;
 		},
 		doc: Document
 	) {
@@ -1701,14 +1702,55 @@ const JobRunner = {
 		// 固定视频进度
 		fixedVideoProgress();
 
-		// 随机作答视频内题目
-		if (setting.videoQuizStrategy === 'random') {
+		// 视频内题目作答（随机 / AI题库）
+		if (setting.videoQuizStrategy === 'random' || setting.videoQuizStrategy === 'ai') {
+			const strategy = setting.videoQuizStrategy;
+
+			/** 使用 AI 题库作答，返回是否成功选中 */
+			const answerByAI = async (list: HTMLElement[]) => {
+				const container =
+					doc.querySelector<HTMLElement>('#video .ans-videoquiz') ||
+					doc.querySelector<HTMLElement>('.ans-videoquiz') ||
+					list[0].parentElement;
+
+				if (!container) return false;
+
+				$console.info('正在使用 AI 题库作答视频内题目...');
+				try {
+					const ret = await answerVideoQuiz({
+						root: container,
+						optionElements: list,
+						click: (el) => el.click(),
+						answererWrappers: setting.workOptions?.answererWrappers
+					});
+
+					if (ret.ok) {
+						$console.log(`AI 题库作答成功：${ret.title} => ${ret.answers.join(' / ')}`);
+						return true;
+					}
+
+					$console.warn(`AI 题库未匹配到答案（${ret.error || '未知原因'}），将随机作答：${ret.title}`);
+				} catch (error: any) {
+					$console.error('AI 题库作答失败：' + ((error && error.message) || String(error)));
+				}
+				return false;
+			};
+
 			const loop = async () => {
 				const submitBtn = () => doc.querySelector<HTMLElement>('#videoquiz-submit');
 				if (submitBtn()) {
 					const list = Array.from(doc.querySelectorAll<HTMLElement>('.ans-videoquiz-opt label'));
-					const answer = list[Math.floor(Math.random() * list.length)];
-					answer?.click();
+
+					let answered = false;
+					if (strategy === 'ai' && list.length) {
+						answered = await answerByAI(list);
+					}
+
+					if (!answered) {
+						const answer = list[Math.floor(Math.random() * list.length)];
+						answer?.click();
+					}
+
 					submitBtn()?.click();
 					await $.sleep(3000);
 					// 隐藏视频内题目元素

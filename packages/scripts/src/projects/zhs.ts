@@ -15,6 +15,7 @@ import { safeClick, trustedClick, trustedDispatch, OrigEvent, OrigMouseEvent } f
 import { waitForMedia, waitForElement } from '../utils/study';
 import { $playwright } from '../utils/app';
 import { $render } from '../utils/render';
+import { answerVideoQuiz, VideoQuizStrategy } from '../utils/video-quiz';
 
 const state = {
 	study: {
@@ -49,6 +50,8 @@ const gxk_read_notes = [
  */
 interface ZHSProcessor {
 	remotePage: RemotePage | undefined | void;
+	/** 视频内题目（弹题）作答策略 */
+	quizStrategy: VideoQuizStrategy;
 	init?(): void;
 	getCourseName(): string;
 	getChapterName(root: HTMLElement): string;
@@ -62,6 +65,63 @@ interface ZHSProcessor {
 
 class StudyVideoH5 implements ZHSProcessor {
 	remotePage: RemotePage | undefined = undefined;
+	/** 视频内题目（弹题）作答策略，由脚本配置注入 */
+	quizStrategy: VideoQuizStrategy = 'random';
+
+	/**
+	 * 按策略作答一组（一道题）选项
+	 *
+	 * - ai：连接题库（含 AI 答题）自动选择答案，未匹配时随机兜底
+	 * - random：随机选择一个选项
+	 *
+	 * @returns 是否成功点击了选项
+	 */
+	async answerQuiz(options: {
+		root: HTMLElement;
+		optionElements: HTMLElement[];
+		type?: 'single' | 'multiple' | 'judgement';
+		/** 是否通过远程控制页面点击 */
+		remotePage?: RemotePage;
+	}): Promise<boolean> {
+		const { root, optionElements, type, remotePage } = options;
+		if (optionElements.length === 0) return false;
+
+		const click = async (el: HTMLElement) => {
+			if (remotePage) {
+				await remotePage.click(el);
+			} else {
+				await trustedClick(el);
+			}
+			await $.sleep(300);
+		};
+
+		if (this.quizStrategy === 'ai') {
+			try {
+				$console.log('正在使用 AI 题库作答视频内题目...');
+				const ret = await answerVideoQuiz({
+					root,
+					optionElements,
+					type,
+					click
+				});
+				if (ret.ok) {
+					$console.log(`AI 题库作答成功：${ret.title} => ${ret.answers.join(' / ')}`);
+					return true;
+				}
+				$console.warn(`AI 题库未匹配到答案（${ret.error || '未知原因'}），将随机作答：${ret.title}`);
+			} catch (error: any) {
+				$console.error('AI 题库作答失败：' + ((error && error.message) || String(error)));
+			}
+		}
+
+		const target = optionElements[Math.floor(Math.random() * optionElements.length)];
+		if (target) {
+			await click(target);
+			return true;
+		}
+		return false;
+	}
+
 	async init() {
 		this.remotePage = await BackgroundProject.scripts.dev.methods.getRemotePlaywrightCurrentPage();
 		if (!this.remotePage) {
@@ -171,20 +231,40 @@ class StudyVideoH5 implements ZHSProcessor {
 					await $.sleep(500);
 				}
 
-				const options = $$el('#playTopic-dialog ul .topic-item');
-				if (options.length !== 0) {
+				// 每一页可能存在多道题，按题目容器分组作答
+				const groups: { root: HTMLElement; optionElements: HTMLElement[] }[] = [];
+				for (const topicItem of $$el('#playTopic-dialog .topic-item')) {
+					// .topic-item 一般是 li 内的内容，点击目标是 li
+					const li = (topicItem.closest('li') as HTMLElement) || topicItem;
+					const root =
+						(li.closest('.topic') as HTMLElement) ||
+						(li.closest('.radio, .checkbox') as HTMLElement) ||
+						(li.parentElement as HTMLElement);
+					if (!root) continue;
+
+					const exist = groups.find((g) => g.root === root);
+					if (exist) {
+						if (exist.optionElements.indexOf(li) === -1) exist.optionElements.push(li);
+					} else {
+						groups.push({ root, optionElements: [li] });
+					}
+				}
+
+				if (groups.length !== 0) {
 					await waitForCaptcha();
 					// 最小化脚本窗口
 					$render.moveToEdge();
-					// 随机选
-					const random = Math.floor(Math.random() * options.length);
 					await $.sleep(1000);
-					// nth-child 从1开始
-					const btn_selector = `#playTopic-dialog .topic .radio ul > li:nth-child(${random + 1})`;
-					if (this.remotePage) {
-						await this.remotePage.click(btn_selector);
-					} else {
-						trustedClick($el(btn_selector));
+
+					for (const group of groups) {
+						await this.answerQuiz({
+							root: group.root,
+							optionElements: group.optionElements,
+							// 智慧树共享课弹题一般为单选，多选容器带 checkbox 类名
+							type: group.optionElements[0]?.closest('.checkbox') ? 'multiple' : 'single',
+							remotePage: this.remotePage || undefined
+						});
+						await $.sleep(500);
 					}
 
 					await $.sleep(1000);
@@ -377,14 +457,14 @@ class StudyPlusH5 extends StudyVideoH5 implements ZHSProcessor {
 					await waitForCaptcha();
 					// 最小化脚本窗口
 					$render.moveToEdge();
-					// 随机选
-					const random = Math.floor(Math.random() * options.length);
 					await $.sleep(1000);
-					if (remotePage) {
-						await remotePage.click(options[random]);
-					} else {
-						trustedClick(options[random]);
-					}
+
+					await this.answerQuiz({
+						root: question_box,
+						optionElements: options,
+						type: question_box.querySelector('.checkbox') ? 'multiple' : 'single',
+						remotePage: remotePage || undefined
+					});
 
 					await $.sleep(1000);
 				}
@@ -472,20 +552,44 @@ class WishdomH5 extends StudyVideoH5 implements ZHSProcessor {
 	async handleTestDialog(remotePage?: RemotePage) {
 		const question_box = $el('.ai-class-exercise-dialog');
 		if (question_box) {
-			const options = $$el('.ques-list .item .option');
 			$message.info('正在关闭弹窗测验...');
-			if (options.length !== 0) {
+
+			// 弹窗内可能存在多道题，按题目容器分组作答
+			const questions = $$el('.ques-list .item', question_box);
+			const groups: { root: HTMLElement; optionElements: HTMLElement[] }[] = [];
+
+			if (questions.length > 1) {
+				for (const question of questions) {
+					const options = $$el('.option', question);
+					if (options.length) {
+						groups.push({ root: question, optionElements: options });
+					}
+				}
+			}
+
+			// 兜底：按题目容器分组失败时，按整个弹窗作为一道题处理
+			if (groups.length === 0) {
+				const options = $$el('.ques-list .item .option', question_box);
+				if (options.length) {
+					groups.push({ root: questions[0] || question_box, optionElements: options });
+				}
+			}
+
+			if (groups.length !== 0) {
 				await waitForCaptcha();
 				// 最小化脚本窗口
 				CommonProject.scripts.render.methods.minimize();
 				CommonProject.scripts.render.methods.setPosition(100, 200);
-				// 随机选
-				const random = Math.floor(Math.random() * options.length);
 				await $.sleep(1000);
-				if (remotePage) {
-					await remotePage.click(options[random]);
-				} else {
-					trustedClick(options[random]);
+
+				for (const group of groups) {
+					await this.answerQuiz({
+						root: group.root,
+						optionElements: group.optionElements,
+						type: group.root.querySelector('.checkbox') ? 'multiple' : 'single',
+						remotePage: remotePage || undefined
+					});
+					await $.sleep(500);
 				}
 
 				await $.sleep(1000);
@@ -719,6 +823,19 @@ export const ZHSProject = Project.create({
 						['1.25', '1.25 x'],
 						['1.5', '1.5 x']
 					]
+				},
+				videoQuizStrategy: {
+					label: '视频内题目',
+					tag: 'select',
+					defaultValue: 'random' as VideoQuizStrategy,
+					options: [
+						['ai', 'AI题库答题', '连接题库（含AI答题）自动选择答案，题库未配置或未匹配时随机作答'],
+						['random', '随机答题']
+					],
+					attrs: {
+						title:
+							'视频播放过程中弹出的测验题。选择 AI题库答题 后会自动连接题库选择答案（需先在 通用-全局设置 中配置题库或 AI 答题），题库搜不到时回退为随机作答。'
+					}
 				}
 			},
 			methods() {
@@ -828,6 +945,8 @@ export const ZHSProject = Project.create({
 					: StudyVideoH5;
 
 				const processor = new ProcessorConstructor();
+				// 注入视频内题目作答策略
+				processor.quizStrategy = (this.cfg.videoQuizStrategy as VideoQuizStrategy) || 'random';
 
 				// 10秒后还没加载出来，则结束
 				setTimeout(() => {
@@ -1647,6 +1766,19 @@ export const ZHSProject = Project.create({
 						['1.25', '1.25 x'],
 						['1.5', '1.5 x']
 					]
+				},
+				videoQuizStrategy: {
+					label: '视频内题目',
+					tag: 'select',
+					defaultValue: 'random' as VideoQuizStrategy,
+					options: [
+						['ai', 'AI题库答题', '连接题库（含AI答题）自动选择答案，题库未配置或未匹配时随机作答'],
+						['random', '随机答题']
+					],
+					attrs: {
+						title:
+							'视频播放过程中弹出的测验题。选择 AI题库答题 后会自动连接题库选择答案（需先在 通用-全局设置 中配置题库或 AI 答题），题库搜不到时回退为随机作答。'
+					}
 				}
 			},
 			async oncomplete() {
@@ -1657,6 +1789,8 @@ export const ZHSProject = Project.create({
 				// 置顶当前脚本
 				CommonProject.scripts.render.methods.pin(this);
 				const processor = new WishdomH5();
+				// 注入视频内题目作答策略
+				processor.quizStrategy = (this.cfg.videoQuizStrategy as VideoQuizStrategy) || 'random';
 
 				// // 点击显示进度条，否则无法进行倍速，清晰度等操作
 				// const showControlBar = async () => {
