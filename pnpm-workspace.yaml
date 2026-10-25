@@ -4,3 +4,8 @@ packages:
 allowBuilds:
   es5-ext: true
   esbuild: true
+# pnpm v10 供应链安全策略：fsevents（gulp4→chokidar2 / electron 的 macOS 可选依赖）
+# 构建脚本默认被阻止，CI 中以 ERR_PNPM_IGNORED_BUILDS 硬失败。
+# 明确声明忽略：chokidar2 回退 fs 轮询，构建流程为一次性任务（无 watch），无功能影响。
+ignoredBuiltDependencies:
+  - fsevents
