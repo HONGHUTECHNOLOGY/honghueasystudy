@@ -145,12 +145,20 @@ from PIL import Image, ImageDraw
 d = Path(%r)
 d.mkdir(parents=True, exist_ok=True)
 
-bg = Image.new('RGB', (300, 150), 'white')
-ImageDraw.Draw(bg).rectangle([180, 60, 220, 100], fill='black')
+# 滑块背景图：浅灰底 + 白块缺口，缺口内含黑色描边环（模拟真实滑块缺口特征）
+bg = Image.new('RGB', (300, 150), (200, 200, 200))
+bd = ImageDraw.Draw(bg)
+bd.rectangle([180, 60, 220, 100], fill='white')
+bd.rectangle([185, 65, 215, 95], outline='black', width=2)
 bg.save(d / 'smoke_bg.png')
 
-# 滑块小图：从背景裁剪含缺口的部分
-piece = bg.crop((175, 55, 230, 110))
+# 滑块小图：必须为 RGBA 透明衬底 + 不透明白块（真实滑块验证码格式）。
+# ddddocr 1.4.11 get_target 按 p[-1]（RGBA 时为 alpha 通道）逐像素扫描内容边界，
+# 不透明 RGB 图会使坐标退化，image.crop 抛 ValueError（Coordinate 'lower' is less than 'upper'）。
+piece = Image.new('RGBA', (55, 55), (0, 0, 0, 0))
+pd = ImageDraw.Draw(piece)
+pd.rectangle([5, 5, 45, 45], fill=(255, 255, 255, 255))
+pd.rectangle([10, 10, 40, 40], outline=(0, 0, 0, 255), width=2)
 piece.save(d / 'smoke_target.png')
 
 # 文本验证码图
@@ -194,6 +202,8 @@ def smoke_test(binary: Path, venv_python: Path, output_dir: Path):
     try:
         result = ast.literal_eval(r.stdout.strip())
         assert 'target_y' in result and 'target' in result, '缺少 target_y/target 字段: %r' % (result,)
+        assert isinstance(result['target_y'], int), 'target_y 非 int: %r' % (result,)
+        assert isinstance(result['target'], list) and len(result['target']) == 4, 'target 非 4 元列表: %r' % (result,)
     except Exception as e:
         raise SystemExit('[smoke] det 输出不符合契约 %r: %s' % (r.stdout[:200], e))
     print('[smoke] 契约自校验通过 ✓')
