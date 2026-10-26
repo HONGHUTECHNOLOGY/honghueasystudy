@@ -32,6 +32,8 @@ jobs:
           # Linux ARM64（原生 arm64 runner；QEMU 下全量桌面打包过慢，不设仿真回退。
           # 不内置 Chrome：CfT 自 153 起才提供 linux-arm64 包，与内置浏览器锁定的 137
           # 版本策略冲突，chrome.install.js 会跳过下载/打包并保留空目录；
+          # 仅产出 AppImage：deb/rpm 依赖的 fpm 工具无 arm64 预编译包（x86 二进制
+          # Exec format error），build-app.js 对 linux-arm64 限定 --linux AppImage；
           # OCR 资源由下方「Fetch Linux OCR bundle」步骤从 GitHub Release
           # （tag: ocr-linux，由 ocr-linux-build.yml 维护）拉取，Release 缺失时该步骤报错）
           - os: ubuntu-24.04-arm

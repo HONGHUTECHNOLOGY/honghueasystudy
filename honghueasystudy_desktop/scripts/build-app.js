@@ -20,9 +20,16 @@ function buildRemote() {
 }
 
 function buildApp() {
+	const platform = process.env.PLATFORM || 'win';
 	const arch = process.env.ARCH || 'x64';
 	// electron-builder 默认按宿主架构打包；mac x64 在 arm64 机器（CI 已无 Intel runner）上需显式指定
-	return execOut(`pnpm dist -- --${arch}`, { cwd: '../packages/app' });
+	let args = `--${arch}`;
+	// electron-builder 的 fpm（deb/rpm 打包工具）仅有 linux-x86 预编译包，在 arm64 主机上 Exec format error；
+	// AppImage 工具链（appimage-12.0.1）自带 linux-arm64 二进制与 runtime-arm64，故 linux-arm64 仅构建 AppImage
+	if (platform === 'linux' && arch === 'arm64') {
+		args += ' --linux AppImage';
+	}
+	return execOut(`pnpm dist -- ${args}`, { cwd: '../packages/app' });
 }
 
 function cleanOutput() {
@@ -31,12 +38,10 @@ function cleanOutput() {
 
 function packResource() {
 	const platform = process.env.PLATFORM || 'win';
-	const unpackedDirs = {
-		win: '../packages/app/dist/win-unpacked',
-		mac: '../packages/app/dist/mac-unpacked',
-		linux: '../packages/app/dist/linux-unpacked'
-	};
-	const unpackedDir = unpackedDirs[platform] || unpackedDirs.win;
+	const arch = process.env.ARCH || 'x64';
+	// electron-builder 输出目录：linux arm64 为 linux-arm64-unpacked，其余为 <platform>-unpacked
+	const dirName = platform === 'linux' && arch === 'arm64' ? 'linux-arm64-unpacked' : `${platform}-unpacked`;
+	const unpackedDir = `../packages/app/dist/${dirName}`;
 	return src(`${unpackedDir}/resources/app/**/*`)
 		.pipe(zip(`app${version}.zip`))
 		.pipe(dest('../packages/app/dist'));
