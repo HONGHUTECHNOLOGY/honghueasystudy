@@ -1,6 +1,6 @@
 /** global Ext videojs getTeacherAjax jobs */
 
-import { trustedDispatch, OrigEvent } from '../utils/safe-click';
+import { trustedDispatch, OrigEvent, trustedPointerClick, isChoiceSelected } from '../utils/safe-click';
 import {
 	HonghuWorker,
 	defaultAnswerWrapperHandler,
@@ -1706,69 +1706,121 @@ const JobRunner = {
 		if (setting.videoQuizStrategy === 'random' || setting.videoQuizStrategy === 'ai') {
 			const strategy = setting.videoQuizStrategy;
 
-			/** 使用 AI 题库作答，返回是否成功选中 */
-			const answerByAI = async (list: HTMLElement[]) => {
+			/**
+			 * 点击一个选项并回读选中态
+			 *
+			 * 超星的选项在 iframe 里、由 Vue 组件托管，`el.click()` 合成事件可能被吞掉：
+			 * 旧实现发一次点击就当成功，日志打「作答成功」而页面上什么都没选中。
+			 * 这里点完回读，没选中就补一次完整鼠标序列（pointerdown/mousedown/pointerup/mouseup/click）。
+			 */
+			const clickOption = async (el: HTMLElement | undefined) => {
+				if (!el) return false;
+				if (isChoiceSelected(el)) return true;
+				el.click();
+				await $.sleep(150);
+				if (isChoiceSelected(el)) return true;
+				trustedPointerClick(el);
+				await $.sleep(150);
+				return isChoiceSelected(el);
+			};
+
+			/** 使用 AI 题库作答；返回是否真的选中，以及题库是否给出了答案 */
+			const answerByAI = async (list: HTMLElement[]): Promise<{ ok: boolean; hasAnswer: boolean }> => {
 				const container =
 					doc.querySelector<HTMLElement>('#video .ans-videoquiz') ||
 					doc.querySelector<HTMLElement>('.ans-videoquiz') ||
 					list[0].parentElement;
 
-				if (!container) return false;
+				if (!container) return { ok: false, hasAnswer: false };
 
 				$console.info('正在使用 AI 题库作答视频内题目...');
 				try {
 					const ret = await answerVideoQuiz({
 						root: container,
 						optionElements: list,
-						click: (el) => el.click(),
+						click: clickOption,
 						answererWrappers: setting.workOptions?.answererWrappers
 					});
 
 					if (ret.ok) {
 						$console.log(`AI 题库作答成功：${ret.title} => ${ret.answers.join(' / ')}`);
-						return true;
+						return { ok: true, hasAnswer: true };
+					}
+
+					// 答案已经选出来了、只是点击没落地：这时候再随机点一个只会把答案覆盖掉
+					if (ret.answers.length > 0) {
+						$console.warn(
+							`AI 题库已选出答案但点击未生效（${ret.error || '未回显选中态'}）：` +
+								`${ret.title} => ${ret.answers.join(' / ')}`
+						);
+						return { ok: false, hasAnswer: true };
 					}
 
 					$console.warn(`AI 题库未匹配到答案（${ret.error || '未知原因'}），将随机作答：${ret.title}`);
 				} catch (error: any) {
 					$console.error('AI 题库作答失败：' + ((error && error.message) || String(error)));
 				}
-				return false;
+				return { ok: false, hasAnswer: false };
 			};
+
+			// 同一道题只作答一次：提交之后 #videoquiz-submit 往往不会立刻消失，
+			// 3 秒后重入会把这题再答一遍（日志反复「作答成功」，随机策略下还会覆盖已选答案）。
+			// 用选项文字拼指纹，指纹没变就只等容器消失，不再重复作答和提交。
+			let lastAnsweredKey = '';
 
 			const loop = async () => {
-				const submitBtn = () => doc.querySelector<HTMLElement>('#videoquiz-submit');
-				if (submitBtn()) {
-					const list = Array.from(doc.querySelectorAll<HTMLElement>('.ans-videoquiz-opt label'));
+				// 原本靠尾部递归实现「每 3 秒检测一次」，会无限堆积调用栈，改成普通循环
+				while (true) {
+					const submitBtn = () => doc.querySelector<HTMLElement>('#videoquiz-submit');
+					if (submitBtn()) {
+						const list = Array.from(doc.querySelectorAll<HTMLElement>('.ans-videoquiz-opt label'));
 
-					let answered = false;
-					if (strategy === 'ai' && list.length) {
-						answered = await answerByAI(list);
-					}
+						// 选项还没渲染出来时不要提交空答案，等下一轮
+						if (list.length === 0) {
+							await $.sleep(3000);
+							continue;
+						}
 
-					if (!answered) {
-						const answer = list[Math.floor(Math.random() * list.length)];
-						answer?.click();
-					}
+						const key = list.map((el) => (el.textContent || '').trim()).join('|');
+						if (key && key === lastAnsweredKey) {
+							// 这道题已经答过并提交过，等平台的题目容器自己消失
+							await $.sleep(3000);
+							continue;
+						}
 
-					submitBtn()?.click();
-					await $.sleep(3000);
-					// 隐藏视频内题目元素
-					const container = doc.querySelector<HTMLElement>('#video .ans-videoquiz');
-					const components = Array.from(doc.querySelectorAll<HTMLElement>('.x-component-default'));
-					if (container) {
-						container.remove();
-					}
-					if (components.length) {
-						for (const com of components) {
-							com.style.display = 'none';
+						let answered = false;
+						let hasAnswer = false;
+						if (strategy === 'ai') {
+							const ret = await answerByAI(list);
+							answered = ret.ok;
+							hasAnswer = ret.hasAnswer;
+						}
+
+						// 已经选出答案只是没点中时不要随机覆盖，直接提交
+						if (!answered && !hasAnswer) {
+							const answer = list[Math.floor(Math.random() * list.length)];
+							await clickOption(answer);
+						}
+
+						if (key) lastAnsweredKey = key;
+						submitBtn()?.click();
+						await $.sleep(3000);
+						// 隐藏视频内题目元素
+						const container = doc.querySelector<HTMLElement>('#video .ans-videoquiz');
+						const components = Array.from(doc.querySelectorAll<HTMLElement>('.x-component-default'));
+						if (container) {
+							container.remove();
+						}
+						if (components.length) {
+							for (const com of components) {
+								com.style.display = 'none';
+							}
 						}
 					}
+					await $.sleep(3000);
 				}
-				await $.sleep(3000);
-				await loop();
 			};
-			loop();
+			void loop();
 		}
 
 		/**

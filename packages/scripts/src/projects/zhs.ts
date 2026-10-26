@@ -11,11 +11,19 @@ import {
 } from '../utils/work';
 import { CommonWorkOptions, playMedia } from '../utils';
 import { $console, BackgroundProject } from './background';
-import { safeClick, trustedClick, trustedDispatch, OrigEvent, OrigMouseEvent } from '../utils/safe-click';
+import {
+	safeClick,
+	trustedClick,
+	trustedDispatch,
+	isChoiceSelected,
+	trustedPointerClick,
+	OrigEvent,
+	OrigMouseEvent
+} from '../utils/safe-click';
 import { waitForMedia, waitForElement } from '../utils/study';
 import { $playwright } from '../utils/app';
 import { $render } from '../utils/render';
-import { answerVideoQuiz, VideoQuizStrategy } from '../utils/video-quiz';
+import { answerVideoQuiz, judgeAnswerOf, VideoQuizStrategy } from '../utils/video-quiz';
 
 const state = {
 	study: {
@@ -44,6 +52,214 @@ const gxk_read_notes = [
 	['答题中请勿进行任何操作，如需暂停答题', '请等待全部题目搜索完成并执行自动保存功能后才能操作。'],
 	['暂停后手动操作请确保每个题目都点击下一题', '进行答案保存（不然不会保存，提交没分）']
 ];
+
+/**
+ * 章节/视频项「已完成」的文本兜底判定
+ *
+ * 各页面原本靠不同类名标记完成态（time_icofinish / finish-icon / label.success / i.select），
+ * 平台改版换掉类名后判定会整体失效 —— 此时 getNext 会认为「所有任务都未完成」，
+ * 于是每次都从列表头部开始，表现为反复播放第一个已经看完的视频。
+ * 页面上「已完成」这几个字是稳定的，用文案兜底可以在类名失效时仍正确跳过已完成项。
+ */
+function textSaysFinished(el: HTMLElement | null | undefined): boolean {
+	if (!el) return false;
+	const text = (el.textContent || '').replace(/\s+/g, '');
+	// 注意不要匹配「未完成」，“未完成”不包含子串“已完成”
+	return /已完成|已学完|已看完/.test(text);
+}
+
+/**
+ * 等章节列表和「已完成」标记渲染稳定
+ *
+ * 首次进入（或刷新、脚本重启）学习页时，平台会先把章节列表渲染出来，
+ * 「已完成」标记（.time_icofinish 等）要等接口回包后再补样式，
+ * 实测两者差 200~300ms。而脚本在列表一出现就去算「下一个该学哪一节」，
+ * 那一刻所有项看起来都是「未完成」，于是永远选中列表第一个，
+ * 表现为每次重启都回头重播第一个已经看完的视频。
+ *
+ * 这里连续多次采样（列表数量 + 完成标记数量）都不再变化才认为渲染稳定。
+ */
+async function waitJobListSettled(timeout = 6000, step = 300): Promise<void> {
+	const snapshot = () => {
+		const nodes = document.querySelectorAll(
+			'.clearfix.video, .child-main, .source-icon, .el-tree-node, .chapter-content-second, .resources-item'
+		);
+		let finished = 0;
+		nodes.forEach((node) => {
+			if (
+				node.querySelector(
+					'.time_icofinish, .finish-icon, .finished-icon, .isFinish, label.success, i.select'
+				)
+			) {
+				finished++;
+			}
+		});
+		return `${nodes.length}:${finished}`;
+	};
+
+	const deadline = Date.now() + timeout;
+	let last = '';
+	let stable = 0;
+	while (Date.now() < deadline) {
+		await $.sleep(step);
+		const now = snapshot();
+		// 列表还没渲染出来时（0:0）不算稳定，继续等
+		if (now === last && now !== '0:0') {
+			stable++;
+			if (stable >= 2) return;
+		} else {
+			stable = 0;
+		}
+		last = now;
+	}
+}
+
+/** 远程动作超时哨兵 */
+const ACTION_TIMEOUT = Symbol('action-timeout');
+
+/**
+ * 给远程（桌面端 Playwright）动作加超时
+ *
+ * 远程点击是把动作丢给桌面端浏览器执行的，请求一旦没人应答就永远不 resolve。
+ * 之前弹题处理链就卡在这一步：日志停在「AI 题库作答成功 / 未匹配」，弹窗一直挂在页面上，
+ * 而且整条轮询链从此死掉，后面的弹题都不再处理。加超时后至少能继续走本地兜底点击。
+ */
+function withTimeout<T>(task: Promise<T> | void, ms: number, label: string): Promise<T | typeof ACTION_TIMEOUT> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<typeof ACTION_TIMEOUT>((resolve) => {
+		timer = setTimeout(() => {
+			$console.warn(`${label}超过 ${ms}ms 未返回，改用本地点击兜底`);
+			resolve(ACTION_TIMEOUT);
+		}, ms);
+	});
+	// 动作正常返回时清掉计时器，否则超时到了还会补打一条「超过 xx ms 未返回」的误报
+	const guarded = Promise.resolve(task).then(
+		(value) => {
+			if (timer !== undefined) clearTimeout(timer);
+			return value;
+		},
+		(error) => {
+			if (timer !== undefined) clearTimeout(timer);
+			throw error;
+		}
+	);
+	return Promise.race([guarded as Promise<T>, timeout]);
+}
+
+/**
+ * 弹题选项的候选点击目标（按优先级）
+ *
+ * 各平台选项的外层容器里往往还有一层真正带点击逻辑的节点
+ * （.topic-item / label / 原生 input），只点最外层 li 时事件冒泡不会向下传递，
+ * 内部的处理函数收不到，表现就是「点了没反应」。
+ *
+ * 共享课弹题的真实结构（#playTopic-dialog）：
+ *   li.topic-item > span.topic-option-item 「A.」 + div.item-topic 「对」
+ * 选中态挂在最内层 div.item-topic 的 active 类上，所以内层节点也要单独试一次。
+ */
+function quizClickTargets(el: HTMLElement): HTMLElement[] {
+	const targets: HTMLElement[] = [];
+	const push = (node: Element | null | undefined) => {
+		if (node instanceof HTMLElement && targets.indexOf(node) === -1) {
+			targets.push(node);
+		}
+	};
+	push(el);
+	push(el.querySelector('.topic-item, .option-item, .option-content, label'));
+	// 内层选项文字节点：平台把选中态和点击处理都绑在这里
+	push(el.querySelector('.item-topic'));
+	push(el.querySelector('.topic-option-item'));
+	push(el.querySelector('input[type="radio"], input[type="checkbox"]'));
+	push(el.parentElement);
+	return targets;
+}
+
+/** 「读不到选中态」最多提示 3 次：既要能排查，又不能每道题都刷屏 */
+let quizSelectStateWarned = 0;
+
+/**
+ * 判断小组弹题的题型
+ *
+ * 共享课的判断题选项就是「A.对 / B.错」：没有 input、容器也没有 checkbox 类名，
+ * 只按容器判只能得出 single，于是提示词要求 AI 回字母，白白丢掉一次精确匹配的机会。
+ * 这里用选项文字反推判断题，让 AI 按要求直接回选项文字。
+ */
+function guessDialogQuizType(optionElements: HTMLElement[]): 'single' | 'multiple' | 'judgement' {
+	if (optionElements[0]?.closest('.checkbox')) return 'multiple';
+	if (optionElements.length === 2) {
+		const polarities = optionElements.map((el) => judgeAnswerOf(el.textContent || ''));
+		if (polarities.filter(Boolean).length === 2 && polarities[0] !== polarities[1]) return 'judgement';
+	}
+	return 'single';
+}
+
+/**
+ * 点击一个弹题选项，并确认它真的被选中
+ *
+ * 旧实现发一次点击就当成功，于是日志打印「作答成功」但页面毫无变化：
+ * 远程页面的元素点击是按元素中心坐标发真实鼠标事件，弹窗刚渲染完 / 被遮罩 /
+ * 坐标落在视口外时会静默点空（异常还被吞掉了），从日志上完全看不出来。
+ * 这里改成：点击 → 回读选中态 → 换目标重试 → 换手段（合成鼠标序列）重试。
+ *
+ * @returns 是否确认到选中态
+ */
+async function clickQuizOption(el: HTMLElement, remotePage?: RemotePage | void): Promise<boolean> {
+	if (isChoiceSelected(el)) return true;
+
+	const targets = quizClickTargets(el);
+
+	// 先瞬时滚动到位，避免远程点击内部的平滑滚动尚未结束就取了旧坐标
+	try {
+		el.scrollIntoView({ block: 'center' });
+	} catch {
+		// 部分容器不支持，忽略
+	}
+	await $.sleep(200);
+
+	// 第一轮：真实鼠标点击
+	for (const target of targets) {
+		let timedOut = false;
+		try {
+			if (remotePage) {
+				timedOut = (await withTimeout(remotePage.click(target), 5000, '弹题选项远程点击')) === ACTION_TIMEOUT;
+			} else {
+				trustedClick(target);
+			}
+		} catch (error: any) {
+			$console.warn('弹题选项点击异常：' + ((error && error.message) || String(error)));
+		}
+		await $.sleep(300);
+		if (isChoiceSelected(el)) return true;
+		// 远程通道已经挂了，再换目标也是白等，直接走合成点击
+		if (timedOut) break;
+	}
+
+	// 第二轮：合成完整鼠标序列，不依赖坐标，遮挡/滚出视口时同样有效
+	for (const target of targets) {
+		trustedPointerClick(target);
+		await $.sleep(300);
+		if (isChoiceSelected(el)) return true;
+	}
+
+	if (quizSelectStateWarned < 3) {
+		quizSelectStateWarned++;
+		const rect = el.getBoundingClientRect();
+		const cls = (node: Element) => {
+			const name = typeof (node as HTMLElement).className === 'string' ? (node as HTMLElement).className : '';
+			return name ? name.trim().replace(/\s+/g, '.') : node.tagName.toLowerCase();
+		};
+		const inner = Array.from(el.querySelectorAll('*'))
+			.slice(0, 4)
+			.map(cls)
+			.join(' , ');
+		$console.warn(
+			`弹题选项点击后读不到选中态（${Math.round(rect.width)}x${Math.round(rect.height)}，` +
+				`通道：${remotePage ? '远程' : '本地'}，li=「${cls(el)}」，内部=「${inner}」）。` +
+				'已继续处理，但平台可能没记录这次作答 —— 请把这条日志反馈过来以便适配页面结构'
+		);
+	}
+	return false;
+}
 
 /**
  * 2024 下半年智慧树更新至两个版本，其中一个改进了部分UI，所以这里使用两个处理器 StudyVideoH5,FusionCourseH5 对不同UI进行处理
@@ -87,17 +303,28 @@ class StudyVideoH5 implements ZHSProcessor {
 		if (optionElements.length === 0) return false;
 
 		const click = async (el: HTMLElement) => {
-			if (remotePage) {
-				await remotePage.click(el);
-			} else {
-				await trustedClick(el);
-			}
-			await $.sleep(300);
+			// 点击后回读选中态，未选中会自动换目标/换手段重试；返回值用于判定是否真的选中
+			const ok = await clickQuizOption(el, remotePage);
+			await $.sleep(200);
+			return ok;
 		};
 
 		if (this.quizStrategy === 'ai') {
 			try {
-				$console.log('正在使用 AI 题库作答视频内题目...');
+				// 把题库数量打出来：一次就能分清「没配」「配了但全被禁用」「正常」
+				let total = -1;
+				let enabled = -1;
+				try {
+					total = (CommonProject.scripts.settings.cfg.answererWrappers || []).length;
+					enabled = (CommonProject.scripts.settings.methods.getWorkOptions().answererWrappers || []).length;
+				} catch {
+					total = -1;
+				}
+				$console.log(
+					total >= 0
+						? `正在使用 AI 题库作答视频内题目（题库 ${total} 个，启用 ${enabled} 个）...`
+						: '正在使用 AI 题库作答视频内题目...'
+				);
 				const ret = await answerVideoQuiz({
 					root,
 					optionElements,
@@ -107,6 +334,14 @@ class StudyVideoH5 implements ZHSProcessor {
 				if (ret.ok) {
 					$console.log(`AI 题库作答成功：${ret.title} => ${ret.answers.join(' / ')}`);
 					return true;
+				}
+				// 答案已经选出来了，只是点击没落地：这种情况再随机点一次只会把刚选中的覆盖掉
+				if (ret.answers.length > 0) {
+					$console.warn(
+						`AI 题库已选出答案但点击未生效（${ret.error || '未回显选中态'}）：` +
+							`${ret.title} => ${ret.answers.join(' / ')}`
+					);
+					return false;
 				}
 				$console.warn(`AI 题库未匹配到答案（${ret.error || '未知原因'}），将随机作答：${ret.title}`);
 			} catch (error: any) {
@@ -152,7 +387,7 @@ class StudyVideoH5 implements ZHSProcessor {
 
 	getNext(opts: { next: boolean; restudy: boolean }) {
 		const videoItems = Array.from(document.querySelectorAll<HTMLElement>('.clearfix.video'));
-		const isFinished = (el: HTMLElement) => el.querySelector('.time_icofinish') !== null;
+		const isFinished = (el: HTMLElement) => el.querySelector('.time_icofinish') !== null || textSaysFinished(el);
 
 		// 在全量列表中定位当前播放项：当前视频刚播完会立刻带上完成标记，
 		// 若先过滤再找 current_play 会找不到而误选列表头部（跳回第一个视频）
@@ -222,69 +457,168 @@ class StudyVideoH5 implements ZHSProcessor {
 		});
 	}
 
+	/** 弹题轮询是否已在运行，避免重复调用叠加成多条循环同时点击同一个选项 */
+	private quizDialogLoopRunning = false;
+
 	async handleTestDialog() {
-		const items = $$el('#playTopic-dialog .el-pager .number');
-		if (items.length) {
-			for (const item of items) {
+		if (this.quizDialogLoopRunning) return;
+		this.quizDialogLoopRunning = true;
+		try {
+			// 原本靠尾部递归自己调自己实现「每 3 秒检测一次」，会无限堆积调用栈，
+			// 这里改成普通循环，语义不变但不会泄漏
+			while (state.study.stop === false) {
+				try {
+					await this.answerTestDialogOnce();
+				} catch (error: any) {
+					// 单次处理失败不能让整条轮询链死掉，否则后面所有弹题都没人管了
+					$console.warn('弹题处理异常：' + ((error && error.message) || String(error)));
+				}
+				await $.sleep(3000);
+			}
+		} finally {
+			this.quizDialogLoopRunning = false;
+		}
+	}
+
+	/** 处理一次当前弹题弹窗（多页时逐页作答） */
+	private async answerTestDialogOnce() {
+		const dialog = $el('#playTopic-dialog');
+		if (!dialog) return;
+		const dialogRect = dialog.getBoundingClientRect();
+		if (dialogRect.width <= 0 || dialogRect.height <= 0) return;
+
+		// 单页弹题时 Element UI 往往不渲染分页器，此时按 1 页处理，
+		// 否则单页弹题会因为取不到 .el-pager .number 被整题跳过。
+		// 既没有分页器又没有题目容器，说明不是弹题对话框，直接放过。
+		const pagerItems = $$el('#playTopic-dialog .el-pager .number');
+		if (pagerItems.length === 0 && $$el('#playTopic-dialog .topic-item').length === 0) return;
+		const pageCount = pagerItems.length === 0 ? 1 : pagerItems.length;
+
+		for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
+			// 每页都重新查询：翻页后 el-pager 会重新渲染，之前缓存的节点已脱离文档
+			// 单页弹题没有分页器，item 为 undefined，此时不需要翻页直接往下作答
+			const item = $$el('#playTopic-dialog .el-pager .number')[pageIndex];
+			if (item && item.classList.contains('active') === false) {
+				// 翻页同样优先走桌面端真实点击：平台的分页有时要求可信事件，
+				// 远程不可用时（超时/未连上）再回退到本地合成点击
+				let flipped = false;
+				if (this.remotePage) {
+					try {
+						flipped =
+							(await withTimeout(this.remotePage.click(item), 5000, '弹题翻页远程点击')) !== ACTION_TIMEOUT;
+					} catch {
+						flipped = false;
+					}
+				}
+				if (!flipped) trustedClick(item);
+				await $.sleep(500);
+				// 翻页没成功就别在这一页上继续点选项了，等下一轮重试
 				if (item.classList.contains('active') === false) {
-					await safeClick(item);
+					$console.warn('弹题翻页未生效，等下一轮重试');
+					continue;
+				}
+			}
+
+			// 每一页可能存在多道题，按题目容器分组作答
+			const groups: { root: HTMLElement; optionElements: HTMLElement[] }[] = [];
+			for (const topicItem of $$el('#playTopic-dialog .topic-item')) {
+				// .topic-item 一般是 li 内的内容，点击目标是 li
+				const li = (topicItem.closest('li') as HTMLElement) || topicItem;
+				const root =
+					(li.closest('.topic') as HTMLElement) ||
+					(li.closest('.radio, .checkbox') as HTMLElement) ||
+					(li.parentElement as HTMLElement);
+				if (!root) continue;
+
+				const exist = groups.find((g) => g.root === root);
+				if (exist) {
+					if (exist.optionElements.indexOf(li) === -1) exist.optionElements.push(li);
+				} else {
+					groups.push({ root, optionElements: [li] });
+				}
+			}
+
+			if (groups.length !== 0) {
+				await waitForCaptcha();
+				// 最小化脚本窗口
+				$render.moveToEdge();
+				await $.sleep(1000);
+
+				for (const group of groups) {
+					// 选项已有选中态 = 这道题上一轮已经答过（弹窗还没关掉，3 秒后又进来一轮）。
+					// 此时再调一次 answerQuiz 只会重复打印「作答成功」：clickQuizOption 对已选中的项
+					// 直接返回 true、一次点击都不发，于是日志上多出一条完全没有实际动作的成功记录；
+					// 随机策略下还会把已经选对的答案覆盖成别的选项。
+					if (group.optionElements.some((el) => isChoiceSelected(el))) {
+						$console.log('该题已有选中选项，跳过重复作答');
+						continue;
+					}
+					await this.answerQuiz({
+						root: group.root,
+						optionElements: group.optionElements,
+						// 共享课弹题一般为单选；多选容器带 checkbox 类名；两个选项是「对/错」时按判断题
+						type: guessDialogQuizType(group.optionElements),
+						remotePage: this.remotePage || undefined
+					});
 					await $.sleep(500);
 				}
 
-				// 每一页可能存在多道题，按题目容器分组作答
-				const groups: { root: HTMLElement; optionElements: HTMLElement[] }[] = [];
-				for (const topicItem of $$el('#playTopic-dialog .topic-item')) {
-					// .topic-item 一般是 li 内的内容，点击目标是 li
-					const li = (topicItem.closest('li') as HTMLElement) || topicItem;
-					const root =
-						(li.closest('.topic') as HTMLElement) ||
-						(li.closest('.radio, .checkbox') as HTMLElement) ||
-						(li.parentElement as HTMLElement);
-					if (!root) continue;
-
-					const exist = groups.find((g) => g.root === root);
-					if (exist) {
-						if (exist.optionElements.indexOf(li) === -1) exist.optionElements.push(li);
-					} else {
-						groups.push({ root, optionElements: [li] });
-					}
-				}
-
-				if (groups.length !== 0) {
-					await waitForCaptcha();
-					// 最小化脚本窗口
-					$render.moveToEdge();
-					await $.sleep(1000);
-
-					for (const group of groups) {
-						await this.answerQuiz({
-							root: group.root,
-							optionElements: group.optionElements,
-							// 智慧树共享课弹题一般为单选，多选容器带 checkbox 类名
-							type: group.optionElements[0]?.closest('.checkbox') ? 'multiple' : 'single',
-							remotePage: this.remotePage || undefined
-						});
-						await $.sleep(500);
-					}
-
-					await $.sleep(1000);
-				}
-			}
-			await $.sleep(1000);
-			// 关闭弹窗
-			const close_btn_selector = '#playTopic-dialog .close-btn,#playTopic-dialog .btn';
-			if (this.remotePage) {
-				await this.remotePage.click(close_btn_selector);
-			} else {
-				trustedClick($el(close_btn_selector));
+				await $.sleep(1000);
 			}
 		}
 
-		/**
-		 * 每过三秒递归检测是否有弹窗
-		 */
-		await $.sleep(3000);
-		await this.handleTestDialog();
+		await $.sleep(1000);
+		await this.closeTestDialog();
+	}
+
+	/** 关闭弹题弹窗：优先点「提交/确定」，再退回关闭按钮，并回读是否真的关掉 */
+	private async closeTestDialog() {
+		const dialogExists = () => {
+			const dialog = $el('#playTopic-dialog');
+			if (!dialog) return false;
+			const rect = dialog.getBoundingClientRect();
+			return rect.width > 0 && rect.height > 0;
+		};
+
+		const click = async (el: HTMLElement | null | undefined) => {
+			if (!el) return;
+			let done = false;
+			try {
+				if (this.remotePage) {
+					done = (await withTimeout(this.remotePage.click(el), 4000, '弹题关闭按钮远程点击')) !== ACTION_TIMEOUT;
+				}
+			} catch {
+				done = false;
+			}
+			// 远程点不到（超时/报错）就本地合成点击：弹窗关不掉比点错更糟
+			if (!done) trustedClick(el);
+			await $.sleep(800);
+		};
+
+		// 弹题一般需要提交后才算作答成功，只点关闭按钮可能被平台丢弃
+		const buttons = $$el('#playTopic-dialog button, #playTopic-dialog .btn, #playTopic-dialog .close-btn');
+		const submit = buttons.find((el) => /提交|确定|确认|知道了|继续/.test(el.textContent || ''));
+		if (submit && dialogExists()) {
+			await click(submit);
+		}
+
+		// 关闭类按钮按「页脚关闭 → 通用 .btn → 右上角 X」顺序逐个尝试，关掉即停
+		const closeSelectors = [
+			'#playTopic-dialog .close-btn',
+			'#playTopic-dialog .dialog-footer .btn',
+			'#playTopic-dialog .btn',
+			'#playTopic-dialog .el-dialog__headerbtn'
+		];
+		for (const selector of closeSelectors) {
+			if (!dialogExists()) break;
+			await click($el(selector));
+		}
+
+		if (dialogExists()) {
+			$console.warn('弹题弹窗未能关闭，3 秒后重试');
+		} else {
+			$console.log('弹题弹窗已关闭');
+		}
 	}
 }
 
@@ -366,10 +700,18 @@ class FusionCourseH5 extends StudyVideoH5 implements ZHSProcessor {
 					.trim()
 					.split('/')
 					.map((s) => parseInt(s));
-				return !(progress < total);
+				// 解析失败时 parseInt 得到 NaN，!(NaN < NaN) 会把每一项都误判成已完成，
+				// 直接返回会让脚本以为「全部学完」而停下，所以先兜到文本判定
+				if (!Number.isFinite(progress) || !Number.isFinite(total)) {
+					return textSaysFinished(el);
+				}
+				return progress >= total;
 			}
 			const num_el = el.querySelector('.progress-num');
-			return num_el !== null && num_el.textContent === '100%';
+			if (num_el && (num_el.textContent || '').replace(/\s+/g, '') === '100%') {
+				return true;
+			}
+			return textSaysFinished(el);
 		};
 
 		// 在全量列表中定位当前播放项：当前视频刚播完会立刻带上完成标记，
@@ -412,7 +754,7 @@ class StudyPlusH5 extends StudyVideoH5 implements ZHSProcessor {
 			el.parentElement?.querySelector('.child-time')
 		);
 		console.log(videoItems);
-		const isFinished = (el: HTMLElement) => !!el.parentElement?.querySelector('.finish-icon');
+		const isFinished = (el: HTMLElement) => !!el.parentElement?.querySelector('.finish-icon') || textSaysFinished(el);
 
 		// 在全量列表中定位当前播放项：当前视频刚播完会立刻带上完成标记，
 		// 若先过滤再找 current 会找不到而误选列表头部（跳回第一个视频）
@@ -526,7 +868,7 @@ class WishdomH5 extends StudyVideoH5 implements ZHSProcessor {
 			.flat();
 
 		console.log(jobs);
-		const isFinished = (el: HTMLElement) => !!el.querySelector('.finish-icon');
+		const isFinished = (el: HTMLElement) => !!el.querySelector('.finish-icon') || textSaysFinished(el);
 
 		// 在全量列表中定位当前播放项，从当前位置向后找第一个未完成任务，避免误选列表头部
 		const currentIndex = jobs.findIndex((el) => el.classList.contains('current'));
@@ -654,12 +996,15 @@ class Hike extends StudyVideoH5 implements ZHSProcessor {
 		console.log(jobs);
 		// 如果不是复习模式，则排除掉已经完成的任务
 		if (!opts.restudy) {
+			const total = jobs.length;
 			jobs = jobs.filter((el) => {
-				if (el.querySelector('i.select')) {
+				if (!el) {
 					return false;
 				}
-				return true;
+				// i.select 是完成标记，类名失效时用「已完成」文案兜底
+				return !(el.querySelector('i.select') || textSaysFinished(el));
 			});
+			console.log(`[鸿鹄易学] 章节共 ${total} 个，识别为已完成 ${total - jobs.length} 个，待学习 ${jobs.length} 个`);
 		}
 
 		for (let i = 0; i < jobs.length; i++) {
@@ -699,19 +1044,22 @@ class HikeV2 extends StudyVideoH5 implements ZHSProcessor {
 		console.log(jobs);
 		// 如果不是复习模式，则排除掉已经完成的任务
 		if (!opts.restudy) {
+			const total = jobs.length;
 			jobs = jobs.filter((el) => {
-				if (el.querySelector('label.success')) {
-					return false;
-				}
-				return true;
+				// label.success 是完成标记，类名失效时用「已完成」文案兜底；
+				// 已完成项若正好是当前项，会被一起过滤掉，下面的循环找不到它，
+				// 于是从剩余列表第一个开始 —— 这正是想要的行为
+				return !(el.querySelector('label.success') || textSaysFinished(el));
 			});
+			console.log(`[鸿鹄易学] 章节共 ${total} 个，识别为已完成 ${total - jobs.length} 个，待学习 ${jobs.length} 个`);
 		}
 
-		for (let i = 0; i < jobs.length; i++) {
-			const item = jobs[i];
-			if (item.classList.contains('.is-current')) {
-				return jobs[i + (opts.next ? 1 : 0)];
-			}
+		// 这里以前写成 classList.contains('.is-current')，classList 的参数不能带点号，
+		// 条件恒为 false，循环永远不命中，于是每次调用都回退到 jobs[0]，
+		// 表现为「明明后面还有没看的，却总是从列表第一个开始播」
+		const currentIndex = jobs.findIndex((el) => el.classList.contains('is-current'));
+		if (currentIndex !== -1) {
+			return jobs[currentIndex + (opts.next ? 1 : 0)];
 		}
 		return jobs[0];
 	}
@@ -947,6 +1295,11 @@ export const ZHSProject = Project.create({
 				const processor = new ProcessorConstructor();
 				// 注入视频内题目作答策略
 				processor.quizStrategy = (this.cfg.videoQuizStrategy as VideoQuizStrategy) || 'random';
+				// 策略改动立即生效：此前只在 oncomplete 读一次，改完配置必须停脚本再运行才生效
+				this.onConfigChange('videoQuizStrategy', (curr) => {
+					processor.quizStrategy = (curr as VideoQuizStrategy) || 'random';
+					$console.log(`视频内题目策略已切换：${processor.quizStrategy === 'ai' ? 'AI题库答题' : '随机答题'}`);
+				});
 
 				// 10秒后还没加载出来，则结束
 				setTimeout(() => {
@@ -1033,25 +1386,46 @@ export const ZHSProject = Project.create({
 
 				const study = async (opts: { next: boolean }) => {
 					if (state.study.stop === false) {
-						const item = processor.getNext({ next: opts.next, restudy: this.cfg.restudy });
+						// 首次进入/刷新/重启时，章节列表比「已完成」标记先渲染，
+						// 立刻算「下一个该学哪节」会把已完成项全当成未完成、选中列表第一个，
+						// 于是每次重启都回头重播第一个视频。先等渲染稳定再决定。
+						if (!opts.next) await waitJobListSettled();
+
+						let item = processor.getNext({ next: opts.next, restudy: this.cfg.restudy });
 						if (item) {
 							const msg = '即将学习：' + processor.getChapterName(item);
 							$message.info({ content: msg });
 							$console.log(msg);
 							await $.sleep(3000);
+							// 双保险：点击前再复核一次，渲染仍比预期慢时以复核结果为准
+							const recheck = processor.getNext({ next: opts.next, restudy: this.cfg.restudy });
+							if (recheck && recheck !== item) {
+								item = recheck;
+								const recheckMsg = '复核后改为：' + processor.getChapterName(item);
+								$message.info({ content: recheckMsg });
+								$console.log(recheckMsg);
+							}
 							// 最小化脚本窗口
 							$render.moveToEdge();
 							// 点击侧边栏任务
 							if (remotePage) {
 								if (type === '新共享课') {
-									await remotePage.click('.title-box');
+									await withTimeout(remotePage.click('.title-box'), 6000, '展开章节列表远程点击');
 									await $.sleep(200);
 								}
-								await remotePage.click(item);
+								// 远程动作必须带超时：页面没被桌面端接管时请求会被挂住或直接拒绝，
+								// 没有超时整条学习链就卡在这里，界面一直停在「即将学习」不动
+								await withTimeout(remotePage.click(item), 8000, '切换章节远程点击');
 								await $.sleep(1000);
 								// 两次点击修复黑屏问题
-								await remotePage.click(item);
+								await withTimeout(remotePage.click(item), 8000, '切换章节远程点击');
 								await $.sleep(1000);
+								// 远程没点动（页面未接管/被拦）就本地补一次，否则永远停在当前视频
+								if (item.classList.contains('current_play') === false) {
+									$console.warn('远程点击未生效，改用本地点击切换章节');
+									await safeClick(item);
+									await $.sleep(1000);
+								}
 							} else {
 								await safeClick(item);
 							}
@@ -1791,6 +2165,11 @@ export const ZHSProject = Project.create({
 				const processor = new WishdomH5();
 				// 注入视频内题目作答策略
 				processor.quizStrategy = (this.cfg.videoQuizStrategy as VideoQuizStrategy) || 'random';
+				// 策略改动立即生效，无需停止脚本再重新运行
+				this.onConfigChange('videoQuizStrategy', (curr) => {
+					processor.quizStrategy = (curr as VideoQuizStrategy) || 'random';
+					$console.log(`视频内题目策略已切换：${processor.quizStrategy === 'ai' ? 'AI题库答题' : '随机答题'}`);
+				});
 
 				// // 点击显示进度条，否则无法进行倍速，清晰度等操作
 				// const showControlBar = async () => {

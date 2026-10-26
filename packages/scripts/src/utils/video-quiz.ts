@@ -62,6 +62,8 @@ export function extractVideoQuizTitle(root: HTMLElement, optionTexts: string[]):
 	let text = '';
 	try {
 		const clone = root.cloneNode(true) as HTMLElement;
+		// 弹题的页码条（1 / 2 / 3…）会被算进题干，导致题干变成「1 以下程序段…」，先摘掉
+		clone.querySelectorAll('.el-pagination, .el-pager').forEach((node) => node.remove());
 		// 由深到浅移除与选项文本一致的节点
 		const nodes = Array.from(clone.querySelectorAll<HTMLElement>('*')).reverse();
 		for (const node of nodes) {
@@ -143,6 +145,97 @@ function getAnswererWrappers(explicit?: AnswererWrapper[]): AnswererWrapper[] {
 const quizAnswerCache = new Map<string, SearchInformation[]>();
 const QUIZ_ANSWER_CACHE_MAX = 200;
 
+/** 判断题的「对」「错」关键词，长词在前，避免「不对」被「对」抢先命中 */
+const JUDGE_FALSE_WORDS = [
+	'不正确',
+	'不对',
+	'不是的',
+	'不是',
+	'错误',
+	'错的',
+	'错',
+	'否',
+	'非',
+	'×',
+	'false',
+	'no'
+];
+const JUDGE_TRUE_WORDS = ['正确', '对的', '是的', '对', '是', '√', 'true', 'yes'];
+
+/**
+ * 把一段文本判定成「对 / 错 / 认不出来」
+ *
+ * 先判错再判对：`不正确`、`不对` 这类词里都含 `对`，顺序反了会把错题判成对题。
+ */
+export function judgeAnswerOf(text: string): 'true' | 'false' | undefined {
+	const normalized = normalizeQuizText(text);
+	if (!normalized) return undefined;
+	// 单字符答案（T / F）单独判定，避免把 t、f 当子串误判整段英文
+	if (normalized === 'f') return 'false';
+	if (normalized === 't') return 'true';
+	if (JUDGE_FALSE_WORDS.some((word) => normalized.includes(normalizeQuizText(word)))) return 'false';
+	if (JUDGE_TRUE_WORDS.some((word) => normalized.includes(normalizeQuizText(word)))) return 'true';
+	return undefined;
+}
+
+/** 取选项的前缀字母（"A.对" → "A"） */
+function optionLabel(text: string): string {
+	const match = /^\s*([A-Za-z])\s*[.、．,，)）:：]/.exec(text || '');
+	return match ? match[1].toUpperCase() : '';
+}
+
+/**
+ * 答案直接给字母时（B / 选B / 答案：B）按选项前缀字母定位
+ *
+ * 判断题走的是专用匹配分支，core 里的 ABCD 兜底不会执行，所以这里补一层。
+ *
+ * @returns 命中的选项下标，未命中返回 -1
+ */
+function pickByOptionLetter(infos: SearchInformation[], optionTexts: string[]): number {
+	const labels = optionTexts.map(optionLabel);
+	if (labels.some((label) => !label)) return -1;
+
+	for (const info of infos) {
+		for (const result of info.results) {
+			const answer = String((result as any).answer || '').trim();
+			if (answer.length > 8) continue;
+			const match = /(?:选|答案|正确答案)?\s*[:：]?\s*([A-Za-z])(?![A-Za-z])/.exec(answer);
+			if (!match) continue;
+			const index = labels.indexOf(match[1].toUpperCase());
+			if (index !== -1) return index;
+		}
+	}
+	return -1;
+}
+
+/**
+ * 判断题兜底匹配
+ *
+ * core 的判断题匹配是「严格相等」，而大模型经常回「错误。因为……只执行一次」这类长句，
+ * 一旦不等就整题匹配失败、退回随机作答 —— 用户看到的就是「AI 明明答了却没选上」。
+ * 这里改成关键词判定：答案里出现「错/错误/不正确」就选「错」那一项，反之亦然。
+ *
+ * @returns 命中的选项下标，未命中返回 -1
+ */
+function pickJudgementIndex(infos: SearchInformation[], optionTexts: string[]): number {
+	if (optionTexts.length !== 2) return -1;
+
+	const polarities = optionTexts.map(judgeAnswerOf);
+	if (polarities.filter(Boolean).length !== 2) return -1;
+	if (polarities[0] === polarities[1]) return -1;
+
+	for (const info of infos) {
+		for (const result of info.results) {
+			const wanted = judgeAnswerOf(String((result as any).answer || ''));
+			if (!wanted) continue;
+			const index = polarities.indexOf(wanted);
+			if (index !== -1) return index;
+		}
+	}
+	return -1;
+}
+
+
 /** 未配置题库是否已经提示过 */
 let quizNoWrapperWarned = false;
 
@@ -163,19 +256,28 @@ export async function searchVideoQuizAnswer(opts: {
 	const wrappers = getAnswererWrappers(opts.answererWrappers);
 
 	if (wrappers.length === 0) {
+		// 区分「一个都没配」和「配了但全被禁用」，否则提示语会误导
+		let total = 0;
+		try {
+			total = (CommonProject.scripts.settings.cfg.answererWrappers || []).length;
+		} catch {
+			total = 0;
+		}
+		const reason =
+			total > 0
+				? `题库共 ${total} 个，但全部被禁用，本次将随机作答。请前往 通用-全局设置 启用至少一个题库。`
+				: '还没有配置题库，本次将随机作答。请前往 通用-全局设置 配置题库或 AI 答题。';
+
 		// 只提示一次，避免每道弹题都弹窗
 		if (!quizNoWrapperWarned) {
 			quizNoWrapperWarned = true;
 			try {
-				$message.warn({
-					content: '视频内题目已选择 AI题库答题，但还没有配置题库，本次将随机作答。请前往 通用-全局设置 配置题库或 AI 答题。',
-					duration: 10
-				});
+				$message.warn({ content: `视频内题目已选择 AI题库答题，但${reason}`, duration: 10 });
 			} catch {
 				// 弹窗失败不影响主流程
 			}
 		}
-		throw new Error('未配置题库，请前往 通用-全局设置 配置题库或 AI 答题');
+		throw new Error(reason);
 	}
 
 	const infos = await defaultAnswerWrapperHandler(wrappers, {
@@ -223,7 +325,8 @@ export async function answerVideoQuiz(opts: {
 	/** 题目类型，不填则自动推断 */
 	type?: VideoQuizType;
 	/** 点击选项的方法（兼容远程控制页面） */
-	click: (el: HTMLElement) => void | Promise<void>;
+	/** 点击选项；返回 false 表示点击后页面没有回显选中态（可能没生效） */
+	click: (el: HTMLElement) => boolean | void | Promise<boolean | void>;
 	/** 题库配置，不填则读取全局配置 */
 	answererWrappers?: AnswererWrapper[];
 }): Promise<VideoQuizAnswerResult> {
@@ -278,12 +381,57 @@ export async function answerVideoQuiz(opts: {
 	}
 
 	if (picked.length === 0) {
-		return { ok: false, title, answers: [], error: '答案与选项不匹配' };
+		// 判断题兜底：题库/大模型回的是长句时，严格相等匹配不到，用关键词再判一次
+		const judgeIndex = pickJudgementIndex(infos, optionTexts);
+		if (judgeIndex !== -1) {
+			picked.push(optionElements[judgeIndex]);
+		}
 	}
 
+	if (picked.length === 0) {
+		// 答案直接给字母时按选项前缀字母定位
+		const letterIndex = pickByOptionLetter(infos, optionTexts);
+		if (letterIndex !== -1) {
+			picked.push(optionElements[letterIndex]);
+		}
+	}
+
+	if (picked.length === 0) {
+		// 把题库原始答案带出来，否则「答案与选项不匹配」根本没法排查
+		const raw = infos
+			.map((info) =>
+				info.results
+					.map((res) => String((res as any).answer || '').replace(/\s+/g, ' ').slice(0, 40))
+					.filter(Boolean)
+					.join(' | ')
+			)
+			.filter(Boolean)
+			.join(' ; ');
+		return {
+			ok: false,
+			title,
+			answers: [],
+			error: raw ? `答案与选项不匹配，题库返回「${raw}」，选项「${optionTexts.join(' / ')}」` : '答案与选项不匹配'
+		};
+	}
+
+	// 逐个点击；只要有一个选项确认选中就算作答成功，
+	// 全都没回显选中态就如实报失败（旧实现无条件返回 ok，
+	// 日志一直打「作答成功」但页面上什么都没选中，问题被完全掩盖）
+	let confirmed = 0;
 	for (const el of picked) {
-		await opts.click(el);
+		const ret = await opts.click(el);
+		if (ret !== false) confirmed++;
 		await $.sleep(200);
+	}
+
+	if (confirmed === 0) {
+		return {
+			ok: false,
+			title,
+			answers: picked.map(getQuizOptionText),
+			error: '选项点击后页面未回显选中态，作答可能未生效'
+		};
 	}
 
 	return { ok: true, title, answers: picked.map(getQuizOptionText) };

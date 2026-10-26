@@ -705,6 +705,9 @@ export const CommonProject = Project.create({
 							(aw) => this.cfg.disabledAnswererWrapperNames.find((daw) => daw === aw.name) === undefined
 						);
 
+						// AI 题库的提示词/模型在「启用」时就被写死进配置了，这里按当前代码刷新副本
+						refreshAiAnswererWrapper(workOptions.answererWrappers);
+
 						return workOptions;
 					},
 					/**
@@ -1790,8 +1793,49 @@ interface ReferenceDoc {
 }
 
 const AI_SYSTEM_PROMPT =
-	'你是一个考试答题助手。根据题目、选项和题型选出正确答案。规则：单选题(single)只输出一个选项字母如 A；多选题(multiple)输出多个字母用 # 分隔如 A#B#C；判断题(judgement)输出"正确"或"错误"；填空题(completion)直接输出答案。只输出答案，不要解释。';
-const AI_USER_PROMPT = '题目：${title}\n选项：${options}\n题型：${type}';
+	'你是一个答题助手。请严格依据给出的「题目」和「选项」作答，只能从给定选项里选，禁止编造选项，也不允许给出选项之外的内容。\n' +
+	'输出要求（必须严格遵守；只输出答案本身，不要解释、不要理由、不要标点、不要引号、不要重复题干）：\n' +
+	'1. 单选题(single)：只输出所选项的字母，例如 A；不要输出选项文字。\n' +
+	'2. 多选题(multiple)：只输出所有正确选项的字母，用 # 分隔，例如 A#B#C。\n' +
+	'3. 判断题(judgement)：只输出所选项的文字，不要输出字母。选项写作「A.对」「B.错」时就输出「对」或「错」；写作「A.正确」「B.错误」时就输出「正确」或「错误」；必须与所选项的文字完全一致。\n' +
+	'4. 填空题(completion)：直接输出要填的内容，多个空用 # 分隔。\n' +
+	'禁止输出「正确答案是」「答案是」「因为」等任何前缀或解析，禁止输出多个选项。';
+const AI_USER_PROMPT = '题目：${title}\n选项：\n${options}\n题型：${type}\n请只输出答案：';
+
+/**
+ * 按当前代码刷新「AI答题」题库条目的地址、鉴权与提示词
+ *
+ * 这些内容在点「启用」的瞬间就被固化进 answererWrappers 里了，
+ * 之后升级代码（改提示词、换模型字段）对老配置完全无效 ——
+ * 所以在取工作配置时刷新一份副本：既能让新提示词对已配置用户立即生效，也不写存储。
+ */
+function refreshAiAnswererWrapper(wrappers: AnswererWrapper[] | undefined) {
+	if (!wrappers || wrappers.length === 0) return;
+	const wrapper: any = wrappers.find((aw) => aw && aw.name === 'AI答题');
+	if (!wrapper) return;
+
+	let aiCfg: any;
+	try {
+		aiCfg = CommonProject.scripts.aiSettings.cfg;
+	} catch {
+		return;
+	}
+	const { aiEndpoint, aiApiKey, aiModel } = aiCfg || {};
+	if (!aiEndpoint || !aiApiKey || !aiModel) return;
+
+	wrapper.url = normalizeAiEndpoint(aiEndpoint);
+	wrapper.headers = {
+		...((wrapper.headers as any) || {}),
+		'Content-Type': 'application/json',
+		Authorization: 'Bearer ' + aiApiKey
+	};
+	wrapper.data = {
+		...((wrapper.data as any) || {}),
+		model: aiModel,
+		messages: buildAiMessages((aiCfg.referenceDocs as any) || []),
+		temperature: 0
+	};
+}
 
 function buildAiMessages(referenceDocs: ReferenceDoc[]) {
 	const enabled = (referenceDocs || []).filter((r) => r.enabled && r.content);

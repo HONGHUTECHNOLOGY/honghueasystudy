@@ -290,10 +290,28 @@ export class RemotePlaywright {
 	}
 }
 
-function scrollToElement(el: HTMLElement) {
-	el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-	// 等待动作完成
-	return $.sleep(200);
+/**
+ * 把元素滚动到视口中央，并等到位置真正稳定
+ *
+ * 原来用 behavior: 'smooth' 只等 200ms —— 长列表（智慧树 70 个视频、侧栏可滚动容器）
+ * 平滑滚动往往要 500ms 以上，等不足就会量到滚动途中的坐标：
+ * 元素还在视口外（实测 getBoundingClientRect().top 仍为 2400 左右），
+ * 远程按这个坐标点下去，实际点在了视口之外，表现就是「脚本说要学某一节，但画面没动」。
+ * 这里改成瞬时滚动 + 轮询到位置不再变化，兼容页面自己设了 scroll-behavior: smooth 的情况。
+ */
+async function scrollToElement(el: HTMLElement) {
+	try {
+		el.scrollIntoView({ behavior: 'auto', block: 'center' });
+	} catch {
+		el.scrollIntoView();
+	}
+	let last = Number.NaN;
+	for (let i = 0; i < 20; i++) {
+		const top = el.getBoundingClientRect().top;
+		if (Math.abs(top - last) < 1) return;
+		last = top;
+		await $.sleep(100);
+	}
 }
 
 function showMousePointer(el: HTMLElement) {
