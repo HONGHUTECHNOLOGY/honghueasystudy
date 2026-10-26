@@ -30,8 +30,13 @@ interface RemoteSnapshotPayload {
 }
 
 let pushTimer: ReturnType<typeof setTimeout> | undefined;
+/** pushTimer 的设置时刻，用于识别被节流/冻结丢弃的定时器 */
+let pushTimerAt = 0;
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 let started = false;
+
+/** 定时器滞留阈值：超过这个时长仍未触发，说明定时器已被页面节流或冻结，必须丢弃重建 */
+const PUSH_STALE = PUSH_INTERVAL * 4;
 
 /**
  * 采集完整快照
@@ -68,16 +73,28 @@ function buildSnapshot(): RemoteSnapshotPayload {
 	return { browsers, logs, ts: Date.now() };
 }
 
+/** 立即发送一次快照，不做节流 */
+function sendState() {
+	try {
+		ipcRenderer.send('remote-ctl:state', buildSnapshot());
+	} catch (e) {
+		console.error('上报远程控制状态失败', e);
+	}
+}
+
 /** 立即上报（节流） */
 function schedulePush() {
-	if (pushTimer) return;
+	if (pushTimer) {
+		// 定时器被页面节流/冻结时会滞留不触发。此时若直接 return，pushTimer 将永远不清空，
+		// 之后每一次上报都被短路，主进程快照就停在最后一次成功的时间里（远程端看起来「卡住」）
+		if (Date.now() - pushTimerAt < PUSH_STALE) return;
+		clearTimeout(pushTimer);
+		pushTimer = undefined;
+	}
+	pushTimerAt = Date.now();
 	pushTimer = setTimeout(() => {
 		pushTimer = undefined;
-		try {
-			ipcRenderer.send('remote-ctl:state', buildSnapshot());
-		} catch (e) {
-			console.error('上报远程控制状态失败', e);
-		}
+		sendState();
 	}, PUSH_INTERVAL);
 }
 
@@ -225,8 +242,22 @@ export function activeRemoteControlBridge() {
 	/** 状态上报：只在指纹变化时触发 */
 	watch(fingerprint, schedulePush, { flush: 'post' });
 
-	/** 兜底心跳 */
-	heartbeatTimer = setInterval(schedulePush, HEARTBEAT_INTERVAL);
+	/** 兜底心跳：直接发送、绕过节流，避免 pushTimer 滞留后彻底停更 */
+	heartbeatTimer = setInterval(() => {
+		if (pushTimer) {
+			clearTimeout(pushTimer);
+			pushTimer = undefined;
+		}
+		sendState();
+	}, HEARTBEAT_INTERVAL);
+
+	/** 后台标签被冻结后回到前台时立即补一次，不必等下一个心跳 */
+	if (typeof document !== 'undefined') {
+		document.addEventListener('visibilitychange', () => {
+			if (!document.hidden) sendState();
+		});
+	}
+	window.addEventListener('focus', () => sendState());
 
 	/** 命令执行 */
 	ipcRenderer.on('remote-ctl:command', async (_event: any, message: { id: string; action: string; payload: any }) => {
