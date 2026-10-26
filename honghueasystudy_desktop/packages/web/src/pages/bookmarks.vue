@@ -208,43 +208,43 @@
 						</div>
 					</div>
 
-					<TransitionGroup name="platform-list" tag="div" class="platform-grid">
-						<a
-							v-for="(bookmark, index) in filteredPlatforms"
-							:key="`${bookmark.name}-${bookmark.url}`"
-							class="platform-card"
-							:href="bookmark.url"
-							target="_blank"
-							rel="noopener noreferrer"
-							:style="cardStyle(index)"
-							@pointermove="handleCardPointerMove"
-							@pointerleave="handleCardPointerLeave"
-						>
-								<div class="platform-card__top">
-									<div class="platform-logo">
-										<span v-if="showFallbackIcon(bookmark)">{{ bookmark.name.slice(0, 1) }}</span>
-										<img
-											v-else
-											:src="iconUrl(bookmark.icon)"
-											:alt="`${bookmark.name}图标`"
-											loading="lazy"
-											@error="hideBrokenIcon(bookmark)"
-										/>
-									</div>
-								<span class="platform-arrow">
-									<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9" /></svg>
-								</span>
+					<div class="platform-grid">
+					<a
+						v-for="(bookmark, index) in filteredPlatforms"
+						:key="`${bookmark.name}-${bookmark.url}`"
+						class="platform-card"
+						:href="bookmark.url"
+						target="_blank"
+						rel="noopener noreferrer"
+						:style="cardStyle(bookmark, index)"
+						@pointermove="handleCardPointerMove"
+						@pointerleave="handleCardPointerLeave"
+					>
+						<div class="platform-card__top">
+							<div class="platform-logo">
+								<span v-if="showFallbackIcon(bookmark)">{{ bookmark.name.slice(0, 1) }}</span>
+								<img
+									v-else
+									:src="iconUrl(bookmark.icon)"
+									:alt="`${bookmark.name}图标`"
+									loading="lazy"
+									@error="hideBrokenIcon(bookmark)"
+								/>
 							</div>
-							<div class="platform-card__body">
-								<span class="platform-category">{{ platformLabel(bookmark) }}</span>
-								<h3>{{ bookmark.name }}</h3>
-								<p>{{ bookmark.description }}</p>
-							</div>
-							<div class="platform-card__footer">
-								<span>进入平台</span>
-							</div>
-						</a>
-					</TransitionGroup>
+							<span class="platform-arrow">
+								<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9" /></svg>
+							</span>
+						</div>
+						<div class="platform-card__body">
+							<span class="platform-category">{{ platformLabel(bookmark) }}</span>
+							<h3>{{ bookmark.name }}</h3>
+							<p>{{ bookmark.description }}</p>
+						</div>
+						<div class="platform-card__footer">
+							<span>进入平台</span>
+						</div>
+					</a>
+				</div>
 
 					<div v-if="!totalVisible" class="empty-state">
 						<div class="empty-state__icon">
@@ -402,10 +402,12 @@ function platformLabel(bookmark: CatalogEntry): string {
 	return labels.find(([keyword]) => bookmark.name.includes(keyword))?.[1] || '课程平台';
 }
 
-function cardStyle(index: number) {
+function cardStyle(bookmark: CatalogEntry, index: number) {
 	const accents = ['#635bff', '#2f80ed', '#0d9f84', '#a762c4', '#ef7b55', '#4d6b82'];
+	// 主题色按平台在完整目录中的位置取值，避免搜索结果变化时卡片颜色跳变。
+	const baseIndex = platforms.value.indexOf(bookmark);
 	return {
-		'--card-accent': accents[index % accents.length],
+		'--card-accent': accents[(baseIndex < 0 ? index : baseIndex) % accents.length],
 		'--card-order': index
 	};
 }
@@ -741,9 +743,6 @@ onBeforeUnmount(() => {
 .platform-card__footer i { width: 20px; height: 1px; background: #c5cac5; transition: width 0.3s ease, background 0.3s ease; }
 .platform-card:hover .platform-card__footer { color: var(--forest); }
 .platform-card:hover .platform-card__footer i { width: 34px; background: var(--forest); }
-.platform-list-enter-active, .platform-list-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
-.platform-list-enter-from, .platform-list-leave-to { opacity: 0; transform: translateY(8px); }
-.platform-list-leave-active { position: absolute; }
 .empty-state { padding: 58px 20px; border: 1px dashed rgba(36, 77, 66, 0.18); border-radius: 18px; text-align: center; background: rgba(255, 255, 255, 0.35); }
 .empty-state__icon { width: 48px; height: 48px; display: grid; place-items: center; margin: 0 auto 15px; border-radius: 50%; background: rgba(36, 77, 66, 0.07); color: var(--forest); }
 .empty-state__icon svg { width: 23px; stroke: currentColor; stroke-width: 1.4; }
