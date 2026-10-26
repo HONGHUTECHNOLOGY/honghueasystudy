@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-var __HH_BRIDGE_KEY__="59ffb342-9a73-4932-9f8c-b6092dc52da5";
+var __HH_BRIDGE_KEY__="e649ee9a-f364-496d-a4f6-0bbdbd932cd2";
 /* 鸿鹄易学 · MAIN world 运行时（ScriptCat 风格）
  *
  * 本文件由 background.js 通过 chrome.userScripts.register({ world: "MAIN" })
@@ -4044,9 +4044,20 @@ try {
   }
   RemotePlaywright.authToken = "";
   RemotePlaywright.currentPage = void 0;
-  function scrollToElement(el) {
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    return $.sleep(200);
+  async function scrollToElement(el) {
+    try {
+      el.scrollIntoView({ behavior: "auto", block: "center" });
+    } catch {
+      el.scrollIntoView();
+    }
+    let last = Number.NaN;
+    for (let i = 0; i < 20; i++) {
+      const top2 = el.getBoundingClientRect().top;
+      if (Math.abs(top2 - last) < 1)
+        return;
+      last = top2;
+      await $.sleep(100);
+    }
   }
   function showMousePointer(el) {
     setTimeout(() => {
@@ -5085,6 +5096,7 @@ try {
   const origAppendChild = Node.prototype.appendChild;
   const OrigEvent = Event;
   const OrigMouseEvent = MouseEvent;
+  const OrigPointerEvent = PointerEvent;
   const OrigKeyboardEvent = KeyboardEvent;
   const OrigInputEvent = InputEvent;
   function hidePanel() {
@@ -5133,6 +5145,71 @@ try {
     } finally {
       restore();
     }
+  }
+  function trustedPointerClick(el) {
+    if (!el)
+      return;
+    const rect = el.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const base = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      view: window,
+      clientX: x,
+      clientY: y,
+      screenX: x,
+      screenY: y,
+      button: 0,
+      detail: 1
+    };
+    const pointer = { ...base, pointerId: 1, pointerType: "mouse", isPrimary: true };
+    const restore = hidePanel();
+    try {
+      const fire = (event) => {
+        try {
+          el.dispatchEvent(event);
+        } catch {
+        }
+      };
+      try {
+        fire(new OrigPointerEvent("pointerdown", pointer));
+      } catch {
+      }
+      fire(new OrigMouseEvent("mousedown", base));
+      try {
+        fire(new OrigPointerEvent("pointerup", pointer));
+      } catch {
+      }
+      fire(new OrigMouseEvent("mouseup", base));
+      fire(new OrigMouseEvent("click", base));
+    } finally {
+      restore();
+    }
+  }
+  const SELECTED_CLASS = /^(?:is-)?(?:active|selected|checked|choose|chosen)$/i;
+  function hasSelectedClass(el) {
+    if (el.getAttribute("aria-checked") === "true" || el.getAttribute("aria-selected") === "true") {
+      return true;
+    }
+    const cls = typeof el.className === "string" ? el.className : "";
+    return cls.split(/\s+/).filter(Boolean).some((token) => SELECTED_CLASS.test(token));
+  }
+  function isChoiceSelected(el) {
+    if (!el)
+      return false;
+    const input = el.querySelector('input[type="radio"],input[type="checkbox"]');
+    if (input && input.checked)
+      return true;
+    if (hasSelectedClass(el))
+      return true;
+    const nodes = el.querySelectorAll("*");
+    for (let i = 0; i < nodes.length; i++) {
+      if (hasSelectedClass(nodes[i]))
+        return true;
+    }
+    return false;
   }
   const $playwright = {
     showError: () => {
@@ -7567,6 +7644,7 @@ try {
               workOptions.answererWrappers = workOptions.answererWrappers.filter(
                 (aw) => this.cfg.disabledAnswererWrapperNames.find((daw) => daw === aw.name) === void 0
               );
+              refreshAiAnswererWrapper(workOptions.answererWrappers);
               return workOptions;
             },
             notificationBySetting: (content, opts) => {
@@ -8467,8 +8545,36 @@ try {
       )
     );
   }
-  const AI_SYSTEM_PROMPT = '你是一个考试答题助手。根据题目、选项和题型选出正确答案。规则：单选题(single)只输出一个选项字母如 A；多选题(multiple)输出多个字母用 # 分隔如 A#B#C；判断题(judgement)输出"正确"或"错误"；填空题(completion)直接输出答案。只输出答案，不要解释。';
-  const AI_USER_PROMPT = "题目：${title}\n选项：${options}\n题型：${type}";
+  const AI_SYSTEM_PROMPT = "你是一个答题助手。请严格依据给出的「题目」和「选项」作答，只能从给定选项里选，禁止编造选项，也不允许给出选项之外的内容。\n输出要求（必须严格遵守；只输出答案本身，不要解释、不要理由、不要标点、不要引号、不要重复题干）：\n1. 单选题(single)：只输出所选项的字母，例如 A；不要输出选项文字。\n2. 多选题(multiple)：只输出所有正确选项的字母，用 # 分隔，例如 A#B#C。\n3. 判断题(judgement)：只输出所选项的文字，不要输出字母。选项写作「A.对」「B.错」时就输出「对」或「错」；写作「A.正确」「B.错误」时就输出「正确」或「错误」；必须与所选项的文字完全一致。\n4. 填空题(completion)：直接输出要填的内容，多个空用 # 分隔。\n禁止输出「正确答案是」「答案是」「因为」等任何前缀或解析，禁止输出多个选项。";
+  const AI_USER_PROMPT = "题目：${title}\n选项：\n${options}\n题型：${type}\n请只输出答案：";
+  function refreshAiAnswererWrapper(wrappers) {
+    if (!wrappers || wrappers.length === 0)
+      return;
+    const wrapper = wrappers.find((aw) => aw && aw.name === "AI答题");
+    if (!wrapper)
+      return;
+    let aiCfg;
+    try {
+      aiCfg = CommonProject.scripts.aiSettings.cfg;
+    } catch {
+      return;
+    }
+    const { aiEndpoint, aiApiKey, aiModel } = aiCfg || {};
+    if (!aiEndpoint || !aiApiKey || !aiModel)
+      return;
+    wrapper.url = normalizeAiEndpoint(aiEndpoint);
+    wrapper.headers = {
+      ...wrapper.headers || {},
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + aiApiKey
+    };
+    wrapper.data = {
+      ...wrapper.data || {},
+      model: aiModel,
+      messages: buildAiMessages(aiCfg.referenceDocs || []),
+      temperature: 0
+    };
+  }
   function buildAiMessages(referenceDocs) {
     const enabled = (referenceDocs || []).filter((r) => r.enabled && r.content);
     const textRefs = enabled.filter((r) => r.type === "text");
@@ -9217,6 +9323,7 @@ try {
     let text = "";
     try {
       const clone = root2.cloneNode(true);
+      clone.querySelectorAll(".el-pagination, .el-pager").forEach((node) => node.remove());
       const nodes = Array.from(clone.querySelectorAll("*")).reverse();
       for (const node of nodes) {
         const nodeText = normalizeQuizText(node.textContent || "");
@@ -9273,6 +9380,78 @@ try {
   }
   const quizAnswerCache = /* @__PURE__ */ new Map();
   const QUIZ_ANSWER_CACHE_MAX = 200;
+  const JUDGE_FALSE_WORDS = [
+    "不正确",
+    "不对",
+    "不是的",
+    "不是",
+    "错误",
+    "错的",
+    "错",
+    "否",
+    "非",
+    "×",
+    "false",
+    "no"
+  ];
+  const JUDGE_TRUE_WORDS = ["正确", "对的", "是的", "对", "是", "√", "true", "yes"];
+  function judgeAnswerOf(text) {
+    const normalized = normalizeQuizText(text);
+    if (!normalized)
+      return void 0;
+    if (normalized === "f")
+      return "false";
+    if (normalized === "t")
+      return "true";
+    if (JUDGE_FALSE_WORDS.some((word) => normalized.includes(normalizeQuizText(word))))
+      return "false";
+    if (JUDGE_TRUE_WORDS.some((word) => normalized.includes(normalizeQuizText(word))))
+      return "true";
+    return void 0;
+  }
+  function optionLabel(text) {
+    const match = /^\s*([A-Za-z])\s*[.、．,，)）:：]/.exec(text || "");
+    return match ? match[1].toUpperCase() : "";
+  }
+  function pickByOptionLetter(infos, optionTexts) {
+    const labels = optionTexts.map(optionLabel);
+    if (labels.some((label) => !label))
+      return -1;
+    for (const info of infos) {
+      for (const result of info.results) {
+        const answer = String(result.answer || "").trim();
+        if (answer.length > 8)
+          continue;
+        const match = /(?:选|答案|正确答案)?\s*[:：]?\s*([A-Za-z])(?![A-Za-z])/.exec(answer);
+        if (!match)
+          continue;
+        const index = labels.indexOf(match[1].toUpperCase());
+        if (index !== -1)
+          return index;
+      }
+    }
+    return -1;
+  }
+  function pickJudgementIndex(infos, optionTexts) {
+    if (optionTexts.length !== 2)
+      return -1;
+    const polarities = optionTexts.map(judgeAnswerOf);
+    if (polarities.filter(Boolean).length !== 2)
+      return -1;
+    if (polarities[0] === polarities[1])
+      return -1;
+    for (const info of infos) {
+      for (const result of info.results) {
+        const wanted = judgeAnswerOf(String(result.answer || ""));
+        if (!wanted)
+          continue;
+        const index = polarities.indexOf(wanted);
+        if (index !== -1)
+          return index;
+      }
+    }
+    return -1;
+  }
   let quizNoWrapperWarned = false;
   async function searchVideoQuizAnswer(opts) {
     const cacheKey = normalizeQuizText(opts.title);
@@ -9351,11 +9530,42 @@ try {
       return { ok: false, title, answers: [], error: error && error.message || String(error) };
     }
     if (picked.length === 0) {
-      return { ok: false, title, answers: [], error: "答案与选项不匹配" };
+      const judgeIndex = pickJudgementIndex(infos, optionTexts);
+      if (judgeIndex !== -1) {
+        picked.push(optionElements[judgeIndex]);
+      }
     }
+    if (picked.length === 0) {
+      const letterIndex = pickByOptionLetter(infos, optionTexts);
+      if (letterIndex !== -1) {
+        picked.push(optionElements[letterIndex]);
+      }
+    }
+    if (picked.length === 0) {
+      const raw = infos.map(
+        (info) => info.results.map((res) => String(res.answer || "").replace(/\s+/g, " ").slice(0, 40)).filter(Boolean).join(" | ")
+      ).filter(Boolean).join(" ; ");
+      return {
+        ok: false,
+        title,
+        answers: [],
+        error: raw ? `答案与选项不匹配，题库返回「${raw}」，选项「${optionTexts.join(" / ")}」` : "答案与选项不匹配"
+      };
+    }
+    let confirmed = 0;
     for (const el of picked) {
-      await opts.click(el);
+      const ret = await opts.click(el);
+      if (ret !== false)
+        confirmed++;
       await lib.$.sleep(200);
+    }
+    if (confirmed === 0) {
+      return {
+        ok: false,
+        title,
+        answers: picked.map(getQuizOptionText),
+        error: "选项点击后页面未回显选中态，作答可能未生效"
+      };
     }
     return { ok: true, title, answers: picked.map(getQuizOptionText) };
   }
@@ -9384,22 +9594,147 @@ try {
     const text = (el.textContent || "").replace(/\s+/g, "");
     return /已完成|已学完|已看完/.test(text);
   }
+  async function waitJobListSettled(timeout = 6e3, step = 300) {
+    const snapshot = () => {
+      const nodes = document.querySelectorAll(
+        ".clearfix.video, .child-main, .source-icon, .el-tree-node, .chapter-content-second, .resources-item"
+      );
+      let finished = 0;
+      nodes.forEach((node) => {
+        if (node.querySelector(
+          ".time_icofinish, .finish-icon, .finished-icon, .isFinish, label.success, i.select"
+        )) {
+          finished++;
+        }
+      });
+      return `${nodes.length}:${finished}`;
+    };
+    const deadline = Date.now() + timeout;
+    let last = "";
+    let stable = 0;
+    while (Date.now() < deadline) {
+      await lib.$.sleep(step);
+      const now2 = snapshot();
+      if (now2 === last && now2 !== "0:0") {
+        stable++;
+        if (stable >= 2)
+          return;
+      } else {
+        stable = 0;
+      }
+      last = now2;
+    }
+  }
+  const ACTION_TIMEOUT = Symbol("action-timeout");
+  function withTimeout(task, ms, label) {
+    let timer;
+    const timeout = new Promise((resolve) => {
+      timer = setTimeout(() => {
+        $console.warn(`${label}超过 ${ms}ms 未返回，改用本地点击兜底`);
+        resolve(ACTION_TIMEOUT);
+      }, ms);
+    });
+    const guarded = Promise.resolve(task).then(
+      (value) => {
+        if (timer !== void 0)
+          clearTimeout(timer);
+        return value;
+      },
+      (error) => {
+        if (timer !== void 0)
+          clearTimeout(timer);
+        throw error;
+      }
+    );
+    return Promise.race([guarded, timeout]);
+  }
+  function quizClickTargets(el) {
+    const targets = [];
+    const push = (node) => {
+      if (node instanceof HTMLElement && targets.indexOf(node) === -1) {
+        targets.push(node);
+      }
+    };
+    push(el);
+    push(el.querySelector(".topic-item, .option-item, .option-content, label"));
+    push(el.querySelector(".item-topic"));
+    push(el.querySelector(".topic-option-item"));
+    push(el.querySelector('input[type="radio"], input[type="checkbox"]'));
+    push(el.parentElement);
+    return targets;
+  }
+  let quizSelectStateWarned = 0;
+  function guessDialogQuizType(optionElements) {
+    var _a;
+    if ((_a = optionElements[0]) == null ? void 0 : _a.closest(".checkbox"))
+      return "multiple";
+    if (optionElements.length === 2) {
+      const polarities = optionElements.map((el) => judgeAnswerOf(el.textContent || ""));
+      if (polarities.filter(Boolean).length === 2 && polarities[0] !== polarities[1])
+        return "judgement";
+    }
+    return "single";
+  }
+  async function clickQuizOption(el, remotePage) {
+    if (isChoiceSelected(el))
+      return true;
+    const targets = quizClickTargets(el);
+    try {
+      el.scrollIntoView({ block: "center" });
+    } catch {
+    }
+    await lib.$.sleep(200);
+    for (const target of targets) {
+      let timedOut = false;
+      try {
+        if (remotePage) {
+          timedOut = await withTimeout(remotePage.click(target), 5e3, "弹题选项远程点击") === ACTION_TIMEOUT;
+        } else {
+          trustedClick(target);
+        }
+      } catch (error) {
+        $console.warn("弹题选项点击异常：" + (error && error.message || String(error)));
+      }
+      await lib.$.sleep(300);
+      if (isChoiceSelected(el))
+        return true;
+      if (timedOut)
+        break;
+    }
+    for (const target of targets) {
+      trustedPointerClick(target);
+      await lib.$.sleep(300);
+      if (isChoiceSelected(el))
+        return true;
+    }
+    if (quizSelectStateWarned < 3) {
+      quizSelectStateWarned++;
+      const rect = el.getBoundingClientRect();
+      const cls = (node) => {
+        const name = typeof node.className === "string" ? node.className : "";
+        return name ? name.trim().replace(/\s+/g, ".") : node.tagName.toLowerCase();
+      };
+      const inner = Array.from(el.querySelectorAll("*")).slice(0, 4).map(cls).join(" , ");
+      $console.warn(
+        `弹题选项点击后读不到选中态（${Math.round(rect.width)}x${Math.round(rect.height)}，通道：${remotePage ? "远程" : "本地"}，li=「${cls(el)}」，内部=「${inner}」）。已继续处理，但平台可能没记录这次作答 —— 请把这条日志反馈过来以便适配页面结构`
+      );
+    }
+    return false;
+  }
   class StudyVideoH5 {
     constructor() {
       this.remotePage = void 0;
       this.quizStrategy = "random";
+      this.quizDialogLoopRunning = false;
     }
     async answerQuiz(options) {
       const { root: root2, optionElements, type, remotePage } = options;
       if (optionElements.length === 0)
         return false;
       const click = async (el) => {
-        if (remotePage) {
-          await remotePage.click(el);
-        } else {
-          await trustedClick(el);
-        }
-        await lib.$.sleep(300);
+        const ok = await clickQuizOption(el, remotePage);
+        await lib.$.sleep(200);
+        return ok;
       };
       if (this.quizStrategy === "ai") {
         try {
@@ -9423,6 +9758,12 @@ try {
           if (ret.ok) {
             $console.log(`AI 题库作答成功：${ret.title} => ${ret.answers.join(" / ")}`);
             return true;
+          }
+          if (ret.answers.length > 0) {
+            $console.warn(
+              `AI 题库已选出答案但点击未生效（${ret.error || "未回显选中态"}）：${ret.title} => ${ret.answers.join(" / ")}`
+            );
+            return false;
           }
           $console.warn(`AI 题库未匹配到答案（${ret.error || "未知原因"}），将随机作答：${ret.title}`);
         } catch (error) {
@@ -9519,54 +9860,133 @@ try {
       });
     }
     async handleTestDialog() {
-      var _a;
-      const items = lib.$$el("#playTopic-dialog .el-pager .number");
-      if (items.length) {
-        for (const item of items) {
+      if (this.quizDialogLoopRunning)
+        return;
+      this.quizDialogLoopRunning = true;
+      try {
+        while (state$7.study.stop === false) {
+          try {
+            await this.answerTestDialogOnce();
+          } catch (error) {
+            $console.warn("弹题处理异常：" + (error && error.message || String(error)));
+          }
+          await lib.$.sleep(3e3);
+        }
+      } finally {
+        this.quizDialogLoopRunning = false;
+      }
+    }
+    async answerTestDialogOnce() {
+      const dialog = lib.$el("#playTopic-dialog");
+      if (!dialog)
+        return;
+      const dialogRect = dialog.getBoundingClientRect();
+      if (dialogRect.width <= 0 || dialogRect.height <= 0)
+        return;
+      const pagerItems = lib.$$el("#playTopic-dialog .el-pager .number");
+      if (pagerItems.length === 0 && lib.$$el("#playTopic-dialog .topic-item").length === 0)
+        return;
+      const pageCount = pagerItems.length === 0 ? 1 : pagerItems.length;
+      for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
+        const item = lib.$$el("#playTopic-dialog .el-pager .number")[pageIndex];
+        if (item && item.classList.contains("active") === false) {
+          let flipped = false;
+          if (this.remotePage) {
+            try {
+              flipped = await withTimeout(this.remotePage.click(item), 5e3, "弹题翻页远程点击") !== ACTION_TIMEOUT;
+            } catch {
+              flipped = false;
+            }
+          }
+          if (!flipped)
+            trustedClick(item);
+          await lib.$.sleep(500);
           if (item.classList.contains("active") === false) {
-            await safeClick(item);
+            $console.warn("弹题翻页未生效，等下一轮重试");
+            continue;
+          }
+        }
+        const groups = [];
+        for (const topicItem of lib.$$el("#playTopic-dialog .topic-item")) {
+          const li = topicItem.closest("li") || topicItem;
+          const root2 = li.closest(".topic") || li.closest(".radio, .checkbox") || li.parentElement;
+          if (!root2)
+            continue;
+          const exist = groups.find((g) => g.root === root2);
+          if (exist) {
+            if (exist.optionElements.indexOf(li) === -1)
+              exist.optionElements.push(li);
+          } else {
+            groups.push({ root: root2, optionElements: [li] });
+          }
+        }
+        if (groups.length !== 0) {
+          await waitForCaptcha();
+          $render.moveToEdge();
+          await lib.$.sleep(1e3);
+          for (const group of groups) {
+            if (group.optionElements.some((el) => isChoiceSelected(el))) {
+              $console.log("该题已有选中选项，跳过重复作答");
+              continue;
+            }
+            await this.answerQuiz({
+              root: group.root,
+              optionElements: group.optionElements,
+              type: guessDialogQuizType(group.optionElements),
+              remotePage: this.remotePage || void 0
+            });
             await lib.$.sleep(500);
           }
-          const groups = [];
-          for (const topicItem of lib.$$el("#playTopic-dialog .topic-item")) {
-            const li = topicItem.closest("li") || topicItem;
-            const root2 = li.closest(".topic") || li.closest(".radio, .checkbox") || li.parentElement;
-            if (!root2)
-              continue;
-            const exist = groups.find((g) => g.root === root2);
-            if (exist) {
-              if (exist.optionElements.indexOf(li) === -1)
-                exist.optionElements.push(li);
-            } else {
-              groups.push({ root: root2, optionElements: [li] });
-            }
-          }
-          if (groups.length !== 0) {
-            await waitForCaptcha();
-            $render.moveToEdge();
-            await lib.$.sleep(1e3);
-            for (const group of groups) {
-              await this.answerQuiz({
-                root: group.root,
-                optionElements: group.optionElements,
-                type: ((_a = group.optionElements[0]) == null ? void 0 : _a.closest(".checkbox")) ? "multiple" : "single",
-                remotePage: this.remotePage || void 0
-              });
-              await lib.$.sleep(500);
-            }
-            await lib.$.sleep(1e3);
-          }
-        }
-        await lib.$.sleep(1e3);
-        const close_btn_selector = "#playTopic-dialog .close-btn,#playTopic-dialog .btn";
-        if (this.remotePage) {
-          await this.remotePage.click(close_btn_selector);
-        } else {
-          trustedClick(lib.$el(close_btn_selector));
+          await lib.$.sleep(1e3);
         }
       }
-      await lib.$.sleep(3e3);
-      await this.handleTestDialog();
+      await lib.$.sleep(1e3);
+      await this.closeTestDialog();
+    }
+    async closeTestDialog() {
+      const dialogExists = () => {
+        const dialog = lib.$el("#playTopic-dialog");
+        if (!dialog)
+          return false;
+        const rect = dialog.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      };
+      const click = async (el) => {
+        if (!el)
+          return;
+        let done = false;
+        try {
+          if (this.remotePage) {
+            done = await withTimeout(this.remotePage.click(el), 4e3, "弹题关闭按钮远程点击") !== ACTION_TIMEOUT;
+          }
+        } catch {
+          done = false;
+        }
+        if (!done)
+          trustedClick(el);
+        await lib.$.sleep(800);
+      };
+      const buttons = lib.$$el("#playTopic-dialog button, #playTopic-dialog .btn, #playTopic-dialog .close-btn");
+      const submit = buttons.find((el) => /提交|确定|确认|知道了|继续/.test(el.textContent || ""));
+      if (submit && dialogExists()) {
+        await click(submit);
+      }
+      const closeSelectors = [
+        "#playTopic-dialog .close-btn",
+        "#playTopic-dialog .dialog-footer .btn",
+        "#playTopic-dialog .btn",
+        "#playTopic-dialog .el-dialog__headerbtn"
+      ];
+      for (const selector of closeSelectors) {
+        if (!dialogExists())
+          break;
+        await click(lib.$el(selector));
+      }
+      if (dialogExists()) {
+        $console.warn("弹题弹窗未能关闭，3 秒后重试");
+      } else {
+        $console.log("弹题弹窗已关闭");
+      }
     }
   }
   class FusionCourseH5 extends StudyVideoH5 {
@@ -10165,22 +10585,36 @@ try {
           const remotePage = processor.remotePage;
           const study2 = async (opts) => {
             if (state$7.study.stop === false) {
-              const item = processor.getNext({ next: opts.next, restudy: this.cfg.restudy });
+              if (!opts.next)
+                await waitJobListSettled();
+              let item = processor.getNext({ next: opts.next, restudy: this.cfg.restudy });
               if (item) {
                 const msg2 = "即将学习：" + processor.getChapterName(item);
                 lib.$message.info({ content: msg2 });
                 $console.log(msg2);
                 await lib.$.sleep(3e3);
+                const recheck = processor.getNext({ next: opts.next, restudy: this.cfg.restudy });
+                if (recheck && recheck !== item) {
+                  item = recheck;
+                  const recheckMsg = "复核后改为：" + processor.getChapterName(item);
+                  lib.$message.info({ content: recheckMsg });
+                  $console.log(recheckMsg);
+                }
                 $render.moveToEdge();
                 if (remotePage) {
                   if (type === "新共享课") {
-                    await remotePage.click(".title-box");
+                    await withTimeout(remotePage.click(".title-box"), 6e3, "展开章节列表远程点击");
                     await lib.$.sleep(200);
                   }
-                  await remotePage.click(item);
+                  await withTimeout(remotePage.click(item), 8e3, "切换章节远程点击");
                   await lib.$.sleep(1e3);
-                  await remotePage.click(item);
+                  await withTimeout(remotePage.click(item), 8e3, "切换章节远程点击");
                   await lib.$.sleep(1e3);
+                  if (item.classList.contains("current_play") === false) {
+                    $console.warn("远程点击未生效，改用本地点击切换章节");
+                    await safeClick(item);
+                    await lib.$.sleep(1e3);
+                  }
                 } else {
                   await safeClick(item);
                 }
@@ -16643,59 +17077,94 @@ try {
       fixedVideoProgress();
       if (setting.videoQuizStrategy === "random" || setting.videoQuizStrategy === "ai") {
         const strategy = setting.videoQuizStrategy;
+        const clickOption = async (el) => {
+          if (!el)
+            return false;
+          if (isChoiceSelected(el))
+            return true;
+          el.click();
+          await $.sleep(150);
+          if (isChoiceSelected(el))
+            return true;
+          trustedPointerClick(el);
+          await $.sleep(150);
+          return isChoiceSelected(el);
+        };
         const answerByAI = async (list) => {
           var _a;
           const container2 = doc.querySelector("#video .ans-videoquiz") || doc.querySelector(".ans-videoquiz") || list[0].parentElement;
           if (!container2)
-            return false;
+            return { ok: false, hasAnswer: false };
           $console.info("正在使用 AI 题库作答视频内题目...");
           try {
             const ret = await answerVideoQuiz({
               root: container2,
               optionElements: list,
-              click: (el) => el.click(),
+              click: clickOption,
               answererWrappers: (_a = setting.workOptions) == null ? void 0 : _a.answererWrappers
             });
             if (ret.ok) {
               $console.log(`AI 题库作答成功：${ret.title} => ${ret.answers.join(" / ")}`);
-              return true;
+              return { ok: true, hasAnswer: true };
+            }
+            if (ret.answers.length > 0) {
+              $console.warn(
+                `AI 题库已选出答案但点击未生效（${ret.error || "未回显选中态"}）：${ret.title} => ${ret.answers.join(" / ")}`
+              );
+              return { ok: false, hasAnswer: true };
             }
             $console.warn(`AI 题库未匹配到答案（${ret.error || "未知原因"}），将随机作答：${ret.title}`);
           } catch (error) {
             $console.error("AI 题库作答失败：" + (error && error.message || String(error)));
           }
-          return false;
+          return { ok: false, hasAnswer: false };
         };
+        let lastAnsweredKey = "";
         const loop = async () => {
           var _a;
-          const submitBtn = () => doc.querySelector("#videoquiz-submit");
-          if (submitBtn()) {
-            const list = Array.from(doc.querySelectorAll(".ans-videoquiz-opt label"));
-            let answered = false;
-            if (strategy === "ai" && list.length) {
-              answered = await answerByAI(list);
-            }
-            if (!answered) {
-              const answer = list[Math.floor(Math.random() * list.length)];
-              answer == null ? void 0 : answer.click();
-            }
-            (_a = submitBtn()) == null ? void 0 : _a.click();
-            await $.sleep(3e3);
-            const container2 = doc.querySelector("#video .ans-videoquiz");
-            const components = Array.from(doc.querySelectorAll(".x-component-default"));
-            if (container2) {
-              container2.remove();
-            }
-            if (components.length) {
-              for (const com of components) {
-                com.style.display = "none";
+          while (true) {
+            const submitBtn = () => doc.querySelector("#videoquiz-submit");
+            if (submitBtn()) {
+              const list = Array.from(doc.querySelectorAll(".ans-videoquiz-opt label"));
+              if (list.length === 0) {
+                await $.sleep(3e3);
+                continue;
+              }
+              const key = list.map((el) => (el.textContent || "").trim()).join("|");
+              if (key && key === lastAnsweredKey) {
+                await $.sleep(3e3);
+                continue;
+              }
+              let answered = false;
+              let hasAnswer = false;
+              if (strategy === "ai") {
+                const ret = await answerByAI(list);
+                answered = ret.ok;
+                hasAnswer = ret.hasAnswer;
+              }
+              if (!answered && !hasAnswer) {
+                const answer = list[Math.floor(Math.random() * list.length)];
+                await clickOption(answer);
+              }
+              if (key)
+                lastAnsweredKey = key;
+              (_a = submitBtn()) == null ? void 0 : _a.click();
+              await $.sleep(3e3);
+              const container2 = doc.querySelector("#video .ans-videoquiz");
+              const components = Array.from(doc.querySelectorAll(".x-component-default"));
+              if (container2) {
+                container2.remove();
+              }
+              if (components.length) {
+                for (const com of components) {
+                  com.style.display = "none";
+                }
               }
             }
+            await $.sleep(3e3);
           }
-          await $.sleep(3e3);
-          await loop();
         };
-        loop();
+        void loop();
       }
       return new Promise((resolve, reject) => {
         const reloadInterval = setInterval(() => {
