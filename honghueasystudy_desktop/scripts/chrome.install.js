@@ -12,8 +12,27 @@ const PLATFORM_MAP = {
 	'linux-x64': 'linux'
 };
 
+// Linux ARM64 暂不内置 Chrome：Chrome for Testing 自 153.0.8001.0 才提供 linux-arm64 构建，
+// 与下方锁定的 137 版本策略冲突（137 后谷歌禁止命令行加载插件）。
+// 命中时跳过下载/校验/打包，仅保证 bin/chrome/linux-arm64/ 目录存在（空目录），
+// electron-builder extraResources 引用该目录，缺失会导致打包报错；
+// 运行时 initChrome 检测不到 chrome.zip 会自动跳过内置浏览器初始化。
+const SKIP_CHROME_TARGETS = ['linux-arm64'];
+
+function shouldSkipChrome() {
+	const platform = process.env.PLATFORM || 'win';
+	const arch = process.env.ARCH || 'x64';
+	return SKIP_CHROME_TARGETS.includes(`${platform}-${arch}`);
+}
+
 // 137 版本后谷歌禁止使用命令行加载插件，目前只能内置Chrome for Test测试浏览器，并且进行严格版本控制，手动更新
-function downloadChrome() {
+function downloadChrome(done) {
+	if (shouldSkipChrome()) {
+		console.log('跳过内置 Chrome 下载: linux-arm64 暂不内置浏览器');
+		done();
+		return;
+	}
+
 	const platform = process.env.PLATFORM || 'win';
 	const arch = process.env.ARCH || 'x64';
 	const targetPlatform = `${platform}-${arch}`;
@@ -33,7 +52,11 @@ function downloadChrome() {
 }
 
 // 验证 Chrome 架构
-function verifyChromeArchitecture() {
+function verifyChromeArchitecture(done) {
+	if (shouldSkipChrome()) {
+		done();
+		return;
+	}
 	const platform = process.env.PLATFORM || 'win';
 	const arch = process.env.ARCH || 'x64';
 	const targetPlatform = `${platform}-${arch}`;
@@ -90,10 +113,18 @@ function detectChromePlatform(chromeDir) {
 	return 'unknown';
 }
 
-function pack() {
+function pack(done) {
 	const platform = process.env.PLATFORM || 'win';
 	const arch = process.env.ARCH || 'x64';
 	const targetDir = `../bin/chrome/${platform}-${arch}`;
+
+	if (shouldSkipChrome()) {
+		// 保留空目录，保证 electron-builder extraResources 源路径存在
+		fs.mkdirSync(path.resolve(__dirname, targetDir), { recursive: true });
+		console.log(`跳过内置 Chrome 打包（空目录）: ${targetDir}`);
+		done();
+		return;
+	}
 
 	console.log(`打包 Chrome 到: ${targetDir}`);
 

@@ -25,11 +25,18 @@ jobs:
             arch: x64
 
           # Linux x64
-          # Linux ARM64 暂不打包：Chrome for Testing 自 153 起才提供 linux-arm64 包，
-          # 与内置浏览器锁定的 137 版本策略冲突，待版本策略调整后再启用。
           - os: ubuntu-latest
             platform: linux
             arch: x64
+
+          # Linux ARM64（原生 arm64 runner；QEMU 下全量桌面打包过慢，不设仿真回退。
+          # 不内置 Chrome：CfT 自 153 起才提供 linux-arm64 包，与内置浏览器锁定的 137
+          # 版本策略冲突，chrome.install.js 会跳过下载/打包并保留空目录；
+          # OCR 资源由下方「Fetch Linux OCR bundle」步骤从 GitHub Release
+          # （tag: ocr-linux，由 ocr-linux-build.yml 维护）拉取，Release 缺失时该步骤报错）
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
 
     runs-on: ${{ matrix.os }}
     defaults:
