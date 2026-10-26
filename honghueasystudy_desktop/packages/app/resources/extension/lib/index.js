@@ -8665,17 +8665,21 @@
     }
     const wrappers = getAnswererWrappers(opts.answererWrappers);
     if (wrappers.length === 0) {
+      let total = 0;
+      try {
+        total = (CommonProject.scripts.settings.cfg.answererWrappers || []).length;
+      } catch {
+        total = 0;
+      }
+      const reason = total > 0 ? `题库共 ${total} 个，但全部被禁用，本次将随机作答。请前往 通用-全局设置 启用至少一个题库。` : "还没有配置题库，本次将随机作答。请前往 通用-全局设置 配置题库或 AI 答题。";
       if (!quizNoWrapperWarned) {
         quizNoWrapperWarned = true;
         try {
-          lib.$message.warn({
-            content: "视频内题目已选择 AI题库答题，但还没有配置题库，本次将随机作答。请前往 通用-全局设置 配置题库或 AI 答题。",
-            duration: 10
-          });
+          lib.$message.warn({ content: `视频内题目已选择 AI题库答题，但${reason}`, duration: 10 });
         } catch {
         }
       }
-      throw new Error("未配置题库，请前往 通用-全局设置 配置题库或 AI 答题");
+      throw new Error(reason);
     }
     const infos = await defaultAnswerWrapperHandler(wrappers, {
       title: opts.title,
@@ -8758,6 +8762,12 @@
     ["答题中请勿进行任何操作，如需暂停答题", "请等待全部题目搜索完成并执行自动保存功能后才能操作。"],
     ["暂停后手动操作请确保每个题目都点击下一题", "进行答案保存（不然不会保存，提交没分）"]
   ];
+  function textSaysFinished(el) {
+    if (!el)
+      return false;
+    const text = (el.textContent || "").replace(/\s+/g, "");
+    return /已完成|已学完|已看完/.test(text);
+  }
   class StudyVideoH5 {
     constructor() {
       this.remotePage = void 0;
@@ -8777,7 +8787,17 @@
       };
       if (this.quizStrategy === "ai") {
         try {
-          $console.log("正在使用 AI 题库作答视频内题目...");
+          let total = -1;
+          let enabled = -1;
+          try {
+            total = (CommonProject.scripts.settings.cfg.answererWrappers || []).length;
+            enabled = (CommonProject.scripts.settings.methods.getWorkOptions().answererWrappers || []).length;
+          } catch {
+            total = -1;
+          }
+          $console.log(
+            total >= 0 ? `正在使用 AI 题库作答视频内题目（题库 ${total} 个，启用 ${enabled} 个）...` : "正在使用 AI 题库作答视频内题目..."
+          );
           const ret = await answerVideoQuiz({
             root: root2,
             optionElements,
@@ -8829,7 +8849,7 @@
     }
     getNext(opts) {
       const videoItems = Array.from(document.querySelectorAll(".clearfix.video"));
-      const isFinished = (el) => el.querySelector(".time_icofinish") !== null;
+      const isFinished = (el) => el.querySelector(".time_icofinish") !== null || textSaysFinished(el);
       const currentIndex = videoItems.findIndex((el) => el.classList.contains("current_play"));
       if (currentIndex !== -1) {
         for (let i = currentIndex + (opts.next ? 1 : 0); i < videoItems.length; i++) {
@@ -8991,10 +9011,16 @@
         if (is_resource_box_mode) {
           const text = ((_a = el.querySelector(".resource-text")) == null ? void 0 : _a.textContent) || "";
           const [progress, total] = text.replace("必学", "").trim().split("/").map((s) => parseInt(s));
-          return !(progress < total);
+          if (!Number.isFinite(progress) || !Number.isFinite(total)) {
+            return textSaysFinished(el);
+          }
+          return progress >= total;
         }
         const num_el = el.querySelector(".progress-num");
-        return num_el !== null && num_el.textContent === "100%";
+        if (num_el && (num_el.textContent || "").replace(/\s+/g, "") === "100%") {
+          return true;
+        }
+        return textSaysFinished(el);
       };
       const currentIndex = videoItems.findIndex(
         (el) => el.classList.contains(is_resource_box_mode ? "activeNode" : "current_play")
@@ -9033,7 +9059,7 @@
       console.log(videoItems);
       const isFinished = (el) => {
         var _a;
-        return !!((_a = el.parentElement) == null ? void 0 : _a.querySelector(".finish-icon"));
+        return !!((_a = el.parentElement) == null ? void 0 : _a.querySelector(".finish-icon")) || textSaysFinished(el);
       };
       const currentIndex = videoItems.findIndex((el) => el.classList.contains("current"));
       if (currentIndex !== -1) {
@@ -9124,7 +9150,7 @@
         }
       }).flat();
       console.log(jobs);
-      const isFinished = (el) => !!el.querySelector(".finish-icon");
+      const isFinished = (el) => !!el.querySelector(".finish-icon") || textSaysFinished(el);
       const currentIndex = jobs.findIndex((el) => el.classList.contains("current"));
       if (currentIndex !== -1) {
         for (let i = currentIndex + (opts.next ? 1 : 0); i < jobs.length; i++) {
@@ -9222,12 +9248,14 @@
       );
       console.log(jobs);
       if (!opts.restudy) {
+        const total = jobs.length;
         jobs = jobs.filter((el) => {
-          if (el.querySelector("i.select")) {
+          if (!el) {
             return false;
           }
-          return true;
+          return !(el.querySelector("i.select") || textSaysFinished(el));
         });
+        console.log(`[鸿鹄易学] 章节共 ${total} 个，识别为已完成 ${total - jobs.length} 个，待学习 ${jobs.length} 个`);
       }
       for (let i = 0; i < jobs.length; i++) {
         const item = jobs[i];
@@ -9265,18 +9293,15 @@
       );
       console.log(jobs);
       if (!opts.restudy) {
+        const total = jobs.length;
         jobs = jobs.filter((el) => {
-          if (el.querySelector("label.success")) {
-            return false;
-          }
-          return true;
+          return !(el.querySelector("label.success") || textSaysFinished(el));
         });
+        console.log(`[鸿鹄易学] 章节共 ${total} 个，识别为已完成 ${total - jobs.length} 个，待学习 ${jobs.length} 个`);
       }
-      for (let i = 0; i < jobs.length; i++) {
-        const item = jobs[i];
-        if (item.classList.contains(".is-current")) {
-          return jobs[i + (opts.next ? 1 : 0)];
-        }
+      const currentIndex = jobs.findIndex((el) => el.classList.contains("is-current"));
+      if (currentIndex !== -1) {
+        return jobs[currentIndex + (opts.next ? 1 : 0)];
       }
       return jobs[0];
     }
@@ -9462,6 +9487,10 @@
           const ProcessorConstructor = location.href.includes("fusioncourseh5") ? FusionCourseH5 : location.href.includes("studyplush5") || location.href.includes("studywisdomh5") ? StudyPlusH5 : StudyVideoH5;
           const processor = new ProcessorConstructor();
           processor.quizStrategy = this.cfg.videoQuizStrategy || "random";
+          this.onConfigChange("videoQuizStrategy", (curr) => {
+            processor.quizStrategy = curr || "random";
+            $console.log(`视频内题目策略已切换：${processor.quizStrategy === "ai" ? "AI题库答题" : "随机答题"}`);
+          });
           setTimeout(() => {
             if (processor.hasJob() === false) {
               finishAlert();
@@ -10177,6 +10206,10 @@
           CommonProject.scripts.render.methods.pin(this);
           const processor = new WishdomH5();
           processor.quizStrategy = this.cfg.videoQuizStrategy || "random";
+          this.onConfigChange("videoQuizStrategy", (curr) => {
+            processor.quizStrategy = curr || "random";
+            $console.log(`视频内题目策略已切换：${processor.quizStrategy === "ai" ? "AI题库答题" : "随机答题"}`);
+          });
           this.onConfigChange("volume", (curr) => {
             state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
           });
