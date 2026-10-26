@@ -8,6 +8,7 @@
     "dev": "node ../../scripts/sync-extension.js && tsc && electron .",
     "pack": "node ../../scripts/sync-extension.js && tsc && electron-builder --config ./electron.builder.json --dir --publish never",
     "dist": "node ../../scripts/sync-extension.js && tsc && electron-builder --config ./electron.builder.json --publish never",
+    "dist:arm64-appimage": "node ../../scripts/sync-extension.js && tsc && electron-builder --config ./electron.builder.json --publish never --arm64 --linux AppImage",
     "proxy": "HTTPS_PROXY=127.0.0.1:7890"
   },
   "devDependencies": {

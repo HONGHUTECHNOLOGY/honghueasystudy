@@ -22,14 +22,18 @@ function buildRemote() {
 function buildApp() {
 	const platform = process.env.PLATFORM || 'win';
 	const arch = process.env.ARCH || 'x64';
-	// electron-builder 默认按宿主架构打包；mac x64 在 arm64 机器（CI 已无 Intel runner）上需显式指定
-	let args = `--${arch}`;
 	// electron-builder 的 fpm（deb/rpm 打包工具）仅有 linux-x86 预编译包，在 arm64 主机上 Exec format error；
-	// AppImage 工具链（appimage-12.0.1）自带 linux-arm64 二进制与 runtime-arm64，故 linux-arm64 仅构建 AppImage
+	// AppImage 工具链（appimage-12.0.1）自带 linux-arm64 二进制与 runtime-arm64，故 linux-arm64 仅构建 AppImage。
+	// 注意：arch 参数必须走专用 npm script 而非 `pnpm dist -- --xxx` 转发——
+	// pnpm 10 会把首个 `--` 原样透传给脚本，electron-builder 的 yargs 遇 `--` 即停止解析，
+	// 导致 --arm64/--linux AppImage 被当作位置参数丢弃、目标回退为配置里的 deb/rpm。
 	if (platform === 'linux' && arch === 'arm64') {
-		args += ' --linux AppImage';
+		const cmd = 'pnpm run dist:arm64-appimage';
+		console.log('[build-app] dist command:', cmd);
+		return execOut(cmd, { cwd: '../packages/app' });
 	}
-	return execOut(`pnpm dist -- ${args}`, { cwd: '../packages/app' });
+	// 其余平台：electron-builder 默认按宿主架构打包，CI runner 架构与目标一致
+	return execOut(`pnpm dist -- --${arch}`, { cwd: '../packages/app' });
 }
 
 function cleanOutput() {
