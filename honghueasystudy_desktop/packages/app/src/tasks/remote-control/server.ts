@@ -338,6 +338,10 @@ export class RemoteServer {
 				res.setHeader('Cache-Control', 'no-store');
 				res.send(Buffer.from(base64, 'base64'));
 			} catch (e) {
+				// 截图失败必须落日志：远程端画面停格时，这里是唯一的定位线索
+				logger.warn(
+					`截图失败（uid=${uid}）：` + String(e && (e as Error).message ? (e as Error).message : e)
+				);
 				res.status(503).json({ ok: false, error: String(e && (e as Error).message ? (e as Error).message : e) });
 			}
 		});

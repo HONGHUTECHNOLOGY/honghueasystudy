@@ -67,6 +67,11 @@ export class CloudflaredTunnel {
 	private stopping = false;
 	private retrying = 0;
 	private port = 0;
+	/** 重连定时器：进程退出后按指数退避自动重连，直到用户关闭开关 */
+	private retryTimer?: ReturnType<typeof setTimeout>;
+	/** 进行中的 start()：并发调用（开关切换与恢复设置同时触发）时复用同一个 Promise，
+	 *  否则会穿透 this.proc 守卫启动两个 cloudflared，产生两个互相无关的隧道地址 */
+	private starting?: Promise<string>;
 	/** 用于中止进行中的下载 */
 	private currentAbort?: AbortController;
 	private status: TunnelStatus = {
@@ -110,7 +115,18 @@ export class CloudflaredTunnel {
 		if (this.proc) {
 			return this.status.url;
 		}
+		/** 并发调用复用同一次启动，避免拉起两个 cloudflared */
+		if (this.starting) {
+			return this.starting;
+		}
 
+		this.starting = this.doStart(port).finally(() => {
+			this.starting = undefined;
+		});
+		return this.starting;
+	}
+
+	private async doStart(port: number): Promise<string> {
 		this.setStatus({ state: 'starting', error: '', url: '' });
 
 		const binary = await this.ensureBinary();
@@ -171,38 +187,64 @@ export class CloudflaredTunnel {
 				}
 
 				logger.warn('cloudflared 已退出，code=' + code);
-				this.setStatus({ state: 'error', url: '', error: `隧道进程已退出（code ${code}）` });
+				this.setStatus({
+					state: 'error',
+					url: '',
+					error: `隧道进程已退出（code ${code}），正在自动重连…`
+				});
 				finish('');
 
-				// 自动重试（最多 3 次）
-				if (this.retrying < 3) {
-					this.retrying += 1;
-					const delay = 2000 * this.retrying;
-					setTimeout(() => {
-						if (this.stopping) return;
-						logger.info(`隧道重连中（第 ${this.retrying} 次）`);
-						this.start(this.port).catch((e) => logger.error(e));
-					}, delay);
-				}
+				// 开关开着 = 隧道应常驻：无限重连 + 指数退避（2s→60s 封顶），网络恢复后自动拉起。
+				// 注意 quick tunnel 每次重连都会分配新域名，旧地址/二维码随之失效。
+				this.scheduleRetry();
 			});
 
-			// 30 秒内没有解析到地址则判定失败
+			// 30 秒内没有解析到地址则判定本次失败：杀掉当前进程，
+			// 由 exit 回调触发自动重连（原来直接 stop() 会永久放弃，休眠唤醒后网络慢就会踩中）
 			setTimeout(() => {
 				if (settled) return;
 				this.setStatus({
 					state: 'error',
-					error: '隧道建立超时，可能是当前网络无法连接 Cloudflare。可改用局域网访问或使用其他穿透工具。'
+					error: '隧道建立超时，正在自动重连…（持续失败请检查网络，或改用局域网访问）'
 				});
-				this.stop();
 				finish('');
+				if (this.proc) {
+					try {
+						this.proc.kill();
+					} catch (e) {
+						logger.error('结束超时 tunnel 进程失败', e);
+					}
+					this.proc = undefined;
+				}
 			}, 30000);
 		});
+	}
+
+	/** 指数退避自动重连：2s、4s、8s、16s、32s、之后 60s 封顶，成功后清零 */
+	private scheduleRetry(): void {
+		if (this.stopping) return;
+		if (this.retryTimer) clearTimeout(this.retryTimer);
+
+		const delay = Math.min(60 * 1000, 2000 * Math.pow(2, Math.min(this.retrying, 5)));
+		this.retrying += 1;
+
+		this.retryTimer = setTimeout(() => {
+			this.retryTimer = undefined;
+			if (this.stopping) return;
+			logger.info(`隧道自动重连（第 ${this.retrying} 次，间隔 ${Math.round(delay / 1000)}s）`);
+			this.start(this.port).catch((e) => logger.error(e));
+		}, delay);
 	}
 
 	/** 停止隧道（同时中止进行中的下载） */
 	stop(): void {
 		this.stopping = true;
-		this.retrying = 3;
+
+		if (this.retryTimer) {
+			clearTimeout(this.retryTimer);
+			this.retryTimer = undefined;
+		}
+		this.retrying = 0;
 
 		if (this.currentAbort) {
 			try {

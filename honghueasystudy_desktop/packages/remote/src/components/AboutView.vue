@@ -2,7 +2,7 @@
 	<div class="settings">
 		<!-- 设备 -->
 		<section class="device card fade-up">
-			<span class="device__mark">鸿</span>
+			<img class="device__mark" src="/logo.png" alt="鸿鹄易学" />
 			<span class="device__text">
 				<strong class="ellipsis">{{ state.deviceName || '鸿鹄易学' }}</strong>
 				<small class="faint">
@@ -222,11 +222,8 @@ onBeforeUnmount(() => {
 	width: 42px;
 	height: 42px;
 	border-radius: 14px;
-	display: grid;
-	place-items: center;
-	font-size: 18px;
-	font-weight: 600;
-	color: #fff;
+	display: block;
+	object-fit: cover;
 	background: linear-gradient(140deg, var(--brand), var(--brand-2));
 	box-shadow: var(--shadow-brand);
 	flex: none;

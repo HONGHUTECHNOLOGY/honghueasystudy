@@ -443,6 +443,13 @@ export async function launchBrowser({
 				// 处理浏览器初始
 				handleBrowserInit(browser, { enable_dialog: config?.enable_dialog, userDataDir });
 
+				// 浏览器进程已就绪：立即触发 onLaunch 并 resolve，
+				// 否则导航页加载、开发者模式、自动化脚本任何一步抛错/卡住
+				// 都会让远程端永远停留在「启动中」且无法截图（浏览器本身却在正常刷课）。
+				onLaunch?.(browser);
+				resolve();
+
+				// 后续初始化步骤转为后台执行：失败只记日志，不再影响启动状态
 				try {
 					/**
 					 * 显示步骤提示
@@ -467,6 +474,7 @@ export async function launchBrowser({
 
 					// 加载本地导航页
 					await blankPage.goto(bookmarksPageUrl || 'about:blank');
+					console.log('浏览器初始化：导航页已加载');
 
 					// 打开开发者模式
 					await openExtensionDeveloperMode(browser, executablePath.toLowerCase().includes('edge'));
@@ -485,13 +493,9 @@ export async function launchBrowser({
 					await runAutomationScripts({ browser, automationScripts, serverPort, step });
 
 					await step('浏览器初始化完成。', { loading: false });
-
-					// 触发onLaunch事件
-					onLaunch?.(browser);
-					// 启动完成
-					resolve();
+					console.log('浏览器初始化全部完成');
 				} catch (err) {
-					reject(err);
+					console.error('浏览器初始化步骤失败（不影响使用）：', err instanceof Error ? err.message : String(err));
 				}
 			})
 			.catch((err) => {
