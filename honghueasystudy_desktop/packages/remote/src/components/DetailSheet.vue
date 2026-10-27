@@ -132,17 +132,37 @@
 							<span class="faint num">{{ browser.pages.length }}</span>
 						</p>
 						<div class="pages">
-							<div
+							<button
 								v-for="(page, index) in browser.pages"
 								:key="index"
+								type="button"
 								class="page-item"
+								:class="{ on: index === pageIndex }"
+								:title="page.url"
+								@click="selectPage(index)"
 							>
 								<span class="page-index num">{{ index + 1 }}</span>
 								<span class="page-text">
-									<span class="page-title ellipsis">{{ page.title || '（无标题）' }}</span>
+									<span class="page-title ellipsis">
+										{{ page.title || '（无标题）' }}
+										<span
+											v-if="page.active"
+											class="page-now"
+											>当前</span
+										>
+									</span>
 									<span class="page-url faint ellipsis">{{ page.url }}</span>
 								</span>
-							</div>
+								<span
+									v-if="index === pageIndex"
+									class="page-check"
+								>
+									<Icon
+										name="check"
+										:size="13"
+									/>
+								</span>
+							</button>
 						</div>
 					</div>
 
@@ -210,6 +230,45 @@ const STATUS_META: Record<string, { label: string; dot: string }> = {
 const statusMeta = computed(() => STATUS_META[browser.value?.status || 'closed'] || STATUS_META.closed);
 const pending = computed(() => state.pending[ui.detailUid]);
 
+/** 用户手动点选的标签页索引；undefined 表示自动跟随浏览器当前前台页 */
+const selectedPage = ref<number | undefined>(undefined);
+
+/** 浏览器当前前台可见页的索引（后端用 visibilityState 判定） */
+const activeIndex = computed(() => {
+	const pages = browser.value?.pages || [];
+	for (let i = 0; i < pages.length; i++) {
+		if (pages[i].active) return i;
+	}
+	return undefined;
+});
+
+/** 实际用于截图的页面索引：手动选中优先，其次跟随前台页 */
+const pageIndex = computed(() => {
+	const pages = browser.value?.pages || [];
+	if (!pages.length) return undefined;
+	if (selectedPage.value !== undefined && selectedPage.value < pages.length) return selectedPage.value;
+	return activeIndex.value;
+});
+
+/** 切换查看的标签页；先清图避免短暂显示上一页画面 */
+function selectPage(index: number) {
+	if (index === pageIndex.value) return;
+	selectedPage.value = index;
+	thumb.value = '';
+	thumbFailed.value = 0;
+	fetchThumb();
+}
+
+/** 标签页数量变化后，手动选中的索引可能失效：重置回「跟随前台页」 */
+watch(
+	() => (browser.value?.pages || []).length,
+	(len) => {
+		if (selectedPage.value !== undefined && selectedPage.value >= len) {
+			selectedPage.value = undefined;
+		}
+	}
+);
+
 const logLines = computed(() => {
 	const raw = state.logs[ui.detailUid] || [];
 	const result: string[] = [];
@@ -237,7 +296,7 @@ function fetchThumb() {
 	const target = browser.value;
 	if (!target || target.status !== 'launched' || document.visibilityState !== 'visible') return;
 
-	const url = snapshotUrl(target.uid);
+	const url = snapshotUrl(target.uid, pageIndex.value);
 	const img = new Image();
 	img.onload = () => {
 		thumbFailed.value = 0;
@@ -549,14 +608,55 @@ async function bringToFront() {
 
 .page-item {
 	display: flex;
+	align-items: flex-start;
 	gap: 8px;
+	width: 100%;
 	padding: 7px 8px;
 	border-radius: 9px;
-	transition: background 0.16s var(--ease);
+	/* 该元素由 div 改为 button：清掉浏览器默认外观 */
+	border: none;
+	background: transparent;
+	font: inherit;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition: background 0.16s var(--ease), box-shadow 0.16s var(--ease);
 }
 
 .page-item:hover {
 	background: var(--surface-2);
+}
+
+/* 远程台正在查看的标签页 */
+.page-item.on {
+	background: var(--brand-soft);
+	box-shadow: inset 0 0 0 1px var(--line-brand);
+}
+
+.page-item.on .page-title {
+	color: var(--brand-text);
+}
+
+/* 浏览器当前前台显示的标签页 */
+.page-now {
+	display: inline-block;
+	margin-left: 5px;
+	padding: 0 4px;
+	border-radius: 4px;
+	background: var(--ok-soft);
+	color: var(--ok);
+	font-size: 9.5px;
+	line-height: 15px;
+	vertical-align: 1px;
+	flex: none;
+}
+
+.page-check {
+	flex: none;
+	display: flex;
+	align-items: center;
+	color: var(--brand-text);
+	padding-top: 1px;
 }
 
 .page-index {

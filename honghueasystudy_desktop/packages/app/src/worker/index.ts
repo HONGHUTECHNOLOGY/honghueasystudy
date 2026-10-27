@@ -283,31 +283,41 @@ export class ScriptWorker {
 	 * 使用 Playwright 截图而非系统窗口截图：
 	 * 能精确对应浏览器实例，且窗口被遮挡、最小化时依然可用。
 	 *
-	 * 「活动页面」优先取前台可见的标签页（document.visibilityState === 'visible'），
-	 * 而不是简单取最后一个：脚本经常会在后台新开标签页（验证码、跳转中转页），
-	 * 这些页面内容静止，取最后一个会导致远程画面长时间停留在一张不变的图上，
-	 * 看起来就像「截图不同步」。
+	 * 页面选择优先级：
+	 * 1. 远程端明确指定的 page 索引（用户在远程台切了标签页）
+	 * 2. 前台可见的标签页（document.visibilityState === 'visible'）
+	 * 3. 最后一个标签页
+	 *
+	 * 取「前台可见页」而不是简单取第一个/最后一个：脚本经常会在后台新开标签页
+	 * （验证码、跳转中转页），这些页面内容静止，取错会导致远程画面长时间停留在一张不变的图上。
 	 */
-	async snapshot(options?: { quality?: number }): Promise<string> {
+	async snapshot(options?: { quality?: number; page?: number }): Promise<string> {
 		const pages = this.browser?.pages() || [];
 		if (pages.length === 0) {
 			throw new Error('浏览器尚未打开任何页面');
 		}
 
-		let page = pages[pages.length - 1];
-		for (const candidate of pages) {
-			try {
-				const state = await Promise.race([
-					candidate.evaluate(() => document.visibilityState),
-					new Promise<string>((resolve) => setTimeout(() => resolve(''), 800))
-				]);
-				if (state === 'visible') {
-					page = candidate;
-					break;
+		const requested = options && typeof options.page === 'number' ? options.page : -1;
+		let page: Page | undefined;
+
+		if (requested >= 0 && requested < pages.length) {
+			page = pages[requested];
+		} else {
+			for (const candidate of pages) {
+				try {
+					const state = await Promise.race([
+						candidate.evaluate(() => document.visibilityState),
+						new Promise<string>((resolve) => setTimeout(() => resolve(''), 800))
+					]);
+					if (state === 'visible') {
+						page = candidate;
+						break;
+					}
+				} catch {
+					// 页面可能正在跳转或已销毁，跳过继续找
 				}
-			} catch {
-				// 页面可能正在跳转或已销毁，跳过继续找
 			}
+			if (!page) page = pages[pages.length - 1];
 		}
 
 		const quality = options && options.quality ? Math.min(Math.max(options.quality, 20), 90) : 55;
@@ -323,25 +333,41 @@ export class ScriptWorker {
 		return Buffer.isBuffer(buffer) ? buffer.toString('base64') : '';
 	}
 
-	/** 获取当前浏览器实例的所有页面 */
-	async getPages(): Promise<{ url: string; title: string }[]> {
+	/**
+	 * 获取当前浏览器实例的所有页面
+	 *
+	 * active 标记前台可见页，远程台据此把「默认查看的标签页」定位到用户正在看的那一页，
+	 * 而不是永远截第一页。
+	 */
+	async getPages(): Promise<{ url: string; title: string; active: boolean }[]> {
 		const pages = this.browser?.pages() || [];
-		const result: { url: string; title: string }[] = [];
 
-		for (const page of pages) {
-			let title = '';
-			try {
-				title = await Promise.race([
-					page.title(),
-					new Promise<string>((resolve) => setTimeout(() => resolve(''), 1500))
-				]);
-			} catch {
-				title = '';
-			}
-			result.push({ url: page.url(), title });
-		}
+		return Promise.all(
+			pages.map(async (page) => {
+				let title = '';
+				try {
+					title = await Promise.race([
+						page.title(),
+						new Promise<string>((resolve) => setTimeout(() => resolve(''), 1500))
+					]);
+				} catch {
+					title = '';
+				}
 
-		return result;
+				let active = false;
+				try {
+					const state = await Promise.race([
+						page.evaluate(() => document.visibilityState),
+						new Promise<string>((resolve) => setTimeout(() => resolve(''), 600))
+					]);
+					active = state === 'visible';
+				} catch {
+					// 页面正在跳转/已关闭，视为非活动页
+				}
+
+				return { url: page.url(), title, active };
+			})
+		);
 	}
 
 	/** 跳转到特殊图像共享浏览器窗口 */

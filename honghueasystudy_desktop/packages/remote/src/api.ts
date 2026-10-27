@@ -4,7 +4,8 @@ export interface BrowserSnapshot {
 	notes: string;
 	tags: { name: string; color: string }[];
 	status: 'closed' | 'closing' | 'launching' | 'launched';
-	pages: { url: string; title: string }[];
+	/** active 为 true 表示该页是浏览器当前前台可见的标签页 */
+	pages: { url: string; title: string; active?: boolean }[];
 }
 
 export interface RemoteSnapshot {
@@ -102,7 +103,12 @@ export const api = {
 		})
 };
 
-/** 截图地址，带时间戳防止缓存 */
-export function snapshotUrl(uid: string): string {
-	return `/api/snapshot/${encodeURIComponent(uid)}?t=${Date.now()}`;
+/**
+ * 截图地址，带时间戳防止缓存
+ *
+ * page 为选中的标签页索引；不传则由后端自动挑选当前前台可见的页面。
+ */
+export function snapshotUrl(uid: string, page?: number): string {
+	const suffix = typeof page === 'number' && page >= 0 ? `&page=${page}` : '';
+	return `/api/snapshot/${encodeURIComponent(uid)}?t=${Date.now()}${suffix}`;
 }

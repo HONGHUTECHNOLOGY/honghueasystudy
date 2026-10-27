@@ -30,8 +30,8 @@ export class Process extends EventEmitter {
 	launchOptions: Required<LaunchOptions>;
 	/** 输出 */
 	logs: string[] = [];
-	/** 当前所有页面（远程控制展示用） */
-	pages: { url: string; title: string }[] = [];
+	/** 当前所有页面（远程控制展示用）；active 标记前台可见页，作为远程台默认查看的标签页 */
+	pages: { url: string; title: string; active?: boolean }[] = [];
 
 	video: HTMLVideoElement | undefined = undefined;
 	stream: MediaStream | undefined = undefined;

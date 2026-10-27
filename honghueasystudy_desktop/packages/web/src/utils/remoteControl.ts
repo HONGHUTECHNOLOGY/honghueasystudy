@@ -20,7 +20,7 @@ interface BrowserSnapshotItem {
 	notes: string;
 	tags: { name: string; color: string }[];
 	status: 'closed' | 'closing' | 'launching' | 'launched';
-	pages: { url: string; title: string }[];
+	pages: { url: string; title: string; active?: boolean }[];
 }
 
 interface RemoteSnapshotPayload {
@@ -200,8 +200,16 @@ async function executeCommand(action: string, payload: any): Promise<any> {
 			const running = Process.from(uid);
 			if (!running) throw new Error('该浏览器未运行');
 			if (running.status !== 'launched') throw new Error('浏览器正在启动，请稍后再试');
+
+			/**
+			 * page 为远程端选中的标签页索引；不传时由子进程自行挑选前台可见页。
+			 * 越界索引由子进程兜底回退，这里不做校验，避免页面刚关闭时的竞态误报。
+			 */
+			const page = payload && typeof payload.page === 'number' ? payload.page : undefined;
+
 			const base64 = await running.callWorker('snapshot', {
-				quality: payload && payload.quality ? payload.quality : 55
+				quality: payload && payload.quality ? payload.quality : 55,
+				page
 			});
 			if (!base64) throw new Error('截图失败');
 			return base64;
@@ -248,6 +256,17 @@ export function activeRemoteControlBridge() {
 			clearTimeout(pushTimer);
 			pushTimer = undefined;
 		}
+
+		/**
+		 * 顺带刷新一次页面列表。
+		 * 用户在浏览器里切换标签页不会触发 page-changed（只有新增/跳转/关闭会），
+		 * 不主动拉取的话 pages[].active 会一直停在旧值，
+		 * 远程台的「默认查看当前页」就会指到用户已经切走的那个标签。
+		 */
+		processes.forEach((p) => {
+			if (p.status === 'launched') p.refreshPages();
+		});
+
 		sendState();
 	}, HEARTBEAT_INTERVAL);
 

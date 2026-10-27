@@ -319,7 +319,17 @@ export class RemoteServer {
 				return;
 			}
 
-			const cached = this.snapshotCache.get(uid);
+			/**
+			 * page：远程端选中的标签页索引。
+			 * 缓存键必须带上它，否则切到第 2 页会命中第 1 页的缓存，
+			 * 表现为「点了切换但画面纹丝不动」。
+			 */
+			const pageRaw = req.query.page;
+			const page = pageRaw === undefined || pageRaw === '' ? undefined : Number(pageRaw);
+			const pageIndex = typeof page === 'number' && Number.isFinite(page) && page >= 0 ? Math.floor(page) : undefined;
+			const cacheKey = `${uid}#${pageIndex === undefined ? 'auto' : pageIndex}`;
+
+			const cached = this.snapshotCache.get(cacheKey);
 			const now = Date.now();
 			if (cached && now - cached.ts < SNAPSHOT_TTL) {
 				res.setHeader('Content-Type', 'image/jpeg');
@@ -329,18 +339,23 @@ export class RemoteServer {
 			}
 
 			try {
-				const base64 = await this.ctx.dispatch('browser.snapshot', { uid, quality: 55 });
+				const base64 = await this.ctx.dispatch('browser.snapshot', {
+					uid,
+					quality: 55,
+					...(pageIndex === undefined ? {} : { page: pageIndex })
+				});
 				if (typeof base64 !== 'string' || !base64) {
 					throw new Error('截图失败');
 				}
-				this.snapshotCache.set(uid, { data: base64, ts: now });
+				this.snapshotCache.set(cacheKey, { data: base64, ts: now });
 				res.setHeader('Content-Type', 'image/jpeg');
 				res.setHeader('Cache-Control', 'no-store');
 				res.send(Buffer.from(base64, 'base64'));
 			} catch (e) {
 				// 截图失败必须落日志：远程端画面停格时，这里是唯一的定位线索
 				logger.warn(
-					`截图失败（uid=${uid}）：` + String(e && (e as Error).message ? (e as Error).message : e)
+					`截图失败（uid=${uid}${pageIndex === undefined ? '' : `, page=${pageIndex}`}）：` +
+						String(e && (e as Error).message ? (e as Error).message : e)
 				);
 				res.status(503).json({ ok: false, error: String(e && (e as Error).message ? (e as Error).message : e) });
 			}

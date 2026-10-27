@@ -88,6 +88,24 @@
 		</div>
 
 		<div
+			v-if="browser.pages.length > 1"
+			class="page-tabs"
+			@click.stop
+		>
+			<button
+				v-for="(page, index) in browser.pages"
+				:key="index"
+				type="button"
+				class="page-tab"
+				:class="{ on: index === pageIndex, current: page.active }"
+				:title="page.title || page.url"
+				@click="selectPage(index)"
+			>
+				{{ index + 1 }}
+			</button>
+		</div>
+
+		<div
 			v-if="currentPage"
 			class="page-line"
 		>
@@ -177,10 +195,51 @@ const STATUS_META: Record<string, { label: string; dot: string; tone: string }> 
 
 const statusMeta = computed(() => STATUS_META[props.browser.status] || STATUS_META.closed);
 
+/** 用户手动选中的标签页索引；undefined 表示自动跟随浏览器当前前台页 */
+const selectedPage = ref<number | undefined>(undefined);
+
+/** 浏览器当前前台可见页的索引（后端用 visibilityState 判定） */
+const activeIndex = computed(() => {
+	const pages = props.browser.pages || [];
+	for (let i = 0; i < pages.length; i++) {
+		if (pages[i].active) return i;
+	}
+	return undefined;
+});
+
+/** 实际用于截图的页面索引：手动选中优先，其次跟随前台页 */
+const pageIndex = computed(() => {
+	const pages = props.browser.pages || [];
+	if (!pages.length) return undefined;
+	if (selectedPage.value !== undefined && selectedPage.value < pages.length) return selectedPage.value;
+	return activeIndex.value;
+});
+
 const currentPage = computed(() => {
 	const pages = props.browser.pages || [];
-	return pages.length ? pages[pages.length - 1] : null;
+	if (!pages.length) return null;
+	const index = pageIndex.value;
+	return index !== undefined ? pages[index] : pages[pages.length - 1];
 });
+
+/** 切换查看的标签页；清了旧图避免短暂显示上一页画面 */
+function selectPage(index: number) {
+	if (index === pageIndex.value) return;
+	selectedPage.value = index;
+	thumb.value = '';
+	thumbFailed.value = 0;
+	fetchThumb();
+}
+
+/** 标签页数量变化后，手动选中的索引可能失效：重置回「跟随前台页」 */
+watch(
+	() => (props.browser.pages || []).length,
+	(len) => {
+		if (selectedPage.value !== undefined && selectedPage.value >= len) {
+			selectedPage.value = undefined;
+		}
+	}
+);
 
 const placeholderText = computed(() => {
 	if (props.browser.status === 'launching') return '正在启动浏览器…';
@@ -211,7 +270,8 @@ function startPolling() {
 
 function fetchThumb() {
 	if (props.browser.status !== 'launched') return;
-	const url = snapshotUrl(props.browser.uid);
+	/** 带上选中页索引：不传时后端自动挑选前台可见页 */
+	const url = snapshotUrl(props.browser.uid, pageIndex.value);
 	/** 先预加载再替换 src，避免图片切换时闪烁 */
 	const img = new Image();
 	img.onload = () => {
@@ -468,6 +528,57 @@ html[data-theme='light'] .browser-card.launched {
 }
 
 /* ------------------------------------------------------------------ 页面与操作 */
+
+/**
+ * 标签页切换条
+ * 只在多标签时出现；选中项以品牌色填充，浏览器当前前台页用底部内阴影标出，
+ * 两者都不改变元素尺寸，避免切换时卡片高度跳动。
+ */
+.page-tabs {
+	display: flex;
+	gap: 5px;
+	overflow-x: auto;
+	scrollbar-width: none;
+	margin-top: -1px;
+}
+
+.page-tabs::-webkit-scrollbar {
+	display: none;
+}
+
+.page-tab {
+	flex: none;
+	min-width: 25px;
+	height: 22px;
+	padding: 0 7px;
+	border-radius: 7px;
+	border: 1px solid var(--line);
+	background: var(--surface-2);
+	color: var(--text-2);
+	font-size: 11.5px;
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+/* 浏览器当前前台显示的标签页 */
+.page-tab.current {
+	color: var(--text);
+	box-shadow: inset 0 -2px 0 var(--line-strong);
+}
+
+/* 远程台正在查看的标签页 */
+.page-tab.on {
+	background: var(--brand);
+	border-color: transparent;
+	color: #fff;
+	box-shadow: none;
+}
+
+.page-tab:active {
+	transform: scale(0.96);
+}
 
 .page-line {
 	display: flex;
