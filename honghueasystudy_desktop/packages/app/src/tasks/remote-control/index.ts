@@ -423,6 +423,18 @@ export class RemoteControlService {
 		return removed;
 	}
 
+	/** 开关远程控制（只负责落设置，启停交给设置监听统一处理，避免双份状态） */
+	async setEnabled(enabled: boolean): Promise<RemoteControlStatus> {
+		store.set('remoteControl.enabled', enabled);
+		if (!enabled) {
+			await this.stop();
+		} else if (!this.running) {
+			await this.start();
+		}
+		this.emitStatus();
+		return this.getStatus();
+	}
+
 	/** 开关内网穿透 */
 	async setTunnel(enabled: boolean): Promise<TunnelStatus> {
 		/**

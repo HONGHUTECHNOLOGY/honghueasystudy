@@ -379,7 +379,6 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { Message, Modal } from '@arco-design/web-vue';
 import Description from '../Description.vue';
 import Icon from '../Icon.vue';
-import { store } from '../../store';
 import { remote } from '../../utils/remote';
 
 interface TunnelInfo {
@@ -518,6 +517,7 @@ async function loadStatus() {
 		if (typeof data.tunnelEnabled === 'boolean' && data.tunnelEnabled !== settings.tunnel.enabled) {
 			settings.tunnel.enabled = data.tunnelEnabled;
 		}
+		settings.allowLan = data.allowLan !== false;
 
 		/** 以后端已生效的配置为准回填界面选择（用户有进行中的切换时不覆盖） */
 		const serverMode = data.authMode || 'pair';
@@ -538,18 +538,6 @@ async function loadStatus() {
 		}
 	} catch (e) {
 		console.error('获取远程控制状态失败', e);
-	}
-}
-
-async function loadSettings() {
-	try {
-		const raw = (await remote['electron-store'].get('remoteControl' as any)) as any;
-		if (raw) {
-			settings.allowLan = raw.allowLan !== false;
-			settings.tunnel.enabled = !!(raw.tunnel && raw.tunnel.enabled);
-		}
-	} catch (e) {
-		console.error(e);
 	}
 }
 
@@ -602,19 +590,19 @@ async function onToggle(value: string | number | boolean) {
 	const enabled = !!value;
 	state.pending = true;
 	try {
-		await persist({ enabled });
+		/** 由主进程写入设置并启停，避免渲染端整份覆盖配置 */
+		await remote.methods.call('rcSetEnabled' as any, enabled);
 		if (enabled) {
-			await remote.methods.call('rcStart' as any);
 			Message.success('远程控制已开启');
 			await loadQR();
 			await detect(false);
 		} else {
-			await remote.methods.call('rcStop' as any);
 			Message.info('远程控制已关闭');
 		}
 		await loadStatus();
 	} catch (e) {
 		Message.error('操作失败：' + String(e));
+		await loadStatus();
 	} finally {
 		state.pending = false;
 	}
@@ -622,8 +610,6 @@ async function onToggle(value: string | number | boolean) {
 
 async function onAllowLanChange(value: string | number | boolean) {
 	const allowLan = !!value;
-	settings.allowLan = allowLan;
-	await persist({ allowLan });
 	try {
 		await remote.methods.call('rcSetAllowLan' as any, allowLan);
 		await loadStatus();
@@ -631,6 +617,7 @@ async function onAllowLanChange(value: string | number | boolean) {
 		await loadQR();
 	} catch (e) {
 		Message.error(String(e));
+		await loadStatus();
 	}
 }
 
@@ -769,19 +756,7 @@ async function revokeAll() {
 	}
 }
 
-/** 持久化设置，保留主进程写入的 sessionSecret */
-async function persist(patch: Record<string, any>) {
-	try {
-		const current = ((await remote['electron-store'].get('remoteControl' as any)) as any) || {};
-		const next = { ...current, ...patch };
-		await remote['electron-store'].set('remoteControl' as any, next);
-		if (store.remoteControl) {
-			Object.assign(store.remoteControl as any, next);
-		}
-	} catch (e) {
-		console.error('保存远程控制设置失败', e);
-	}
-}
+/** 持久化设置：已移除，远程控制配置统一由主进程 rc* 接口写入 */
 
 function copy(text: string) {
 	if (!text) return;
@@ -802,7 +777,7 @@ function formatTime(ts: number) {
 // ------------------------------------------------------------------ 生命周期
 
 onMounted(async () => {
-	await loadSettings();
+	/** 开关与地址全部来自后端状态，不再读取渲染端的设置快照 */
 	await loadStatus();
 
 	if (status.running) {

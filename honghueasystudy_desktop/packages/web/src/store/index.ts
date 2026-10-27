@@ -193,6 +193,17 @@ if (typeof _store.render === 'string') {
 	}
 }
 
+/**
+ * 远程控制配置由主进程独占维护（渲染端既不该读快照、也不该写回）。
+ *
+ * 渲染端保存时是把整个 store 序列化后交给主进程的，这份快照里的 remoteControl
+ * 停留在页面加载那一刻，写回去会把主进程刚改的开关/端口/验证方式全部回滚——
+ * 典型现象：点「启动浏览器」触发自动保存，内网穿透开关自己关掉、隧道消失。
+ * 这里直接从渲染端 store 中摘掉，保存时自然就不会带上它。
+ */
+// @ts-ignore - remoteControl 只在主进程维护
+delete (_store as any).remoteControl;
+
 /** 数据存储对象 */
 export const store: AppStore & { render: WebStore } = reactive(_store);
 

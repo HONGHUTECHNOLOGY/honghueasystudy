@@ -22,6 +22,12 @@ import { encryptRenderString, decryptRenderString } from '../crypto';
 import { remoteControl } from './remote-control';
 
 export type RawAutomationScript = Pick<AutomationScript, 'configs' | 'name'>;
+
+/**
+ * 由主进程独占维护、渲染端无权覆盖的顶层配置。
+ * 渲染进程保存设置时必须沿用主进程的当前值，否则会把主进程侧的修改回滚掉。
+ */
+const MAIN_OWNED_KEYS: (keyof AppStore)[] = ['remoteControl', 'paths', 'server'];
 /**
  * 注册主进程远程通信事件
  * @param name 事件前缀名称
@@ -169,12 +175,29 @@ const methods = {
 			// @ts-ignore
 			storeData.render = encryptRenderString(JSON.stringify(storeData.render));
 		}
+
+		/**
+		 * 主进程独占的配置不能被渲染端的整份快照覆盖。
+		 *
+		 * 渲染端的 store 只是页面加载时的一份拷贝，之后主进程对 remoteControl 的修改
+		 * （开隧道、改端口、改验证方式）它并不知道。整份写回会把 remoteControl 退回旧值，
+		 * 表现为：点「启动浏览器」触发了自动保存 → 内网穿透开关自己关掉、隧道消失。
+		 */
+		const current = store.store as Partial<AppStore> | undefined;
+		for (const key of MAIN_OWNED_KEYS) {
+			const value = current ? (current as any)[key] : undefined;
+			if (value !== undefined) {
+				(storeData as any)[key] = value;
+			}
+		}
+
 		store.store = storeData;
 	},
 
 	// ------------------------------------------------------------ 远程控制
 	// 注意：remote 通道只支持一层方法名，因此这里全部扁平化为 rc* 前缀。
 	rcStatus: () => remoteControl.getStatus(),
+	rcSetEnabled: (enabled: boolean) => remoteControl.setEnabled(enabled),
 	rcStart: () => remoteControl.start(),
 	rcStop: () => remoteControl.stop(),
 	rcDetectNetwork: (force?: boolean) => remoteControl.detectNetwork(force),
