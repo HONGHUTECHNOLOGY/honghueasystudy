@@ -116,6 +116,9 @@ export const api = {
 
 	state: () => request<{ snapshot: RemoteSnapshot | null; service: ServiceInfo; sessions: number }>('/api/state'),
 
+	/** 催桌面端立即补报一次快照（远程端发现状态停滞时用） */
+	sync: () => request<{ ok: boolean; ts: number }>('/api/sync', { method: 'POST', body: '{}' }),
+
 	command: (action: string, payload: Record<string, any> = {}) =>
 		request<{ ok: boolean; data: any }>('/api/command', {
 			method: 'POST',

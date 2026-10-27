@@ -31,6 +31,14 @@ interface State {
 	pending: { [uid: string]: string };
 	/** 最近一次收到快照的时间 */
 	lastUpdate: number;
+	/**
+	 * 最近一次「快照内容真正变化」的时间（本地时钟）
+	 *
+	 * 主进程会缓存桌面端最后一次上报的快照，反复拉 /api/state 拿到的还是同一份内容。
+	 * 因此不能用 lastUpdate 判断停滞——那只会证明「我们在轮询」，不证明「桌面端在上报」。
+	 * 这里改成跟踪快照自身的时间戳是否推进。
+	 */
+	snapshotAt: number;
 }
 
 export const state = reactive<State>({
@@ -51,7 +59,8 @@ export const state = reactive<State>({
 	error: '',
 	toasts: [],
 	pending: {},
-	lastUpdate: 0
+	lastUpdate: 0,
+	snapshotAt: 0
 });
 
 /** 界面态（与业务数据分开） */
@@ -60,6 +69,29 @@ export const ui = reactive({
 	detailUid: '',
 	theme: 'auto' as ThemeMode
 });
+
+/**
+ * 远程端时钟
+ *
+ * 用来判断「当前展示的状态是不是已经停止推进了」。
+ * 页面里的时间不能只靠一次性计算，否则卡片会一直停留在旧的判断上。
+ */
+export const clock = reactive({ now: Date.now() });
+
+/**
+ * 状态停滞的判断阈值
+ *
+ * 桌面端正常时每 3 秒上报一次，SSE 会立刻推过来；
+ * 超过这个时间还没有新快照，说明桌面端的上报链路停了（窗口被冻结、桥接异常）。
+ */
+const STALE_AFTER = 12000;
+
+/** 当前展示的状态是否可能已经停滞 */
+export function isSnapshotStale(): boolean {
+	if (!state.authed) return false;
+	if (!state.snapshotAt) return true;
+	return clock.now - state.snapshotAt > STALE_AFTER;
+}
 
 // ------------------------------------------------------------------ Toast
 
@@ -264,6 +296,38 @@ function ensureFallbackTimer(): void {
 	}, FALLBACK_INTERVAL);
 }
 
+/**
+ * 主动唤醒桌面端
+ *
+ * 桌面端窗口被最小化 / 被遮挡时，Chromium 可能冻结渲染进程的定时器，
+ * 状态上报随之停摆——浏览器其实已经起来了，远程端却一直显示「启动中」。
+ * 这里让远程端发现停滞时推一把，主进程会催渲染进程立刻补报。
+ */
+let lastSyncAt = 0;
+
+export async function requestSync(): Promise<void> {
+	if (!state.authed) return;
+	if (Date.now() - lastSyncAt < 4000) return;
+	lastSyncAt = Date.now();
+	try {
+		await api.sync();
+	} catch {
+		/* 唤醒失败不打扰用户，下一个时钟周期会重试 */
+	}
+}
+
+/** 远程端时钟 + 停滞自愈 */
+let clockTimer: ReturnType<typeof setInterval> | undefined;
+
+function ensureClock(): void {
+	if (clockTimer) return;
+	clockTimer = setInterval(() => {
+		clock.now = Date.now();
+		if (!state.authed) return;
+		if (isSnapshotStale()) requestSync();
+	}, 2500);
+}
+
 // ------------------------------------------------------------------ SSE
 
 let source: EventSource | null = null;
@@ -271,11 +335,18 @@ let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let retryDelay = 1000;
 let disposed = false;
 
+/** 最近一次快照的原始时间戳，用于识别内容是否真的推进了 */
+let lastSnapshotTs = 0;
+
 function applySnapshot(snapshot: RemoteSnapshot | null) {
 	if (!snapshot) return;
 	state.browsers = mergeOptimistic(snapshot.browsers || []);
 	state.logs = snapshot.logs || {};
 	state.lastUpdate = Date.now();
+	if (snapshot.ts && snapshot.ts !== lastSnapshotTs) {
+		lastSnapshotTs = snapshot.ts;
+		state.snapshotAt = state.lastUpdate;
+	}
 	ensureTracking();
 }
 
@@ -392,6 +463,7 @@ export async function bootstrap() {
 			await refresh();
 			connect();
 			ensureFallbackTimer();
+			ensureClock();
 		}
 	} catch (e) {
 		state.error = e instanceof Error ? e.message : String(e);
@@ -434,6 +506,7 @@ export async function authenticate(secret: string) {
 		await refresh();
 		connect();
 		ensureFallbackTimer();
+		ensureClock();
 		toast('连接成功', 'success');
 		return true;
 	} finally {

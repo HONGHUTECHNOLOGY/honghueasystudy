@@ -59,7 +59,7 @@
 									name="image"
 									:size="24"
 							/></span>
-							<span>{{ browser.status === 'launched' ? (thumbFailed >= 3 ? '画面获取失败，正在重试…' : '正在获取画面…') : '实例未运行' }}</span>
+							<span>{{ screenEmptyText }}</span>
 						</div>
 						<span
 							v-if="thumb"
@@ -86,6 +86,25 @@
 								:size="15"
 							/>
 							启动浏览器
+						</button>
+
+						<button
+							v-else-if="browser.status === 'launching' && stalled"
+							type="button"
+							class="btn"
+							:disabled="syncing"
+							@click="syncNow"
+						>
+							<span
+								v-if="syncing"
+								class="spinner"
+							></span>
+							<Icon
+								v-else
+								name="refresh"
+								:size="15"
+							/>
+							{{ syncing ? '同步中…' : '状态未同步，重新获取' }}
 						</button>
 
 						<button
@@ -281,7 +300,16 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Icon from './Icon.vue';
 import { snapshotUrl } from '../api';
-import { closeBrowser as closeBrowserAction, launchBrowser, runCommand, state, ui } from '../store';
+import {
+	closeBrowser as closeBrowserAction,
+	isSnapshotStale,
+	launchBrowser,
+	refresh,
+	requestSync,
+	runCommand,
+	state,
+	ui
+} from '../store';
 import { formatAgo, formatDuration } from '../utils';
 
 const emit = defineEmits<{ (e: 'close'): void }>();
@@ -302,6 +330,39 @@ const STATUS_META: Record<string, { label: string; dot: string }> = {
 
 const statusMeta = computed(() => STATUS_META[browser.value?.status || 'closed'] || STATUS_META.closed);
 const pending = computed(() => state.pending[ui.detailUid]);
+
+/** 快照是否停止推进（桌面端上报被冻结时会一直停在「启动中」） */
+const stalled = computed(() => isSnapshotStale());
+
+/**
+ * 无画面时的占位文案
+ *
+ * 之前启动中也显示「实例未运行」，看起来像自相矛盾：
+ * 明明正在启动，却说没运行，用户会以为启动命令丢了。
+ */
+const screenEmptyText = computed(() => {
+	const status = browser.value?.status;
+	if (status === 'launched') {
+		return thumbFailed.value >= 3 ? '画面获取失败，正在重试…' : '正在获取画面…';
+	}
+	if (status === 'launching') return stalled.value ? '电脑端未响应，正在重新同步…' : '正在启动浏览器…';
+	if (status === 'closing') return '正在关闭浏览器…';
+	return '实例未运行';
+});
+
+const syncing = ref(false);
+
+/** 唤醒桌面端补报一次快照 */
+async function syncNow() {
+	if (syncing.value) return;
+	syncing.value = true;
+	try {
+		await requestSync();
+		await refresh();
+	} finally {
+		syncing.value = false;
+	}
+}
 
 /** 用户手动点选的标签页索引；undefined 表示自动跟随浏览器当前前台页 */
 const selectedPage = ref<number | undefined>(undefined);

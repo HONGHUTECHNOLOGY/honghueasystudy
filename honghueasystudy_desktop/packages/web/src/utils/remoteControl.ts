@@ -106,10 +106,14 @@ function buildSnapshot(): RemoteSnapshotPayload {
 	return { browsers, logs, ts: Date.now() };
 }
 
+/** 最近一次成功上报的时间，用于主进程催报去重 */
+let lastSendAt = 0;
+
 /** 立即发送一次快照，不做节流 */
 function sendState() {
 	try {
 		ipcRenderer.send('remote-ctl:state', buildSnapshot());
+		lastSendAt = Date.now();
 	} catch (e) {
 		console.error('上报远程控制状态失败', e);
 	}
@@ -337,6 +341,23 @@ export function activeRemoteControlBridge() {
 		});
 	}
 	window.addEventListener('focus', () => sendState());
+
+	/**
+	 * 主进程催报
+	 *
+	 * 窗口最小化 / 被遮挡时 Chromium 会冻结渲染进程的定时器，3 秒心跳直接停摆，
+	 * 主进程手里就只剩最后一次快照（远程端表现为「浏览器已经开了还一直显示启动中」）。
+	 * 主进程的定时器不受节流影响，由它定期来催，保证状态一定在推进。
+	 */
+	ipcRenderer.on('remote-ctl:tick', () => {
+		/** 刚上报过就跳过，避免催报和心跳重复发包 */
+		if (Date.now() - lastSendAt < 1200) return;
+		if (pushTimer) {
+			clearTimeout(pushTimer);
+			pushTimer = undefined;
+		}
+		sendState();
+	});
 
 	/** 命令执行 */
 	ipcRenderer.on('remote-ctl:command', async (_event: any, message: { id: string; action: string; payload: any }) => {

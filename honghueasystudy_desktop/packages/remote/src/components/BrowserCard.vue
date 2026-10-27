@@ -117,6 +117,18 @@
 		</div>
 
 		<div
+			v-if="browser.status === 'launching' && stalled"
+			class="sync-line"
+			@click.stop="syncNow"
+		>
+			<Icon
+				name="wifi"
+				:size="12"
+			/>
+			<span class="ellipsis">电脑端状态未同步，点此重新获取</span>
+		</div>
+
+		<div
 			v-if="hasTaskBlock"
 			class="task-line"
 			:class="{ stale: isStale, done: progress?.finished }"
@@ -159,6 +171,25 @@
 					:size="14"
 				/>
 				{{ pending ? '启动中…' : '启动' }}
+			</button>
+
+			<button
+				v-else-if="browser.status === 'launching' && stalled"
+				type="button"
+				class="btn btn-sm"
+				:disabled="syncing"
+				@click="syncNow"
+			>
+				<span
+					v-if="syncing"
+					class="spinner"
+				></span>
+				<Icon
+					v-else
+					name="refresh"
+					:size="14"
+				/>
+				{{ syncing ? '同步中…' : '重新同步' }}
 			</button>
 
 			<button
@@ -216,7 +247,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Icon from './Icon.vue';
 import { BrowserSnapshot, snapshotUrl } from '../api';
-import { closeBrowser, launchBrowser, runCommand, state } from '../store';
+import { closeBrowser, isSnapshotStale, launchBrowser, refresh, requestSync, runCommand, state } from '../store';
 
 const props = defineProps<{ browser: BrowserSnapshot }>();
 const emit = defineEmits<{ (e: 'open'): void }>();
@@ -321,6 +352,32 @@ const hasTaskBlock = computed(
 	() => props.browser.status === 'launched' && (!!taskText.value || !!taskStats.value || isStale.value)
 );
 
+// ------------------------------------------------------------------ 状态同步
+
+/**
+ * 快照是否停止推进
+ *
+ * 桌面端窗口被最小化或遮挡时，渲染进程的上报可能被系统冻结，
+ * 主进程只能反复给出最后一份快照——浏览器其实已经启动完成，
+ * 远程端却会一直停在「启动中」。这里把这种情况单独标出来，
+ * 让用户知道是「状态没同步」而不是「机器卡住了」。
+ */
+const stalled = computed(() => isSnapshotStale());
+
+const syncing = ref(false);
+
+/** 手动唤醒：催桌面端补报一次，再拉一遍最新状态 */
+async function syncNow() {
+	if (syncing.value) return;
+	syncing.value = true;
+	try {
+		await requestSync();
+		await refresh();
+	} finally {
+		syncing.value = false;
+	}
+}
+
 /** 切换查看的标签页；清了旧图避免短暂显示上一页画面 */
 function selectPage(index: number) {
 	if (index === pageIndex.value) return;
@@ -341,7 +398,9 @@ watch(
 );
 
 const placeholderText = computed(() => {
-	if (props.browser.status === 'launching') return '正在启动浏览器…';
+	if (props.browser.status === 'launching') {
+		return stalled.value ? '电脑端未响应，正在重新同步…' : '正在启动浏览器…';
+	}
 	if (props.browser.status === 'launched') {
 		return thumbFailed.value >= 3 ? '画面获取失败，正在重试…' : '正在获取画面…';
 	}
@@ -693,6 +752,27 @@ html[data-theme='light'] .browser-card.launched {
 .page-line :deep(svg) {
 	flex: none;
 	color: var(--text-3);
+}
+
+/* ---------------------------------------------------------------- 状态同步 */
+
+/* 桌面端停止上报时的提示条：可点，用来手动催一次 */
+.sync-line {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	margin-top: -2px;
+	padding: 3px 6px;
+	border-radius: 6px;
+	font-size: 11.5px;
+	color: var(--warn, #d9902f);
+	background: var(--warn-soft, rgba(217, 134, 19, 0.12));
+	cursor: pointer;
+}
+
+.sync-line :deep(svg) {
+	flex: none;
 }
 
 /* ---------------------------------------------------------------- 任务进度 */

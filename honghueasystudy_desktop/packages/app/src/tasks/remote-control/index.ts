@@ -70,6 +70,12 @@ export class RemoteControlService {
 	private running = false;
 	private starting = false;
 	private lastError = '';
+	/** 最近一次收到渲染进程快照的时间 */
+	private lastStateAt = 0;
+	/** 最近一次向渲染进程催报的时间（去重） */
+	private lastPingAt = 0;
+	/** 主进程侧的催报定时器 */
+	private stateTimer?: ReturnType<typeof setInterval>;
 	private networkReport?: { report: NetworkReport; ts: number };
 	private listeners: ((status: RemoteControlStatus) => void)[] = [];
 	private inited = false;
@@ -139,6 +145,20 @@ export class RemoteControlService {
 	async init(window: BrowserWindow): Promise<void> {
 		this.window = window;
 
+		/**
+		 * 关闭渲染进程的后台节流。
+		 *
+		 * 窗口最小化或被完全遮挡时，Chromium 会把该页面的定时器节流到极低频率（甚至冻结），
+		 * 而远程控制的状态上报完全靠渲染进程的 `setInterval` 心跳驱动。
+		 * 一旦心跳被冻住，主进程手里就只剩最后一次快照——浏览器其实已经启动完成，
+		 * 远程端却永远停在「启动中」，直到窗口重新可见才恢复。
+		 */
+		try {
+			window.webContents.setBackgroundThrottling(false);
+		} catch (e) {
+			logger.warn('关闭窗口后台节流失败：' + String(e));
+		}
+
 		if (this.inited) {
 			if (this.settings().enabled && !this.running) {
 				await this.start().catch((e) => logger.error('恢复远程控制服务失败', e));
@@ -176,13 +196,15 @@ export class RemoteControlService {
 					getTunnelStatus: () => this.tunnel.getStatus(),
 					listSessions: () => this.auth.list(),
 					revokeSession: (id) => this.auth.revoke(id),
-					refreshCode: () => this.auth.getCode()
+					refreshCode: () => this.auth.getCode(),
+					requestStateRefresh: () => this.requestStateRefresh()
 				},
 				this.bridge
 			);
 
 			await this.server.listen(settings.port, settings.allowLan);
 			this.running = true;
+			this.startStateTicker();
 
 			/** 先算出排序后的访问地址，保证二维码一打开就是可用的那个 */
 			await this.refreshAddresses(true);
@@ -209,6 +231,7 @@ export class RemoteControlService {
 	/** 停止服务（含隧道） */
 	async stop(): Promise<RemoteControlStatus> {
 		this.stopAddressWatcher();
+		this.stopStateTicker();
 
 		if (this._tunnel) {
 			this._tunnel.stop();
@@ -234,6 +257,7 @@ export class RemoteControlService {
 	/** 退出时清理 */
 	dispose(): void {
 		this.stopAddressWatcher();
+		this.stopStateTicker();
 		if (this._tunnel) this._tunnel.stop();
 		if (this._bridge) this._bridge.disposeAll();
 		if (this.server) {
@@ -247,9 +271,51 @@ export class RemoteControlService {
 
 	/** 渲染进程上报的状态快照 */
 	handleState(snapshot: RemoteSnapshot): void {
+		this.lastStateAt = Date.now();
 		this.snapshot = snapshot;
 		if (this.server) {
 			this.server.broadcast('state', snapshot);
+		}
+	}
+
+	/**
+	 * 主进程驱动的状态催报
+	 *
+	 * 渲染进程自己每 3 秒上报一次，但它的定时器会被 Chromium 的后台节流冻结
+	 * （窗口最小化、被遮挡、系统休眠唤醒后都可能发生）。主进程的定时器不受影响，
+	 * 所以这里在「有客户端在线但 6 秒没收到上报」时发一条 tick，
+	 * 让渲染进程立刻补一次快照，避免远程端状态永久停在「启动中」。
+	 */
+	private startStateTicker(): void {
+		if (this.stateTimer) return;
+		this.stateTimer = setInterval(() => {
+			if (!this.running) return;
+			const server = this.server;
+			if (!server || server.clientCount() === 0) return;
+			if (Date.now() - this.lastStateAt < 6000) return;
+			this.requestStateRefresh();
+		}, 2000);
+	}
+
+	private stopStateTicker(): void {
+		if (this.stateTimer) {
+			clearInterval(this.stateTimer);
+			this.stateTimer = undefined;
+		}
+	}
+
+	/** 请求渲染进程立即上报一次（远程端「同步」按钮也走这里） */
+	requestStateRefresh(): void {
+		const now = Date.now();
+		if (now - this.lastPingAt < 1200) return;
+		this.lastPingAt = now;
+
+		const win = this.window;
+		if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
+		try {
+			win.webContents.send('remote-ctl:tick');
+		} catch (e) {
+			logger.warn('催报渲染进程状态失败：' + String(e));
 		}
 	}
 

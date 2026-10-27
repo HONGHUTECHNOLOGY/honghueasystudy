@@ -61,6 +61,8 @@ export interface RemoteServerContext {
 	listSessions(): RemoteSession[];
 	revokeSession(id: string): boolean;
 	refreshCode(): string;
+	/** 催渲染进程立即上报一次快照（主进程定时器驱动，不依赖渲染进程的定时器） */
+	requestStateRefresh(): void;
 }
 
 /** 快照缓存的有效期（ms） */
@@ -74,6 +76,8 @@ export class RemoteServer {
 	private snapshotCache = new Map<string, { data: string; ts: number }>();
 	/** 最近一次向客户端推送状态的时间，用于识别「渲染进程不再上报」的停滞 */
 	private lastStateAt = 0;
+	/** 停滞告警的节流时间戳 */
+	private lastStaleLogAt = 0;
 
 	private pairLimiter = new RateLimiter(60 * 1000, 10);
 	private commandLimiter = new RateLimiter(1000, 10);
@@ -103,10 +107,14 @@ export class RemoteServer {
 					this.broadcast('heartbeat', { ts: Date.now() });
 					/**
 					 * 有客户端在线却长时间没有状态推送，说明渲染进程那边停了（窗口冻结、桥接异常）。
-					 * 远程端此时只能靠主动轮询，这条日志是定位「点了没反应」的第一手证据。
+					 * 这里先主动催一次让它自愈；仍无响应才记日志（30 秒最多一条，避免刷屏）。
 					 */
 					if (this.clients.size > 0 && Date.now() - this.lastStateAt > 20000) {
-						logger.warn('超过 20 秒未收到渲染进程的状态上报，远程实时状态可能已停滞');
+						this.ctx.requestStateRefresh();
+						if (Date.now() - this.lastStaleLogAt > 30000) {
+							this.lastStaleLogAt = Date.now();
+							logger.warn('超过 20 秒未收到渲染进程的状态上报，已主动催报；远程实时状态可能滞后');
+						}
 					}
 				}, 15000);
 				logger.info(`远程控制服务已启动 => ${host}:${port}`);
@@ -138,6 +146,16 @@ export class RemoteServer {
 			/** 兜底：3 秒后强制释放 */
 			setTimeout(() => resolve(), 3000);
 		});
+	}
+
+	/** 当前在线的实时连接数 */
+	clientCount(): number {
+		return this.clients.size;
+	}
+
+	/** 最近一次收到渲染进程状态的时间（0 表示尚未收到） */
+	lastStateTime(): number {
+		return this.lastStateAt;
 	}
 
 	/** 向所有已连接客户端推送事件 */
@@ -293,6 +311,17 @@ export class RemoteServer {
 				service: sanitizeServiceInfo(this.ctx.getServiceInfo()),
 				sessions: this.ctx.listSessions().length
 			});
+		});
+
+		/**
+		 * 主动同步
+		 *
+		 * 远程端发现状态长时间没有推进（典型表现：浏览器已经起来，卡片还停在「启动中」）时，
+		 * 调一次这个接口让主进程催渲染进程补报快照。只触发上报，没有副作用。
+		 */
+		app.post('/api/sync', auth, (req, res) => {
+			this.ctx.requestStateRefresh();
+			res.json({ ok: true, ts: Date.now(), lastStateAt: this.lastStateAt });
 		});
 
 		app.get('/api/events', auth, (req, res) => {
