@@ -375,8 +375,11 @@ export class RemoteServer {
 					index: 'index.html',
 					maxAge: '1h',
 					setHeaders: (res, filePath) => {
-						/** 入口 HTML 必须不缓存：否则升级后手机仍加载旧的资源引用 */
-						if (filePath.indexOf('index.html') !== -1) {
+						/**
+						 * 入口 HTML 与 manifest 必须不缓存：
+						 * 否则升级后手机仍加载旧的资源引用，改完图标也不生效。
+						 */
+						if (filePath.indexOf('index.html') !== -1 || filePath.endsWith('manifest.webmanifest')) {
 							res.setHeader('Cache-Control', 'no-store');
 						}
 					}
