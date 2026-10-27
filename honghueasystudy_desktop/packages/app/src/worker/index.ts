@@ -222,6 +222,8 @@ export class ScriptWorker {
 				...options
 			});
 		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+
 			// 浏览器异常关闭
 			if (err instanceof Error) {
 				if (
@@ -243,13 +245,20 @@ export class ScriptWorker {
 					} else {
 						console.error('异常关闭，请尝试重启浏览器。', err.message.substring(0, 500));
 					}
-					this.close();
 				} else {
 					console.error('错误 : ', err.message.substring(0, 500));
 				}
 			} else {
 				console.error('未知错误 : ', String(err).substring(0, 500));
 			}
+
+			/**
+			 * 无论哪种失败都要显式告诉渲染进程。
+			 * 否则界面只能干等看门狗的 120 秒，期间一直显示「启动中」，
+			 * 用户看到的是「浏览器明明起来了、状态却不动」。
+			 */
+			send('launch-failed', ScriptWorker.getTransformedErrorMessage(message));
+			return await this.close();
 		}
 
 		// 浏览器初始化完成
@@ -440,6 +449,12 @@ export async function launchBrowser({
 	onLaunch?: (browser: BrowserContext) => void;
 }) {
 	return new Promise<void>((resolve, reject) => {
+		/** 握手耗时参考：全新 profile 约 0.5~2 秒；已有大量会话/扩展的 profile 可达 10~15 秒 */
+		const launchStartedAt = Date.now();
+		console.log(
+			`[启动] 开始拉起浏览器 exe=${executablePath} userDataDir=${userDataDir} 附加参数=${args.length} 个`
+		);
+
 		chromium
 			.launchPersistentContext(userDataDir, {
 				headless,
@@ -448,11 +463,25 @@ export async function launchBrowser({
 				ignoreHTTPSErrors: true,
 				acceptDownloads: true,
 				ignoreDefaultArgs: ['--disable-extensions', '--enable-automation'],
+				/**
+				 * 显式限制握手超时。playwright 默认 180 秒，而渲染端的启动看门狗是 120 秒：
+				 * 浏览器窗口已经弹出、但 DevTools 通道没连上时会一直等，
+				 * 结果就是「用户看到浏览器起来了、远程端永远显示启动中」，120 秒后又被判成未运行。
+				 * 这里收到 60 秒，保证失败原因能在看门狗之前被明确抛出。
+				 */
+				timeout: 60 * 1000,
 				args: [
 					'--window-position=0,0',
 					'--no-first-run',
 					'--no-default-browser-check',
 					'--allow-file-access-from-files',
+					/**
+					 * 上一次异常退出（崩溃 / 被强杀 / 启动超时）后，Edge 与 Chrome 都会在下次启动时
+					 * 弹「恢复页面」气泡并尝试恢复整批标签页，恢复期间 DevTools 握手会拖到几十秒，
+					 * 表现为「浏览器窗口已经出现了，但状态一直卡在启动中」。
+					 * 关掉这个气泡，启动耗时即可回到正常水平。
+					 */
+					'--hide-crash-restore-bubble',
 					// AppImage 下无法可靠保留 chrome-sandbox 的 setuid 位，Linux 关闭沙箱；
 					// Windows/macOS 保留沙箱以收紧攻击面。
 					...(process.platform === 'linux' ? ['--no-sandbox', '--disable-setuid-sandbox'] : []),
@@ -460,6 +489,8 @@ export async function launchBrowser({
 				]
 			})
 			.then(async (browser) => {
+				console.log(`[启动] 握手完成，耗时 ${Date.now() - launchStartedAt}ms，初始页面数 ${browser.pages().length}`);
+
 				// 处理浏览器初始
 				handleBrowserInit(browser, { enable_dialog: config?.enable_dialog, userDataDir });
 
@@ -519,6 +550,11 @@ export async function launchBrowser({
 				}
 			})
 			.catch((err) => {
+				console.error(
+					`[启动] 握手失败，耗时 ${Date.now() - launchStartedAt}ms：${
+						err instanceof Error ? err.message : String(err)
+					}`
+				);
 				reject(err);
 			});
 	});
@@ -716,18 +752,29 @@ function handleBrowserInit(browser: BrowserContext, config: { enable_dialog?: bo
 		content: 'Object.defineProperty(navigator, "webdriver", { get: () => false });console.log(navigator)'
 	});
 
-	// 关闭检测
+	/**
+	 * 空页面巡检：连续 1 秒都没有任何页面才判定浏览器已被关闭。
+	 *
+	 * 原来是 100ms 单次判空就 close —— 启动瞬间（标签页还没挂完、或首屏正在被替换）
+	 * 极易误判成「用户关掉了浏览器」，直接把刚起来的浏览器整个关掉，
+	 * 表现就是「浏览器窗口一闪就没了，远程一直显示启动中/未运行」。
+	 */
+	let emptyTicks = 0;
 	const interval = setInterval(async () => {
-		if (browser.pages().length === 0) {
-			clearInterval(interval);
-
-			await browser.close({
-				reason: 'no pages'
-			});
+		if (browser.pages().length > 0) {
+			emptyTicks = 0;
+			return;
 		}
+		emptyTicks += 1;
+		if (emptyTicks < 10) return;
+
+		clearInterval(interval);
+		console.warn('[启动] 连续 1 秒没有任何页面，判定浏览器已关闭，主动回收实例');
+		await browser.close({ reason: 'no pages' }).catch(() => {});
 	}, 100);
 
 	browser.once('close', () => {
+		clearInterval(interval);
 		send('browser-closed');
 		process.exit();
 	});

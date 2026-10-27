@@ -63,20 +63,51 @@ export class Process extends EventEmitter {
 		this.shell = child_process.fork(
 			await remote.path.call('join', await remote.app.call('getAppPath'), './script.js'),
 			{
-				stdio: ['ipc'],
+				/**
+				 * 必须显式 pipe 出 stdout/stderr。
+				 * 原来只写 ['ipc']，子进程的 console.log/console.error 全部被丢弃，
+				 * 浏览器启动失败时（launchPersistentContext 握手超时）远程端只能看到「启动中」，
+				 * 日志里一个字都没有，完全无法定位。
+				 */
+				stdio: ['ipc', 'pipe', 'pipe'],
 				env: process.env
 			}
 		);
 		this.worker = createRemoteScriptWorker(this.shell);
 
+		/** 子进程输出统一落盘：启动阶段的日志是排查「一直显示启动中」的唯一线索 */
+		const appendOutput = (raw: any, isError: boolean) => {
+			const line = String(raw).trim();
+			if (!line) return;
+
+			this.logs.push(isError ? `[${this.browser.name}] ${line}` : line);
+			/** 防止长时间刷课把内存里的日志数组撑爆 */
+			if (this.logs.length > 300) this.logs.splice(0, this.logs.length - 300);
+
+			/**
+			 * 启动阶段全量落盘（这段时间的输出才有诊断价值）；
+			 * 运行阶段只落错误，否则脚本每道题的 console.log 会把日志文件刷爆。
+			 */
+			if (!isError && this.status === 'launched') return;
+			try {
+				const text = `[${this.browser.name}] ${line.slice(0, 2000)}`;
+				if (isError) {
+					remote.logger.call('error', text);
+				} else {
+					remote.logger.call('log', text);
+				}
+			} catch {
+				// 日志写入失败不影响主流程
+			}
+		};
+
 		this.shell.stdout?.on('data', (data: any) => {
-			this.logs.push(data.toString());
+			appendOutput(data, false);
 			onConsole?.(data.toString());
 		});
 		this.shell.stderr?.on('data', (data: any) => {
+			appendOutput(data, true);
 			onConsole?.(data.toString());
-			remote.logger.call('error', String(data));
-			this.logs.push(`${this.browser.name} 错误`, data);
 			notify(`${this.browser.name} 错误`, data, this.browser.uid, {
 				duration: 60 * 1000,
 				copy: true,
@@ -100,6 +131,24 @@ export class Process extends EventEmitter {
 				console.log('browser-closed', this.uid);
 				// 从进程列表中移除
 				Process.remove(this.uid);
+			},
+			/**
+			 * 启动失败（握手超时、浏览器被策略拦截、扩展加载异常等）
+			 *
+			 * 子进程现在会显式上报失败原因，不必再等看门狗的 120 秒。
+			 * 没有这条监听时，失败只会打到子进程的 stderr，
+			 * 界面永远停在「启动中」，用户看到的就是「浏览器明明起来了、状态却不动」。
+			 */
+			'launch-failed': (message?: string) => {
+				const reason = String(message || '未知原因');
+				console.error('浏览器启动失败：', reason);
+				this.status = 'closed';
+				Process.remove(this.uid);
+				notify(`${this.browser.name} 启动失败`, reason, this.browser.uid, {
+					duration: 60 * 1000,
+					copy: true,
+					type: 'error'
+				});
 			},
 			/** 页面新增/跳转/关闭，节流后刷新页面列表 */
 			'page-changed': () => {
@@ -222,6 +271,17 @@ export class Process extends EventEmitter {
 			const fail = (message?: string) => {
 				clearTimeout(watchdog);
 				this.status = 'closed';
+				/**
+				 * 必须连同子进程一起回收。
+				 * 只从 processes 里移除对象而把 worker / 浏览器进程留在后台的话，
+				 * 下次启动会再 fork 一个 worker 去抢同一个 user-data-dir，
+				 * 触发 SingletonLock 冲突 → 必然又卡在启动中，越试越坏。
+				 */
+				try {
+					this.shell?.kill();
+				} catch {
+					// 进程可能已退出
+				}
 				Process.remove(this.uid);
 				if (message) reject(new Error(message));
 			};
@@ -239,6 +299,11 @@ export class Process extends EventEmitter {
 						this.once('launched', () => {
 							clearTimeout(watchdog);
 							resolve();
+						});
+						/** 子进程明确报告启动失败：立刻落地结果，不必空等看门狗 */
+						this.once('launch-failed', (message?: string) => {
+							clearTimeout(watchdog);
+							reject(new Error(String(message || '浏览器启动失败')));
 						});
 						this.shell?.once('exit', (code) => {
 							// 子进程退出（含崩溃）：未成功启动时回退状态，已启动时标记为已关闭

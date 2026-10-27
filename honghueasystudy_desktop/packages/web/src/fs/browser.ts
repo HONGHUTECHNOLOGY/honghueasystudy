@@ -49,10 +49,26 @@ export class Browser extends Entity implements BrowserOptions {
 		processes.push(process);
 		const reactiveProcess = Process.from(this.uid);
 		if (reactiveProcess) {
-			await reactiveProcess.init(console.log);
-			const code = await reactiveProcess.launch();
-			if (typeof code === 'number') {
-				return code;
+			try {
+				await reactiveProcess.init(console.log);
+				const code = await reactiveProcess.launch();
+				if (typeof code === 'number') {
+					return code;
+				}
+			} catch (e) {
+				/**
+				 * 初始化或启动失败必须把实例清干净：
+				 * 残留的 Process 对象会让「是否在运行」的判断失真，
+				 * 残留的 worker 进程还会占住 user-data-dir，使下一次启动必定再失败。
+				 */
+				reactiveProcess.status = 'closed';
+				try {
+					reactiveProcess.shell?.kill();
+				} catch {
+					// 进程可能已退出
+				}
+				Process.remove(this.uid);
+				throw e;
 			}
 		}
 
