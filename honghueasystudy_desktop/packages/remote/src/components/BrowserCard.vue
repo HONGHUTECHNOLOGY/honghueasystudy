@@ -131,7 +131,17 @@
 					name="play"
 					:size="14"
 				/>
-				启动
+				{{ pending ? '启动中…' : '启动' }}
+			</button>
+
+			<button
+				v-else-if="browser.status === 'launching'"
+				type="button"
+				class="btn btn-sm btn-primary btn-busy"
+				disabled
+			>
+				<span class="spinner"></span>
+				启动中…
 			</button>
 
 			<template v-else>
@@ -150,14 +160,20 @@
 				<button
 					type="button"
 					class="btn btn-sm btn-danger"
-					:disabled="!!pending"
+					:class="{ 'btn-busy': browser.status === 'closing' }"
+					:disabled="!!pending || browser.status === 'closing'"
 					@click="close"
 				>
+					<span
+						v-if="browser.status === 'closing'"
+						class="spinner"
+					></span>
 					<Icon
+						v-else
 						name="stop"
 						:size="14"
 					/>
-					关闭
+					{{ browser.status === 'closing' ? '关闭中…' : '关闭' }}
 				</button>
 			</template>
 
@@ -173,7 +189,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Icon from './Icon.vue';
 import { BrowserSnapshot, snapshotUrl } from '../api';
-import { runCommand, state } from '../store';
+import { closeBrowser, launchBrowser, runCommand, state } from '../store';
 
 const props = defineProps<{ browser: BrowserSnapshot }>();
 const emit = defineEmits<{ (e: 'open'): void }>();
@@ -326,13 +342,13 @@ onBeforeUnmount(() => {
 
 async function launch() {
 	try {
-		await runCommand('browser.launch', { uid: props.browser.uid }, props.browser.uid);
+		await launchBrowser(props.browser.uid);
 	} catch {}
 }
 
 async function close() {
 	try {
-		await runCommand('browser.close', { uid: props.browser.uid }, props.browser.uid);
+		await closeBrowser(props.browser.uid);
 	} catch {}
 }
 

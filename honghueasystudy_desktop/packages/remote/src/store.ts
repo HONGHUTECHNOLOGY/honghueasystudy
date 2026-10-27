@@ -148,6 +148,122 @@ export function initTheme(): void {
 	}
 }
 
+// ------------------------------------------------------------------ 过渡态
+
+/**
+ * 本地乐观状态
+ *
+ * 点击「启动」后，主进程要等渲染进程把 worker 拉起来才会有新的状态可上报，
+ * 这段空窗里推送过来的快照仍然是「未运行」，界面看起来就像点了没反应。
+ * 所以点击瞬间先在本地把该实例标成 launching / closing，
+ * 等后端快照确认（状态已离开原状态）或超时后自动交还给后端数据。
+ */
+const optimistic = new Map<string, { status: 'launching' | 'closing'; at: number }>();
+
+/**
+ * 乐观状态兜底过期时间
+ *
+ * 正常情况下后端 1~2 秒内就会把状态改成 launching，20 秒还没被确认基本可以判定失败
+ * （worker 起不来 / 命令没送达），此时必须回落到真实状态，不能永远显示「启动中」。
+ */
+const OPTIMISTIC_TTL = 20 * 1000;
+
+/** 过渡态轮询间隔：只要还有 launching / closing，就按这个节奏主动拉状态 */
+const TRACK_INTERVAL = 2000;
+/** 实时连接断开时的兜底轮询间隔 */
+const FALLBACK_INTERVAL = 8000;
+
+let trackTimer: ReturnType<typeof setInterval> | undefined;
+let fallbackTimer: ReturnType<typeof setInterval> | undefined;
+
+function isTransient(list: BrowserSnapshot[]): boolean {
+	return list.some((b) => b.status === 'launching' || b.status === 'closing');
+}
+
+/** 把本地乐观状态叠加到后端快照上 */
+function mergeOptimistic(list: BrowserSnapshot[]): BrowserSnapshot[] {
+	if (optimistic.size === 0) return list;
+	const now = Date.now();
+
+	return list.map((item) => {
+		const local = optimistic.get(item.uid);
+		if (!local) return item;
+
+		if (now - local.at > OPTIMISTIC_TTL) {
+			optimistic.delete(item.uid);
+			return item;
+		}
+
+		if (local.status === 'launching') {
+			/** 后端已确认（启动中或已就绪）→ 交还给后端数据 */
+			if (item.status !== 'closed') {
+				optimistic.delete(item.uid);
+				return item;
+			}
+			return { ...item, status: 'launching' };
+		}
+
+		/** closing：后端已变成关闭态则交还，否则继续显示关闭中 */
+		if (item.status === 'closed') {
+			optimistic.delete(item.uid);
+			return item;
+		}
+		return { ...item, status: 'closing' };
+	});
+}
+
+/** 就地改本地显示状态，点击瞬间立刻见效，不必等下一次快照 */
+function patchLocalStatus(uid: string, status: BrowserSnapshot['status']) {
+	const item = state.browsers.find((b) => b.uid === uid);
+	if (item) item.status = status;
+}
+
+/**
+ * 过渡态跟踪
+ *
+ * SSE 正常时状态会主动推过来，但推送依赖渲染进程的上报（最长 5 秒心跳），
+ * 移动网络下 SSE 也可能被中间设备掐断。这里在「启动中 / 关闭中」期间
+ * 以 2 秒的节奏主动拉取，状态稳定后自动停止，保证操作后一定能看到结果。
+ */
+function ensureTracking(): void {
+	const need = optimistic.size > 0 || isTransient(state.browsers);
+
+	if (!need) {
+		if (trackTimer) {
+			clearInterval(trackTimer);
+			trackTimer = undefined;
+		}
+		return;
+	}
+
+	if (trackTimer) return;
+	trackTimer = setInterval(async () => {
+		if (!state.authed) {
+			if (trackTimer) {
+				clearInterval(trackTimer);
+				trackTimer = undefined;
+			}
+			return;
+		}
+		await refresh();
+		if (optimistic.size === 0 && !isTransient(state.browsers)) {
+			if (trackTimer) {
+				clearInterval(trackTimer);
+				trackTimer = undefined;
+			}
+		}
+	}, TRACK_INTERVAL);
+}
+
+/** 实时连接不可用时的兜底刷新，避免状态彻底停滞 */
+function ensureFallbackTimer(): void {
+	if (fallbackTimer) return;
+	fallbackTimer = setInterval(() => {
+		if (!state.authed || state.connected) return;
+		refresh();
+	}, FALLBACK_INTERVAL);
+}
+
 // ------------------------------------------------------------------ SSE
 
 let source: EventSource | null = null;
@@ -157,9 +273,10 @@ let disposed = false;
 
 function applySnapshot(snapshot: RemoteSnapshot | null) {
 	if (!snapshot) return;
-	state.browsers = snapshot.browsers || [];
+	state.browsers = mergeOptimistic(snapshot.browsers || []);
 	state.logs = snapshot.logs || {};
 	state.lastUpdate = Date.now();
+	ensureTracking();
 }
 
 export function connect() {
@@ -176,6 +293,8 @@ export function connect() {
 	source.onopen = () => {
 		state.connected = true;
 		retryDelay = 1000;
+		/** 断线期间可能错过了状态变化，重连后立即补一次全量 */
+		refresh();
 	};
 
 	source.addEventListener('state', (event: MessageEvent) => {
@@ -272,6 +391,7 @@ export async function bootstrap() {
 		if (state.authed) {
 			await refresh();
 			connect();
+			ensureFallbackTimer();
 		}
 	} catch (e) {
 		state.error = e instanceof Error ? e.message : String(e);
@@ -313,6 +433,7 @@ export async function authenticate(secret: string) {
 		state.authed = true;
 		await refresh();
 		connect();
+		ensureFallbackTimer();
 		toast('连接成功', 'success');
 		return true;
 	} finally {
@@ -352,5 +473,92 @@ export async function runCommand(action: string, payload: Record<string, any> = 
 		throw e;
 	} finally {
 		delete state.pending[key];
+	}
+}
+
+// ------------------------------------------------------------------ 启动 / 关闭
+
+/** 标记为「启动中」并开始跟踪（乐观反馈） */
+function markLaunching(uid: string) {
+	optimistic.set(uid, { status: 'launching', at: Date.now() });
+	patchLocalStatus(uid, 'launching');
+	ensureTracking();
+}
+
+/** 标记为「关闭中」并开始跟踪（乐观反馈） */
+function markClosing(uid: string) {
+	optimistic.set(uid, { status: 'closing', at: Date.now() });
+	patchLocalStatus(uid, 'closing');
+	ensureTracking();
+}
+
+/**
+ * 启动浏览器
+ *
+ * 点击后立刻在本地显示「启动中」，命令返回后不丢弃结果；
+ * 失败时撤销乐观状态并回落到真实快照，避免界面停在「启动中」。
+ */
+export async function launchBrowser(uid: string) {
+	markLaunching(uid);
+	try {
+		const data = await runCommand('browser.launch', { uid }, uid);
+
+		/** 命令返回时浏览器可能已经就绪（冷启动很快的情况），直接收敛，不用再等快照 */
+		if (data && data.status === 'launched') {
+			optimistic.delete(uid);
+			patchLocalStatus(uid, 'launched');
+		} else if (optimistic.has(uid)) {
+			/** 后端已受理，续期一次，避免后端状态上报稍慢时本地标记先过期 */
+			optimistic.set(uid, { status: 'launching', at: Date.now() });
+		}
+		return data;
+	} catch (e) {
+		optimistic.delete(uid);
+		await refresh();
+		throw e;
+	}
+}
+
+/** 关闭浏览器 */
+export async function closeBrowser(uid: string) {
+	markClosing(uid);
+	try {
+		const data = await runCommand('browser.close', { uid }, uid);
+		if (optimistic.has(uid)) optimistic.set(uid, { status: 'closing', at: Date.now() });
+		return data;
+	} catch (e) {
+		optimistic.delete(uid);
+		await refresh();
+		throw e;
+	}
+}
+
+/** 批量启动：先全部标成启动中，再发一条批量指令 */
+export async function launchAllBrowsers() {
+	const targets = state.browsers.filter((b) => b.status === 'closed');
+	targets.forEach((b) => markLaunching(b.uid));
+	try {
+		const data = await runCommand('browser.batchLaunch', {}, 'batch');
+		toast(targets.length ? `已发送启动指令（${targets.length} 个）` : '没有需要启动的实例', 'success');
+		return data;
+	} catch (e) {
+		targets.forEach((b) => optimistic.delete(b.uid));
+		await refresh();
+		throw e;
+	}
+}
+
+/** 批量关闭 */
+export async function closeAllBrowsers() {
+	const targets = state.browsers.filter((b) => b.status === 'launched' || b.status === 'launching');
+	targets.forEach((b) => markClosing(b.uid));
+	try {
+		const data = await runCommand('browser.batchClose', {}, 'batch');
+		toast(`已发送关闭指令（${targets.length} 个）`, 'success');
+		return data;
+	} catch (e) {
+		targets.forEach((b) => optimistic.delete(b.uid));
+		await refresh();
+		throw e;
 	}
 }

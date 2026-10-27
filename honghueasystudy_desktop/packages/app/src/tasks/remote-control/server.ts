@@ -59,6 +59,8 @@ export class RemoteServer {
 	private clients = new Set<express.Response>();
 	private heartbeat?: ReturnType<typeof setInterval>;
 	private snapshotCache = new Map<string, { data: string; ts: number }>();
+	/** 最近一次向客户端推送状态的时间，用于识别「渲染进程不再上报」的停滞 */
+	private lastStateAt = 0;
 
 	private pairLimiter = new RateLimiter(60 * 1000, 10);
 	private commandLimiter = new RateLimiter(1000, 10);
@@ -84,7 +86,16 @@ export class RemoteServer {
 
 			server.listen(port, host, () => {
 				this.httpServer = server;
-				this.heartbeat = setInterval(() => this.broadcast('heartbeat', { ts: Date.now() }), 15000);
+				this.heartbeat = setInterval(() => {
+					this.broadcast('heartbeat', { ts: Date.now() });
+					/**
+					 * 有客户端在线却长时间没有状态推送，说明渲染进程那边停了（窗口冻结、桥接异常）。
+					 * 远程端此时只能靠主动轮询，这条日志是定位「点了没反应」的第一手证据。
+					 */
+					if (this.clients.size > 0 && Date.now() - this.lastStateAt > 20000) {
+						logger.warn('超过 20 秒未收到渲染进程的状态上报，远程实时状态可能已停滞');
+					}
+				}, 15000);
 				logger.info(`远程控制服务已启动 => ${host}:${port}`);
 				resolve(port);
 			});
@@ -118,6 +129,7 @@ export class RemoteServer {
 
 	/** 向所有已连接客户端推送事件 */
 	broadcast(event: string, payload: any): void {
+		if (event === 'state') this.lastStateAt = Date.now();
 		if (this.clients.size === 0) return;
 		const chunk = `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
 		this.clients.forEach((res) => {
@@ -282,9 +294,12 @@ export class RemoteServer {
 			res.write(`event: state\ndata: ${JSON.stringify(this.ctx.getSnapshot())}\n\n`);
 
 			this.clients.add(res);
+			logger.info(`实时连接已建立（${getClientIp(req)}），当前 ${this.clients.size} 个客户端`);
 
 			const cleanup = () => {
-				this.clients.delete(res);
+				if (this.clients.delete(res)) {
+					logger.info(`实时连接已断开，剩余 ${this.clients.size} 个客户端`);
+				}
 			};
 			req.on('close', cleanup);
 			req.on('aborted', cleanup);

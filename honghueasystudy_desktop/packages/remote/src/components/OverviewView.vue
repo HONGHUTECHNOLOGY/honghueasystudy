@@ -156,7 +156,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import BrowserCard from './BrowserCard.vue';
 import Icon from './Icon.vue';
-import { copyWithToast, refresh, runCommand, state, toast, ui } from '../store';
+import { closeAllBrowsers, copyWithToast, launchAllBrowsers, refresh, state, ui } from '../store';
 import { formatAgo } from '../utils';
 
 const runningCount = computed(
@@ -189,16 +189,14 @@ const agoText = computed(() => (state.lastUpdate ? formatAgo(state.lastUpdate, n
 
 async function launchAll() {
 	try {
-		await runCommand('browser.batchLaunch', {}, 'batch');
-		toast('已发送启动指令', 'success');
+		await launchAllBrowsers();
 	} catch {}
 }
 
 async function closeAll() {
 	if (!window.confirm(`确定关闭全部 ${runningCount.value} 个浏览器吗？`)) return;
 	try {
-		await runCommand('browser.batchClose', {}, 'batch');
-		toast('已发送关闭指令', 'success');
+		await closeAllBrowsers();
 	} catch {}
 }
 

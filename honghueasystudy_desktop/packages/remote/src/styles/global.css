@@ -274,6 +274,19 @@ html[data-theme='light'] .card {
 	cursor: not-allowed;
 }
 
+/* 进行中的按钮：需要禁用点击，但不能看起来像「坏掉」的灰按钮 */
+.btn-busy:disabled {
+	opacity: 1;
+	cursor: progress;
+}
+
+/* 彩色按钮里的 loading 圈用白色，否则品牌色叠品牌色几乎看不见 */
+.btn-primary .spinner,
+.btn-danger .spinner {
+	border-color: rgb(255 255 255 / 0.35);
+	border-top-color: #fff;
+}
+
 .btn-primary {
 	background: linear-gradient(135deg, var(--brand), var(--brand-2));
 	border-color: transparent;
