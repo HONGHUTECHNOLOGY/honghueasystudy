@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-var __HH_BRIDGE_KEY__="e649ee9a-f364-496d-a4f6-0bbdbd932cd2";
+var __HH_BRIDGE_KEY__="48c5620d-4c05-42c2-93f2-5a4b2a18c415";
 /* 鸿鹄易学 · MAIN world 运行时（ScriptCat 风格）
  *
  * 本文件由 background.js 通过 chrome.userScripts.register({ world: "MAIN" })

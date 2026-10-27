@@ -67,6 +67,9 @@ export class CloudflaredTunnel {
 	private stopping = false;
 	private retrying = 0;
 	private port = 0;
+	/** 进行中的 start()：并发调用（开关切换与恢复设置同时触发）时复用同一个 Promise，
+	 *  否则会穿透 this.proc 守卫启动两个 cloudflared，产生两个互相无关的隧道地址 */
+	private starting?: Promise<string>;
 	/** 用于中止进行中的下载 */
 	private currentAbort?: AbortController;
 	private status: TunnelStatus = {
@@ -110,7 +113,18 @@ export class CloudflaredTunnel {
 		if (this.proc) {
 			return this.status.url;
 		}
+		/** 并发调用复用同一次启动，避免拉起两个 cloudflared */
+		if (this.starting) {
+			return this.starting;
+		}
 
+		this.starting = this.doStart(port).finally(() => {
+			this.starting = undefined;
+		});
+		return this.starting;
+	}
+
+	private async doStart(port: number): Promise<string> {
 		this.setStatus({ state: 'starting', error: '', url: '' });
 
 		const binary = await this.ensureBinary();

@@ -217,22 +217,51 @@ export class Process extends EventEmitter {
 	launch() {
 		return new Promise<void | number | null>((resolve, reject) => {
 			this.status = 'launching';
+
+			/** 状态回退：任何原因导致启动失败，都不能让状态停留在 launching（否则远程端永远显示「启动中」） */
+			const fail = (message?: string) => {
+				clearTimeout(watchdog);
+				this.status = 'closed';
+				Process.remove(this.uid);
+				if (message) reject(new Error(message));
+			};
+			/** 看门狗：初始化链条卡死（如页面 evaluate 无超时）时兜底回退 */
+			const watchdog = setTimeout(() => {
+				if (this.status === 'launching') {
+					console.error('浏览器启动超时（120 秒未就绪），已回退为未运行状态');
+					fail('浏览器启动超时（120 秒未就绪）');
+				}
+			}, 120 * 1000);
+
 			this.launchPreCheck()
 				.then((result) => {
 					if (result) {
 						this.once('launched', () => {
+							clearTimeout(watchdog);
 							resolve();
 						});
 						this.shell?.once('exit', (code) => {
+							// 子进程退出（含崩溃）：未成功启动时回退状态，已启动时标记为已关闭
+							if (this.status === 'launching' || this.status === 'launched') {
+								this.status = 'closed';
+								Process.remove(this.uid);
+							}
+							clearTimeout(watchdog);
 							resolve(code);
 						});
 						this.worker?.('launch', {
 							userDataDir: this.browser.cachePath,
 							...this.launchOptions
 						});
+					} else {
+						// preCheck 失败（浏览器路径缺失等）：原实现 promise 永不落定，状态永久卡在 launching
+						fail();
 					}
 				})
-				.catch(reject);
+				.catch((err) => {
+					fail();
+					reject(err);
+				});
 		});
 	}
 

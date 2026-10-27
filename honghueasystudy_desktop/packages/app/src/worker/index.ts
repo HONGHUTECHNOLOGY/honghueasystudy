@@ -273,6 +273,11 @@ export class ScriptWorker {
 	 *
 	 * 使用 Playwright 截图而非系统窗口截图：
 	 * 能精确对应浏览器实例，且窗口被遮挡、最小化时依然可用。
+	 *
+	 * 「活动页面」优先取前台可见的标签页（document.visibilityState === 'visible'），
+	 * 而不是简单取最后一个：脚本经常会在后台新开标签页（验证码、跳转中转页），
+	 * 这些页面内容静止，取最后一个会导致远程画面长时间停留在一张不变的图上，
+	 * 看起来就像「截图不同步」。
 	 */
 	async snapshot(options?: { quality?: number }): Promise<string> {
 		const pages = this.browser?.pages() || [];
@@ -280,7 +285,22 @@ export class ScriptWorker {
 			throw new Error('浏览器尚未打开任何页面');
 		}
 
-		const page = pages[pages.length - 1];
+		let page = pages[pages.length - 1];
+		for (const candidate of pages) {
+			try {
+				const state = await Promise.race([
+					candidate.evaluate(() => document.visibilityState),
+					new Promise<string>((resolve) => setTimeout(() => resolve(''), 800))
+				]);
+				if (state === 'visible') {
+					page = candidate;
+					break;
+				}
+			} catch {
+				// 页面可能正在跳转或已销毁，跳过继续找
+			}
+		}
+
 		const quality = options && options.quality ? Math.min(Math.max(options.quality, 20), 90) : 55;
 
 		const buffer = await page.screenshot({
@@ -443,6 +463,13 @@ export async function launchBrowser({
 				// 处理浏览器初始
 				handleBrowserInit(browser, { enable_dialog: config?.enable_dialog, userDataDir });
 
+				// 浏览器进程已就绪：立即触发 onLaunch 并 resolve，
+				// 否则导航页加载、开发者模式、自动化脚本任何一步抛错/卡住
+				// 都会让远程端永远停留在「启动中」且无法截图（浏览器本身却在正常刷课）。
+				onLaunch?.(browser);
+				resolve();
+
+				// 后续初始化步骤转为后台执行：失败只记日志，不再影响启动状态
 				try {
 					/**
 					 * 显示步骤提示
@@ -467,6 +494,7 @@ export async function launchBrowser({
 
 					// 加载本地导航页
 					await blankPage.goto(bookmarksPageUrl || 'about:blank');
+					console.log('浏览器初始化：导航页已加载');
 
 					// 打开开发者模式
 					await openExtensionDeveloperMode(browser, executablePath.toLowerCase().includes('edge'));
@@ -485,13 +513,9 @@ export async function launchBrowser({
 					await runAutomationScripts({ browser, automationScripts, serverPort, step });
 
 					await step('浏览器初始化完成。', { loading: false });
-
-					// 触发onLaunch事件
-					onLaunch?.(browser);
-					// 启动完成
-					resolve();
+					console.log('浏览器初始化全部完成');
 				} catch (err) {
-					reject(err);
+					console.error('浏览器初始化步骤失败（不影响使用）：', err instanceof Error ? err.message : String(err));
 				}
 			})
 			.catch((err) => {

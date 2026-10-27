@@ -338,6 +338,8 @@ export class RemoteServer {
 				res.setHeader('Cache-Control', 'no-store');
 				res.send(Buffer.from(base64, 'base64'));
 			} catch (e) {
+				// 截图失败此前完全静默：远程端画面停格在旧图上却查不到任何原因，必须落日志
+				logger.warn(`截图失败（uid=${uid}）：${String(e instanceof Error ? e.message : e)}`);
 				res.status(503).json({ ok: false, error: String(e && (e as Error).message ? (e as Error).message : e) });
 			}
 		});
