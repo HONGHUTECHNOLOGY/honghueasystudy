@@ -341,6 +341,7 @@ import {
 	requestSync,
 	runCommand,
 	state,
+	toast,
 	ui
 } from '../store';
 import { formatAgo, formatDuration } from '../utils';
@@ -351,6 +352,15 @@ const thumb = ref('');
 /** 连续拉图失败次数：失败时清掉旧图给出可见反馈，避免画面永远停格在过期截图上 */
 const thumbFailed = ref(0);
 const fullscreen = ref(false);
+
+/**
+ * 截图请求代次
+ *
+ * 切换标签页时，上一页的截图请求可能还在路上；它晚一步回来就会覆盖新页面的图，
+ * 表现就是「切换后第一次看到的还是上一个标签页，过两秒才纠正」。
+ * 每次发起请求自增代次，回来时对不上就直接丢弃。
+ */
+let thumbToken = 0;
 
 const browser = computed(() => state.browsers.find((b) => b.uid === ui.detailUid));
 
@@ -376,7 +386,13 @@ const stalled = computed(() => isSnapshotStale());
 const screenEmptyText = computed(() => {
 	const status = browser.value?.status;
 	if (status === 'launched') {
-		return thumbFailed.value >= 3 ? '画面获取失败，正在重试…' : '正在获取画面…';
+		if (thumbFailed.value >= 3) return '画面获取失败，正在重试…';
+		/** 多页时说清正在取哪一页，切换后不会以为还停在旧页面 */
+		const pages = browser.value?.pages || [];
+		if (pages.length > 1 && typeof pageIndex.value === 'number') {
+			return `正在获取第 ${pageIndex.value + 1} 页画面…`;
+		}
+		return '正在获取画面…';
 	}
 	if (status === 'launching') return stalled.value ? '电脑端未响应，正在重新同步…' : '正在启动浏览器…';
 	if (status === 'closing') return '正在关闭浏览器…';
@@ -417,14 +433,25 @@ const pageIndex = computed(() => {
 	return activeIndex.value;
 });
 
-/** 切换查看的标签页；先清图避免短暂显示上一页画面 */
+/** 切换查看的标签页；清图与重新取图交给 pageIndex 的 watch 统一处理 */
 function selectPage(index: number) {
 	if (index === pageIndex.value) return;
 	selectedPage.value = index;
+}
+
+/**
+ * 生效页变化（手动点选，或桌面端上报的前台页变了）→ 立刻丢弃旧图并重取
+ *
+ * 不清图的话，用户会先看到上一页的截图：既可能是页面上的旧图没被替换，
+ * 也可能是他恰好这时点开大图，冻结到的还是上一页那一帧。
+ */
+watch(pageIndex, (next, prev) => {
+	if (next === prev) return;
 	thumb.value = '';
 	thumbFailed.value = 0;
+	thumbToken += 1;
 	fetchThumb();
-}
+});
 
 /** 标签页数量变化后，手动选中的索引可能失效：重置回「跟随前台页」 */
 watch(
@@ -546,13 +573,17 @@ function fetchThumb() {
 	const target = browser.value;
 	if (!target || target.status !== 'launched' || document.visibilityState !== 'visible') return;
 
+	const token = ++thumbToken;
 	const url = snapshotUrl(target.uid, pageIndex.value);
 	const img = new Image();
 	img.onload = () => {
+		/** 已经切到别的标签页/实例，这一帧过期了 */
+		if (token !== thumbToken) return;
 		thumbFailed.value = 0;
 		thumb.value = url;
 	};
 	img.onerror = () => {
+		if (token !== thumbToken) return;
 		thumbFailed.value += 1;
 		// 连续 3 次失败清掉旧图，让占位文案露出「画面获取失败」
 		if (thumbFailed.value >= 3) {
@@ -564,6 +595,8 @@ function fetchThumb() {
 
 function startPolling() {
 	stopPolling();
+	/** 重新开始取图时，之前挂在路上的请求一律作废 */
+	thumbToken += 1;
 	const target = browser.value;
 	if (!target || target.status !== 'launched') {
 		thumb.value = '';
@@ -601,7 +634,11 @@ const fullscreenFailed = ref(false);
 const fullscreenImg = ref<HTMLImageElement | null>(null);
 
 async function openFullscreen() {
-	if (!thumb.value) return;
+	if (!thumb.value) {
+		/** 刚切页时旧图已被清掉，什么都不做会像「点了没反应」 */
+		if (browser.value?.status === 'launched') toast('该标签页画面还在获取，稍等一下');
+		return;
+	}
 
 	fullscreenSrc.value = thumb.value;
 	fullscreenFailed.value = false;

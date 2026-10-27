@@ -268,6 +268,13 @@ const emit = defineEmits<{ (e: 'open'): void }>();
 const thumb = ref('');
 /** 连续拉图失败次数：失败时清掉旧图给出可见反馈，避免画面永远停格在过期截图上 */
 const thumbFailed = ref(0);
+/**
+ * 截图请求代次
+ *
+ * 切页后上一页的请求可能还在路上，回来会覆盖新页面那一帧，
+ * 表现是「切了标签页，画面还是上一页，过两秒才变」。
+ */
+let thumbToken = 0;
 const visible = ref(false);
 const cardEl = ref<HTMLElement | null>(null);
 
@@ -423,14 +430,20 @@ async function syncNow() {
 	}
 }
 
-/** 切换查看的标签页；清了旧图避免短暂显示上一页画面 */
+/** 切换查看的标签页；清图与重取交给 pageIndex 的 watch 统一处理 */
 function selectPage(index: number) {
 	if (index === pageIndex.value) return;
 	selectedPage.value = index;
+}
+
+/** 生效页变化（手动点选或桌面端前台页变了）→ 丢弃旧图立刻重取，避免显示上一页的画面 */
+watch(pageIndex, (next, prev) => {
+	if (next === prev) return;
 	thumb.value = '';
 	thumbFailed.value = 0;
+	thumbToken += 1;
 	fetchThumb();
-}
+});
 
 /** 标签页数量变化后，手动选中的索引可能失效：重置回「跟随前台页」 */
 watch(
@@ -447,7 +460,12 @@ const placeholderText = computed(() => {
 		return stalled.value ? '电脑端未响应，正在重新同步…' : '正在启动浏览器…';
 	}
 	if (props.browser.status === 'launched') {
-		return thumbFailed.value >= 3 ? '画面获取失败，正在重试…' : '正在获取画面…';
+		if (thumbFailed.value >= 3) return '画面获取失败，正在重试…';
+		const pages = props.browser.pages || [];
+		if (pages.length > 1 && typeof pageIndex.value === 'number') {
+			return `正在获取第 ${pageIndex.value + 1} 页画面…`;
+		}
+		return '正在获取画面…';
 	}
 	return '实例未运行';
 });
@@ -466,6 +484,8 @@ function stopPolling() {
 
 function startPolling() {
 	stopPolling();
+	/** 重新开始取图时，之前挂在路上的请求一律作废 */
+	thumbToken += 1;
 	if (props.browser.status !== 'launched' || !visible.value) return;
 	fetchThumb();
 	timer = setInterval(fetchThumb, 2000);
@@ -473,15 +493,19 @@ function startPolling() {
 
 function fetchThumb() {
 	if (props.browser.status !== 'launched') return;
+	const token = ++thumbToken;
 	/** 带上选中页索引：不传时后端自动挑选前台可见页 */
 	const url = snapshotUrl(props.browser.uid, pageIndex.value);
 	/** 先预加载再替换 src，避免图片切换时闪烁 */
 	const img = new Image();
 	img.onload = () => {
+		/** 已切到别的标签页，这一帧过期了 */
+		if (token !== thumbToken) return;
 		thumbFailed.value = 0;
 		thumb.value = url;
 	};
 	img.onerror = () => {
+		if (token !== thumbToken) return;
 		thumbFailed.value += 1;
 		// 连续 3 次失败清掉旧图，让占位文案露出「画面获取失败」
 		if (thumbFailed.value >= 3) {
