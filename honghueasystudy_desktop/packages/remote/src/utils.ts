@@ -56,3 +56,20 @@ export function formatAgo(ts: number, now: number): string {
 	if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
 	return Math.floor(diff / 3600) + ' 小时前';
 }
+
+/** 运行时长：45 秒 / 12 分 30 秒 / 2 小时 05 分 */
+export function formatDuration(ms: number): string {
+	if (!ms || ms < 0) return '—';
+	const total = Math.floor(ms / 1000);
+	if (total < 60) return total + ' 秒';
+
+	const minutes = Math.floor(total / 60);
+	if (minutes < 60) {
+		const seconds = total % 60;
+		return seconds ? `${minutes} 分 ${seconds} 秒` : `${minutes} 分钟`;
+	}
+
+	const hours = Math.floor(minutes / 60);
+	return `${hours} 小时 ${pad(minutes % 60)} 分`;
+}
+

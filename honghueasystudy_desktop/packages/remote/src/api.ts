@@ -1,3 +1,21 @@
+/** 任务进度：桌面端从脚本日志推断后随状态快照推送 */
+export interface TaskProgress {
+	/** 浏览器就绪时间戳（0 表示未就绪） */
+	startedAt: number;
+	/** 最后一次有日志输出的时间戳（0 表示还没有输出） */
+	lastActivityAt: number;
+	/** 推断出的当前任务名 */
+	currentTask: string;
+	/** 已完成任务点数 */
+	completed: number;
+	/** 已作答题目数 */
+	answered: number;
+	/** 错误条数 */
+	errors: number;
+	/** 是否收到「全部完成」信号 */
+	finished: boolean;
+}
+
 export interface BrowserSnapshot {
 	uid: string;
 	name: string;
@@ -6,6 +24,8 @@ export interface BrowserSnapshot {
 	status: 'closed' | 'closing' | 'launching' | 'launched';
 	/** active 为 true 表示该页是浏览器当前前台可见的标签页 */
 	pages: { url: string; title: string; active?: boolean }[];
+	/** 可选：桌面端旧版本不上报该字段 */
+	progress?: TaskProgress;
 }
 
 export interface RemoteSnapshot {

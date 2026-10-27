@@ -140,6 +140,62 @@
 
 				<div class="col">
 					<div
+						v-if="browser.status === 'launched'"
+						class="block block--task"
+						:class="{ stale: isStale, done: progress?.finished }"
+					>
+						<p class="block__title">
+							<span>任务进度</span>
+							<span class="faint">{{ progress?.finished ? '已完成' : isStale ? '无输出' : '进行中' }}</span>
+						</p>
+
+						<p
+							v-if="taskTitle"
+							class="task-now"
+							:title="taskTitle"
+						>
+							{{ taskTitle }}
+						</p>
+						<p
+							v-else
+							class="task-now faint"
+						>
+							等待脚本输出任务节点…
+						</p>
+
+						<p
+							v-if="isStale"
+							class="task-alert"
+						>
+							<Icon
+								name="pause"
+								:size="12"
+							/>
+							已 {{ staleText }}无输出，任务可能卡住
+						</p>
+
+						<div class="task-stats">
+							<div class="stat">
+								<b class="num">{{ progress?.completed || 0 }}</b>
+								<span>完成任务</span>
+							</div>
+							<div class="stat">
+								<b class="num">{{ progress?.answered || 0 }}</b>
+								<span>已作答</span>
+							</div>
+							<div
+								class="stat"
+								:class="{ bad: (progress?.errors || 0) > 0 }"
+							>
+								<b class="num">{{ progress?.errors || 0 }}</b>
+								<span>异常</span>
+							</div>
+						</div>
+
+						<p class="task-meta faint">已运行 {{ runtimeText }} · 最后活动 {{ lastActivityText }}</p>
+					</div>
+
+					<div
 						v-if="browser.pages.length"
 						class="block"
 					>
@@ -226,6 +282,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Icon from './Icon.vue';
 import { snapshotUrl } from '../api';
 import { closeBrowser as closeBrowserAction, launchBrowser, runCommand, state, ui } from '../store';
+import { formatAgo, formatDuration } from '../utils';
 
 const emit = defineEmits<{ (e: 'close'): void }>();
 
@@ -295,6 +352,57 @@ const logLines = computed(() => {
 			.forEach((line) => result.push(line));
 	});
 	return result.slice(-40);
+});
+
+// ------------------------------------------------------------------ 任务进度
+
+/** 每 5 秒刷新一次，让「已运行」「最后活动」自己走字，不依赖新快照 */
+const now = ref(Date.now());
+const nowTimer = setInterval(() => (now.value = Date.now()), 5000);
+
+const progress = computed(() => browser.value?.progress);
+
+const runtimeText = computed(() => {
+	const startedAt = progress.value?.startedAt || 0;
+	if (!startedAt) return '—';
+	return formatDuration(Math.max(0, now.value - startedAt));
+});
+
+const lastActivityText = computed(() => {
+	const last = progress.value?.lastActivityAt || 0;
+	if (!last) return '暂无输出';
+	return formatAgo(last, now.value);
+});
+
+/** 距最后一次输出多久（毫秒）；-1 表示还没有输出 */
+const idleMs = computed(() => {
+	const last = progress.value?.lastActivityAt || 0;
+	if (!last) return -1;
+	return Math.max(0, now.value - last);
+});
+
+const STALE_MS = 120 * 1000;
+
+/** 任务长时间没有输出：可能卡在某个环节，值得在详情里明确提示 */
+const isStale = computed(() => {
+	if (browser.value?.status !== 'launched') return false;
+	if (progress.value?.finished) return false;
+	return idleMs.value >= STALE_MS;
+});
+
+const taskTitle = computed(() => {
+	const p = progress.value;
+	if (!p) return '';
+	if (p.finished) return '全部任务已完成';
+	return p.currentTask || '';
+});
+
+/** 静止时长文案：3 分钟 / 42 秒 */
+const staleText = computed(() => {
+	if (!isStale.value) return '';
+	const ms = Math.max(0, idleMs.value);
+	if (ms >= 60000) return Math.floor(ms / 60000) + ' 分钟';
+	return Math.floor(ms / 1000) + ' 秒';
 });
 
 // ------------------------------------------------------------------ 画面
@@ -372,6 +480,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+	clearInterval(nowTimer);
 	document.body.style.overflow = '';
 	document.removeEventListener('visibilitychange', onVisibility);
 	document.removeEventListener('keydown', onKeydown);
@@ -611,6 +720,82 @@ async function bringToFront() {
 	font-weight: 550;
 	color: var(--text-2);
 	border-bottom: 1px solid var(--line);
+}
+
+/* ------------------------------------------------------------------ 任务进度 */
+
+.block--task {
+	padding-bottom: 10px;
+}
+
+.task-now {
+	margin: 10px 12px 0;
+	font-size: 13px;
+	line-height: 1.45;
+	color: var(--text);
+	word-break: break-all;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.block--task.done .task-now {
+	color: var(--ok);
+}
+
+.task-alert {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	margin: 8px 12px 0;
+	padding: 6px 9px;
+	border-radius: 8px;
+	background: var(--warn-soft);
+	color: var(--warn);
+	font-size: 11.5px;
+}
+
+.task-alert :deep(svg) {
+	flex: none;
+}
+
+.task-stats {
+	display: flex;
+	gap: 8px;
+	margin: 10px 12px 0;
+}
+
+.task-stats .stat {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	padding: 7px 4px;
+	border-radius: 9px;
+	background: var(--surface-2);
+}
+
+.task-stats .stat b {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--text);
+	line-height: 1.1;
+}
+
+.task-stats .stat span {
+	font-size: 10.5px;
+	color: var(--text-3);
+}
+
+.task-stats .stat.bad b {
+	color: var(--danger);
+}
+
+.task-meta {
+	margin: 9px 12px 0;
+	font-size: 11px;
 }
 
 .pages {

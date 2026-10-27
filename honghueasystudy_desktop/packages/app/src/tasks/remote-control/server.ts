@@ -9,6 +9,17 @@ import { TunnelStatus } from './tunnel';
 
 const logger = Logger('remote-server');
 
+/** 任务进度（渲染进程从脚本日志推断，主进程只做透传） */
+export interface TaskProgressInfo {
+	startedAt: number;
+	lastActivityAt: number;
+	currentTask: string;
+	completed: number;
+	answered: number;
+	errors: number;
+	finished: boolean;
+}
+
 /** 单个浏览器实例的状态快照 */
 export interface BrowserSnapshot {
 	uid: string;
@@ -16,7 +27,9 @@ export interface BrowserSnapshot {
 	notes?: string;
 	tags: { name: string; color: string }[];
 	status: 'closed' | 'closing' | 'launching' | 'launched';
-	pages: { url: string; title: string }[];
+	pages: { url: string; title: string; active?: boolean }[];
+	/** 可选：旧版本渲染进程上报的快照里没有这个字段 */
+	progress?: TaskProgressInfo;
 }
 
 /** 渲染进程上报的完整快照 */

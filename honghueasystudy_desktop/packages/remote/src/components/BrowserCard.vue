@@ -117,6 +117,33 @@
 		</div>
 
 		<div
+			v-if="hasTaskBlock"
+			class="task-line"
+			:class="{ stale: isStale, done: progress?.finished }"
+		>
+			<span
+				v-if="!isStale"
+				class="pulse"
+			></span>
+			<Icon
+				v-else
+				name="pause"
+				:size="12"
+			/>
+			<span class="ellipsis">{{ taskText || (isStale ? staleText : '任务进行中') }}</span>
+			<span
+				v-if="isStale && taskText"
+				class="task-stats num stale"
+				>{{ staleText }}</span
+			>
+			<span
+				v-else-if="taskStats"
+				class="task-stats num"
+				>{{ taskStats }}</span
+			>
+		</div>
+
+		<div
 			class="actions"
 			@click.stop
 		>
@@ -238,6 +265,62 @@ const currentPage = computed(() => {
 	return index !== undefined ? pages[index] : pages[pages.length - 1];
 });
 
+// ------------------------------------------------------------------ 任务进度
+
+/** 每 5 秒刷新一次「x 秒前」，让静止状态自己浮现，不必等新快照 */
+const now = ref(Date.now());
+const nowTimer = setInterval(() => (now.value = Date.now()), 5000);
+
+const progress = computed(() => props.browser.progress);
+
+/** 距最后一次日志输出多久（毫秒）；-1 表示还没有输出 */
+const idleMs = computed(() => {
+	const last = progress.value?.lastActivityAt || 0;
+	if (!last) return -1;
+	return Math.max(0, now.value - last);
+});
+
+/** 超过这个时长没有新输出，认为任务可能卡住了 */
+const STALE_MS = 120 * 1000;
+
+const isStale = computed(() => {
+	if (props.browser.status !== 'launched') return false;
+	if (progress.value?.finished) return false;
+	return idleMs.value >= STALE_MS;
+});
+
+/** 进度主文案：当前任务 → 完成态 → 空 */
+const taskText = computed(() => {
+	const p = progress.value;
+	if (!p) return '';
+	if (p.finished) return '全部任务已完成';
+	if (p.currentTask) return p.currentTask;
+	return '';
+});
+
+/** 进度副文案：统计数字 */
+const taskStats = computed(() => {
+	const p = progress.value;
+	if (!p) return '';
+	const parts: string[] = [];
+	if (p.completed > 0) parts.push(`完成 ${p.completed}`);
+	if (p.answered > 0) parts.push(`作答 ${p.answered}`);
+	if (p.errors > 0) parts.push(`异常 ${p.errors}`);
+	return parts.join(' · ');
+});
+
+/** 静止提示：优先展示「x 分钟没有输出」，这比堆统计更能说明问题 */
+const staleText = computed(() => {
+	if (!isStale.value) return '';
+	const ms = Math.max(0, idleMs.value);
+	if (ms >= 60000) return Math.floor(ms / 60000) + ' 分钟无输出';
+	return Math.floor(ms / 1000) + ' 秒无输出';
+});
+
+const hasTaskBlock = computed(
+	() => props.browser.status === 'launched' && (!!taskText.value || !!taskStats.value || isStale.value)
+);
+
 /** 切换查看的标签页；清了旧图避免短暂显示上一页画面 */
 function selectPage(index: number) {
 	if (index === pageIndex.value) return;
@@ -334,6 +417,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+	clearInterval(nowTimer);
 	stopPolling();
 	observer?.disconnect();
 });
@@ -609,6 +693,78 @@ html[data-theme='light'] .browser-card.launched {
 .page-line :deep(svg) {
 	flex: none;
 	color: var(--text-3);
+}
+
+/* ---------------------------------------------------------------- 任务进度 */
+
+.task-line {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	margin-top: -2px;
+	font-size: 11.5px;
+	color: var(--text-2);
+}
+
+.task-line :deep(svg) {
+	flex: none;
+}
+
+/* 有输出时的小绿点：让人一眼看出脚本还在动 */
+.task-line .pulse {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--ok, #2fbf71);
+	animation: task-pulse 1.6s var(--ease, ease) infinite;
+}
+
+@keyframes task-pulse {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.35;
+		transform: scale(0.82);
+	}
+}
+
+.task-line .ellipsis {
+	flex: 1;
+	min-width: 0;
+}
+
+.task-stats {
+	flex: none;
+	font-size: 11px;
+	color: var(--text-3);
+}
+
+.task-stats.stale {
+	color: var(--warn, #d98800);
+}
+
+/* 长时间没有输出：进度行转为警示色，提示任务可能卡住 */
+.task-line.stale {
+	color: var(--warn, #d98800);
+}
+
+.task-line.stale :deep(svg) {
+	color: var(--warn, #d98800);
+}
+
+.task-line.done {
+	color: var(--ok, #2fbf71);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.task-line .pulse {
+		animation: none;
+	}
 }
 
 .actions {

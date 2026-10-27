@@ -9,11 +9,21 @@ import { Message } from '@arco-design/web-vue';
 import EventEmitter from 'events';
 import { child_process } from './node';
 import { notify } from './notify';
+import { createProgress, feedProgress, TaskProgress } from './task-progress';
 
 export type RemoteScriptWorker = <W extends keyof ScriptWorker = keyof ScriptWorker>(
 	event: W,
 	...args: ScriptWorker[W] extends { (...args: any[]): any } ? Parameters<ScriptWorker[W]> : any[]
 ) => void;
+
+/**
+ * 进程级事件总线
+ *
+ * `processes` 虽然是 reactive 数组，但类方法内部的 `this` 指向原始实例，
+ * 直接给 `this.pages` / `this.progress` 赋值会绕过 Vue 的 set trap，
+ * watch 收不到变化。远程控制的上报因此改为「变化即广播」，不再依赖响应式追踪。
+ */
+export const processEvents = new EventEmitter();
 
 /**
  * 运行进程
@@ -32,10 +42,18 @@ export class Process extends EventEmitter {
 	logs: string[] = [];
 	/** 当前所有页面（远程控制展示用）；active 标记前台可见页，作为远程台默认查看的标签页 */
 	pages: { url: string; title: string; active?: boolean }[] = [];
+	/** 任务进度（由脚本日志推断，远程台据此展示「进度」） */
+	progress: TaskProgress = createProgress();
 
 	video: HTMLVideoElement | undefined = undefined;
 	stream: MediaStream | undefined = undefined;
 	private pagesTimer: ReturnType<typeof setTimeout> | undefined;
+	/** 是否有一次刷新正在排队（节流用） */
+	private pagesPending = false;
+	/** 上一次真正拉到页面列表的时刻 */
+	private pagesLastAt = 0;
+	/** 两次实际拉取的最小间隔 */
+	private static readonly PAGES_MIN_INTERVAL = 900;
 
 	static from(uid: string) {
 		return processes.find((p) => p.uid === uid);
@@ -85,6 +103,22 @@ export class Process extends EventEmitter {
 			if (this.logs.length > 300) this.logs.splice(0, this.logs.length - 300);
 
 			/**
+			 * 顺带推进任务进度。
+			 * 一个 chunk 可能是多行，逐行喂给推断器；结果变化时立刻广播，
+			 * 让远程台不必等下一次心跳就能看到「正在学习 xxx」这类节点。
+			 */
+			try {
+				const now = Date.now();
+				let changed = false;
+				for (const text of line.split(/\r?\n/)) {
+					if (feedProgress(this.progress, text, now)) changed = true;
+				}
+				if (changed) processEvents.emit('progress', this.uid);
+			} catch {
+				// 进度推断失败不影响日志输出
+			}
+
+			/**
 			 * 启动阶段全量落盘（这段时间的输出才有诊断价值）；
 			 * 运行阶段只落错误，否则脚本每道题的 console.log 会把日志文件刷爆。
 			 */
@@ -120,6 +154,7 @@ export class Process extends EventEmitter {
 			/** 浏览器启动 */
 			launched: async () => {
 				this.status = 'launched';
+				if (!this.progress.startedAt) this.progress.startedAt = Date.now();
 				this.refreshPages();
 			},
 			/**
@@ -227,19 +262,74 @@ export class Process extends EventEmitter {
 		});
 	}
 
-	/** 节流刷新页面列表 */
-	refreshPages() {
-		if (this.pagesTimer) clearTimeout(this.pagesTimer);
-		this.pagesTimer = setTimeout(async () => {
-			try {
-				const pages = await this.callWorker('getPages');
-				if (Array.isArray(pages)) {
-					this.pages = pages;
-				}
-			} catch {
-				// 浏览器可能正在关闭，忽略
+	/**
+	 * 刷新页面列表（节流 + 保底）
+	 *
+	 * 原实现是纯防抖：每次调用都 `clearTimeout` 再等 500ms。
+	 * 刷课脚本的 `framenavigated` 触发极其频繁（SPA 路由、iframe 导航、
+	 * 跳转中转页都在内），间隔常常小于 500ms，定时器被无限重置，
+	 * 页面列表永远停在第一次拉到的结果上——也就是「后来脚本开了新标签页，
+	 * 远程一直只看到最开始那一个」。
+	 *
+	 * 现在改成节流：距上次拉取超过最小间隔就立即拉，否则合并到最近一次窗口内，
+	 * 保证高频触发时也一定会有结果落地。
+	 */
+	refreshPages(): Promise<void> {
+		if (this.status !== 'launched') return Promise.resolve();
+
+		const since = Date.now() - this.pagesLastAt;
+		if (since >= Process.PAGES_MIN_INTERVAL) return this.pullPages();
+
+		if (this.pagesPending) return Promise.resolve();
+		this.pagesPending = true;
+
+		return new Promise<void>((resolve) => {
+			if (this.pagesTimer) clearTimeout(this.pagesTimer);
+			this.pagesTimer = setTimeout(async () => {
+				this.pagesPending = false;
+				await this.pullPages();
+				resolve();
+			}, Process.PAGES_MIN_INTERVAL - since);
+		});
+	}
+
+	/** 是否已有一次拉取在执行：慢页面会让单次 getPages 拖到 2 秒，重的并发会拖垮页面 */
+	private pagesInFlight = false;
+
+	/** 页面列表指纹，用于判断是否有变化 */
+	private pagesSignature(pages = this.pages): string {
+		return (pages || []).map((p) => `${p.url}|${p.title}|${p.active ? 1 : 0}`).join('\n');
+	}
+
+	/** 真正拉取一次页面列表 */
+	private async pullPages(): Promise<void> {
+		if (!this.shell || !this.shell.connected) return;
+		/** 单次 getPages 最坏要 2 秒（每页 title 1.5s + visibilityState 0.6s），并发没有意义 */
+		if (this.pagesInFlight) return;
+
+		this.pagesInFlight = true;
+		this.pagesLastAt = Date.now();
+		try {
+			const pages = await this.callWorker('getPages');
+			if (!Array.isArray(pages)) return;
+
+			/**
+			 * 空列表不覆盖旧值：浏览器启动瞬间、或脚本正在批量重建标签页时
+			 * `browser.pages()` 可能短暂为空，覆盖会让远程端闪一下「没有页面」。
+			 */
+			if (pages.length === 0) return;
+
+			const next = pages as { url: string; title: string; active?: boolean }[];
+			const before = this.pagesSignature();
+			this.pages = next;
+			if (before !== this.pagesSignature(next)) {
+				processEvents.emit('pages', this.uid);
 			}
-		}, 500);
+		} catch {
+			// 浏览器可能正在关闭，忽略
+		} finally {
+			this.pagesInFlight = false;
+		}
 	}
 
 	async launchPreCheck() {
