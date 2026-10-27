@@ -97,7 +97,7 @@
 				:key="index"
 				type="button"
 				class="page-tab"
-				:class="{ on: index === pageIndex, current: page.active }"
+				:class="{ on: index === pageIndex, current: index === activeIndex }"
 				:title="page.title || page.url"
 				@click="selectPage(index)"
 			>

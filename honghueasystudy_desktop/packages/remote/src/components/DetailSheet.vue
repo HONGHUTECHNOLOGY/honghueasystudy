@@ -246,14 +246,14 @@
 							>
 								<span class="page-index num">{{ index + 1 }}</span>
 								<span class="page-text">
-									<span class="page-title ellipsis">
-										{{ page.title || '（无标题）' }}
-										<span
-											v-if="page.active"
-											class="page-now"
-											>当前</span
-										>
-									</span>
+								<span class="page-title ellipsis">
+									{{ page.title || '（无标题）' }}
+									<span
+										v-if="index === activeIndex"
+										class="page-now"
+										>当前</span
+									>
+								</span>
 									<span class="page-url faint ellipsis">{{ page.url }}</span>
 								</span>
 								<span
@@ -295,21 +295,42 @@
 		</section>
 
 		<div
-			v-if="fullscreen && thumb"
+			v-if="fullscreen"
 			class="fullscreen"
-			@click="fullscreen = false"
+			@click="closeFullscreen"
 		>
 			<img
-				:src="thumb"
+				v-if="fullscreenSrc && !fullscreenFailed"
+				ref="fullscreenImg"
+				:src="fullscreenSrc"
 				alt=""
+				@load="onFullscreenLoad"
+				@error="onFullscreenError"
 			/>
+			<div
+				v-if="fullscreenLoading"
+				class="fullscreen-hint"
+			>
+				<span class="spinner"></span>
+				<span>正在加载大图…</span>
+			</div>
+			<div
+				v-else-if="fullscreenFailed"
+				class="fullscreen-hint"
+			>
+				<Icon
+					name="image"
+					:size="18"
+				/>
+				<span>画面获取失败，点任意处退出后可重试</span>
+			</div>
 			<p class="faint">点击任意处退出</p>
 		</div>
 	</div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Icon from './Icon.vue';
 import { snapshotUrl } from '../api';
 import {
@@ -567,14 +588,59 @@ function onVisibility() {
 function onKeydown(event: KeyboardEvent) {
 	if (event.key !== 'Escape') return;
 	if (fullscreen.value) {
-		fullscreen.value = false;
+		closeFullscreen();
 		return;
 	}
 	emit('close');
 }
 
-function openFullscreen() {
-	if (thumb.value) fullscreen.value = true;
+/** 大图打开时冻结一帧地址：直接复用轮询中的 thumb，截图已被预加载，命中缓存即可立刻显示 */
+const fullscreenSrc = ref('');
+const fullscreenLoading = ref(false);
+const fullscreenFailed = ref(false);
+const fullscreenImg = ref<HTMLImageElement | null>(null);
+
+async function openFullscreen() {
+	if (!thumb.value) return;
+
+	fullscreenSrc.value = thumb.value;
+	fullscreenFailed.value = false;
+	fullscreenLoading.value = true;
+	fullscreen.value = true;
+
+	/** 大图是冻结帧，背后的小图轮询没必要继续跑（省掉每 2 秒一次截图） */
+	stopPolling();
+
+	await nextTick();
+	/**
+	 * 图片命中缓存时 load 事件可能已经发完，这里同步校验一次，
+	 * 否则会出现「大图出来了但 spinner 一直转」的反向问题。
+	 */
+	const el = fullscreenImg.value;
+	if (!el || !el.complete) return;
+	if (el.naturalWidth > 0) {
+		fullscreenLoading.value = false;
+	} else {
+		onFullscreenError();
+	}
+}
+
+function onFullscreenLoad() {
+	fullscreenLoading.value = false;
+	fullscreenFailed.value = false;
+}
+
+function onFullscreenError() {
+	fullscreenLoading.value = false;
+	fullscreenFailed.value = true;
+}
+
+function closeFullscreen() {
+	fullscreen.value = false;
+	fullscreenSrc.value = '';
+	fullscreenLoading.value = false;
+	fullscreenFailed.value = false;
+	startPolling();
 }
 
 onMounted(() => {
@@ -1054,6 +1120,23 @@ async function bringToFront() {
 	max-height: 84vh;
 	object-fit: contain;
 	border-radius: 12px;
+}
+
+/* 加载中 / 失败时替代空黑屏：只有一行「点击任意处退出」会让人以为点了没反应 */
+.fullscreen-hint {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 14px;
+	border-radius: 10px;
+	background: rgba(255, 255, 255, 0.08);
+	color: rgba(255, 255, 255, 0.82);
+	font-size: 12.5px;
+}
+
+.fullscreen-hint .spinner {
+	border-color: rgba(255, 255, 255, 0.25);
+	border-top-color: rgba(255, 255, 255, 0.9);
 }
 
 .fullscreen p {

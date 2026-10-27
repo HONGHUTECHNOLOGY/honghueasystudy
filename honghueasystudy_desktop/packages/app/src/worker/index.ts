@@ -53,6 +53,8 @@ export class ScriptWorker {
 	/** 浏览器中软件设置的名字 */
 	browserInfo?: BrowserInfo;
 	config?: BrowserConfig;
+	/** 上一次判定为「当前页」的索引，用于多个页面同分时保持稳定 */
+	private lastActiveIndex = 0;
 	static langs?: Langs;
 	static lang: (key: keyof Langs, def?: string, replace?: Record<string, string>) => string = (key, def, replace) => {
 		const result = _get(ScriptWorker.langs, key, def);
@@ -351,7 +353,7 @@ export class ScriptWorker {
 	async getPages(): Promise<{ url: string; title: string; active: boolean }[]> {
 		const pages = this.browser?.pages() || [];
 
-		return Promise.all(
+		const items = await Promise.all(
 			pages.map(async (page) => {
 				let title = '';
 				try {
@@ -363,20 +365,77 @@ export class ScriptWorker {
 					title = '';
 				}
 
-				let active = false;
+				let visible = false;
+				let focused = false;
 				try {
+					/**
+					 * 同时取 visibilityState 和 hasFocus。
+					 *
+					 * 只看 visibilityState 会出现多个「当前」：浏览器里可能有多个 window
+					 * （脚本新开窗口、扩展主页、弹题窗口），每个窗口的前台标签都是 visible。
+					 * hasFocus 只有真正持有键盘焦点的那个文档才为 true，用它收敛到唯一一页。
+					 */
 					const state = await Promise.race([
-						page.evaluate(() => document.visibilityState),
-						new Promise<string>((resolve) => setTimeout(() => resolve(''), 600))
+						page.evaluate(() => ({
+							v: document.visibilityState,
+							f: document.hasFocus()
+						})),
+						new Promise<{ v: string; f: boolean }>((resolve) =>
+							setTimeout(() => resolve({ v: '', f: false }), 600)
+						)
 					]);
-					active = state === 'visible';
+					visible = state.v === 'visible';
+					focused = !!state.f;
 				} catch {
 					// 页面正在跳转/已关闭，视为非活动页
 				}
 
-				return { url: page.url(), title, active };
+				return { url: page.url(), title, visible, focused };
 			})
 		);
+
+		const activeIndex = this.resolveActiveIndex(items);
+
+		/** 任何时刻最多只有一个页面 active，远程端的「当前」徽标与默认截图页都依赖这个唯一性 */
+		return items.map((item, index) => ({
+			url: item.url,
+			title: item.title,
+			active: index === activeIndex
+		}));
+	}
+
+	/**
+	 * 从可见性信息里挑出唯一的「当前页」
+	 *
+	 * 打分：前台且聚焦 3 > 前台未聚焦 2 > 后台 0，同分时沿用上一次的当前页避免来回跳。
+	 * 全部不可见（浏览器最小化/被遮挡）时沿用上一次，索引失效则回到第一页，
+	 * 这样远程端不会因为「一个都没有」而退化成截第一页。
+	 */
+	private resolveActiveIndex(states: { visible: boolean; focused: boolean }[]): number {
+		if (states.length === 0) return -1;
+
+		let best = -1;
+		let bestScore = 0;
+
+		states.forEach((state, index) => {
+			const score = state.visible ? (state.focused ? 3 : 2) : 0;
+			if (score === 0) return;
+			if (score > bestScore) {
+				bestScore = score;
+				best = index;
+				return;
+			}
+			if (score === bestScore && index === this.lastActiveIndex) {
+				best = index;
+			}
+		});
+
+		if (best === -1) {
+			best = this.lastActiveIndex < states.length ? this.lastActiveIndex : 0;
+		}
+
+		this.lastActiveIndex = best;
+		return best;
 	}
 
 	/**
@@ -437,19 +496,29 @@ export class ScriptWorker {
 		const pages = this.browser?.pages() || [];
 		if (pages.length === 0) return undefined;
 
-		for (const candidate of pages) {
-			try {
-				const state = await Promise.race([
-					candidate.evaluate(() => document.visibilityState),
-					new Promise<string>((resolve) => setTimeout(() => resolve(''), 500))
-				]);
-				if (state === 'visible') return candidate;
-			} catch {
-				// 页面正在跳转/已销毁，继续找
-			}
-		}
+		/** 和 getPages() 用同一套判定，避免「页面列表里的当前页」与「截哪一页」不一致 */
+		const states = await Promise.all(
+			pages.map(async (candidate) => {
+				try {
+					const state = await Promise.race([
+						candidate.evaluate(() => ({
+							v: document.visibilityState,
+							f: document.hasFocus()
+						})),
+						new Promise<{ v: string; f: boolean }>((resolve) =>
+							setTimeout(() => resolve({ v: '', f: false }), 500)
+						)
+					]);
+					return { visible: state.v === 'visible', focused: !!state.f };
+				} catch {
+					// 页面正在跳转/已销毁，视为非活动页
+					return { visible: false, focused: false };
+				}
+			})
+		);
 
-		return pages[pages.length - 1];
+		const index = this.resolveActiveIndex(states);
+		return index >= 0 ? pages[index] : pages[pages.length - 1];
 	}
 
 	/** 跳转到特殊图像共享浏览器窗口 */
