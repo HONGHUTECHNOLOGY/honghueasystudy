@@ -60,6 +60,27 @@ let started = false;
 const PUSH_STALE = PUSH_INTERVAL * 4;
 
 /**
+ * 页面列表转纯对象
+ *
+ * `processes` 是 Vue 的 reactive 数组，`Process.pages` 读出来是 **响应式代理**。
+ * Electron 的 IPC 走结构化克隆，代理对象会直接抛
+ * `An object could not be cloned.` —— 而 sendState 里的 try/catch 会把它静默吞掉，
+ * 于是「只要有一个页面，快照就永远发不出去」：
+ *   · 远程台停在最后一份「启动前」的快照上（一直显示启动中、页面只有 1 个）
+ *   · 多标签页永远不出现，默认页也不会跟着前台标签走
+ *   · 命令通道是事件驱动的，不受影响，所以「能启动、看不到状态」
+ * 必须逐字段拷贝成纯对象再发。
+ */
+function toPlainPages(pages: any): { url: string; title: string; active: boolean }[] {
+	if (!Array.isArray(pages)) return [];
+	return pages.slice(0, 12).map((p: any) => ({
+		url: String((p && p.url) || ''),
+		title: String((p && p.title) || ''),
+		active: !!(p && p.active)
+	}));
+}
+
+/**
  * 采集完整快照
  *
  * 浏览器实例来自配置树（包含未启动的），运行状态来自 processes。
@@ -81,7 +102,7 @@ function buildSnapshot(): RemoteSnapshotPayload {
 				notes: browser.notes || '',
 				tags: (browser.tags || []).map((t) => ({ name: t.name, color: t.color })),
 				status: running ? running.status : 'closed',
-				pages: running && running.pages ? running.pages.slice(0, 12) : [],
+				pages: toPlainPages(running && running.pages),
 				/** 浅拷贝：快照会经过 IPC 与 JSON 序列化，直接传引用没有意义 */
 				progress: running
 					? { ...running.progress }
@@ -109,13 +130,43 @@ function buildSnapshot(): RemoteSnapshotPayload {
 /** 最近一次成功上报的时间，用于主进程催报去重 */
 let lastSendAt = 0;
 
+/** 最近一次上报失败的时间（限频写日志，避免刷屏） */
+let lastSendErrorAt = 0;
+
 /** 立即发送一次快照，不做节流 */
 function sendState() {
+	const snapshot = buildSnapshot();
+
 	try {
-		ipcRenderer.send('remote-ctl:state', buildSnapshot());
+		ipcRenderer.send('remote-ctl:state', snapshot);
 		lastSendAt = Date.now();
+		return;
 	} catch (e) {
+		/**
+		 * 结构化克隆失败（响应式代理、函数、DOM 节点等）。
+		 *
+		 * 这里绝不能静默失败：快照发不出去时远程端只能看到一份永不更新的旧快照，
+		 * 表现就是「卡在启动中 / 只有一个标签页 / 默认页不跟当前标签走」。
+		 * 以前只 console.error，日志里毫无痕迹，排查要从头猜一遍。
+		 */
 		console.error('上报远程控制状态失败', e);
+
+		/** 兜底：JSON 往返一次，把所有代理/类实例压成纯数据再发 */
+		try {
+			ipcRenderer.send('remote-ctl:state', JSON.parse(JSON.stringify(snapshot)));
+			lastSendAt = Date.now();
+			return;
+		} catch (e2) {
+			const now = Date.now();
+			if (now - lastSendErrorAt > 15000) {
+				lastSendErrorAt = now;
+				try {
+					remote.logger.call('warn', `[远程] 状态上报失败：${e2 instanceof Error ? e2.message : String(e2)}`);
+				} catch {
+					// 日志通道也不可用时只能留在控制台
+				}
+			}
+		}
 	}
 }
 

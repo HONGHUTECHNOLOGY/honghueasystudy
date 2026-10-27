@@ -336,12 +336,23 @@ export class Process extends EventEmitter {
 			if (before !== this.pagesSignature(next)) {
 				processEvents.emit('pages', this.uid);
 			}
-		} catch {
-			// 浏览器可能正在关闭，忽略
+		} catch (e) {
+			/**
+			 * 浏览器可能正在关闭/跳转，忽略即可；但连续失败会让页面列表永远停在旧值
+			 * （远程端表现为「只有第一个标签页」），所以限频留一条痕迹。
+			 */
+			const now = Date.now();
+			if (now - Process.pagesErrorAt > 30000) {
+				Process.pagesErrorAt = now;
+				console.error('刷新页面列表失败', e);
+			}
 		} finally {
 			this.pagesInFlight = false;
 		}
 	}
+
+	/** 上一次页面列表拉取失败的时间（限频写日志） */
+	private static pagesErrorAt = 0;
 
 	async launchPreCheck() {
 		// 只检查浏览器路径；鸿鹄易学扩展随软件打包，不再检查/安装用户脚本
