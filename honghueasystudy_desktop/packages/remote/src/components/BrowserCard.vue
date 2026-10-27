@@ -161,8 +161,8 @@ const props = defineProps<{ browser: BrowserSnapshot }>();
 const emit = defineEmits<{ (e: 'open'): void }>();
 
 const thumb = ref('');
-/** 连续截图失败次数：≥3 时清掉旧图给出可见反馈，避免无声停格 */
-const failCount = ref(0);
+/** 连续拉图失败次数：失败时清掉旧图给出可见反馈，避免画面永远停格在过期截图上 */
+const thumbFailed = ref(0);
 const visible = ref(false);
 const cardEl = ref<HTMLElement | null>(null);
 
@@ -185,7 +185,7 @@ const currentPage = computed(() => {
 const placeholderText = computed(() => {
 	if (props.browser.status === 'launching') return '正在启动浏览器…';
 	if (props.browser.status === 'launched') {
-		return failCount.value >= 3 ? '画面获取失败，正在重试…' : '正在获取画面…';
+		return thumbFailed.value >= 3 ? '画面获取失败，正在重试…' : '正在获取画面…';
 	}
 	return '实例未运行';
 });
@@ -215,13 +215,15 @@ function fetchThumb() {
 	/** 先预加载再替换 src，避免图片切换时闪烁 */
 	const img = new Image();
 	img.onload = () => {
-		failCount.value = 0;
+		thumbFailed.value = 0;
 		thumb.value = url;
 	};
-	/** 截图失败时清掉旧图给出可见反馈，否则画面会无声停格在很多秒之前的旧帧上 */
 	img.onerror = () => {
-		failCount.value += 1;
-		if (failCount.value >= 3) thumb.value = '';
+		thumbFailed.value += 1;
+		// 连续 3 次失败清掉旧图，让占位文案露出「画面获取失败」
+		if (thumbFailed.value >= 3) {
+			thumb.value = '';
+		}
 	};
 	img.src = url;
 }
@@ -235,7 +237,7 @@ watch(
 	() => {
 		if (props.browser.status !== 'launched') {
 			thumb.value = '';
-			failCount.value = 0;
+			thumbFailed.value = 0;
 		}
 		startPolling();
 	}

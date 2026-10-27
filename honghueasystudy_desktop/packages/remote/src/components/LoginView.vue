@@ -12,11 +12,7 @@
 			</div>
 
 			<div class="aside__brand">
-				<img
-					class="mark"
-					src="/logo.png"
-					alt="鸿鹄易学"
-				/>
+				<img class="mark" src="/logo.png" alt="鸿鹄易学" />
 				<span class="aside__brand-text">
 					<strong>鸿鹄易学</strong>
 					<small>远程控制台</small>
@@ -56,11 +52,7 @@
 		<!-- 右侧验证区 -->
 		<section class="panel-wrap">
 			<div class="panel-head">
-				<img
-					class="mark mark--lg"
-					src="/logo.png"
-					alt="鸿鹄易学"
-				/>
+				<img class="mark mark--lg" src="/logo.png" alt="鸿鹄易学" />
 				<h1>鸿鹄易学</h1>
 				<p class="faint">远程控制台</p>
 			</div>
@@ -287,7 +279,6 @@ onMounted(() => {
 	border-radius: 12px;
 	display: block;
 	object-fit: cover;
-	/* 图片加载失败时退回品牌底色方块，而不是裂图 */
 	background: linear-gradient(140deg, var(--brand), var(--brand-2));
 	box-shadow: var(--shadow-brand);
 	flex: none;

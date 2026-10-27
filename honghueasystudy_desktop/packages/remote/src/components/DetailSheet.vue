@@ -59,13 +59,7 @@
 									name="image"
 									:size="24"
 							/></span>
-							<span>{{
-								browser.status === 'launched'
-									? failCount >= 3
-										? '画面获取失败，正在重试…'
-										: '正在获取画面…'
-									: '实例未运行'
-							}}</span>
+							<span>{{ browser.status === 'launched' ? (thumbFailed >= 3 ? '画面获取失败，正在重试…' : '正在获取画面…') : '实例未运行' }}</span>
 						</div>
 						<span
 							v-if="thumb"
@@ -200,9 +194,9 @@ import { runCommand, state, ui } from '../store';
 const emit = defineEmits<{ (e: 'close'): void }>();
 
 const thumb = ref('');
+/** 连续拉图失败次数：失败时清掉旧图给出可见反馈，避免画面永远停格在过期截图上 */
+const thumbFailed = ref(0);
 const fullscreen = ref(false);
-/** 连续截图失败次数：≥3 时清掉旧图给出可见反馈，避免无声停格 */
-const failCount = ref(0);
 
 const browser = computed(() => state.browsers.find((b) => b.uid === ui.detailUid));
 
@@ -246,13 +240,15 @@ function fetchThumb() {
 	const url = snapshotUrl(target.uid);
 	const img = new Image();
 	img.onload = () => {
-		failCount.value = 0;
+		thumbFailed.value = 0;
 		thumb.value = url;
 	};
-	/** 截图失败时清掉旧图给出可见反馈，否则画面会无声停格在很多秒之前的旧帧上 */
 	img.onerror = () => {
-		failCount.value += 1;
-		if (failCount.value >= 3) thumb.value = '';
+		thumbFailed.value += 1;
+		// 连续 3 次失败清掉旧图，让占位文案露出「画面获取失败」
+		if (thumbFailed.value >= 3) {
+			thumb.value = '';
+		}
 	};
 	img.src = url;
 }
@@ -262,6 +258,7 @@ function startPolling() {
 	const target = browser.value;
 	if (!target || target.status !== 'launched') {
 		thumb.value = '';
+		thumbFailed.value = 0;
 		return;
 	}
 	fetchThumb();

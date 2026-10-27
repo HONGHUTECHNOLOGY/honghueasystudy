@@ -5,11 +5,7 @@
 			v-if="!state.ready"
 			class="boot"
 		>
-			<img
-				class="boot__mark"
-				src="/logo.png"
-				alt="鸿鹄易学"
-			/>
+			<img class="boot__mark" src="/logo.png" alt="鸿鹄易学" />
 			<div class="boot__bar"><i></i></div>
 			<p class="boot__text faint">正在连接电脑端…</p>
 		</div>
@@ -21,11 +17,7 @@
 				<!-- 桌面端：左侧竖栏 -->
 				<aside class="rail">
 				<div class="rail__brand">
-					<img
-						class="mark"
-						src="/logo.png"
-						alt="鸿鹄易学"
-					/>
+					<img class="mark" src="/logo.png" alt="鸿鹄易学" />
 					<span class="rail__brand-text">
 						<strong>鸿鹄易学</strong>
 						<small>远程控制台</small>
@@ -76,11 +68,7 @@
 				<header class="head">
 					<!-- 移动端展示品牌，桌面端展示页标题 -->
 					<div class="head__brand">
-						<img
-							class="mark mark--sm"
-							src="/logo.png"
-							alt="鸿鹄易学"
-						/>
+						<img class="mark mark--sm" src="/logo.png" alt="鸿鹄易学" />
 						<span class="head__brand-text">
 							<strong>远程控制台</strong>
 							<small class="faint ellipsis">{{ state.deviceName || '鸿鹄易学' }}</small>
@@ -218,7 +206,6 @@ onBeforeUnmount(() => {
 	border-radius: 17px;
 	display: block;
 	object-fit: cover;
-	/* 图片加载失败时退回品牌底色方块，而不是裂图 */
 	background: linear-gradient(140deg, var(--brand), var(--brand-2));
 	box-shadow: var(--shadow-brand);
 	animation: boot-pop 0.6s var(--ease) both;
@@ -300,7 +287,6 @@ onBeforeUnmount(() => {
 	border-radius: 12px;
 	display: block;
 	object-fit: cover;
-	/* 图片加载失败时退回品牌底色方块，而不是裂图 */
 	background: linear-gradient(140deg, var(--brand), var(--brand-2));
 	box-shadow: var(--shadow-brand);
 	flex: none;

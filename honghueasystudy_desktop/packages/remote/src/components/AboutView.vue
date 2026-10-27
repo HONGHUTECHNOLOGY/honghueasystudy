@@ -2,11 +2,7 @@
 	<div class="settings">
 		<!-- 设备 -->
 		<section class="device card fade-up">
-			<img
-				class="device__mark"
-				src="/logo.png"
-				alt="鸿鹄易学"
-			/>
+			<img class="device__mark" src="/logo.png" alt="鸿鹄易学" />
 			<span class="device__text">
 				<strong class="ellipsis">{{ state.deviceName || '鸿鹄易学' }}</strong>
 				<small class="faint">
@@ -228,7 +224,6 @@ onBeforeUnmount(() => {
 	border-radius: 14px;
 	display: block;
 	object-fit: cover;
-	/* 图片加载失败时退回品牌底色方块，而不是裂图 */
 	background: linear-gradient(140deg, var(--brand), var(--brand-2));
 	box-shadow: var(--shadow-brand);
 	flex: none;
