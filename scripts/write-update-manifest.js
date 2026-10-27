@@ -36,6 +36,10 @@ function parseArgs(argv) {
 		notes: [],
 		tag: null,
 		repo: 'HONGHUTECHNOLOGY/honghueasystudy',
+		gitcode: 'honghutech/honghueasystudy',
+		noMirror: false,
+		mirrors: [],
+		verify: false,
 		zipUrl: null,
 		manifest: MANIFEST,
 		dryRun: false,
@@ -47,6 +51,10 @@ function parseArgs(argv) {
 		else if (a === '--notes') out.notes.push(String(argv[++i]));
 		else if (a === '--tag') out.tag = argv[++i];
 		else if (a === '--repo') out.repo = argv[++i];
+		else if (a === '--gitcode') out.gitcode = argv[++i];
+		else if (a === '--no-mirror') out.noMirror = true;
+		else if (a === '--mirror') out.mirrors.push(String(argv[++i]));
+		else if (a === '--verify') out.verify = true;
 		else if (a === '--zip-url') out.zipUrl = argv[++i];
 		else if (a === '--manifest') out.manifest = path.resolve(argv[++i]);
 		else if (a === '--dry-run') out.dryRun = true;
@@ -54,6 +62,40 @@ function parseArgs(argv) {
 		else if (a === '-h' || a === '--help') out.help = true;
 	}
 	return out;
+}
+
+const PROBE_UA =
+	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+
+/**
+ * 探测下载源是否真的可用。
+ *
+ * GitCode 的附件地址会 302 到 file-cdn.gitcode.com，HEAD 请求直接 401，
+ * 所以必须用带 Range 的 GET 并跟随重定向；只取 1 字节，不会把整个包拉下来。
+ */
+async function probeUrl(url) {
+	let axios;
+	try {
+		// axios 装在桌面端 app 包里，脚本层面没有直接依赖
+		const { createRequire } = require('module');
+		const req = createRequire(path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app', 'package.json'));
+		axios = req('axios');
+	} catch {
+		return { ok: false, detail: '未找到 axios（跳过探测）' };
+	}
+	try {
+		const res = await axios.get(url, {
+			headers: { 'User-Agent': PROBE_UA, Range: 'bytes=0-1' },
+			timeout: 20000,
+			maxRedirects: 5,
+			validateStatus: () => true,
+			responseType: 'arraybuffer'
+		});
+		const ok = res.status === 200 || res.status === 206;
+		return { ok, detail: `HTTP ${res.status}` };
+	} catch (e) {
+		return { ok: false, detail: e?.message || String(e) };
+	}
 }
 
 /** 把 `feat:` / `fix:` / `other:` 前缀解析成 updater 弹窗能展示的分组 */
@@ -78,7 +120,7 @@ function compareVersionDesc(a, b) {
 	return 0;
 }
 
-function main() {
+async function main() {
 	const args = parseArgs(process.argv.slice(2));
 	if (args.help) {
 		console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
@@ -105,7 +147,28 @@ function main() {
 	}
 	const tag = args.tag || meta.tagHint || `desktop-v${version}`;
 	const releasePage = `https://github.com/${args.repo}/releases/tag/${tag}`;
-	const zipUrl = args.zipUrl || `https://github.com/${args.repo}/releases/download/${tag}/${meta.file || `app-${version}.zip`}`;
+	const zipFileName = meta.file || `app-${version}.zip`;
+	const githubZipUrl = `https://github.com/${args.repo}/releases/download/${tag}/${zipFileName}`;
+	const gitcodeZipUrl = args.gitcode
+		? `https://gitcode.com/${args.gitcode}/releases/download/${tag}/${zipFileName}`
+		: null;
+
+	/**
+	 * 多源顺序：GitCode 在前、GitHub 在后。
+	 * 国内直连 GitHub Release 的下载速度常常只有几十 KB/s 甚至超时，GitCode 走 file-cdn.gitcode.com
+	 * 国内 CDN；客户端逐个尝试，某个源连不上或校验不过会自动切下一个。
+	 * 两个源的文件必须字节一致（同一个 sha256），否则校验会失败。
+	 */
+	const sources = [];
+	if (args.zipUrl) {
+		// 显式指定了地址（例如自建对象存储），就不再推导 GitCode 镜像
+		sources.push(args.zipUrl);
+	} else {
+		if (!args.noMirror && gitcodeZipUrl) sources.push(gitcodeZipUrl);
+		sources.push(githubZipUrl);
+	}
+	for (const m of args.mirrors) sources.push(m);
+	const uniqueSources = [...new Set(sources.filter(Boolean))];
 
 	const builder = fs.existsSync(BUILDER) ? JSON.parse(fs.readFileSync(BUILDER, 'utf8')) : {};
 	const productName = builder.productName || '鸿鹄易学';
@@ -118,7 +181,8 @@ function main() {
 	const entry = {
 		tag: version,
 		description: parseNotes(args.notes),
-		url: zipUrl,
+		url: uniqueSources[0],
+		...(uniqueSources.length > 1 ? { urls: uniqueSources } : {}),
 		sha256: meta.sha256,
 		size: meta.size,
 		app_downloads: {
@@ -128,6 +192,25 @@ function main() {
 			linux: releasePage
 		}
 	};
+
+	/** 发布前自检：链接 404 或镜像没上传就写进清单，等于这一版永远不会被检测到 */
+	if (args.verify) {
+		console.log('[update-manifest] 探测下载源…');
+		let failed = 0;
+		for (const u of uniqueSources) {
+			const r = await probeUrl(u);
+			console.log(`  ${r.ok ? '✓' : '✗'} ${u}  (${r.detail})`);
+			if (!r.ok) failed++;
+		}
+		if (failed > 0) {
+			console.error(
+				`\n[update-manifest] ${failed} 个下载源不可用，未写入清单。\n` +
+					'请先在对应平台创建 tag 并上传同名更新包后再执行；确认无需校验可去掉 --verify。'
+			);
+			process.exitCode = 1;
+			return;
+		}
+	}
 
 	const write = (file, label) => {
 		const json = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -155,11 +238,15 @@ function main() {
 
 	if (!args.dryRun) {
 		console.log(`\n[update-manifest] 版本     ${version}`);
-		console.log(`[update-manifest] 更新包   ${zipUrl}`);
+		console.log(`[update-manifest] 下载源   ${uniqueSources.length} 个（客户端按顺序回退）`);
+		for (const u of uniqueSources) console.log(`                    ${u}`);
 		console.log(`[update-manifest] 校验     ${meta.sha256 || '（缺失）'}`);
 		console.log('\n下一步：提交 website/api/ 的改动并推送，官网（Cloudflare Pages）部署后即生效。');
 		console.log('提示：客户端每次请求都带时间戳，不需要担心 CDN 缓存。');
 	}
 }
 
-main();
+main().catch((e) => {
+	console.error('[update-manifest] 执行失败:', e);
+	process.exit(1);
+});

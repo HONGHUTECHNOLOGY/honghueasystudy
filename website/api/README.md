@@ -36,9 +36,11 @@ gh release create desktop-v3.2.0 --title "桌面端 3.2.0" --notes "..." \
   honghueasystudy_desktop/packages/app/dist/update/app-3.2.0.zip
 
 # 3) 写入清单（同时同步 ocs-app-infos.json 旧副本）
+#    默认生成 GitCode 优先、GitHub 兜底的双源；--verify 会在写之前逐个探测链接是否可用
 node scripts/write-update-manifest.js \
   --meta honghueasystudy_desktop/packages/app/dist/update/update-meta.json \
-  --notes "feat: 支持点击版本号检查更新" --notes "fix: 修复更新失败导致无法启动"
+  --notes "feat: 支持点击版本号检查更新" --notes "fix: 修复更新失败导致无法启动" \
+  --verify
 ```
 
 字段含义：
@@ -47,15 +49,36 @@ node scripts/write-update-manifest.js \
 | --- | --- |
 | `tag` | 版本号，与 `app.getVersion()` 做 semver 比较（允许带 `v` 前缀） |
 | `description` | 更新弹窗内按 新增 / 修复 / 其他 分组展示 |
-| `url` | Windows 就地更新包（zip 根目录 = `resources/app` 的内容），**必须能直接下载** |
+| `url` | 首选下载地址，同时也是没有 `urls` 时唯一可用的地址 |
+| `urls` | 多源地址，按优先级排列；客户端逐个尝试，失败自动切下一个 |
 | `sha256` | 更新包校验值，下载后不一致立即中止，不改动现有安装 |
 | `size` | 字节数，下载后做完整性复核 |
 | `app_downloads` | mac / linux 打开对应链接手动安装（单字段无法区分 mac 双架构，一般指 Release 页面） |
 
+### GitCode 镜像（国内加速）
+
+GitHub Release 在国内经常只有几十 KB/s 甚至直接超时，所以客户端优先走 GitCode：
+
+- 仓库 `honghutech/honghueasystudy`，附件地址格式与 GitHub 完全一致，只是域名不同：
+
+  ```
+  https://gitcode.com/honghutech/honghueasystudy/releases/download/<tag>/app-<version>.zip
+  ```
+
+  实测该地址 302 跳转到 `file-cdn.gitcode.com`，**免登录可下载、支持 Range**（用 HEAD 会返回 401，
+  探测和下载都必须用带 Range 的 GET）。
+
+- 发布时在 GitCode 建**同名 tag**（如 `desktop-v3.2.1`）并上传**同一个 zip**。
+  两个源必须是字节一致的文件——否则 sha256 校验失败，客户端会切回 GitHub 重新下载。
+- 客户端行为：按 `urls` 顺序尝试，任一源连不上、20 秒收不到数据、大小或 sha256 不符都会立刻切下一个；
+  全部失败才报错，并在错误信息里列出每个源失败的原因。
+- 代理策略：`gitcode.com` 系列**强制直连**（走代理反而绕远/被拦），GitHub 沿用环境代理设置。
+- 想跳过镜像只用 GitHub：`--no-mirror`；想追加自建源：`--mirror <url>`（可多次）。
+
 > 更新包约 22MB（解压后 58MB），**超过 Cloudflare Pages 单文件 25MB 限制**，
-> 只能放 GitHub Release 或对象存储；官网只托管这份 JSON 清单。
+> 只能放 GitHub Release / GitCode Release / 对象存储；官网只托管这份 JSON 清单。
 >
-> `url` 指向的 zip 由 `scripts/pack-app-update.js` 生成，根目录必须是
+> `url` / `urls` 指向的 zip 由 `scripts/pack-app-update.js` 生成，根目录必须是
 > `package.json` / `lib/` / `node_modules/` / `public/` 这些 `resources/app` 里的内容，
 > 外面不能再套一层目录——客户端是把整个 app 目录换掉。
 

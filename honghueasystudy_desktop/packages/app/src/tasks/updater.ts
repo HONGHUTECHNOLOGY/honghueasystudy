@@ -2,9 +2,9 @@ import { app, dialog, clipboard, shell } from 'electron';
 import { gt, rcompare } from 'semver';
 import { Logger } from '../logger';
 import { join, dirname } from 'path';
-import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rm, rmSync, statSync, writeFileSync } from 'fs';
-import { createHash } from 'crypto';
-import { downloadFile, getCurrentWebContents, moveWindowToTop, unzip } from '../utils';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rm, rmSync, writeFileSync } from 'fs';
+import { getCurrentWebContents, moveWindowToTop, unzip } from '../utils';
+import { downloadFromMirrors, hostOf, normalizeSources } from '../utils/download-source';
 import { HonghuApi, UpdateInformationResource } from '@honghu-desktop/common';
 
 const logger = Logger('updater');
@@ -113,17 +113,6 @@ export async function updater() {
 	await checkUpdate(false);
 }
 
-/** 流式计算文件 SHA256（更新包 40–60MB，避免整读进内存） */
-function sha256File(file: string): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const hash = createHash('sha256');
-		createReadStream(file)
-			.on('data', (chunk) => hash.update(chunk))
-			.on('end', () => resolve(hash.digest('hex')))
-			.on('error', reject);
-	});
-}
-
 function describeFsError(e: any): string {
 	const code = e?.code;
 	if (code === 'EBUSY' || code === 'EPERM' || code === 'EACCES' || code === 'ENOTEMPTY') {
@@ -161,7 +150,7 @@ function assertExtractedApp(dir: string) {
 
 export async function updateApp(newVersion: UpdateInformationResource) {
 	logger.info('更新  : ' + JSON.stringify(newVersion));
-	const { tag, url } = newVersion;
+	const { tag } = newVersion;
 
 	// 就地解压更新只支持 Windows：
 	// - versions[].url 指向的 app.zip 是 Windows 构建产物，覆盖后 mac/linux 的原生模块（keytar 等）会失配
@@ -201,23 +190,23 @@ export async function updateApp(newVersion: UpdateInformationResource) {
 		logger.info('更新包 : ' + zipPath);
 		logger.info('解压到 : ' + stageDir);
 
-		await downloadFile(url, zipPath, (rate: any, totalLength: any, chunkLength: any) => {
-			getCurrentWebContents().send('update-download', rate, totalLength, chunkLength);
-		});
-
-		if (newVersion.size && statSync(zipPath).size !== newVersion.size) {
-			throw new Error(`更新包不完整：期望 ${newVersion.size} 字节，实际 ${statSync(zipPath).size} 字节`);
-		}
-
-		if (newVersion.sha256) {
-			const actual = await sha256File(zipPath);
-			if (actual.toLowerCase() !== String(newVersion.sha256).toLowerCase()) {
-				throw new Error(`更新包校验失败（SHA256 不匹配）\n期望 ${newVersion.sha256}\n实际 ${actual}`);
+		await (async () => {
+			const sources = normalizeSources(newVersion);
+			if (!sources.length) {
+				throw new Error('清单缺少更新包地址（url / urls 均为空）');
 			}
-			logger.info('更新包 SHA256 校验通过');
-		} else {
-			logger.warn('清单未提供 sha256，跳过完整性校验');
-		}
+			logger.info(`更新包来源（${sources.length} 个）：` + sources.map(hostOf).join(' → '));
+			const used = await downloadFromMirrors(sources, zipPath, {
+				sha256: newVersion.sha256,
+				size: newVersion.size,
+				onLog: (level, msg) => (level === 'warn' ? logger.warn(msg) : logger.info(msg)),
+				onProgress: (rate, totalLength, chunkLength) => {
+					getCurrentWebContents().send('update-download', rate, totalLength, chunkLength);
+				}
+			});
+			if (!newVersion.sha256) logger.warn('清单未提供 sha256，跳过完整性校验');
+			else logger.info('更新包 SHA256 校验通过（' + hostOf(used) + '）');
+		})();
 
 		await unzip(zipPath, stageDir);
 		assertExtractedApp(stageDir);

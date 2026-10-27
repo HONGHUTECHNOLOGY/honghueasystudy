@@ -52,8 +52,14 @@ export interface BannerResource {
 export interface UpdateInformationResource {
 	tag: string;
 	description: Record<'feat' | 'fix' | 'other', string[]>;
-	/** Windows 就地更新包（zip，根目录即 resources/app 的内容） */
+	/** Windows 就地更新包（zip，根目录即 resources/app 的内容）。无 urls 时使用它 */
 	url: string;
+	/**
+	 * 更新包的多源地址，按优先级排列（如 [GitCode, GitHub]）。
+	 * 客户端逐个尝试：连不上、下载中断、sha256 不符都会自动切下一个源。
+	 * 各源必须是**字节完全一致**的同一个文件，否则 sha256 校验无法通过。
+	 */
+	urls?: string[];
 	/**
 	 * 更新包 SHA256（小写 hex）。
 	 * 存在时主进程会在覆盖前校验，不匹配立即中止，绝不改动当前安装。
