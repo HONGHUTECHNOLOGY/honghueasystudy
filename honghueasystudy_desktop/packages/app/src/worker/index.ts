@@ -21,6 +21,25 @@ type BrowserConfig = {
 	enable_dialog?: boolean;
 };
 
+/**
+ * 单个页面的前台状态采样结果
+ *
+ * known=false 表示这次没取到（页面正在跳转/已销毁），不能当作「不可见」，
+ * 否则一个正在加载的页面会把「当前页」挤到别的标签上。
+ */
+interface PageState {
+	page: Page;
+	url: string;
+	title: string;
+	visible: boolean;
+	focused: boolean;
+	known: boolean;
+	/** 最近一次被观测到持有焦点的时间 */
+	focusedAt: number;
+	/** 最近一次被观测到可见的时间 */
+	visibleAt: number;
+}
+
 /** 页面内视频的播放状态（远程台用来区分「正常播放」和「真的卡住」） */
 export interface MediaState {
 	playing: boolean;
@@ -53,8 +72,12 @@ export class ScriptWorker {
 	/** 浏览器中软件设置的名字 */
 	browserInfo?: BrowserInfo;
 	config?: BrowserConfig;
-	/** 上一次判定为「当前页」的索引，用于多个页面同分时保持稳定 */
-	private lastActiveIndex = 0;
+	/** 上一次判定为「当前页」的页面对象，多个页面同分时沿用，避免来回跳 */
+	private lastActivePage?: Page;
+	/** 每页的 CDP 会话：用来关掉 Playwright 的焦点模拟（否则 hasFocus 恒为 true） */
+	private cdpSessions = new WeakMap<Page, any>();
+	/** 每页最近一次被观测到在前台/可见的时间，用于「浏览器整体失焦」时回退 */
+	private pageActivity = new WeakMap<Page, { focusedAt: number; visibleAt: number }>();
 	static langs?: Langs;
 	static lang: (key: keyof Langs, def?: string, replace?: Record<string, string>) => string = (key, def, replace) => {
 		const result = _get(ScriptWorker.langs, key, def);
@@ -314,20 +337,12 @@ export class ScriptWorker {
 		if (requested >= 0 && requested < pages.length) {
 			page = pages[requested];
 		} else {
-			for (const candidate of pages) {
-				try {
-					const state = await Promise.race([
-						candidate.evaluate(() => document.visibilityState),
-						new Promise<string>((resolve) => setTimeout(() => resolve(''), 800))
-					]);
-					if (state === 'visible') {
-						page = candidate;
-						break;
-					}
-				} catch {
-					// 页面可能正在跳转或已销毁，跳过继续找
-				}
-			}
+			/**
+			 * 不指定页码时必须和页面列表用同一套判定。
+			 * 这里原来单独按 visibilityState 找，而 Playwright 下所有标签都是 visible，
+			 * 结果永远截到第一个页面（与列表里标的「当前」还可能不一致）。
+			 */
+			page = await this.pickActivePage();
 			if (!page) page = pages[pages.length - 1];
 		}
 
@@ -347,13 +362,37 @@ export class ScriptWorker {
 	/**
 	 * 获取当前浏览器实例的所有页面
 	 *
-	 * active 标记前台可见页，远程台据此把「默认查看的标签页」定位到用户正在看的那一页，
+	 * active 标记真正的前台标签，远程台据此把「默认查看的标签页」定位到用户正在看的那一页，
 	 * 而不是永远截第一页。
 	 */
 	async getPages(): Promise<{ url: string; title: string; active: boolean }[]> {
 		const pages = this.browser?.pages() || [];
+		if (pages.length === 0) return [];
 
-		const items = await Promise.all(
+		const states = await this.collectPageStates(pages);
+		const active = this.resolveActivePage(states);
+
+		/** 任何时刻最多只有一个页面 active，远程端的「当前」徽标与默认截图页都依赖这个唯一性 */
+		return states.map((state) => ({
+			url: state.url,
+			title: state.title,
+			active: state.page === active
+		}));
+	}
+
+	/**
+	 * 采集每个页面的前台状态
+	 *
+	 * 关键：Playwright 默认对每个 page 打开 Emulation.setFocusEmulationEnabled，
+	 * 效果是**所有标签**的 document.hasFocus() 都为 true、visibilityState 都为 visible。
+	 * 直接拿它判「当前页」会全部同分，只能沿用初始索引 —— 表现就是「明明前台是别的标签，
+	 * 远程永远显示第一个」。实测关闭该模拟后 hasFocus 才反映真实标签焦点，
+	 * 且 click / fill 等自动化操作不受影响。
+	 */
+	private async collectPageStates(pages: Page[]): Promise<PageState[]> {
+		const now = Date.now();
+
+		return Promise.all(
 			pages.map(async (page) => {
 				let title = '';
 				try {
@@ -365,77 +404,106 @@ export class ScriptWorker {
 					title = '';
 				}
 
+				/** 必须先关掉焦点模拟，否则读出来的 focused 全为 true */
+				await this.disableFocusEmulation(page);
+
 				let visible = false;
 				let focused = false;
+				let known = false;
 				try {
-					/**
-					 * 同时取 visibilityState 和 hasFocus。
-					 *
-					 * 只看 visibilityState 会出现多个「当前」：浏览器里可能有多个 window
-					 * （脚本新开窗口、扩展主页、弹题窗口），每个窗口的前台标签都是 visible。
-					 * hasFocus 只有真正持有键盘焦点的那个文档才为 true，用它收敛到唯一一页。
-					 */
 					const state = await Promise.race([
 						page.evaluate(() => ({
 							v: document.visibilityState,
 							f: document.hasFocus()
 						})),
 						new Promise<{ v: string; f: boolean }>((resolve) =>
-							setTimeout(() => resolve({ v: '', f: false }), 600)
+							setTimeout(() => resolve({ v: '', f: false }), 900)
 						)
 					]);
-					visible = state.v === 'visible';
-					focused = !!state.f;
+					if (state.v) {
+						visible = state.v === 'visible';
+						focused = !!state.f;
+						known = true;
+					}
 				} catch {
-					// 页面正在跳转/已关闭，视为非活动页
+					// 页面正在跳转/已关闭：记为未知，不参与打分
 				}
 
-				return { url: page.url(), title, visible, focused };
+				const activity = this.pageActivity.get(page) || { focusedAt: 0, visibleAt: 0 };
+				if (known) {
+					if (focused) activity.focusedAt = now;
+					if (visible) activity.visibleAt = now;
+					this.pageActivity.set(page, activity);
+				}
+
+				return {
+					page,
+					url: page.url(),
+					title,
+					visible,
+					focused,
+					known,
+					focusedAt: activity.focusedAt,
+					visibleAt: activity.visibleAt
+				};
 			})
 		);
+	}
 
-		const activeIndex = this.resolveActiveIndex(items);
-
-		/** 任何时刻最多只有一个页面 active，远程端的「当前」徽标与默认截图页都依赖这个唯一性 */
-		return items.map((item, index) => ({
-			url: item.url,
-			title: item.title,
-			active: index === activeIndex
-		}));
+	/** 关掉 Playwright 对单个页面的焦点模拟（幂等，会话缓存复用） */
+	private async disableFocusEmulation(page: Page): Promise<void> {
+		try {
+			let session = this.cdpSessions.get(page);
+			if (!session) {
+				session = await page.context().newCDPSession(page);
+				this.cdpSessions.set(page, session);
+			}
+			await session.send('Emulation.setFocusEmulationEnabled', { enabled: false });
+		} catch {
+			/** 页面已销毁或会话失效：丢掉缓存，下次采样重建 */
+			this.cdpSessions.delete(page);
+		}
 	}
 
 	/**
-	 * 从可见性信息里挑出唯一的「当前页」
+	 * 挑出唯一的「当前页」
 	 *
-	 * 打分：前台且聚焦 3 > 前台未聚焦 2 > 后台 0，同分时沿用上一次的当前页避免来回跳。
-	 * 全部不可见（浏览器最小化/被遮挡）时沿用上一次，索引失效则回到第一页，
-	 * 这样远程端不会因为「一个都没有」而退化成截第一页。
+	 * 打分：真实持有焦点 3 > 可见 2 > 未知 -1（不参与）。
+	 * 同分（多个窗口都可见、或整个浏览器失焦）时依次：沿用上次的页面 →
+	 * 最近被聚焦的那一页 → 最新创建的页面（新开的标签通常就在前台）。
 	 */
-	private resolveActiveIndex(states: { visible: boolean; focused: boolean }[]): number {
-		if (states.length === 0) return -1;
+	private resolveActivePage(states: PageState[]): Page | undefined {
+		if (states.length === 0) return undefined;
 
-		let best = -1;
-		let bestScore = 0;
-
-		states.forEach((state, index) => {
-			const score = state.visible ? (state.focused ? 3 : 2) : 0;
-			if (score === 0) return;
-			if (score > bestScore) {
-				bestScore = score;
-				best = index;
-				return;
+		const scored = states.filter((state) => state.known);
+		if (scored.length === 0) {
+			/** 全部采样失败（页面都在导航）：沿用上次，别乱切 */
+			if (this.lastActivePage && states.some((state) => state.page === this.lastActivePage)) {
+				return this.lastActivePage;
 			}
-			if (score === bestScore && index === this.lastActiveIndex) {
-				best = index;
-			}
-		});
-
-		if (best === -1) {
-			best = this.lastActiveIndex < states.length ? this.lastActiveIndex : 0;
+			return states[states.length - 1].page;
 		}
 
-		this.lastActiveIndex = best;
-		return best;
+		const scoreOf = (state: PageState) => (state.focused ? 3 : state.visible ? 2 : 0);
+		const bestScore = Math.max(...scored.map(scoreOf));
+		const tied = scored.filter((state) => scoreOf(state) === bestScore);
+
+		let chosen: PageState;
+		if (tied.length === 1) {
+			chosen = tied[0];
+		} else {
+			const last = tied.find((state) => state.page === this.lastActivePage);
+			if (last) {
+				chosen = last;
+			} else {
+				chosen = tied.reduce((a, b) =>
+					b.focusedAt > a.focusedAt || (b.focusedAt === a.focusedAt && b.visibleAt >= a.visibleAt) ? b : a
+				);
+			}
+		}
+
+		this.lastActivePage = chosen.page;
+		return chosen.page;
 	}
 
 	/**
@@ -491,34 +559,14 @@ export class ScriptWorker {
 		return best;
 	}
 
-	/** 取前台可见页；都不可见时退回最后一页（与截图的选择保持一致） */
+	/** 取真正的前台页；判定不出时退回最新页面（与页面列表的选择保持一致） */
 	private async pickActivePage(): Promise<Page | undefined> {
 		const pages = this.browser?.pages() || [];
 		if (pages.length === 0) return undefined;
 
 		/** 和 getPages() 用同一套判定，避免「页面列表里的当前页」与「截哪一页」不一致 */
-		const states = await Promise.all(
-			pages.map(async (candidate) => {
-				try {
-					const state = await Promise.race([
-						candidate.evaluate(() => ({
-							v: document.visibilityState,
-							f: document.hasFocus()
-						})),
-						new Promise<{ v: string; f: boolean }>((resolve) =>
-							setTimeout(() => resolve({ v: '', f: false }), 500)
-						)
-					]);
-					return { visible: state.v === 'visible', focused: !!state.f };
-				} catch {
-					// 页面正在跳转/已销毁，视为非活动页
-					return { visible: false, focused: false };
-				}
-			})
-		);
-
-		const index = this.resolveActiveIndex(states);
-		return index >= 0 ? pages[index] : pages[pages.length - 1];
+		const states = await this.collectPageStates(pages);
+		return this.resolveActivePage(states);
 	}
 
 	/** 跳转到特殊图像共享浏览器窗口 */
