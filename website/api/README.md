@@ -35,6 +35,10 @@ node scripts/pack-app-update.js
 gh release create desktop-v3.2.0 --title "桌面端 3.2.0" --notes "..." \
   honghueasystudy_desktop/packages/app/dist/update/app-3.2.0.zip
 
+# 2.5) 同步到 GitCode（国内加速源；CI 配了 GITCODE_TOKEN 时这一步已自动完成，可跳过）
+GITCODE_TOKEN=xxx node scripts/publish-to-gitcode.js --tag desktop-v3.2.0 \
+  --file honghueasystudy_desktop/packages/app/dist/update/app-3.2.0.zip
+
 # 3) 写入清单（同时同步 ocs-app-infos.json 旧副本）
 #    默认生成 GitCode 优先、GitHub 兜底的双源；--verify 会在写之前逐个探测链接是否可用
 node scripts/write-update-manifest.js \
@@ -70,6 +74,15 @@ GitHub Release 在国内经常只有几十 KB/s 甚至直接超时，所以客�
 
 - 发布时在 GitCode 建**同名 tag**（如 `desktop-v3.2.1`）并上传**同一个 zip**。
   两个源必须是字节一致的文件——否则 sha256 校验失败，客户端会切回 GitHub 重新下载。
+  上传有两条路，二者结果一致：
+  - **CI 自动**（推荐）：在仓库 Secrets 里配 `GITCODE_TOKEN`，`desktop-build.yml` 的
+    `upload-release` 会用 `scripts/publish-to-gitcode.js` 把**同一批 artifacts**
+    （更新包 + 扩展包）同步过去，不再二次打包。未配置 token 时该步骤整步跳过，
+    GitHub 发布不受影响；配置了则失败即红，避免清单指向不存在的镜像附件。
+  - **本地手动**：`GITCODE_TOKEN=xxx node scripts/publish-to-gitcode.js --tag desktop-v3.2.1 --file <zip>`
+    （可重复 `--file`；`--dry-run` 只看计划，`--force` 覆盖同名附件）。
+  - 机制与 GitHub 不同：先 `GET .../releases/{tag}/upload_url` 拿华为 OBS 预签名地址，
+    再 `PUT` 原始字节并原样透传返回的 `x-obs-*` 头；上传完自动用 Range GET 校验可下载。
 - 客户端行为：按 `urls` 顺序尝试，任一源连不上、20 秒收不到数据、大小或 sha256 不符都会立刻切下一个；
   全部失败才报错，并在错误信息里列出每个源失败的原因。
 - 代理策略：`gitcode.com` 系列**强制直连**（走代理反而绕远/被拦），GitHub 沿用环境代理设置。
