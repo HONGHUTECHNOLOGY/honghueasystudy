@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [closed]
     branches:
-      - "4.0"
+      - "5.0"
 
 permissions:
   contents: write
@@ -26,9 +26,11 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      - name: Trigger Build workflow
+      # Release 仅承载桌面端安装包与浏览器扩展 extension.zip；
+      # 用户脚本不随 Release 发布（build-and-publish.yml 保留，仅手动触发）
+      - name: Trigger Desktop & Extension build workflow
         if: ${{ steps.release.outputs.release_created }}
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN  }}
         run: |
-          gh workflow run build-and-publish.yml --ref ${{ steps.release.outputs.tag_name }} --repo ${{ github.repository }}
+          gh workflow run desktop-build.yml --ref ${{ steps.release.outputs.tag_name }} --repo ${{ github.repository }}
