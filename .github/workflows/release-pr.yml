@@ -1,7 +1,7 @@
 name: Release PR
 
 # 仅手动触发：GitHub → Actions → Release PR → Run workflow
-# 运行后 release-please 扫描 5.0 分支自上次发布以来的提交，
+# 运行后 release-please 扫描 main 分支自上次发布以来的提交，
 # 自动计算版本号（feat→minor / fix→patch / BREAKING→major）并创建/更新 Release PR
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          default-branch: 5.0 # dispatch 触发时 context 默认落在 main，必须显式指定目标分支
+          default-branch: main # 明确对 main 分支维护 Release PR
           skip-github-release: true # 只创建 PR，不创建 Release
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json

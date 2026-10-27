@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [closed]
     branches:
-      - "5.0"
+      - "main"
 
 permissions:
   contents: write
