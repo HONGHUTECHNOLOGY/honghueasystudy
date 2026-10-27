@@ -1,6 +1,6 @@
 import { nextTick } from 'vue';
 import { store } from '../store';
-import { Process, processes } from '../utils/process';
+import { Process, processes, processEvents } from '../utils/process';
 import { resetSearch } from '../utils/entity';
 import { router } from '../route';
 import { Entity } from './entity';
@@ -42,6 +42,19 @@ export class Browser extends Entity implements BrowserOptions {
 
 	/** 启动浏览器 */
 	async launch() {
+		/**
+		 * 幂等保护：已经在运行或正在启动时直接返回
+		 *
+		 * 重复调用会再 fork 一个 worker 去抢同一个 user-data-dir，
+		 * 而且 `Process.from` 返回的是列表里第一个同 uid 的实例——
+		 * 于是新 worker 被挂到**正在运行的那个 Process** 上，把它的 shell 覆盖掉：
+		 * 浏览器本身还开着，状态却退回「启动中」，最后连截图都拿不到。
+		 */
+		const existing = Process.from(this.uid);
+		if (existing && (existing.status === 'launched' || existing.status === 'launching')) {
+			return;
+		}
+
 		const process = new Process(this, {
 			executablePath: store.render.setting.launchOptions.executablePath,
 			headless: false
@@ -68,6 +81,7 @@ export class Browser extends Entity implements BrowserOptions {
 					// 进程可能已退出
 				}
 				Process.remove(this.uid);
+				processEvents.emit('status', this.uid);
 				throw e;
 			}
 		}

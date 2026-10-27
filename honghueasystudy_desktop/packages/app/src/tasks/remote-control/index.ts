@@ -294,6 +294,8 @@ export class RemoteControlService {
 			if (!server || server.clientCount() === 0) return;
 			if (Date.now() - this.lastStateAt < 6000) return;
 			this.requestStateRefresh();
+			/** 长时间完全没有上报，顺便确认渲染进程是否还在执行 JS */
+			if (Date.now() - this.lastStateAt > 15000) this.probeRenderer();
 		}, 2000);
 	}
 
@@ -317,6 +319,41 @@ export class RemoteControlService {
 		} catch (e) {
 			logger.warn('催报渲染进程状态失败：' + String(e));
 		}
+	}
+
+	/** 最近一次探针时间（探针本身也是 IPC，不能太频繁） */
+	private lastProbeAt = 0;
+
+	/**
+	 * 探测渲染进程是否还在执行 JS
+	 *
+	 * 催报发出后仍然收不到快照时，需要区分两种故障：
+	 * - 渲染进程还活着，只是上报被卡住（能恢复）
+	 * - 渲染进程主线程已经不响应（只能回电脑前处理）
+	 * 用一次极轻的 executeJavaScript 就能判定，结论写进日志方便事后定位。
+	 */
+	private probeRenderer(): void {
+		const now = Date.now();
+		if (now - this.lastProbeAt < 10000) return;
+		this.lastProbeAt = now;
+
+		const win = this.window;
+		if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
+
+		const timer = setTimeout(() => {
+			logger.warn('渲染进程 3 秒内未响应探针，界面可能已卡死（远程状态将停止更新）');
+		}, 3000);
+
+		win.webContents
+			.executeJavaScript('1', true)
+			.then(() => {
+				clearTimeout(timer);
+				logger.info('渲染进程探针正常，但已超过 15 秒没有上报快照');
+			})
+			.catch((e) => {
+				clearTimeout(timer);
+				logger.warn('渲染进程探针失败：' + String(e));
+			});
 	}
 
 	/** 渲染进程回传的命令执行结果 */

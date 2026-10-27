@@ -190,7 +190,7 @@ export function initTheme(): void {
  * 所以点击瞬间先在本地把该实例标成 launching / closing，
  * 等后端快照确认（状态已离开原状态）或超时后自动交还给后端数据。
  */
-const optimistic = new Map<string, { status: 'launching' | 'closing'; at: number }>();
+const optimistic = new Map<string, { status: 'launching' | 'closing' | 'launched'; at: number }>();
 
 /**
  * 乐观状态兜底过期时间
@@ -212,6 +212,15 @@ function isTransient(list: BrowserSnapshot[]): boolean {
 	return list.some((b) => b.status === 'launching' || b.status === 'closing');
 }
 
+/**
+ * 已确认启动后的「粘住」时长
+ *
+ * 启动命令返回 launched 时浏览器确实已经起来了，但桌面端的快照可能有 1~2 秒延迟
+ * （渲染进程要先刷新页面列表才会打包上报）。这段时间里拉回来的还是旧的「启动中」，
+ * 直接覆盖会让界面从「运行中 + 截图」闪回「启动中」，看起来像启动失败。
+ */
+const LAUNCHED_HOLD = 8000;
+
 /** 把本地乐观状态叠加到后端快照上 */
 function mergeOptimistic(list: BrowserSnapshot[]): BrowserSnapshot[] {
 	if (optimistic.size === 0) return list;
@@ -220,6 +229,15 @@ function mergeOptimistic(list: BrowserSnapshot[]): BrowserSnapshot[] {
 	return list.map((item) => {
 		const local = optimistic.get(item.uid);
 		if (!local) return item;
+
+		/** 已确认启动：短暂压住更旧的快照，避免闪回启动中 */
+		if (local.status === 'launched') {
+			if (item.status === 'launched' || now - local.at > LAUNCHED_HOLD) {
+				optimistic.delete(item.uid);
+				return item;
+			}
+			return { ...item, status: 'launched' };
+		}
 
 		if (now - local.at > OPTIMISTIC_TTL) {
 			optimistic.delete(item.uid);
@@ -578,8 +596,10 @@ export async function launchBrowser(uid: string) {
 
 		/** 命令返回时浏览器可能已经就绪（冷启动很快的情况），直接收敛，不用再等快照 */
 		if (data && data.status === 'launched') {
-			optimistic.delete(uid);
+			/** 用「已确认启动」压住随后可能到达的旧快照，避免闪回启动中 */
+			optimistic.set(uid, { status: 'launched', at: Date.now() });
 			patchLocalStatus(uid, 'launched');
+			ensureTracking();
 		} else if (optimistic.has(uid)) {
 			/** 后端已受理，续期一次，避免后端状态上报稍慢时本地标记先过期 */
 			optimistic.set(uid, { status: 'launching', at: Date.now() });

@@ -285,6 +285,86 @@ function collectUids(payload: any): string[] {
 	return uids;
 }
 
+/**
+ * 一轮心跳：先刷新页面列表，再上报快照
+ *
+ * 原来两者是并行的：`refreshPages()` 只是把定时器排上队就返回，
+ * `sendState()` 立刻用旧数组打包，于是每次推送的 pages 都落后一轮。
+ * 加上刷课时 framenavigated 高频重置定时器，页面列表就长期停在初始值，
+ * 表现为「脚本后来开了新标签页，远程一直看不到」。
+ *
+ * 顺带刷新一次 `active`：用户在浏览器里切标签页不会触发 page-changed，
+ * 不主动拉取的话远程台的「默认查看当前页」会指到已经切走的那个标签。
+ */
+async function runHeartbeat(): Promise<void> {
+	/** 上一轮还没跑完（慢页面会让采集拖到 2 秒以上）就跳过这一轮，避免任务堆叠 */
+	if (heartbeatBusy) return;
+	heartbeatBusy = true;
+
+	if (pushTimer) {
+		clearTimeout(pushTimer);
+		pushTimer = undefined;
+	}
+
+	try {
+		const jobs = processes.filter((p) => p.status === 'launched').map((p) => p.refreshPages());
+		if (jobs.length > 0) {
+			await Promise.race([Promise.allSettled(jobs), sleep(REFRESH_TIMEOUT)]);
+		}
+		sendState();
+	} finally {
+		heartbeatBusy = false;
+	}
+}
+
+/**
+ * Worker 心跳
+ *
+ * 主线程的 `setInterval` 在窗口最小化 / 被完全遮挡时会被 Chromium 降频，
+ * 严重时直接冻结——远程端于是永远停在最后一份快照上（浏览器明明已经启动，
+ * 界面却一直显示「启动中」）。Worker 里的定时器不受页面可见性影响，
+ * 这里再挂一条 Worker 节拍，到点就让主线程补报一次；两条链路互为备份。
+ */
+let beatWorker: Worker | undefined;
+
+function startWorkerHeartbeat(): void {
+	if (beatWorker) return;
+
+	try {
+		const source = `setInterval(function () { postMessage(1); }, ${HEARTBEAT_INTERVAL});`;
+		const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+		beatWorker = new Worker(url);
+		beatWorker.onmessage = () => {
+			runHeartbeat();
+		};
+		beatWorker.onerror = () => {
+			// Worker 起不来时主线程心跳仍在，忽略即可
+		};
+	} catch (e) {
+		console.error('心跳 Worker 启动失败', e);
+	}
+}
+
+/**
+ * 诊断：主进程催报到达时记一行
+ *
+ * 只在「上报确实停滞」时才写，且 30 秒限频，正常运行时不会产生日志。
+ * 用途是区分两种故障：主进程没催（ticker 没跑） vs 渲染进程没收到/没执行（IPC 看不到）。
+ */
+let lastTickNoteAt = 0;
+
+function noteTick(): void {
+	const now = Date.now();
+	if (now - lastSendAt < 15000) return;
+	if (now - lastTickNoteAt < 30000) return;
+	lastTickNoteAt = now;
+	try {
+		remote.logger.call('log', '[远程] 状态上报停滞，已收到主进程催报');
+	} catch {
+		// 日志失败不影响上报
+	}
+}
+
 /** 注册远程控制桥接（幂等） */
 export function activeRemoteControlBridge() {
 	if (started) return;
@@ -300,39 +380,24 @@ export function activeRemoteControlBridge() {
 	 */
 	processEvents.on('pages', schedulePush);
 	processEvents.on('progress', schedulePush);
+	/**
+	 * 状态变化（启动中 / 已启动 / 关闭中 / 失败）立刻上报，不经 800ms 节流。
+	 *
+	 * Process 内部对 `this.status` 的赋值绕过 Vue 的 set trap，指纹 watch 收不到，
+	 * 原来只能等 3 秒心跳顺带发出去——心跳一旦被冻结，远程端就永远停在「启动中」。
+	 */
+	processEvents.on('status', sendState);
 
 	/** 兜底心跳：直接发送、绕过节流，避免 pushTimer 滞留后彻底停更 */
-	heartbeatTimer = setInterval(async () => {
-		/** 上一轮还没跑完（慢页面会让采集拖到 2 秒以上）就跳过这一轮，避免任务堆叠 */
-		if (heartbeatBusy) return;
-		heartbeatBusy = true;
+	heartbeatTimer = setInterval(runHeartbeat, HEARTBEAT_INTERVAL);
+	startWorkerHeartbeat();
 
-		if (pushTimer) {
-			clearTimeout(pushTimer);
-			pushTimer = undefined;
-		}
-
-		/**
-		 * 先刷新页面列表、再上报。
-		 *
-		 * 原来两者是并行的：`refreshPages()` 只是把定时器排上队就返回，
-		 * `sendState()` 立刻用旧数组打包，于是每次推送的 pages 都落后一轮。
-		 * 加上刷课时 framenavigated 高频重置定时器，页面列表就长期停在初始值，
-		 * 表现为「脚本后来开了新标签页，远程一直看不到」。
-		 *
-		 * 顺带刷新一次 `active`：用户在浏览器里切标签页不会触发 page-changed，
-		 * 不主动拉取的话远程台的「默认查看当前页」会指到已经切走的那个标签。
-		 */
-		try {
-			const jobs = processes.filter((p) => p.status === 'launched').map((p) => p.refreshPages());
-			if (jobs.length > 0) {
-				await Promise.race([Promise.allSettled(jobs), sleep(REFRESH_TIMEOUT)]);
-			}
-			sendState();
-		} finally {
-			heartbeatBusy = false;
-		}
-	}, HEARTBEAT_INTERVAL);
+	/** 留一条启动痕迹：排查「远程收不到状态」时先确认桥接和新版心跳确实在工作 */
+	try {
+		remote.logger.call('log', `[远程] 状态上报已启动（心跳 ${HEARTBEAT_INTERVAL}ms，Worker ${beatWorker ? '已启用' : '不可用'}）`);
+	} catch {
+		// 日志失败不影响上报
+	}
 
 	/** 后台标签被冻结后回到前台时立即补一次，不必等下一个心跳 */
 	if (typeof document !== 'undefined') {
@@ -350,6 +415,7 @@ export function activeRemoteControlBridge() {
 	 * 主进程的定时器不受节流影响，由它定期来催，保证状态一定在推进。
 	 */
 	ipcRenderer.on('remote-ctl:tick', () => {
+		noteTick();
 		/** 刚上报过就跳过，避免催报和心跳重复发包 */
 		if (Date.now() - lastSendAt < 1200) return;
 		if (pushTimer) {
@@ -383,6 +449,11 @@ export function activeRemoteControlBridge() {
 export function disposeRemoteControlBridge() {
 	processEvents.off('pages', schedulePush);
 	processEvents.off('progress', schedulePush);
+	processEvents.off('status', sendState);
+	if (beatWorker) {
+		beatWorker.terminate();
+		beatWorker = undefined;
+	}
 	if (heartbeatTimer) {
 		clearInterval(heartbeatTimer);
 		heartbeatTimer = undefined;

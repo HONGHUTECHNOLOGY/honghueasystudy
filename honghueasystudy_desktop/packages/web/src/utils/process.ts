@@ -154,6 +154,15 @@ export class Process extends EventEmitter {
 			/** 浏览器启动 */
 			launched: async () => {
 				this.status = 'launched';
+				/**
+				 * 必须显式广播状态变化。
+				 *
+				 * `this` 是原始 Process 实例（不是 reactive 代理），直接赋值绕过 Vue 的 set trap，
+				 * 状态指纹 watch 收不到；而 `refreshPages()` 只在页面签名变化时才 emit，
+				 * worker 还没准备好时会静默失败。于是「已启动」只能等下一次 3 秒心跳才上报——
+				 * 心跳一旦被冻结，远程端就会永远停在启动中，而且拿不到截图。
+				 */
+				processEvents.emit('status', this.uid);
 				if (!this.progress.startedAt) this.progress.startedAt = Date.now();
 				this.refreshPages();
 			},
@@ -166,6 +175,7 @@ export class Process extends EventEmitter {
 				console.log('browser-closed', this.uid);
 				// 从进程列表中移除
 				Process.remove(this.uid);
+				processEvents.emit('status', this.uid);
 			},
 			/**
 			 * 启动失败（握手超时、浏览器被策略拦截、扩展加载异常等）
@@ -179,6 +189,7 @@ export class Process extends EventEmitter {
 				console.error('浏览器启动失败：', reason);
 				this.status = 'closed';
 				Process.remove(this.uid);
+				processEvents.emit('status', this.uid);
 				notify(`${this.browser.name} 启动失败`, reason, this.browser.uid, {
 					duration: 60 * 1000,
 					copy: true,
@@ -356,6 +367,8 @@ export class Process extends EventEmitter {
 	launch() {
 		return new Promise<void | number | null>((resolve, reject) => {
 			this.status = 'launching';
+			/** 启动中也要立刻让远程端看到，不能等心跳 */
+			processEvents.emit('status', this.uid);
 
 			/** 状态回退：任何原因导致启动失败，都不能让状态停留在 launching（否则远程端永远显示「启动中」） */
 			const fail = (message?: string) => {
@@ -373,6 +386,7 @@ export class Process extends EventEmitter {
 					// 进程可能已退出
 				}
 				Process.remove(this.uid);
+				processEvents.emit('status', this.uid);
 				if (message) reject(new Error(message));
 			};
 			/** 看门狗：初始化链条卡死（如页面 evaluate 无超时）时兜底回退 */
@@ -400,6 +414,7 @@ export class Process extends EventEmitter {
 							if (this.status === 'launching' || this.status === 'launched') {
 								this.status = 'closed';
 								Process.remove(this.uid);
+								processEvents.emit('status', this.uid);
 							}
 							clearTimeout(watchdog);
 							resolve(code);
@@ -424,6 +439,7 @@ export class Process extends EventEmitter {
 	async close() {
 		// 标记为 closing ，使监控页面，以及操作栏的图标可以判断状态
 		this.status = 'closing';
+		processEvents.emit('status', this.uid);
 		return new Promise<void>((resolve) => {
 			this.once('browser-closed', resolve);
 			// 关闭进程
