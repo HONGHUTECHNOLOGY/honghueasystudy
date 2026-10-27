@@ -72,6 +72,18 @@ export class CloudflaredTunnel {
 	/** 进行中的 start()：并发调用（开关切换与恢复设置同时触发）时复用同一个 Promise，
 	 *  否则会穿透 this.proc 守卫启动两个 cloudflared，产生两个互相无关的隧道地址 */
 	private starting?: Promise<string>;
+	/**
+	 * 健康检查定时器。
+	 *
+	 * 隧道进程可能被外部因素静默终止（安全软件拦截、系统休眠、代理软件重置连接等），
+	 * 此时 exit 回调甚至可能不触发，状态就永远停在 idle/error 而开关仍是开着的。
+	 * 这里按「上层期望是否应运行」定期校正，比只依赖进程事件更可靠。
+	 */
+	private healthTimer?: ReturnType<typeof setInterval>;
+	/** 连通性探测：抓到「进程还在但隧道已经断了」的半死状态 */
+	private probeFailures = 0;
+	private probeAt = 0;
+	private probing = false;
 	/** 用于中止进行中的下载 */
 	private currentAbort?: AbortController;
 	private status: TunnelStatus = {
@@ -84,9 +96,15 @@ export class CloudflaredTunnel {
 	};
 
 	// eslint-disable-next-line no-useless-constructor
-	constructor(private baseDir: string, private onStatusChange?: (status: TunnelStatus) => void) {
+	constructor(
+		private baseDir: string,
+		private onStatusChange?: (status: TunnelStatus) => void,
+		/** 上层期望隧道是否应当处于运行状态（读设置与开关）；用于静默死亡后的自愈 */
+		private shouldRun?: () => boolean
+	) {
 		/** 安装包是否已内置二进制，决定界面是否需要提示「首次下载」 */
 		this.status.builtin = hasBuiltinCloudflared();
+		this.startHealthWatch();
 	}
 
 	getStatus(): TunnelStatus {
@@ -102,6 +120,88 @@ export class CloudflaredTunnel {
 				logger.error('tunnel status callback error', e);
 			}
 		}
+	}
+
+	/** 启动健康检查（每 10s 校正一次） */
+	private startHealthWatch(): void {
+		if (this.healthTimer) return;
+		this.healthTimer = setInterval(() => this.checkHealth(), 10000);
+		/** 不阻塞进程退出 */
+		if (this.healthTimer.unref) this.healthTimer.unref();
+	}
+
+	/**
+	 * 一次性校正：设置里要求开隧道，但本地既没有进程也没有在启动，
+	 * 说明进程被静默杀掉或状态机被打断，直接重新拉起。
+	 */
+	private checkHealth(): void {
+		if (!this.shouldRun || !this.port) return;
+
+		let wanted = false;
+		try {
+			wanted = this.shouldRun();
+		} catch (e) {
+			logger.error('隧道健康检查读取设置失败', e);
+			return;
+		}
+		if (!wanted) return;
+
+		/** 进程在：只做连通性探测，不重启，避免打断正常的隧道 */
+		if (this.proc) {
+			if (this.status.state === 'running') this.probe();
+			return;
+		}
+		if (this.starting || this.retryTimer) return;
+
+		logger.warn(`隧道健康检查：期望运行但进程不存在（状态 ${this.status.state}），重新拉起`);
+		/** 清理可能残留的 stopping 标记，否则新进程退出时又会走静默分支 */
+		this.stopping = false;
+		this.retrying = 0;
+		this.start(this.port).catch((e) => logger.error('隧道健康检查重启失败', e));
+	}
+
+	/**
+	 * 隧道连通性探测。
+	 *
+	 * cloudflared 进程有时不会退出，但底层连接被代理软件/安全软件掐断，
+	 * 界面上域名还在、实际已经打不开。这里定期请求一次 /api/ping，
+	 * 连续三次不通就杀掉进程，交给退出回调走自动重连（会分配新域名）。
+	 */
+	private probe(): void {
+		if (this.probing) return;
+		if (this.status.state !== 'running' || !this.status.url) return;
+
+		const now = Date.now();
+		if (now - this.probeAt < 45000) return;
+		this.probeAt = now;
+		this.probing = true;
+
+		axios
+			.get(`${this.status.url}/api/ping`, {
+				timeout: 8000,
+				/** 忽略系统代理：本机代理软件（加速器/VPN）会拦截对隧道的访问，导致误判 */
+				proxy: false,
+				validateStatus: () => true
+			})
+			.then(() => {
+				this.probeFailures = 0;
+			})
+			.catch((e) => {
+				this.probeFailures += 1;
+				logger.warn(`隧道连通性探测失败（第 ${this.probeFailures} 次）：${e instanceof Error ? e.message : String(e)}`);
+				if (this.probeFailures >= 3 && this.proc) {
+					logger.warn('隧道连续探测失败，终止进程以触发自动重连');
+					this.probeFailures = 0;
+					try {
+						this.proc.kill();
+					} catch (err) {
+						logger.error('结束失效 tunnel 进程失败', err);
+					}
+				}
+			})
+			.finally(() => {
+				this.probing = false;
+			});
 	}
 
 	/** 启动隧道；已运行时直接返回当前地址 */
@@ -163,6 +263,8 @@ export class CloudflaredTunnel {
 				if (match && !settled) {
 					const url = match[0];
 					this.retrying = 0;
+					this.probeFailures = 0;
+					this.probeAt = Date.now();
 					this.setStatus({ state: 'running', url, error: '' });
 					logger.info('隧道地址：' + url);
 					finish(url);
@@ -179,8 +281,21 @@ export class CloudflaredTunnel {
 			});
 
 			child.on('exit', (code) => {
+				/**
+				 * 旧一代进程的退出回调不能动新一代的状态：
+				 * 超时重连时会先杀旧进程再拉新进程，而 Windows 上旧进程的 exit 事件
+				 * 可能晚于新进程建立隧道才到达，原来无条件 `this.proc = undefined`
+				 * 会把刚拿到的域名清空，表现为「隧道明明开着，域名突然消失」。
+				 */
+				if (this.proc !== child) {
+					logger.info(`旧 tunnel 进程退出（pid=${child.pid}，code=${code}），不影响当前隧道`);
+					return;
+				}
+
 				this.proc = undefined;
+
 				if (this.stopping) {
+					logger.info(`cloudflared 已停止（pid=${child.pid}，code=${code}）`);
 					this.setStatus({ state: 'idle', url: '', error: '' });
 					finish('');
 					return;
@@ -208,7 +323,8 @@ export class CloudflaredTunnel {
 					error: '隧道建立超时，正在自动重连…（持续失败请检查网络，或改用局域网访问）'
 				});
 				finish('');
-				if (this.proc) {
+				/** 只结束自己这一代进程，避免误杀后来的新进程 */
+				if (this.proc === child) {
 					try {
 						this.proc.kill();
 					} catch (e) {
@@ -239,6 +355,18 @@ export class CloudflaredTunnel {
 	/** 停止隧道（同时中止进行中的下载） */
 	stop(): void {
 		this.stopping = true;
+		this.probeFailures = 0;
+		this.probing = false;
+
+		/** 记录调用来源：开关关闭和内部重启都会走到这里，出问题时能直接看出是谁停的 */
+		try {
+			const stack = (new Error().stack || '')
+				.split('\n')
+				.slice(1, 6)
+				.map((line) => line.trim())
+				.join(' <- ');
+			logger.info(`停止隧道（pid=${this.proc ? this.proc.pid : '无'}）来自：${stack}`);
+		} catch {}
 
 		if (this.retryTimer) {
 			clearTimeout(this.retryTimer);

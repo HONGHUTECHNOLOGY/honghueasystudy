@@ -131,7 +131,11 @@
 					<span class="rc-error">{{ status.tunnel.error || '隧道连接失败' }}</span>
 				</template>
 				<template v-else>
-					<span class="rc-faint">隧道未启动</span>
+					<a-spin
+						:size="14"
+						style="margin-right: 6px"
+					/>
+					<span class="rc-faint">隧道未运行，正在自动重连…</span>
 				</template>
 			</div>
 		</div>
@@ -399,6 +403,8 @@ interface Status {
 	/** 是否已设置访问密码 */
 	hasPassword: boolean;
 	tunnel: TunnelInfo;
+	/** 设置里是否开启了内网穿透（后端权威值，用来校正界面开关） */
+	tunnelEnabled?: boolean;
 	sessionCount: number;
 	error: string;
 	appVersion: string;
@@ -503,6 +509,15 @@ async function loadStatus() {
 			tunnel: data.tunnel || { state: 'idle', url: '', error: '', progress: 0 }
 		});
 		portDraft.value = data.port;
+
+		/**
+		 * 开关状态以后端设置为准。
+		 * 之前只在组件挂载时读一次设置，后端因故关掉隧道（如切到免验证）后，
+		 * 界面开关会一直显示「开」，用户看到的就是「开关是打开的但隧道没了」。
+		 */
+		if (typeof data.tunnelEnabled === 'boolean' && data.tunnelEnabled !== settings.tunnel.enabled) {
+			settings.tunnel.enabled = data.tunnelEnabled;
+		}
 
 		/** 以后端已生效的配置为准回填界面选择（用户有进行中的切换时不覆盖） */
 		const serverMode = data.authMode || 'pair';

@@ -33,6 +33,8 @@ export interface RemoteControlStatus {
 	/** 是否已设置访问密码 */
 	hasPassword: boolean;
 	tunnel: TunnelStatus;
+	/** 设置里是否开启了内网穿透（与隧道实时状态分开，避免界面开关与真实配置不一致） */
+	tunnelEnabled: boolean;
 	sessionCount: number;
 	error: string;
 	appVersion: string;
@@ -116,7 +118,12 @@ export class RemoteControlService {
 
 	private get tunnel(): CloudflaredTunnel {
 		if (!this._tunnel) {
-			this._tunnel = new CloudflaredTunnel(this.appsDir(), () => this.emitStatus());
+			this._tunnel = new CloudflaredTunnel(
+				this.appsDir(),
+				() => this.emitStatus(),
+				/** 隧道自愈判据：服务在跑且设置要求开穿透 */
+				() => this.running && this.settings().tunnel.enabled
+			);
 		}
 		return this._tunnel;
 	}
@@ -289,6 +296,7 @@ export class RemoteControlService {
 			authMode: this.auth.getMode(),
 			hasPassword: this.auth.hasPassword(),
 			tunnel: tunnelStatus,
+			tunnelEnabled: settings.tunnel.enabled,
 			sessionCount: this.auth.list().length,
 			error: this.lastError,
 			appVersion: app.getVersion(),
@@ -634,6 +642,14 @@ export class RemoteControlService {
 					if (changed) this.emitStatus();
 				})
 				.catch(() => {});
+
+			/**
+			 * 兜底：设置要求开隧道，但隧道对象还没被创建（启动链路被中断过），
+			 * 这里补一次启动。已存在时不做任何事，避免打断隧道自身的退避重连。
+			 */
+			if (this.settings().tunnel.enabled && !this._tunnel) {
+				this.startTunnel().catch((e) => logger.error('补齐隧道启动失败', e));
+			}
 		}, 20000);
 		/** 不阻塞进程退出 */
 		if (this.lanTimer.unref) this.lanTimer.unref();
