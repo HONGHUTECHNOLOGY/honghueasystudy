@@ -116,6 +116,19 @@
 			<span class="ellipsis">{{ currentPage.title || currentPage.url }}</span>
 		</div>
 
+		<!-- 视频播放进度：网课一个视频几十分钟没有日志是正常的，用它证明任务在推进 -->
+		<div
+			v-if="mediaText"
+			class="media-line"
+			:class="{ playing }"
+		>
+			<Icon
+				:name="playing ? 'play' : 'pause'"
+				:size="12"
+			/>
+			<span class="ellipsis">{{ mediaText }}</span>
+		</div>
+
 		<div
 			v-if="browser.status === 'launching' && stalled"
 			class="sync-line"
@@ -312,13 +325,45 @@ const idleMs = computed(() => {
 });
 
 /** 超过这个时长没有新输出，认为任务可能卡住了 */
-const STALE_MS = 120 * 1000;
+const STALE_MS = 10 * 60 * 1000;
+
+/**
+ * 视频状态
+ *
+ * 网课一个视频动辄几十分钟，播放期间脚本不会有日志。
+ * 只看「日志静止」会把「正在看视频」误报成「卡住」，所以播放中一律不算卡住。
+ */
+const media = computed(() => props.browser.media || null);
+const playing = computed(() => !!media.value?.playing);
 
 const isStale = computed(() => {
 	if (props.browser.status !== 'launched') return false;
 	if (progress.value?.finished) return false;
+	/** 有视频在播说明任务正在推进，不能报「静止」 */
+	if (playing.value) return false;
 	return idleMs.value >= STALE_MS;
 });
+
+/** 播放进度文案：播放中 12:30 / 45:00 */
+const mediaText = computed(() => {
+	const m = media.value;
+	if (!m) return '';
+	const at = formatClock(m.currentTime);
+	const total = m.duration > 0 ? ' / ' + formatClock(m.duration) : '';
+	if (m.playing) return '播放中 ' + at + total;
+	if (m.currentTime > 0) return '已暂停 ' + at + total;
+	return '';
+});
+
+function formatClock(seconds: number) {
+	const total = Math.max(0, Math.floor(seconds || 0));
+	const h = Math.floor(total / 3600);
+	const m = Math.floor((total % 3600) / 60);
+	const s = total % 60;
+	const mm = String(m).padStart(2, '0');
+	const ss = String(s).padStart(2, '0');
+	return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
 
 /** 进度主文案：当前任务 → 完成态 → 空 */
 const taskText = computed(() => {
@@ -752,6 +797,31 @@ html[data-theme='light'] .browser-card.launched {
 .page-line :deep(svg) {
 	flex: none;
 	color: var(--text-3);
+}
+
+/* 视频播放进度：比「x 分钟无输出」更能说明任务在推进 */
+.media-line {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 11.5px;
+	color: var(--text-3);
+	min-width: 0;
+	margin-top: -2px;
+	font-variant-numeric: tabular-nums;
+}
+
+.media-line :deep(svg) {
+	flex: none;
+	color: var(--text-3);
+}
+
+.media-line.playing {
+	color: var(--ok, #2ea36a);
+}
+
+.media-line.playing :deep(svg) {
+	color: var(--ok, #2ea36a);
 }
 
 /* ---------------------------------------------------------------- 状态同步 */

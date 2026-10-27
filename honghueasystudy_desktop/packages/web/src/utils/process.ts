@@ -44,6 +44,13 @@ export class Process extends EventEmitter {
 	pages: { url: string; title: string; active?: boolean }[] = [];
 	/** 任务进度（由脚本日志推断，远程台据此展示「进度」） */
 	progress: TaskProgress = createProgress();
+	/**
+	 * 页面内视频的播放状态
+	 *
+	 * 网课一个视频几十分钟且播放期间没有日志，远程台只靠「日志静止」判断会误报卡住，
+	 * 所以额外采集播放进度当作活性信号。null 表示当前页没有 video 元素。
+	 */
+	media: { playing: boolean; currentTime: number; duration: number } | null = null;
 
 	video: HTMLVideoElement | undefined = undefined;
 	stream: MediaStream | undefined = undefined;
@@ -353,6 +360,55 @@ export class Process extends EventEmitter {
 
 	/** 上一次页面列表拉取失败的时间（限频写日志） */
 	private static pagesErrorAt = 0;
+
+	/** 上一次采集播放状态的时刻 */
+	private mediaLastAt = 0;
+	/** 是否有一次播放状态采集在执行 */
+	private mediaInFlight = false;
+	/** 两次采集的最小间隔：视频进度不需要秒级精度 */
+	private static readonly MEDIA_MIN_INTERVAL = 2500;
+
+	/**
+	 * 刷新页面内视频的播放状态
+	 *
+	 * 视频播放时页面不会有新日志，光看日志静止会把「正在看视频」误判成「卡住」。
+	 * 这里把播放进度取回来，远程台据此展示播放时间、并抑制「长时间无输出」告警。
+	 */
+	refreshMedia(): Promise<void> {
+		if (this.status !== 'launched') {
+			this.media = null;
+			return Promise.resolve();
+		}
+		if (this.mediaInFlight) return Promise.resolve();
+		if (Date.now() - this.mediaLastAt < Process.MEDIA_MIN_INTERVAL) return Promise.resolve();
+
+		this.mediaInFlight = true;
+		this.mediaLastAt = Date.now();
+
+		return this.callWorker('getMedia')
+			.then((info) => {
+				if (!info || typeof info !== 'object') {
+					this.media = null;
+					return;
+				}
+				const raw = info as { playing?: boolean; currentTime?: number; duration?: number };
+				this.media = {
+					playing: !!raw.playing,
+					currentTime: Number(raw.currentTime) || 0,
+					duration: Number(raw.duration) || 0
+				};
+			})
+			.catch(() => {
+				/**
+				 * 浏览器正在关闭/跳转时取不到，保留上一次结果。
+				 * 这里不能清空：播放中偶发一次失败会让远程台闪一下「未知」。
+				 */
+			})
+			.finally(() => {
+				this.mediaInFlight = false;
+			});
+	}
+
 
 	async launchPreCheck() {
 		// 只检查浏览器路径；鸿鹄易学扩展随软件打包，不再检查/安装用户脚本

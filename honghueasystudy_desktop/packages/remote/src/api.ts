@@ -26,6 +26,11 @@ export interface BrowserSnapshot {
 	pages: { url: string; title: string; active?: boolean }[];
 	/** 可选：桌面端旧版本不上报该字段 */
 	progress?: TaskProgress;
+	/**
+	 * 页面内视频状态；null / 缺省表示当前页没有视频。
+	 * 用来区分「正在看视频（没有日志是正常的）」和「真的卡住了」。
+	 */
+	media?: { playing: boolean; currentTime: number; duration: number } | null;
 }
 
 export interface RemoteSnapshot {

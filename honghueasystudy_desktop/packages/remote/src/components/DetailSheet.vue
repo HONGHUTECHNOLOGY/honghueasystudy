@@ -165,7 +165,7 @@
 					>
 						<p class="block__title">
 							<span>任务进度</span>
-							<span class="faint">{{ progress?.finished ? '已完成' : isStale ? '无输出' : '进行中' }}</span>
+							<span class="faint">{{ progress?.finished ? '已完成' : playing ? '播放中' : isStale ? '无输出' : '进行中' }}</span>
 						</p>
 
 						<p
@@ -180,6 +180,18 @@
 							class="task-now faint"
 						>
 							等待脚本输出任务节点…
+						</p>
+
+						<p
+							v-if="mediaText"
+							class="task-media"
+							:class="{ playing }"
+						>
+							<Icon
+								:name="playing ? 'play' : 'pause'"
+								:size="12"
+							/>
+							{{ mediaText }}
 						</p>
 
 						<p
@@ -442,14 +454,46 @@ const idleMs = computed(() => {
 	return Math.max(0, now.value - last);
 });
 
-const STALE_MS = 120 * 1000;
+const STALE_MS = 10 * 60 * 1000;
+
+/**
+ * 视频播放状态
+ *
+ * 网课一个视频几十分钟，播放期间本来就没有日志输出。
+ * 播放中一律不算「卡住」，改为展示播放进度。
+ */
+const media = computed(() => browser.value?.media || null);
+const playing = computed(() => !!media.value?.playing);
 
 /** 任务长时间没有输出：可能卡在某个环节，值得在详情里明确提示 */
 const isStale = computed(() => {
 	if (browser.value?.status !== 'launched') return false;
 	if (progress.value?.finished) return false;
+	if (playing.value) return false;
 	return idleMs.value >= STALE_MS;
 });
+
+/** 播放进度：播放中 12:30 / 45:00 */
+const mediaText = computed(() => {
+	const m = media.value;
+	if (!m) return '';
+	const at = formatClock(m.currentTime);
+	const total = m.duration > 0 ? ' / ' + formatClock(m.duration) : '';
+	if (m.playing) return '播放中 ' + at + total;
+	if ((m.currentTime || 0) > 0) return '已暂停 ' + at + total;
+	return '';
+});
+
+/** 秒 → 12:30 / 1:02:30 */
+function formatClock(seconds: number) {
+	const total = Math.max(0, Math.floor(seconds || 0));
+	const h = Math.floor(total / 3600);
+	const m = Math.floor((total % 3600) / 60);
+	const s = total % 60;
+	const mm = String(m).padStart(2, '0');
+	const ss = String(s).padStart(2, '0');
+	return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
 
 const taskTitle = computed(() => {
 	const p = progress.value;
@@ -815,6 +859,25 @@ async function bringToFront() {
 	background: var(--warn-soft);
 	color: var(--warn);
 	font-size: 11.5px;
+}
+
+/* 视频播放进度：证明「没有日志」是正常的 */
+.task-media {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	margin: 8px 12px 0;
+	font-size: 11.5px;
+	color: var(--text-3);
+	font-variant-numeric: tabular-nums;
+}
+
+.task-media :deep(svg) {
+	flex: none;
+}
+
+.task-media.playing {
+	color: var(--ok);
 }
 
 .task-alert :deep(svg) {

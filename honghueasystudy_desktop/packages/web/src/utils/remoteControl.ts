@@ -7,6 +7,20 @@ import { store } from '../store';
 
 const { ipcRenderer } = electron;
 
+/**
+ * 主进程日志桥接
+ *
+ * `remote` 是 preload 注入的全局对象，没有类型声明（直接写会报 TS2304）。
+ * 统一收在这里，顺便把「日志通道不可用」也吃掉——记日志失败绝不能影响上报本身。
+ */
+function mainLog(level: 'log' | 'warn' | 'info', message: string) {
+	try {
+		(globalThis as any).remote?.logger?.call(level, message);
+	} catch {
+		// 忽略：日志通道异常不该影响主流程
+	}
+}
+
 /** 上报节流间隔 */
 const PUSH_INTERVAL = 800;
 /**
@@ -40,6 +54,13 @@ interface BrowserSnapshotItem {
 		errors: number;
 		finished: boolean;
 	};
+	/**
+	 * 页面内视频播放状态
+	 *
+	 * 视频播放期间没有日志输出，远程台据此区分「正在看视频」和「真的卡住」。
+	 * null 表示当前页没有 video。
+	 */
+	media: { playing: boolean; currentTime: number; duration: number } | null;
 }
 
 interface RemoteSnapshotPayload {
@@ -114,7 +135,16 @@ function buildSnapshot(): RemoteSnapshotPayload {
 							answered: 0,
 							errors: 0,
 							finished: false
-						}
+						},
+				/** 同样逐字段拷贝：running.media 读出来是响应式代理，直接进 IPC 会克隆失败 */
+				media:
+					running && running.media
+						? {
+								playing: !!running.media.playing,
+								currentTime: Number(running.media.currentTime) || 0,
+								duration: Number(running.media.duration) || 0
+							}
+						: null
 			});
 			if (running && running.logs && running.logs.length > 0) {
 				logs[browser.uid] = running.logs.slice(-MAX_LOGS);
@@ -160,11 +190,7 @@ function sendState() {
 			const now = Date.now();
 			if (now - lastSendErrorAt > 15000) {
 				lastSendErrorAt = now;
-				try {
-					remote.logger.call('warn', `[远程] 状态上报失败：${e2 instanceof Error ? e2.message : String(e2)}`);
-				} catch {
-					// 日志通道也不可用时只能留在控制台
-				}
+				mainLog('warn', `[远程] 状态上报失败：${e2 instanceof Error ? e2.message : String(e2)}`);
 			}
 		}
 	}
@@ -358,9 +384,12 @@ async function runHeartbeat(): Promise<void> {
 	}
 
 	try {
-		const jobs = processes.filter((p) => p.status === 'launched').map((p) => p.refreshPages());
+		const running = processes.filter((p) => p.status === 'launched');
+		const jobs = running.map((p) => p.refreshPages());
+		/** 播放状态也要在打包快照前更新，否则远程台看到的是上一轮的进度 */
+		const mediaJobs = running.map((p) => p.refreshMedia());
 		if (jobs.length > 0) {
-			await Promise.race([Promise.allSettled(jobs), sleep(REFRESH_TIMEOUT)]);
+			await Promise.race([Promise.allSettled([...jobs, ...mediaJobs]), sleep(REFRESH_TIMEOUT)]);
 		}
 		sendState();
 	} finally {
@@ -409,11 +438,7 @@ function noteTick(): void {
 	if (now - lastSendAt < 15000) return;
 	if (now - lastTickNoteAt < 30000) return;
 	lastTickNoteAt = now;
-	try {
-		remote.logger.call('log', '[远程] 状态上报停滞，已收到主进程催报');
-	} catch {
-		// 日志失败不影响上报
-	}
+	mainLog('log', '[远程] 状态上报停滞，已收到主进程催报');
 }
 
 /** 注册远程控制桥接（幂等） */
@@ -444,11 +469,7 @@ export function activeRemoteControlBridge() {
 	startWorkerHeartbeat();
 
 	/** 留一条启动痕迹：排查「远程收不到状态」时先确认桥接和新版心跳确实在工作 */
-	try {
-		remote.logger.call('log', `[远程] 状态上报已启动（心跳 ${HEARTBEAT_INTERVAL}ms，Worker ${beatWorker ? '已启用' : '不可用'}）`);
-	} catch {
-		// 日志失败不影响上报
-	}
+	mainLog('log', `[远程] 状态上报已启动（心跳 ${HEARTBEAT_INTERVAL}ms，Worker ${beatWorker ? '已启用' : '不可用'}）`);
 
 	/** 后台标签被冻结后回到前台时立即补一次，不必等下一个心跳 */
 	if (typeof document !== 'undefined') {

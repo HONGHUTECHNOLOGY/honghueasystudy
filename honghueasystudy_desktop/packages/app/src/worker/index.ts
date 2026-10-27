@@ -21,6 +21,15 @@ type BrowserConfig = {
 	enable_dialog?: boolean;
 };
 
+/** 页面内视频的播放状态（远程台用来区分「正常播放」和「真的卡住」） */
+export interface MediaState {
+	playing: boolean;
+	/** 当前播放位置（秒） */
+	currentTime: number;
+	/** 总时长（秒），直播/未知为 0 */
+	duration: number;
+}
+
 interface Langs {
 	error_when_executable_not_found?: string;
 	error_when_browser_version_too_high?: string;
@@ -370,9 +379,81 @@ export class ScriptWorker {
 		);
 	}
 
+	/**
+	 * 读取当前页面的视频播放状态
+	 *
+	 * 网课一个视频动辄几十分钟，播放期间脚本不会有任何日志输出。
+	 * 远程台只看「日志静止」会把正常播放误判成卡住，所以把播放进度也当作活性信号。
+	 *
+	 * 视频通常在 iframe 里（超星、智慧树都是），必须逐 frame 找；
+	 * 只看主文档会永远返回 null，等于没做。取进度最大的那个 video，
+	 * 避免页面里同时挂着一个广告/预加载的 0 秒播放器。
+	 */
+	async getMedia(): Promise<MediaState | null> {
+		const page = await this.pickActivePage();
+		if (!page) return null;
+
+		let best: MediaState | null = null;
+
+		/** 限制扫描的 frame 数量：每帧最坏 600ms，页面 frame 多时会把这次采集拖过心跳预算 */
+		for (const frame of page.frames().slice(0, 10)) {
+			try {
+				const info = await Promise.race([
+					frame.evaluate(() => {
+						const videos = Array.from(document.querySelectorAll('video')) as HTMLVideoElement[];
+						if (videos.length === 0) return null;
+
+						let pick: HTMLVideoElement | null = null;
+						for (const video of videos) {
+							if (!pick || (video.currentTime || 0) > (pick.currentTime || 0)) pick = video;
+						}
+						if (!pick) return null;
+
+						const duration = Number.isFinite(pick.duration) ? pick.duration : 0;
+
+						return {
+							playing: !pick.paused && !pick.ended && pick.readyState > 2,
+							currentTime: Math.round((pick.currentTime || 0) * 10) / 10,
+							duration: Math.round(duration * 10) / 10
+						};
+					}),
+					new Promise<null>((resolve) => setTimeout(() => resolve(null), 600))
+				]);
+
+				if (!info) continue;
+				/** 找到正在播放的就直接返回，不用再扫其它 frame */
+				if (info.playing) return info;
+				if (!best) best = info;
+			} catch {
+				// frame 可能已销毁或正在跳转，跳过
+			}
+		}
+
+		return best;
+	}
+
+	/** 取前台可见页；都不可见时退回最后一页（与截图的选择保持一致） */
+	private async pickActivePage(): Promise<Page | undefined> {
+		const pages = this.browser?.pages() || [];
+		if (pages.length === 0) return undefined;
+
+		for (const candidate of pages) {
+			try {
+				const state = await Promise.race([
+					candidate.evaluate(() => document.visibilityState),
+					new Promise<string>((resolve) => setTimeout(() => resolve(''), 500))
+				]);
+				if (state === 'visible') return candidate;
+			} catch {
+				// 页面正在跳转/已销毁，继续找
+			}
+		}
+
+		return pages[pages.length - 1];
+	}
+
 	/** 跳转到特殊图像共享浏览器窗口 */
-	async gotoWebRTCPage() {
-		const page = await this.browser?.newPage();
+	async gotoWebRTCPage() {		const page = await this.browser?.newPage();
 		if (page) {
 			const loadingText = ScriptWorker.lang('webrtc_page_loading_notice', `正在获取图像中，请勿操作...`);
 			await page
