@@ -168,6 +168,13 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           ARCH: ${{ matrix.arch }}
 
+      # 就地更新包：resources/app 的全量 zip，客户端更新时整体替换该目录后重启。
+      # 根目录必须是 resources/app 里的内容（不能再套一层），所以用专用的
+      # scripts/pack-app-update.js，而不是复用安装包；同时产出 sha256 供客户端校验。
+      - name: Pack in-place update bundle (Windows only)
+        if: matrix.platform == 'win'
+        run: node scripts/pack-app-update.js
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -178,6 +185,9 @@ jobs:
             honghueasystudy_desktop/packages/app/dist/*.AppImage
             honghueasystudy_desktop/packages/app/dist/*.deb
             honghueasystudy_desktop/packages/app/dist/*.rpm
+            honghueasystudy_desktop/packages/app/dist/update/app-*.zip
+            honghueasystudy_desktop/packages/app/dist/update/app-*.zip.sha256
+            honghueasystudy_desktop/packages/app/dist/update/update-meta.json
           if-no-files-found: error
           retention-days: 7
 
@@ -236,6 +246,8 @@ jobs:
                 *.deb)         label="Linux deb 包" ;;
                 *.rpm)         label="Linux rpm 包" ;;
                 extension.zip) label="浏览器扩展 v${EXT_VERSION}（解压后在扩展管理页加载）" ;;
+                app-*.zip)     label="Windows 就地更新包（客户端自动更新下载，无需手动安装）" ;;
+                *.zip.sha256)  label="更新包校验值" ;;
                 *)             label="$name" ;;
               esac
               echo "- [${label}](${DL}/${name})"

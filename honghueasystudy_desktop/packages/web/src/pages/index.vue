@@ -52,7 +52,9 @@
 						</template>
 					</div>
 
-					<div class="text-secondary version mb-1 ms-2">{{ version }}</div>
+					<div class="text-secondary version mb-1 ms-2" @click="handleCheckUpdate">
+						{{ checking ? '检查中…' : version }}
+					</div>
 				</div>
 			</div>
 			<div
@@ -75,6 +77,7 @@ import { RouteRecordRaw, useRouter } from 'vue-router';
 import { routes, CustomRouteType, router } from '../route';
 import { store } from '../store';
 import { remote } from '../utils/remote';
+import { checkAppUpdate } from '../utils/ipc';
 import Icon from '../components/Icon.vue';
 import { Tooltip } from '@arco-design/web-vue';
 import CommonEditActionDropdown from '../components/CommonEditActionDropdown.vue';
@@ -92,6 +95,18 @@ const version = ref('');
 remote.app.call('getVersion').then((v) => {
 	version.value = v;
 });
+
+/** 点击版本号手动检查更新：启动时只在静默检测，网络抖动用户无从察觉 */
+const checking = ref(false);
+async function handleCheckUpdate() {
+	if (checking.value) return;
+	checking.value = true;
+	try {
+		await checkAppUpdate();
+	} finally {
+		checking.value = false;
+	}
+}
 
 function clickMenu(route: RouteRecordRaw & { meta: { title: string } }) {
 	router.push(route.path);
@@ -183,6 +198,13 @@ function clickMenu(route: RouteRecordRaw & { meta: { title: string } }) {
 		position: absolute;
 		bottom: 0px;
 		opacity: 0.5;
+		cursor: pointer;
+		user-select: none;
+		transition: opacity 0.2s var(--ease-precise);
+
+		&:hover {
+			opacity: 1;
+		}
 	}
 }
 

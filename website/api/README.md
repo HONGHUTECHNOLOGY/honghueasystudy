@@ -23,23 +23,41 @@
   - `userjs`：官方用户脚本，指向 `https://easystudy.honghutech.eu.org/honghueasystudy.user.js`。
     **发布前需把构建产物放到网站根目录**（本地执行 `pnpm build` 生成 `dist/honghu.user.js`，
     重命名为 `honghueasystudy.user.js` 放入 `website/` 即可随官网部署）。
-- `versions`：软件版本列表。发布新版时在此追加：
+- `versions`：软件版本列表，桌面端 `packages/app/src/tasks/updater.ts` 读取它做版本比较。
+  **不要手写**——链接或字段错一条，就等于那一版永远不会被检测到。用脚本生成：
 
-```json
-{
-  "tag": "x.y.z",
-  "description": { "feat": ["..."], "fix": ["..."], "other": [] },
-  "url": "https://easystudy.honghutech.eu.org/app/download/x.y.z/app-x.y.z.zip",
-  "app_downloads": {
-    "win32": "https://easystudy.honghutech.eu.org/app/download/x.y.z/honghueasystudy-x.y.z-setup-win-x64.exe",
-    "darwin": "https://easystudy.honghutech.eu.org/app/download/x.y.z/honghueasystudy-x.y.z-setup-mac-arm64.dmg",
-    "linux": "https://easystudy.honghutech.eu.org/app/download/x.y.z/honghueasystudy-x.y.z-setup-linux-x64.AppImage"
-  }
-}
+```bash
+# 1) 打就地更新包：产出 dist/update/app-<ver>.zip + .sha256 + update-meta.json
+node scripts/pack-app-update.js
+
+# 2) 上传到 GitHub Release（建议单独开一条桌面端版本线 tag: desktop-v<ver>，
+#    不要和扩展的 release-please tag 混用；CI 也会自动产出同名 zip 并附在 Release 里）
+gh release create desktop-v3.2.0 --title "桌面端 3.2.0" --notes "..." \
+  honghueasystudy_desktop/packages/app/dist/update/app-3.2.0.zip
+
+# 3) 写入清单（同时同步 ocs-app-infos.json 旧副本）
+node scripts/write-update-manifest.js \
+  --meta honghueasystudy_desktop/packages/app/dist/update/update-meta.json \
+  --notes "feat: 支持点击版本号检查更新" --notes "fix: 修复更新失败导致无法启动"
 ```
 
-> 注意：`url` 指向的更新包是**桌面端主进程就地解压用的 app.zip**，仅 Windows 生效；
-> mac / linux 桌面端检测到新版本后会打开 `app_downloads` 里的安装包链接手动安装。
+字段含义：
+
+| 字段 | 作用 |
+| --- | --- |
+| `tag` | 版本号，与 `app.getVersion()` 做 semver 比较（允许带 `v` 前缀） |
+| `description` | 更新弹窗内按 新增 / 修复 / 其他 分组展示 |
+| `url` | Windows 就地更新包（zip 根目录 = `resources/app` 的内容），**必须能直接下载** |
+| `sha256` | 更新包校验值，下载后不一致立即中止，不改动现有安装 |
+| `size` | 字节数，下载后做完整性复核 |
+| `app_downloads` | mac / linux 打开对应链接手动安装（单字段无法区分 mac 双架构，一般指 Release 页面） |
+
+> 更新包约 22MB（解压后 58MB），**超过 Cloudflare Pages 单文件 25MB 限制**，
+> 只能放 GitHub Release 或对象存储；官网只托管这份 JSON 清单。
+>
+> `url` 指向的 zip 由 `scripts/pack-app-update.js` 生成，根目录必须是
+> `package.json` / `lib/` / `node_modules/` / `public/` 这些 `resources/app` 里的内容，
+> 外面不能再套一层目录——客户端是把整个 app 目录换掉。
 
 ## 维护
 

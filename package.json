@@ -15,6 +15,8 @@
 		"build:ext": "gulp -f ./scripts/build-extension.js",
 		"pack:ext": "node scripts/pack-extension.js",
 		"build:web": "node scripts/build-website.js",
+		"release:update-pack": "node scripts/pack-app-update.js",
+		"release:update-manifest": "node scripts/write-update-manifest.js",
 		"dev:web": "node scripts/build-website.js --serve",
 		"build:desktop": "pnpm build:ext && pnpm -C honghueasystudy_desktop build",
 		"tsc": "pnpm lint && gulp -f ./scripts/tsc.js",
