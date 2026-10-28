@@ -30,6 +30,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
 const MANIFEST = path.join(ROOT, 'website', 'api', 'honghu-app-infos.json');
@@ -76,6 +77,7 @@ function parseArgs(argv) {
 		mirrors: [],
 		verify: false,
 		zipUrl: null,
+		installer: null,
 		manifest: MANIFEST,
 		dryRun: false,
 		noLegacy: false
@@ -91,6 +93,7 @@ function parseArgs(argv) {
 		else if (a === '--mirror') out.mirrors.push(String(argv[++i]));
 		else if (a === '--verify') out.verify = true;
 		else if (a === '--zip-url') out.zipUrl = argv[++i];
+		else if (a === '--installer') out.installer = path.resolve(argv[++i]);
 		else if (a === '--manifest') out.manifest = path.resolve(argv[++i]);
 		else if (a === '--dry-run') out.dryRun = true;
 		else if (a === '--no-legacy') out.noLegacy = true;
@@ -145,6 +148,44 @@ function parseNotes(notes) {
 	}
 	return desc;
 }
+
+/** 流式算 SHA256（安装包 260MB，不能整读进内存） */
+function sha256File(file) {
+	return new Promise((resolve, reject) => {
+		const hash = crypto.createHash('sha256');
+		fs.createReadStream(file)
+			.on('data', (c) => hash.update(c))
+			.on('end', () => resolve(hash.digest('hex')))
+			.on('error', reject);
+	});
+}
+
+/**
+ * 找 Windows 安装包（NSIS setup exe）。
+ *
+ * 客户端现在走「下载安装包 → 静默覆盖安装」，所以必须给出安装包的多源地址与校验值。
+ * 文件名按 electron.builder.json 的 artifactName 生成：
+ *   `${productName}-${version}-setup-${os}-${arch}.${ext}`，例如 鸿鹄易学-3.2.1-setup-win-x64.exe
+ */
+function findWinInstaller(productName, version) {
+	const distDir = path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app', 'dist');
+	if (!fs.existsSync(distDir)) return null;
+
+	const expected = `${productName}-${version}-setup-win-x64.exe`;
+	const exact = path.join(distDir, expected);
+	if (fs.existsSync(exact)) return { file: exact, name: expected };
+
+	// artifactName 改过名字时兜底：同版本、win、setup、exe
+	const candidates = fs
+		.readdirSync(distDir)
+		.filter((f) => /-setup-win-.*\.exe$/i.test(f) && f.includes(version));
+	if (candidates.length === 1) return { file: path.join(distDir, candidates[0]), name: candidates[0] };
+	if (candidates.length > 1) {
+		console.warn(`[update-manifest] ⚠ 找到多个候选安装包，请用 --installer 指定：${candidates.join(', ')}`);
+	}
+	return null;
+}
+
 
 function compareVersionDesc(a, b) {
 	const parse = (v) => String(v).replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
@@ -208,24 +249,66 @@ async function main() {
 
 	const builder = fs.existsSync(BUILDER) ? JSON.parse(fs.readFileSync(BUILDER, 'utf8')) : {};
 	const productName = builder.productName || '鸿鹄易学';
+	const githubBase = `https://github.com/${args.repo}`;
+	const gitcodeBase = args.gitcode ? `https://gitcode.com/${args.gitcode}` : null;
 	/** 与 electron.builder.json 的 artifactName 保持一致：${productName}-${version}-setup-${os}-${arch}.${ext} */
-	const installer = (os, arch, ext) =>
-		`https://github.com/${args.repo}/releases/download/${tag}/${encodeURIComponent(`${productName}-${version}-setup-${os}-${arch}.${ext}`)}`;
+	const installerName = (os, arch, ext) => `${productName}-${version}-setup-${os}-${arch}.${ext}`;
+	const downloadUrl = (base, name) => `${base}/releases/download/${tag}/${encodeURIComponent(name)}`;
 
-	if (!meta.sha256) console.warn('[update-manifest] ⚠ meta 没有 sha256，客户端将跳过完整性校验');
+	/*
+	 * Windows 安装包：新版客户端只走这条（下载 setup.exe → 静默覆盖安装）。
+	 * 用安装包而不是替换 resources/app，是为了把 Electron 运行时、内置扩展 extension/、
+	 * bin/chrome、bin/cloudflared、bin/ocr 一起对齐。
+	 */
+	const winName = installerName('win', 'x64', 'exe');
+	const foundInstaller = args.installer
+		? { file: args.installer, name: path.basename(args.installer) }
+		: findWinInstaller(productName, version);
+
+	/** @type {{urls: string[], sha256: string, size: number, name: string} | null} */
+	let winInstaller = null;
+	if (foundInstaller) {
+		if (!fs.existsSync(foundInstaller.file)) {
+			console.error('[update-manifest] 找不到安装包：' + foundInstaller.file);
+			process.exit(1);
+		}
+		const size = fs.statSync(foundInstaller.file).size;
+		const sha256 = await sha256File(foundInstaller.file);
+		const urls = [];
+		// 顺序与 zip 一致：GitCode 在前（国内 CDN），GitHub 兜底
+		if (gitcodeBase && !args.noMirror) urls.push(downloadUrl(gitcodeBase, foundInstaller.name));
+		urls.push(downloadUrl(githubBase, foundInstaller.name));
+		for (const m of args.mirrors) urls.push(m);
+		winInstaller = { urls: [...new Set(urls)], sha256, size, name: foundInstaller.name };
+	} else {
+		console.warn(
+			`[update-manifest] ⚠ 没找到 Windows 安装包（${winName}）\n` +
+				'  客户端会退回「打开下载页手动安装」。请先执行桌面端打包，或用 --installer 指定文件。'
+		);
+	}
+
+	if (!meta.sha256) console.warn('[update-manifest] ⚠ meta 没有 sha256，旧版客户端将跳过完整性校验');
 
 	console.log(`[update-manifest] 桌面版本 ${version}（清单 tag，参与 semver 比较）`);
 	console.log(`[update-manifest] 插件版本 ${tag}（Release tag，只拼下载地址，来源：${resolved.from}）`);
+	if (winInstaller) {
+		console.log(`[update-manifest] 安装包   ${winInstaller.name}  ${(winInstaller.size / 1024 / 1024).toFixed(1)}MB`);
+		console.log(`[update-manifest] 校验     ${winInstaller.sha256}`);
+	}
 
 	const entry = {
 		tag: version,
 		description: parseNotes(args.notes),
-		url: uniqueSources[0],
-		...(uniqueSources.length > 1 ? { urls: uniqueSources } : {}),
-		sha256: meta.sha256,
-		size: meta.size,
+		...(winInstaller ? { installers: { win32: winInstaller } } : {}),
+		/*
+		 * 旧版客户端（<= 3.2.0）只会读 url/urls 走 zip 就地更新。
+		 * 保留这几个字段，它们才能升级到本版；新客户端会忽略。
+		 */
+		...(meta.sha256 && uniqueSources.length
+			? { url: uniqueSources[0], ...(uniqueSources.length > 1 ? { urls: uniqueSources } : {}), sha256: meta.sha256, size: meta.size }
+			: {}),
 		app_downloads: {
-			win32: installer('win', 'x64', 'exe'),
+			win32: downloadUrl(githubBase, foundInstaller?.name || winName),
 			// 单字段无法区分 mac arm64/x64 与 linux 的 deb/rpm/AppImage，统一指 Release 页面
 			darwin: releasePage,
 			linux: releasePage
@@ -236,7 +319,9 @@ async function main() {
 	if (args.verify) {
 		console.log('[update-manifest] 探测下载源…');
 		let failed = 0;
-		for (const u of uniqueSources) {
+		/** 真正会被下载的是安装包；zip 只在旧客户端上用到，一并探测 */
+		const targets = [...(winInstaller ? winInstaller.urls : []), ...uniqueSources];
+		for (const u of [...new Set(targets)]) {
 			const r = await probeUrl(u);
 			console.log(`  ${r.ok ? '✓' : '✗'} ${u}  (${r.detail})`);
 			if (!r.ok) failed++;
@@ -244,7 +329,7 @@ async function main() {
 		if (failed > 0) {
 			console.error(
 				`\n[update-manifest] ${failed} 个下载源不可用，未写入清单。\n` +
-					'请先在对应平台创建 tag 并上传同名更新包后再执行；确认无需校验可去掉 --verify。'
+					'请先在对应平台创建 tag 并上传同名安装包后再执行；确认无需校验可去掉 --verify。'
 			);
 			process.exitCode = 1;
 			return;
@@ -278,9 +363,14 @@ async function main() {
 	if (!args.dryRun) {
 		console.log(`\n[update-manifest] 桌面版本 ${version}   → 清单 tag（参与比较）`);
 		console.log(`[update-manifest] 插件版本 ${tag}   → Release tag（只拼地址，来源：${resolved.from}）`);
-		console.log(`[update-manifest] 下载源   ${uniqueSources.length} 个（客户端按顺序回退）`);
-		for (const u of uniqueSources) console.log(`                    ${u}`);
-		console.log(`[update-manifest] 校验     ${meta.sha256 || '（缺失）'}`);
+		if (winInstaller) {
+			console.log(`[update-manifest] 安装包   ${winInstaller.name}（${(winInstaller.size / 1024 / 1024).toFixed(1)}MB）`);
+			for (const u of winInstaller.urls) console.log(`                    ${u}`);
+		}
+		if (uniqueSources.length) {
+			console.log(`[update-manifest] 旧版 zip  ${uniqueSources.length} 个源（仅 <=3.2.0 客户端使用）`);
+		}
+		console.log(`[update-manifest] 校验     ${winInstaller?.sha256 || meta.sha256 || '（缺失）'}`);
 		console.log('\n下一步：提交 website/api/ 的改动并推送，官网（Cloudflare Pages）部署后即生效。');
 		console.log('提示：客户端每次请求都带时间戳，不需要担心 CDN 缓存。');
 	}

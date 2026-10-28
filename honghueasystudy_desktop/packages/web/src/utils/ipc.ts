@@ -12,8 +12,10 @@ const { ipcRenderer } = electron;
 const CLOSING_NOTIFY_KEY = 'updater-close-browsers';
 
 /**
- * 就地更新要整体替换 resources/app 目录，浏览器进程会占用其中的 node_modules 原生模块，
- * 不关掉就 rename 失败（Windows 报 EBUSY/EPERM）。这里先关浏览器再交给主进程替换。
+ * 安装包静默覆盖安装前必须关掉浏览器实例。
+ *
+ * 安装器要改写 resources/ 下的文件（含 node_modules 里的原生模块），
+ * 这些文件正被浏览器进程占用时安装会失败或留下半装状态。
  *
  * close() 依赖 worker 的 browser-closed 回执，卡住时不能让更新无限等待，因此加超时兜底。
  */
@@ -21,7 +23,7 @@ async function closeBrowsersForUpdate() {
 	const running = processes.filter((p) => p.status === 'launched' || p.status === 'launching');
 	if (!running.length) return;
 
-	notify('鸿鹄易学更新程序', '正在关闭浏览器，准备更新…', CLOSING_NOTIFY_KEY, {
+	notify('鸿鹄易学更新程序', '正在关闭浏览器，准备安装…', CLOSING_NOTIFY_KEY, {
 		type: 'info',
 		duration: 0,
 		close: false
@@ -59,11 +61,12 @@ export async function checkAppUpdate() {
 }
 
 export function activeIpcRenderListener() {
-	/** 如果正在更新的话，获取更新进度 */
+	/** 下载安装包的进度（261MB，进度按实际字节走） */
 	ipcRenderer.on('update-download', (e, rate, totalLength, chunkLength) => {
+		const total = totalLength > 0 ? (totalLength / 1024 / 1024).toFixed(0) : '?';
 		notify(
 			'鸿鹄易学更新程序',
-			`更新中: ${(chunkLength / 1024 / 1024).toFixed(2)}MB/${(totalLength / 1024 / 1024).toFixed(2)}MB`,
+			`正在下载安装包: ${(chunkLength / 1024 / 1024).toFixed(1)}MB/${total}MB`,
 			'updater',
 			{
 				type: 'info',
@@ -71,6 +74,37 @@ export function activeIpcRenderListener() {
 				close: false
 			}
 		);
+	});
+
+	/**
+	 * 安装包下载并校验完成。
+	 * 此时还不退出应用 —— 用户可能正在做题，让他自己决定什么时候装。
+	 */
+	ipcRenderer.on('update-downloaded', (e, info: { tag?: string; size?: number; installDir?: string }) => {
+		Notification.remove('updater');
+		if (!info || !info.tag) return;
+
+		Modal.confirm({
+			title: '安装包已下载完成',
+			okText: '立即安装',
+			cancelText: '稍后安装',
+			maskClosable: false,
+			width: 460,
+			async onOk() {
+				await closeBrowsersForUpdate();
+				try {
+					await remote.methods.call('installUpdate');
+				} catch (err) {
+					Message.error('启动安装失败：' + err);
+				}
+			},
+			content: () =>
+				h('div', [
+					h('div', `新版本 ${info.tag} 已下载完成。`),
+					h('div', '点击「立即安装」会关闭本软件并开始安装，安装完成后自动重新启动。'),
+					info.installDir ? h('div', { style: 'margin-top:8px;opacity:.6;font-size:12px' }, `安装目录：${info.installDir}`) : null
+				])
+		});
 	});
 
 	// 显示浏览器
@@ -92,8 +126,14 @@ export function activeIpcRenderListener() {
 			maskClosable: false,
 			width: 500,
 			async onOk() {
-				await closeBrowsersForUpdate();
-				await remote.methods.call('updateApp', new_version);
+				try {
+					// 只负责下载安装包（261MB）：下载期间不打扰用户，也不关浏览器；
+					// 下完由主进程推 update-downloaded，再弹「立即安装」由用户决定时机。
+					await remote.methods.call('updateApp', new_version);
+				} catch (e) {
+					// 主进程已弹过详细的失败对话框，这里只留控制台记录，避免重复提示
+					console.warn('下载更新失败', e);
+				}
 			},
 			content: () =>
 				h('div', [

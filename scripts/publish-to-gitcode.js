@@ -168,11 +168,17 @@ async function getUploadUrl({ apiBase, repo, tag, token, fileName }) {
 
 /** 上传是 PUT 到预签名地址，返回的 headers 必须原样透传（OBS 用它校验策略） */
 async function putToStorage({ uploadUrl, headers, buffer, fileName }) {
+	/*
+	 * 安装包是 300MB+ 的单个附件，固定 10 分钟在慢线路下会被自己掐断。
+	 * 按 512KB/s 的下限估算所需时间，再留 60 秒余量。
+	 */
+	const estimated = Math.ceil(buffer.length / (512 * 1024)) * 1000 + 60000;
+	const timeout = Math.max(10 * 60 * 1000, estimated);
 	const res = await fetch(uploadUrl, {
 		method: 'PUT',
 		headers: { ...headers, 'Content-Length': String(buffer.length) },
 		body: buffer,
-		signal: AbortSignal.timeout(10 * 60 * 1000)
+		signal: AbortSignal.timeout(timeout)
 	});
 	if (!res.ok) {
 		throw new ApiError(res.status, await res.text().catch(() => ''), `上传 ${fileName}`);

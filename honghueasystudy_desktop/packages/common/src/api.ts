@@ -48,27 +48,44 @@ export interface BannerResource {
 	type?: 'info' | 'warning' | 'success' | 'error';
 }
 
+/** 单个平台安装包的下载信息 */
+export interface UpdateInstaller {
+	/** 多源地址，按优先级排列（如 [GitCode, GitHub]）；各源必须是字节一致的同一个文件 */
+	urls: string[];
+	/** 安装包 SHA256（小写 hex），下载后校验，不匹配立即中止 */
+	sha256?: string;
+	/** 字节大小，用于完整性复核与进度兜底 */
+	size?: number;
+	/** 文件名，仅用于日志与本地临时文件名 */
+	name?: string;
+}
+
 /** 版本更新信息 */
 export interface UpdateInformationResource {
 	tag: string;
 	description: Record<'feat' | 'fix' | 'other', string[]>;
-	/** Windows 就地更新包（zip，根目录即 resources/app 的内容）。无 urls 时使用它 */
-	url: string;
 	/**
-	 * 更新包的多源地址，按优先级排列（如 [GitCode, GitHub]）。
-	 * 客户端逐个尝试：连不上、下载中断、sha256 不符都会自动切下一个源。
-	 * 各源必须是**字节完全一致**的同一个文件，否则 sha256 校验无法通过。
+	 * Windows **安装包**（setup exe）的下载信息。
+	 *
+	 * 客户端拿到后下载 → 校验 sha256 → `setup.exe /S /D=<当前安装目录>` 静默覆盖安装 → 重启。
+	 * 用安装包而不是就地替换 app 目录，是因为 `resources/app` 之外还有 Electron 运行时、
+	 * 内置扩展 `resources/extension`、`bin/chrome`、`bin/cloudflared`、`bin/ocr`，
+	 * 只换 app 层会让这些停留在旧版本（扩展改动永远送不到已装用户）。
 	 */
+	installers?: Partial<Record<'win32' | 'darwin' | 'linux', UpdateInstaller>>;
+	/**
+	 * 旧版就地更新包（zip，根目录即 resources/app 的内容）。
+	 * @deprecated 仅为了让已装的旧版本客户端（<= 3.2.0）还能升级上来而保留；
+	 * 新版客户端优先走 installers，不再使用它。
+	 */
+	url?: string;
+	/** @deprecated 见 url */
 	urls?: string[];
-	/**
-	 * 更新包 SHA256（小写 hex）。
-	 * 存在时主进程会在覆盖前校验，不匹配立即中止，绝不改动当前安装。
-	 * 由 scripts/pack-app-update.js 生成，写入清单时一并带上。
-	 */
+	/** @deprecated 旧 zip 的校验值 */
 	sha256?: string;
-	/** 更新包字节大小，用于下载前磁盘预检与进度兜底 */
+	/** @deprecated 旧 zip 的字节大小 */
 	size?: number;
-	/** 各平台安装包（mac / linux 检测到新版本后打开对应下载页手动安装） */
+	/** 各平台安装包下载页（mac / linux 打开对应链接手动安装） */
 	app_downloads?: {
 		win32?: string;
 		darwin?: string;

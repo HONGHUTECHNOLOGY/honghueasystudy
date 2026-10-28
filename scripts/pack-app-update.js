@@ -188,7 +188,8 @@ async function main() {
 	console.log(`  文件      ${path.relative(ROOT, outFile)}  (${(size / 1024 / 1024).toFixed(2)} MB)`);
 	console.log(`  条目      ${files.length} 个`);
 	console.log(`  SHA256    ${sha256}`);
-	console.log(`\n下一步：把该 zip 上传到 Release（tag: ${tagHint}，与扩展包同一个 Release），然后执行`);
+	console.log(`\n注意：新版客户端已改为「下载安装包 → 静默覆盖安装」，本 zip 仅用于让 <=3.2.0 的旧客户端还能升级上来。`);
+	console.log(`下一步：与安装包一起上传到同一个 Release（tag: ${tagHint}），然后执行`);
 	console.log(`  node scripts/write-update-manifest.js --meta ${path.relative(ROOT, path.join(args.out, 'update-meta.json'))}`);
 }
 

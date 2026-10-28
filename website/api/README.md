@@ -27,27 +27,64 @@
   **不要手写**——链接或字段错一条，就等于那一版永远不会被检测到。用脚本生成：
 
 ```bash
-# 1) 打就地更新包：产出 dist/update/app-<ver>.zip + .sha256 + update-meta.json
-#    meta 里的 tagHint 会读根 package.json（插件版本），例如 v5.2.0
-node scripts/pack-app-update.js
+# 1) 桌面端打包会同时产出安装包（dist/*.exe）与就地更新包（dist/update/app-<ver>.zip）
+#    前者是主路径（新版客户端下载安装包装），后者只留给 <=3.2.0 的旧客户端
+node scripts/pack-app-update.js    # 仅重打 zip；完整打包见 pnpm build:app
 
 # 2) 上传到扩展那一条 Release（tag = 插件版本 v5.x.x）——
-#    扩展包和桌面安装包是同一批产物、挂在同一个 Release 下，不要另开 tag
-gh release upload v5.2.0 honghueasystudy_desktop/packages/app/dist/update/app-3.2.0.zip
+#    扩展包、安装包、旧版 zip 是同一批产物、挂在同一个 Release 下，不要另开 tag
+gh release upload v5.2.0 \
+  honghueasystudy_desktop/packages/app/dist/鸿鹄易学-3.2.1-setup-win-x64.exe \
+  honghueasystudy_desktop/packages/app/dist/update/app-3.2.1.zip
 #    若该 Release 还不存在：gh release create v5.2.0 --title "..." --notes "..."
 
 # 2.5) 同步到 GitCode（国内加速源；CI 配了 GITCODE_TOKEN 时这一步已自动完成，可跳过）
 GITCODE_TOKEN=xxx node scripts/publish-to-gitcode.js --tag v5.2.0 \
-  --file honghueasystudy_desktop/packages/app/dist/update/app-3.2.0.zip
+  --file honghueasystudy_desktop/packages/app/dist/鸿鹄易学-3.2.1-setup-win-x64.exe \
+  --file honghueasystudy_desktop/packages/app/dist/update/app-3.2.1.zip
 
 # 3) 写入清单（同时同步 ocs-app-infos.json 旧副本）
-#    Release tag 默认取根 package.json，不用手填；
-#    默认生成 GitCode 优先、GitHub 兜底的双源；--verify 会在写之前逐个探测链接是否可用
+#    会自动在 dist 下找安装包、算 sha256/size，写进 installers.win32；
+#    Release tag 默认取根 package.json，不用手填；--verify 会在写之前逐个探测链接
 node scripts/write-update-manifest.js \
   --meta honghueasystudy_desktop/packages/app/dist/update/update-meta.json \
   --notes "feat: 支持点击版本号检查更新" --notes "fix: 修复更新失败导致无法启动" \
   --verify
 ```
+
+### 更新方式：下载安装包，静默覆盖安装
+
+客户端（>= 3.2.1）检测到新版本后的流程：
+
+```
+读 installers.win32 → 多源下载 setup.exe → 校验 sha256/大小
+→ 弹「安装包已下载完成」→ 用户点「立即安装」→ 关闭浏览器实例
+→ setup.exe /S /D=<当前安装目录> → 应用退出 → 安装完成自动启动
+```
+
+为什么用安装包而不是替换 `resources/app`：
+
+| 内容 | 就地替换 app 目录 | 安装包 |
+| --- | --- | --- |
+| 主进程 / 渲染端 / node_modules | ✅ | ✅ |
+| Electron 运行时与原生模块 ABI | ❌ 升级大版本会启动失败 | ✅ |
+| 内置扩展 `resources/extension` | ❌ **扩展更新送不到** | ✅ |
+| `bin/chrome`、`bin/cloudflared`、`bin/ocr` | ❌ | ✅ |
+| 体积 | 22MB | 320MB |
+
+几个实现约束（改客户端时不要破坏）：
+
+- 安装目录取 `dirname(app.getPath('exe'))`，**不能读注册表**：electron-builder 生成的卸载项里
+  `InstallLocation` 是空的（实测）。
+- NSIS 的 `/D=` 必须是最后一个参数且**路径不加引号**，所以子进程要开
+  `windowsVerbatimArguments: true`，否则 Node 会自动加引号、装出一个带引号的目录。
+- 安装器必须以 detached 方式启动，并在启动后再 `app.quit()`；应用以管理员（High 完整性）运行时，
+  没退出就装会因文件占用失败。
+- 运行在打包目录（路径含 `win-unpacked`）时拒绝自动安装，避免覆盖构建产物。
+- 清单缺 `installers.win32` 时不要静默失败，退回「打开下载页手动安装」。
+
+`url` / `urls`（zip）保留的唯一原因是兼容 <= 3.2.0 的已装用户——那份代码只会走就地更新。
+等这批用户升级完，可以移除。
 
 **两个 tag 不要混用**（这是最容易踩的坑）：
 
@@ -66,11 +103,13 @@ node scripts/write-update-manifest.js \
 | --- | --- |
 | `tag` | **桌面版本**，与 `app.getVersion()` 做 semver 比较（允许带 `v` 前缀） |
 | `description` | 更新弹窗内按 新增 / 修复 / 其他 分组展示 |
-| `url` | 首选下载地址，同时也是没有 `urls` 时唯一可用的地址 |
-| `urls` | 多源地址，按优先级排列；客户端逐个尝试，失败自动切下一个 |
-| `sha256` | 更新包校验值，下载后不一致立即中止，不改动现有安装 |
-| `size` | 字节数，下载后做完整性复核 |
-| `app_downloads` | mac / linux 打开对应链接手动安装（单字段无法区分 mac 双架构，一般指 Release 页面） |
+| `installers.win32.urls` | 安装包多源地址，按优先级排列（GitCode → GitHub），客户端逐个回退 |
+| `installers.win32.sha256` | 安装包校验值，不匹配立即中止，不会启动安装器 |
+| `installers.win32.size` | 字节数，下载后复核 + 磁盘预检 |
+| `installers.win32.name` | 安装包文件名，用于本地临时文件名 |
+| `url` / `urls` | **旧版 zip 的就地更新地址**，仅 <=3.2.0 客户端使用 |
+| `sha256` / `size` | 旧版 zip 的校验值与大小 |
+| `app_downloads` | mac / linux 打开对应链接手动安装；`win32` 用作手动下载兜底 |
 
 ### GitCode 镜像（国内加速）
 

@@ -13,7 +13,7 @@ import si from 'systeminformation';
 import { store } from '../store';
 import { exportExcel } from '../utils/index';
 import { readdir, stat } from 'fs/promises';
-import { updateApp, checkUpdate } from './updater';
+import { updateApp, checkUpdate, installUpdate } from './updater';
 import { AutomationScripts } from '../scripts';
 import { AutomationScript } from '../scripts/script';
 import { getBrowserMajorVersion, getBuiltinExtensionPaths, getExtensionPaths } from '../utils/browser';
@@ -157,6 +157,7 @@ const methods = {
 	getPlatform: () => process.platform,
 	getArch: () => process.arch,
 	updateApp: updateApp,
+	installUpdate: installUpdate,
 	/** 手动检测更新（设置页/侧边栏版本号触发）：返回结构化的检测结果供 UI 展示 */
 	checkUpdate: () => checkUpdate(true),
 	moveWindowToTop: moveWindowToTop,

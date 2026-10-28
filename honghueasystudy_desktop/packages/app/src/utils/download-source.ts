@@ -29,12 +29,15 @@ export interface DownloadOptions {
 	stallMs?: number;
 }
 
+/** 把候选地址整理成去重后的 http(s) 列表 */
+export function normalizeUrls(urls: unknown): string[] {
+	const list = (Array.isArray(urls) ? urls : []).filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u));
+	return [...new Set(list)];
+}
+
 /** 把清单里的多源地址整理成去重后的候选列表；urls 优先，url 兜底（兼容旧版清单） */
 export function normalizeSources(version: UpdateInformationResource): string[] {
-	const list = [...(Array.isArray(version.urls) ? version.urls : []), version.url].filter(
-		(u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u)
-	);
-	return [...new Set(list)];
+	return normalizeUrls([...(Array.isArray(version.urls) ? version.urls : []), version.url]);
 }
 
 export function hostOf(url: string) {
