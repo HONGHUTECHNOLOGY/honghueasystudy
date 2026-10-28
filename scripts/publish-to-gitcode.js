@@ -160,12 +160,14 @@ async function createRelease({ apiBase, repo, tag, token, name, body, target }) 
 	return res.json().catch(() => ({}));
 }
 
-/** Release 已存在时也同步说明：CI 每次都重发完整 final-body.md，直接覆盖不会叠加 */
-async function updateReleaseBody({ apiBase, repo, releaseId, token, name, body }) {
-	const payload = {};
-	if (name) payload.name = name;
-	if (body !== undefined) payload.body = body;
-	const res = await apiFetch(`${apiBase}/repos/${repo}/releases/${releaseId}`, {
+/**
+ * Release 已存在时也同步说明：CI 每次都重发完整 final-body.md，直接覆盖不会叠加。
+ * GitCode 的更新接口按 tag 寻址（PATCH /releases/{tag}），且 name/body 都必填；
+ * Release 对象本身不暴露 id，不能走 gitea 式的 /releases/{id}。
+ */
+async function updateReleaseBody({ apiBase, repo, tag, token, name, body }) {
+	const payload = { name: name || tag, body: body || '' };
+	const res = await apiFetch(`${apiBase}/repos/${repo}/releases/${encodeURIComponent(tag)}`, {
 		token,
 		method: 'PATCH',
 		headers: { 'Content-Type': 'application/json' },
@@ -174,12 +176,12 @@ async function updateReleaseBody({ apiBase, repo, releaseId, token, name, body }
 	if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''), '更新 Release 说明');
 }
 
-/** 删除 Release 上的一个附件 */
-async function deleteAsset({ apiBase, repo, releaseId, assetId, token }) {
-	const res = await apiFetch(`${apiBase}/repos/${repo}/releases/${releaseId}/assets/${assetId}`, {
-		token,
-		method: 'DELETE'
-	});
+/** 删除 Release 附件：GitCode 按 tag 寻址（DELETE /releases/{tag}/attach_files/{id}） */
+async function deleteAsset({ apiBase, repo, tag, assetId, token }) {
+	const res = await apiFetch(
+		`${apiBase}/repos/${repo}/releases/${encodeURIComponent(tag)}/attach_files/${assetId}`,
+		{ token, method: 'DELETE' }
+	);
 	// GitCode 对已不存在的附件可能返回 404，视为已删除
 	if (!res.ok && res.status !== 404) {
 		throw new ApiError(res.status, await res.text().catch(() => ''), '删除附件');
@@ -199,8 +201,12 @@ async function purgeStaleAssets({ apiBase, repo, release, keepNames, tag, token 
 		if (new RegExp(`^${tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.(zip|tar|tar\\.gz|tar\\.bz2)$`).test(name)) {
 			continue;
 		}
+		if (a.id === undefined) {
+			console.warn(`[gitcode] 跳过删除过期附件 ${name}：附件缺少 id`);
+			continue;
+		}
 		try {
-			await deleteAsset({ apiBase, repo, releaseId: release.id, assetId: a.id, token });
+			await deleteAsset({ apiBase, repo, tag, assetId: a.id, token });
 			console.log(`[gitcode] 已删除过期附件 ${name}`);
 		} catch (e) {
 			console.warn(`[gitcode] 删除过期附件 ${name} 失败（不阻断）：${e.message}`);
@@ -362,12 +368,12 @@ async function main() {
 		console.log('[gitcode] Release 已存在，复用');
 		// 说明也要同步：脚本此前只在创建时写 notes，Release 已存在时说明会停在
 		// 首次创建的旧文案（CI 传来的 --notes-file 是完整正文，覆盖写不会叠加）
-		if (body && release.id) {
+		if (body) {
 			try {
 				await updateReleaseBody({
 					apiBase: args.apiBase,
 					repo: args.repo,
-					releaseId: release.id,
+					tag: args.tag,
 					token: args.token,
 					name: args.name || release.name,
 					body
@@ -382,7 +388,7 @@ async function main() {
 
 	// --purge-stale：清掉不在本次列表里的附件（安装包改名、失败重试的残留），
 	// GitCode 自动生成的源码归档（tag.zip 等）保留
-	if (args.purgeStale && release && release.id) {
+	if (args.purgeStale && release) {
 		await purgeStaleAssets({
 			apiBase: args.apiBase,
 			repo: args.repo,

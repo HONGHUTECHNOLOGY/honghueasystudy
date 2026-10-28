@@ -308,15 +308,17 @@ jobs:
           # 已有正式 Release（release-please 创建）就不建草稿，避免残留 untagged 草稿；
           # 手动对 tag dispatch 且无 Release 时才补建草稿
           gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --draft --generate-notes
-          # 清掉历史命名残留（如 鸿鹄易学-*）：--clobber 只覆盖同名，不删旧名，
-          # 不清理会出现中英文两套安装包并存
-          while IFS= read -r asset; do
-            [ -n "$asset" ] || continue
-            if [ ! -f "artifacts/$asset" ]; then
-              echo "删除过期附件: $asset"
-              gh release delete-asset "$TAG_NAME" "$asset" --yes || true
+          # 清掉历史命名残留（如 鸿鹄易学-* 上传后变成 -5.2.0-*）：
+          # --clobber 只覆盖同名，不删旧名，不清理会出现新旧两套安装包并存。
+          # 必须按 id 删：旧附件名以 - 开头（中文前缀被 GitHub 剥掉），
+          # gh 按名字删会把 -5.2.0-... 当成 flag 解析。
+          gh release view "$TAG_NAME" --json assets \
+            -q '.assets[] | "\(.id)\t\(.name)"' 2>/dev/null | while IFS=$'\t' read -r aid aname; do
+            if [ ! -f "artifacts/$aname" ]; then
+              echo "删除过期附件: $aname (id=$aid)"
+              gh api -X DELETE "repos/${GH_REPO}/releases/assets/$aid" || true
             fi
-          done < <(gh release view "$TAG_NAME" --json assets -q '.assets[].name' 2>/dev/null || true)
+          done
           # 只传文件：用 find 兜底，目录永远不会被当成附件
           find artifacts -type f -print0 | xargs -0 gh release upload "$TAG_NAME" --clobber
 
