@@ -155,4 +155,4 @@ extension/lib/
 extension/icon/
 extension/content/resources.js
 extension/content/main.js
-install.log
+install.log.release-sync/
