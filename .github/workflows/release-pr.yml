@@ -22,3 +22,30 @@ jobs:
           skip-github-release: true # 只创建 PR，不创建 Release
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # 「一键发版」：PR 创建后直接设置自动合并，检查通过即合入，
+      # 合入触发 release-tag.yml 建 Release 并派发 desktop-build。
+      # 仓库未开启 Allow auto-merge 或分支保护要求人工审批时这里只告警不失败，
+      # 此时需要人到 Pull requests 页面手动点合并。
+      - name: Auto-merge release PR
+        if: ${{ steps.release.outputs.prs != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          PRS=$(echo '${{ steps.release.outputs.prs }}' | jq -r '.[].number' 2>/dev/null)
+          if [ -z "$PRS" ]; then
+            # 本次没有新建 PR（如上次运行已创建），兜底找 open 状态的 autorelease PR
+            PRS=$(gh pr list --state open --label "autorelease: pending" --json number -q '.[].number')
+          fi
+          if [ -z "$PRS" ]; then
+            echo "没有待处理的 Release PR"
+            exit 0
+          fi
+          for pr in $PRS; do
+            if gh pr merge "$pr" --auto --squash; then
+              echo "PR #$pr 已设置自动合并"
+            else
+              echo "::warning::PR #$pr 无法设置自动合并 —— 需要在仓库 Settings 勾选 Allow auto-merge，且分支保护未要求人工审批；请到 Pull requests 手动合并"
+            fi
+          done

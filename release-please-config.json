@@ -1,13 +1,20 @@
 {
 	"release-type": "node",
 	"include-component-in-tag": false,
-	"include-v-in-tag": false,
+	"include-v-in-tag": true,
 	"separate-pull-requests": true,
 	"skip-parse-errors": true,
 	"packages": {
 		".": {
 			"component": "",
-			"release-type": "node"
+			"release-type": "node",
+			"extra-files": [
+				{
+					"type": "json",
+					"path": "honghueasystudy_desktop/packages/app/package.json",
+					"jsonpath": "$.version"
+				}
+			]
 		}
 	},
 	"changelog-sections": [

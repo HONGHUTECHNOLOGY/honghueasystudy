@@ -24,38 +24,65 @@
     **发布前需把构建产物放到网站根目录**（本地执行 `pnpm build` 生成 `dist/honghu.user.js`，
     重命名为 `honghueasystudy.user.js` 放入 `website/` 即可随官网部署）。
 - `versions`：软件版本列表，桌面端 `packages/app/src/tasks/updater.ts` 读取它做版本比较。
-  **不要手写**——链接或字段错一条，就等于那一版永远不会被检测到。用脚本生成：
+  **不要手写**——链接或字段错一条，就等于那一版永远不会被检测到。
+
+### 发版流程（一键）
+
+正常发版只需要在 GitHub Actions 点一下 **Release PR → Run workflow**：
+
+```
+1. Actions → Release PR → Run workflow
+   release-please 生成 Release PR：根 package.json（插件/扩展版本）与
+   桌面端 packages/app/package.json 由 extra-files 一起 bump 到同一版本号；
+   PR 创建后自动设置 auto-merge（仓库需开启 Allow auto-merge）。
+2. PR 合入（自动）→ release-tag.yml 创建 Release + tag v5.x.x
+   → 派发 desktop-build：三平台安装包 + extension.zip + 旧版 zip
+   → 上传 GitHub Release → 同步 GitCode 镜像（需 Secrets 配置 GITCODE_TOKEN）
+3. update-manifest job：从 artifacts 取 update-meta.json 与全部安装包，
+   跑 write-update-manifest.js --verify（探链 fail-closed），
+   把 versions[] 条目直接提交推回 main → CF Pages 自动重建 → 客户端检测到更新
+```
+
+**一次性前置条件**：仓库 Secrets 配 `GITCODE_TOKEN`（不配则 GitCode 镜像为空，
+update-manifest 探链失败、本版不推更新）；Settings → General 勾选 Allow auto-merge；
+main 分支保护需允许 GITHUB_TOKEN 推送。
+
+**版本线已统一**：桌面端版本号跟随插件版本（同一 Release PR 内一起 bump），
+清单 `versions[].tag` 与 Release tag 数值相同（仅差 `v` 前缀），
+不再需要单独 bump 桌面版本。
+
+### 手动兜底（CI 失败时）
 
 ```bash
-# 1) 桌面端打包会同时产出安装包（dist/*.exe）与就地更新包（dist/update/app-<ver>.zip）
-#    前者是主路径（新版客户端下载安装包装），后者只留给 <=3.2.0 的旧客户端
+# 桌面端打包会同时产出安装包（dist/*.exe）与就地更新包（dist/update/app-<ver>.zip）
+# 前者是主路径（新版客户端下载安装包装），后者只留给 <=3.2.0 的旧客户端
 node scripts/pack-app-update.js    # 仅重打 zip；完整打包见 pnpm build:app
 
-# 2) 上传到扩展那一条 Release（tag = 插件版本 v5.x.x）——
-#    扩展包、安装包、旧版 zip 是同一批产物、挂在同一个 Release 下，不要另开 tag
+# 上传到扩展那一条 Release（tag = 插件版本 v5.x.x）——
+# 扩展包、安装包、旧版 zip 是同一批产物、挂在同一个 Release 下，不要另开 tag
 gh release upload v5.2.0 \
-  honghueasystudy_desktop/packages/app/dist/鸿鹄易学-3.2.1-setup-win-x64.exe \
-  honghueasystudy_desktop/packages/app/dist/update/app-3.2.1.zip
+  honghueasystudy_desktop/packages/app/dist/鸿鹄易学-5.2.0-setup-win-x64.exe \
+  honghueasystudy_desktop/packages/app/dist/update/app-5.2.0.zip
 #    若该 Release 还不存在：gh release create v5.2.0 --title "..." --notes "..."
 
-# 2.5) 同步到 GitCode（国内加速源；CI 配了 GITCODE_TOKEN 时这一步已自动完成，可跳过）
+# 同步到 GitCode（国内加速源）
 GITCODE_TOKEN=xxx node scripts/publish-to-gitcode.js --tag v5.2.0 \
-  --file honghueasystudy_desktop/packages/app/dist/鸿鹄易学-3.2.1-setup-win-x64.exe \
-  --file honghueasystudy_desktop/packages/app/dist/update/app-3.2.1.zip
+  --file honghueasystudy_desktop/packages/app/dist/鸿鹄易学-5.2.0-setup-win-x64.exe \
+  --file honghueasystudy_desktop/packages/app/dist/update/app-5.2.0.zip
 
-# 3) 写入清单（同时同步 ocs-app-infos.json 旧副本）
+# 写入清单（同时同步 ocs-app-infos.json 旧副本）并提交推送
 #    会自动在 dist 下找安装包、算 sha256/size，写进 installers.win32；
 #    mac/linux 产物不在本机时，自动从该 tag 的 Release 附件列表补（只补 name/size，不下载文件）；
-#    Release tag 默认取根 package.json，不用手填；
 #    链路校验默认开启：任一源不可用就拒绝写入（--no-verify 可跳过，但会有风险警告）
 node scripts/write-update-manifest.js \
   --meta honghueasystudy_desktop/packages/app/dist/update/update-meta.json \
   --notes "feat: 支持点击版本号检查更新" --notes "fix: 修复更新失败导致无法启动"
+git add website/api/ && git commit -m "chore(release): 同步更新清单" && git push
 ```
 
-> 跨平台产物在 CI 的 artifacts 里、而 Release 还没建时，第 3 步会拿不到 mac/linux 条目
-> （日志有 `读取 Release <tag> 附件失败`）。此时先等 CI 发布完，或把各平台产物下载到同一目录后用
-> `--artifacts <目录>` 指定；`--no-remote-assets` 可跳过联网查询。
+> 跨平台产物在 CI 的 artifacts 里、而 Release 还没建时，手动跑第 3 步会拿不到 mac/linux
+> 条目（日志有 `读取 Release <tag> 附件失败`）。此时先等 CI 发布完，或把各平台产物下载到
+> 同一目录后用 `--artifacts <目录>` 指定；`--no-remote-assets` 可跳过联网查询。
 
 ### 防「检测到更新但下不了包」
 
@@ -160,16 +187,18 @@ node scripts/write-update-manifest.js \
 `url` / `urls`（zip）保留的唯一原因是兼容 <= 3.2.0 的已装用户——那份代码只会走就地更新。
 等这批用户升级完，可以移除。
 
-**两个 tag 不要混用**（这是最容易踩的坑）：
+**两个 tag 的分工**（自版本线统一后，两者数值相同，仅差 `v` 前缀）：
 
 | 用途 | 取值 | 例子 | 参与版本比较？ |
 | --- | --- | --- | --- |
-| 清单 `versions[].tag` | 桌面版本 `meta.version` | `3.2.1` | ✅ 与 `app.getVersion()` 比大小 |
+| 清单 `versions[].tag` | 桌面版本 `meta.version` | `5.2.0` | ✅ 与 `app.getVersion()` 比大小 |
 | Release tag | 根 `package.json` 版本 | `v5.2.0` | ❌ 只用来拼下载地址 |
 
-清单 `tag` 若误写成插件版本（例如 `5.2.0`），客户端 3.2.0 会认为「5.2.0 > 3.2.0 有新版本」，
-装完仍是 3.2.0，下次启动又提示——陷入死循环、永远装不完。
-桌面端真要脱离插件单独发版时，才显式传 `--tag desktop-v3.2.1`。
+历史背景：曾经桌面版本（3.x）与插件版本（5.x）是两条独立的线，混用会导致
+「检测到更新 → 装完还是旧版本 → 下次启动又提示」的死循环。现在 Release PR 通过
+`extra-files` 把桌面 `package.json` 与根 `package.json` bump 到同一版本，
+两线合一，但「清单 tag 参与比较、Release tag 只拼地址」的分工不变。
+桌面端真要脱离插件单独发版时，才显式传 `--tag desktop-v<x.y.z>`。
 
 字段含义：
 
