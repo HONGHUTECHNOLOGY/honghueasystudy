@@ -10,9 +10,19 @@ on:
         description: "发布目标 tag（如 v5.2.0），留空则只在 tag 触发时发布"
         required: false
         default: ""
+      skip_build:
+        description: "复用已有产物、跳过三平台构建（发布步骤失败后重跑用，需填 artifact_run_id）"
+        type: boolean
+        default: false
+      artifact_run_id:
+        description: "要复用产物的 run id（skip_build 勾选时必填）"
+        required: false
+        default: ""
 
 permissions:
   contents: write
+  # skip_build 时要用 download-artifact 的 run-id 跨 run 取产物，需要读 Actions
+  actions: read
 
 concurrency:
   group: desktop-build-${{ github.ref }}
@@ -24,6 +34,8 @@ jobs:
   # 产物与桌面安装包一起上传到同一 GitHub Release。
   build-extension:
     runs-on: ubuntu-latest
+    # skip_build 用于发布步骤失败后只重跑发布链（产物从指定 run 复用）
+    if: ${{ !inputs.skip_build }}
     # 扩展与桌面端/用户脚本版本线各自独立（扩展版本源 = 根 package.json，
     # 构建时 syncManifestVersion 注入 extension/manifest.json），
     # 把构建产物的实际版本传给 upload-release 用于下载列表标注
@@ -76,6 +88,7 @@ jobs:
         run: echo "version=$(node -p "require('./extension/manifest.json').version")" >> "$GITHUB_OUTPUT"
 
   build:
+    if: ${{ !inputs.skip_build }}
     strategy:
       fail-fast: false
       matrix:
@@ -231,18 +244,40 @@ jobs:
   # 上传到该 tag 对应的 GitHub Release，并追加「桌面端与扩展下载」说明段落。
   upload-release:
     needs: [build, build-extension]
-    if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
+    # always()：skip_build 时 build/build-extension 被跳过，默认语义会把本 job 一起跳过
+    if: ${{ always() && (startsWith(github.ref, 'refs/tags/') || inputs.tag != '') && needs.build.result != 'failure' && needs.build-extension.result != 'failure' }}
     runs-on: ubuntu-latest
     # 提到 job 级，step 的 if 才能读到（step 级 env 不参与 if 求值）
     env:
       GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
 
     steps:
+      # GitCode 同步要跑仓库里的 scripts/publish-to-gitcode.js，
+      # 本 job 只下载产物、默认没有工作区 —— 必须显式检出（脚本仅用内置模块，无需装依赖）
+      - name: Check out scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag && 'main' || github.ref }}
+          sparse-checkout: |
+            scripts
+          sparse-checkout-cone-mode: false
+
       - name: Download all build artifacts
+        if: ${{ !inputs.skip_build }}
         uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
+
+      # 复用历史 run 的产物（保留 7 天）：发布步骤失败重跑时不必再等三平台构建
+      - name: Download artifacts from previous run
+        if: ${{ inputs.skip_build }}
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # upload-artifact 保留 dist/ 目录结构：安装包在根、更新包与 update-meta.json
       # 在 update/ 子目录。统一拍平，后面的 gh release upload / 下载链接生成 /
@@ -250,6 +285,8 @@ jobs:
       - name: Flatten artifact directories
         run: |
           find artifacts -mindepth 2 -type f -exec mv {} artifacts/ \;
+          # 搬空后残留的空目录会让「遍历 artifacts/*」把它当成附件
+          find artifacts -mindepth 1 -type d -empty -delete
           ls -lh artifacts/
 
       - name: Upload artifacts to GitHub Release
@@ -375,10 +412,20 @@ jobs:
           node-version: "22.14"
 
       - name: Download build artifacts
+        if: ${{ !inputs.skip_build }}
         uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
+
+      - name: Download artifacts from previous run
+        if: ${{ inputs.skip_build }}
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # 同 upload-release：拍平 update/ 子目录，update-meta.json 落到 artifacts/ 根
       - name: Flatten artifact directories
