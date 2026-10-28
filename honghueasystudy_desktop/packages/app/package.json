@@ -1,6 +1,6 @@
 {
   "name": "@honghu-desktop/app",
-  "version": "3.2.0",
+  "version": "5.2.0",
   "description": "desktop for userscript",
   "main": "./lib/index.js",
   "types": "./lib/types.d.ts",
