@@ -447,15 +447,28 @@ export async function updateApp(newVersion: UpdateInformationResource): Promise<
 		logger.error('更新包下载失败', e);
 		pendingInstaller = null;
 		const message = describeError(e);
+		/*
+		 * 下载是最容易「检测到更新但走不下去」的一步：所有源都可能因为
+		 * 清单写错、附件被删、公司网络封了 GitCode/GitHub 而全挂。
+		 * 这时必须给一条出路 —— 打开下载页手动装，而不是只让用户「继续使用」。
+		 */
+		const page = newVersion.app_downloads?.win32 || 'https://easystudy.honghutech.eu.org';
 		const { response } = await dialog.showMessageBox({
 			title: '鸿鹄易学更新程序',
-			message: '下载新版本失败:\n' + message + '\n\n当前版本未受影响，可继续使用。',
+			message:
+				'下载新版本失败:\n' + message + '\n\n当前版本未受影响，可以继续使用。\n如需立即升级，可打开下载页手动安装。',
 			type: 'error',
 			noLink: true,
 			defaultId: 1,
-			buttons: ['继续使用', '复制错误日志']
+			cancelId: 1,
+			buttons: ['打开下载页', '继续使用', '复制错误日志']
 		});
-		if (response === 1) clipboard.writeText(String(e) + '\n\n' + message);
+		if (response === 0) {
+			logger.info('下载失败，改为打开下载页：' + page);
+			await shell.openExternal(page);
+		} else if (response === 2) {
+			clipboard.writeText(String(e) + '\n\n' + message);
+		}
 		rm(dir, { recursive: true, force: true }, () => {});
 		throw e;
 	}

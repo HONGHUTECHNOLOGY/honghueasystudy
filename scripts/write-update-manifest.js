@@ -15,6 +15,11 @@
  *   node scripts/write-update-manifest.js --meta ... --dry-run       # 只打印，不写文件
  *   node scripts/write-update-manifest.js --meta ... --tag desktop-v3.2.0 --repo owner/repo
  *
+ * 链路校验默认开启（fail-closed）：
+ * - 本次新增条目的每个下载地址都会 Range GET 探一遍，任一不通就拒绝写入
+ * - 已有的历史条目也会复查：某平台全部源都失效 → 告警；--prune-dead 则从清单移除
+ * - 确实要先写清单再加 --no-verify，但那样用户很可能「检测到更新却下不了包」
+ *
  * 关于 tag（两个 tag 不要混用）：
  * - 清单里的 tag 字段 = **桌面版本**（meta.version，如 3.2.1），客户端用它和 app.getVersion() 比大小
  * - Release tag = **插件版本**（默认取根 package.json，如 v5.2.1），只用来拼下载地址；
@@ -77,7 +82,14 @@ function parseArgs(argv) {
 		gitcode: 'honghutech/honghueasystudy',
 		noMirror: false,
 		mirrors: [],
-		verify: false,
+		/*
+		 * 默认开启链路校验：清单一旦被客户端读到，就等于对用户承诺「这个版本可下载」。
+		 * 带病写入的后果是用户弹了更新却下不了包，比发版晚几分钟严重得多，
+		 * 所以这里 fail-closed —— 要跳过必须显式 --no-verify。
+		 */
+		verify: true,
+		/** 历史条目里所有源都失效的，写入时清掉（默认只告警） */
+		pruneDead: false,
 		zipUrl: null,
 		installer: null,
 		artifacts: [],
@@ -96,6 +108,8 @@ function parseArgs(argv) {
 		else if (a === '--no-mirror') out.noMirror = true;
 		else if (a === '--mirror') out.mirrors.push(String(argv[++i]));
 		else if (a === '--verify') out.verify = true;
+		else if (a === '--no-verify') out.verify = false;
+		else if (a === '--prune-dead') out.pruneDead = true;
 		else if (a === '--zip-url') out.zipUrl = argv[++i];
 		else if (a === '--installer') out.installer = path.resolve(argv[++i]);
 		else if (a === '--artifacts') out.artifacts.push(path.resolve(argv[++i]));
@@ -163,6 +177,111 @@ async function probeUrl(url) {
 		}
 	}
 	return { ok: false, detail: last };
+}
+
+/**
+ * 把一个清单条目里所有「可能被下载」的地址按平台/格式分组。
+ *
+ * 分组的目的是判断粒度：多源设计下单个源挂掉是正常的（客户端会回退），
+ * 只有某一平台的**全部**源都失效，才真的会让该平台用户「下不了包」。
+ */
+function groupEntrySources(entry) {
+	const groups = new Map();
+	const add = (key, urls) => {
+		const list = (Array.isArray(urls) ? urls : [urls]).filter(
+			(u) => typeof u === 'string' && /^https?:\/\//i.test(u)
+		);
+		if (!list.length) return;
+		groups.set(key, [...new Set([...(groups.get(key) || []), ...list])]);
+	};
+
+	const installers = entry && entry.installers;
+	if (installers && typeof installers === 'object') {
+		for (const platform of Object.keys(installers)) {
+			const value = installers[platform];
+			const list = Array.isArray(value) ? value : [value];
+			for (const item of list) {
+				if (!item || typeof item !== 'object') continue;
+				const suffix = [item.arch, item.ext].filter(Boolean).join('/');
+				add(`installers.${platform}${suffix ? ':' + suffix : ''}`, item.urls || item.url);
+			}
+		}
+	}
+	// 旧版客户端（<= 3.2.0）走的 zip 通道
+	add('zip', entry && entry.urls && entry.urls.length ? entry.urls : entry && entry.url);
+	return groups;
+}
+
+/** 条目里所有下载地址（去重） */
+function collectDownloadSources(entry) {
+	return [...new Set([...groupEntrySources(entry).values()].flat())];
+}
+
+/** 限并发的探链：单个坏链接要等满 20s 超时，串行跑历史条目会让人等到放弃 */
+async function probeAll(urls, concurrency = 4) {
+	const result = new Map();
+	for (let i = 0; i < urls.length; i += concurrency) {
+		const batch = urls.slice(i, i + concurrency);
+		const rs = await Promise.all(batch.map((u) => probeUrl(u).then((r) => [u, r])));
+		for (const [u, r] of rs) result.set(u, r);
+	}
+	return result;
+}
+
+/**
+ * 复查清单里已有的条目。
+ *
+ * 为什么必须复查：`versions[]` 会一直累加，而附件可能被删（Release 被清理、
+ * GitCode 侧没传、改名）。客户端只要在自己的版本之上找到更高的条目就会提示更新，
+ * 于是老用户被推到一条死链上。发布前顺手体检一遍，比出事后再回滚便宜。
+ */
+async function auditHistory(args, newVersion) {
+	const file = args.manifest;
+	if (!file || !fs.existsSync(file)) return [];
+
+	let json;
+	try {
+		json = JSON.parse(fs.readFileSync(file, 'utf8'));
+	} catch {
+		return [];
+	}
+	const versions = (Array.isArray(json.versions) ? json.versions : []).filter(
+		(v) => v && String(v.tag).replace(/^v/, '') !== newVersion
+	);
+	if (!versions.length) return [];
+
+	console.log(`[update-manifest] 复查已有条目 ${versions.length} 条（老版本用户升级时命中的就是这些）…`);
+	const probed = await probeAll([...new Set(versions.flatMap((v) => collectDownloadSources(v)))]);
+
+	const dead = [];
+	for (const v of versions) {
+		const groups = groupEntrySources(v);
+		const broken = [];
+		let usable = 0;
+		for (const [key, urls] of groups) {
+			const up = urls.filter((u) => probed.get(u)?.ok).length;
+			usable += up;
+			console.log(`  ${up === urls.length ? '✓' : up > 0 ? '!' : '✗'} [${v.tag}] ${key}  ${up}/${urls.length} 源可用`);
+			if (up === 0) broken.push(key);
+		}
+		if (!groups.size) continue;
+		if (broken.length === groups.size) {
+			dead.push({ tag: v.tag, groups: broken });
+		} else if (broken.length) {
+			console.warn(`  ⚠ ${v.tag} 的 ${broken.join('、')} 全部不可用：该平台用户升级会失败，其他平台不受影响`);
+		}
+	}
+
+	if (dead.length) {
+		console.error(
+			'\n[update-manifest] 以下历史条目的所有下载源都失效了，老版本用户会「检测到更新但下不了包」：\n' +
+				dead.map((d) => `  - ${d.tag}（${d.groups.join('、')}）`).join('\n') +
+				(args.pruneDead
+					? '\n已按 --prune-dead 从清单中移除。'
+					: '\n恢复对应 Release 附件后重试，或加 --prune-dead 重新执行以移除这些条目。')
+		);
+	}
+	return args.pruneDead ? dead : [];
 }
 
 /**
@@ -524,36 +643,50 @@ async function main() {
 		}
 	};
 
-	/** 发布前自检：链接 404 或镜像没上传就写进清单，等于这一版永远不会被检测到 */
+	/**
+	 * 发布前自检（默认开启，--no-verify 才跳过）。
+	 *
+	 * 清单一旦被客户端读到，就等于对用户承诺「这个版本可下载」。带病写入的后果是
+	 * 用户弹了更新却下不了包 —— 比晚发版几分钟严重得多，所以这里 fail-closed。
+	 *
+	 * 分两层判断：
+	 *  1) 本次新增条目：任一源不可用就终止。此刻 CI 可能还在传附件，也是唯一能当场修好的时机。
+	 *  2) 历史条目：按「平台/格式」分组，某组所有源都失效才算坏。多源设计本来就允许
+	 *     单源失败（客户端会自动回退），按单条 URL 判死会误伤。
+	 */
+	let deadEntries = [];
 	if (args.verify) {
-		console.log('[update-manifest] 探测下载源…');
-		let failed = 0;
-		/** 真正会被下载的是安装包；zip 只在旧客户端上用到，一并探测 */
-		const targets = [
-			...(winInstaller ? winInstaller.urls : []),
-			...darwinInstallers.flatMap((i) => i.urls),
-			...linuxInstallers.flatMap((i) => i.urls),
-			...uniqueSources
-		];
-		for (const u of [...new Set(targets)]) {
+		console.log('[update-manifest] 探测本次新增条目的下载源…');
+		const failed = [];
+		for (const u of collectDownloadSources(entry)) {
 			const r = await probeUrl(u);
 			console.log(`  ${r.ok ? '✓' : '✗'} ${u}  (${r.detail})`);
-			if (!r.ok) failed++;
+			if (!r.ok) failed.push(u);
 		}
-		if (failed > 0) {
+		if (failed.length) {
 			console.error(
-				`\n[update-manifest] ${failed} 个下载源不可用，未写入清单。\n` +
-					'请先在对应平台创建 tag 并上传同名安装包后再执行；确认无需校验可去掉 --verify。'
+				`\n[update-manifest] ${failed.length} 个下载源不可用，未写入清单。\n` +
+					'通常是 CI 还没把附件传完（GitHub Release 或 GitCode 镜像），等上传结束再执行；\n' +
+					'确实要先写清单可以加 --no-verify，但那样用户很可能检测到更新却下不了包。'
 			);
 			process.exitCode = 1;
 			return;
 		}
+		deadEntries = await auditHistory(args, version);
+	} else {
+		console.warn(
+			'\n[update-manifest] ⚠ 已跳过链路校验（--no-verify）。\n' +
+				'  写进去的地址如果不存在，客户端会「检测到更新但下载失败」，只能等下一个版本覆盖。'
+		);
 	}
 
 	const write = (file, label) => {
 		const json = JSON.parse(fs.readFileSync(file, 'utf8'));
 		const versions = Array.isArray(json.versions) ? json.versions : [];
-		const rest = versions.filter((v) => v && String(v.tag).replace(/^v/, '') !== version);
+		const deadTags = new Set(deadEntries.map((d) => String(d.tag)));
+		const rest = versions.filter(
+			(v) => v && String(v.tag).replace(/^v/, '') !== version && !deadTags.has(String(v.tag))
+		);
 		rest.push(entry);
 		// 降序：客户端虽然会自己取最大值，但有序能让清单本身一眼看懂
 		rest.sort((a, b) => compareVersionDesc(a.tag, b.tag));
@@ -598,4 +731,13 @@ if (require.main === module) {
 }
 
 // 供测试直接引用纯函数（扫描文件名、解析参数），不重复实现一套
-module.exports = { findPlatformInstallers, parseArtifactName, parseArgs, parseNotes, fetchReleaseAssets };
+module.exports = {
+	findPlatformInstallers,
+	parseArtifactName,
+	parseArgs,
+	parseNotes,
+	fetchReleaseAssets,
+	// 纯函数，供健康检查脚本与测试复用，避免各写一套判断
+	groupEntrySources,
+	collectDownloadSources
+};

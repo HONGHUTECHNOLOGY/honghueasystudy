@@ -46,16 +46,35 @@ GITCODE_TOKEN=xxx node scripts/publish-to-gitcode.js --tag v5.2.0 \
 # 3) 写入清单（同时同步 ocs-app-infos.json 旧副本）
 #    会自动在 dist 下找安装包、算 sha256/size，写进 installers.win32；
 #    mac/linux 产物不在本机时，自动从该 tag 的 Release 附件列表补（只补 name/size，不下载文件）；
-#    Release tag 默认取根 package.json，不用手填；--verify 会在写之前逐个探测链接
+#    Release tag 默认取根 package.json，不用手填；
+#    链路校验默认开启：任一源不可用就拒绝写入（--no-verify 可跳过，但会有风险警告）
 node scripts/write-update-manifest.js \
   --meta honghueasystudy_desktop/packages/app/dist/update/update-meta.json \
-  --notes "feat: 支持点击版本号检查更新" --notes "fix: 修复更新失败导致无法启动" \
-  --verify
+  --notes "feat: 支持点击版本号检查更新" --notes "fix: 修复更新失败导致无法启动"
 ```
 
 > 跨平台产物在 CI 的 artifacts 里、而 Release 还没建时，第 3 步会拿不到 mac/linux 条目
 > （日志有 `读取 Release <tag> 附件失败`）。此时先等 CI 发布完，或把各平台产物下载到同一目录后用
 > `--artifacts <目录>` 指定；`--no-remote-assets` 可跳过联网查询。
+
+### 防「检测到更新但下不了包」
+
+清单一旦上线就等于对用户承诺「这个版本可下载」。带病写入的后果是客户端弹了更新、
+下载却全源失败，用户没有自助修复手段。所以分三层兜：
+
+| 层 | 机制 | 触发时机 |
+| --- | --- | --- |
+| 写入 | `--verify` **默认开启**，本次条目任一源 Range GET 不通即拒绝写入 | 每次跑脚本 |
+| 写入 | 复查已有条目，某平台全部源失效 → 告警；`--prune-dead` 则从 `versions[]` 移除 | 每次跑脚本 |
+| 运行 | `.github/workflows/manifest-health.yml` 每天验结构 + 探链 + 比对线上与仓库 | 每日 05:20（UTC+8） |
+| 客户端 | 所有源都失败时弹窗给「打开下载页」，不把用户卡在「继续使用」 | 下载失败 |
+
+注意 `versions[]` 会一直累加，而附件可能被删（Release 清理、GitCode 没传成功、改名）。
+客户端只要发现比自身更高的条目就会提示更新，所以老条目死了同样要处理 —— 这就是
+`--prune-dead` 与每日体检存在的理由。
+
+`--no-verify` 只在「确要先上线清单、稍后补附件」时用：此时用户可能已经检测到更新但下载失败，
+下一个版本才能覆盖。不要习惯性加它。
 
 ### 跨平台：mac / linux 只给直链，不自动安装
 

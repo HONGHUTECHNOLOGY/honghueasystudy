@@ -1,0 +1,42 @@
+name: Manifest Health
+
+# 更新清单是「用户能不能升级」的唯一开关：只要 versions[] 里有一条指向不存在的附件，
+# 客户端就会弹更新、下载失败，而用户没有任何自助修复手段。
+# 写入时的 --verify 只保证当时是好的，附件之后可能被删（Release 清理 / GitCode 没传上），
+# 所以这里每天复查一次，任一平台全部源失效即失败，GitHub 会给仓库 owner 发通知。
+#
+# 只跑结构校验 + Range GET 探链，不需要 pnpm install。
+
+on:
+  schedule:
+    # 每天 21:20 UTC = 次日 05:20（UTC+8），避开构建高峰
+    - cron: '20 21 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.14'
+
+      # 先做结构校验：不需要网络，能立刻发现手改 JSON 引入的问题
+      - name: Validate manifest schema
+        run: node scripts/check-manifest-health.js --offline
+
+      # 再探链：每个条目的每个平台至少要有 1 个源可下载
+      - name: Probe download sources
+        run: node scripts/check-manifest-health.js
+
+      # 顺带确认线上那份和仓库一致（CF 部署失败时仓库是好的、用户拿到的却是旧的）
+      - name: Verify live manifest matches repo
+        run: node scripts/check-manifest-health.js --url https://easystudy.honghutech.eu.org/api/honghu-app-infos.json --compare
