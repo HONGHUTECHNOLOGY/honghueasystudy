@@ -15,8 +15,9 @@ export const MIRROR_STALL_MS = 20000;
 /**
  * 提示更新前的可达性探测超时。
  *
- * 比下载的 20 秒短得多：这一步只是决定「要不要打扰用户」，
- * 卡太久会让启动检测拖到十几秒，而后台下载本身等得起。
+ * 探测发生在窗口显示之后（`did-finish-load` + 1s，且不 await），**不影响启动速度**。
+ * 它只决定「多久之后才会弹更新提示」：超时越长，提示来得越晚、越容易在用户已经切到
+ * 别的程序时突然把窗口提到最前。后台下载用另一套 20 秒停滞阈值，不受此值影响。
  */
 export const PROBE_TIMEOUT_MS = 6000;
 
@@ -234,8 +235,8 @@ export async function probeOne(url: string, timeoutMs = PROBE_TIMEOUT_MS): Promi
 /**
  * 并发探测所有下载源，任一可达即可。
  *
- * 必须并发：两个源都不可达时，串行会把 6 秒超时叠加成 12 秒，
- * 而这只是启动时的一次后台判断，不该拖住用户。
+ * 必须并发：两个源都不可达时，串行会让提示延后到 2×超时。
+ * 这里不影响启动（探测在窗口显示之后才开始），影响的只是「更新提示多久出现」。
  */
 export async function probeSources(
 	sources: string[],
