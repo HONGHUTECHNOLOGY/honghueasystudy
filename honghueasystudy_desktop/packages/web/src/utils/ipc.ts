@@ -43,13 +43,18 @@ async function closeBrowsersForUpdate() {
  * 手动检查更新（侧边栏版本号点击触发）。
  *
  * 有新版本时主进程会推送 detect-new-app-version 弹窗，这里不重复提示；
- * 只有「已是最新」或「检测失败」需要在此反馈，避免用户点了没反应。
+ * 只有「已是最新」「检测失败」「有新版本但下载源不可达」需要在此反馈，避免用户点了没反应。
  */
 export async function checkAppUpdate() {
 	try {
 		const result = await remote.methods.call('checkUpdate');
 		if (!result || result.ok === false) {
 			Message.error('检查更新失败，请检查网络后重试');
+			return;
+		}
+		// 有新版但该平台的下载地址全部连不上：主进程刻意不弹更新窗，这里必须说明原因
+		if (result.blocked === 'unreachable') {
+			Message.warning(`新版本 v${result.latest} 已发布，但下载服务器当前无法连接，请稍后再试`);
 			return;
 		}
 		if (!result.hasUpdate) {

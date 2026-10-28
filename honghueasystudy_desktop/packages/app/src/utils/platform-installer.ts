@@ -113,3 +113,51 @@ export function pickPlatformInstaller(
 	const first = usable[0];
 	return { installer: first, guide: guideForInstaller(opts.platform, first) };
 }
+
+/** 只保留可用的 http(s) 地址并去重 */
+function httpUrls(urls: unknown): string[] {
+	const list = (Array.isArray(urls) ? urls : []).filter(
+		(u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u)
+	);
+	return [...new Set(list)];
+}
+
+/** 解析下载地址所需的清单片段 */
+export interface DownloadTargetsInput {
+	installers?: {
+		win32?: UpdateInstaller;
+		darwin?: UpdateInstaller[];
+		linux?: UpdateInstaller[];
+	};
+	app_downloads?: Partial<Record<string, string>>;
+}
+
+/**
+ * 当前平台实际会被下载的地址。
+ *
+ * 用于「提示更新前先确认下载源能不能连上」—— 必须和 updateApp 里的取用路径完全一致，
+ * 否则会出现「预检通过、用户点更新却打到另一个死链」。
+ *
+ * 清单里没有本平台的安装包时（只发了 Windows），客户端点更新会打开下载页，
+ * 这种情况下可达性就按那个页面算。
+ */
+export function resolveDownloadTargets(
+	input: DownloadTargetsInput | undefined,
+	opts: PickPlatformInstallerOptions
+): string[] {
+	if (!input) return [];
+
+	if (opts.platform === 'win32') {
+		const direct = httpUrls(input.installers?.win32?.urls);
+		if (direct.length) return direct;
+	} else {
+		const pick = pickPlatformInstaller(input.installers, opts);
+		if (pick) {
+			const direct = httpUrls(pick.installer.urls);
+			if (direct.length) return direct;
+		}
+	}
+
+	// 没有匹配的安装包：updateApp 会 shell.openExternal 这个页面，所以按它判定
+	return httpUrls([input.app_downloads?.[opts.platform]]);
+}

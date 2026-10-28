@@ -13,6 +13,14 @@ import { UpdateInformationResource } from '@honghu-desktop/common';
 export const MIRROR_STALL_MS = 20000;
 
 /**
+ * 提示更新前的可达性探测超时。
+ *
+ * 比下载的 20 秒短得多：这一步只是决定「要不要打扰用户」，
+ * 卡太久会让启动检测拖到十几秒，而后台下载本身等得起。
+ */
+export const PROBE_TIMEOUT_MS = 6000;
+
+/**
  * GitCode 的附件下载会 302 到 file-cdn.gitcode.com，默认 UA（axios/x.y.z）在部分节点会被拦，
  * 用一个常规浏览器 UA 最稳。GitHub 侧无影响。
  */
@@ -175,4 +183,74 @@ export async function downloadFromMirrors(sources: string[], dest: string, opts:
 	}
 
 	throw new Error('所有下载源均不可用：\n  ' + failures.join('\n  '));
+}
+
+export interface ProbeAttempt {
+	url: string;
+	ok: boolean;
+	/** 供日志展示：HTTP 状态码 / 超时 / 网络错误 */
+	detail: string;
+}
+
+export interface ProbeResult {
+	/** 是否至少有一个源可用 */
+	ok: boolean;
+	/** 第一个可用的源 */
+	url?: string;
+	attempts: ProbeAttempt[];
+}
+
+/**
+ * 探测单个地址能否真正下载。
+ *
+ * 两个必须注意的点：
+ * - **只能用带 Range 的 GET**。GitCode 的附件地址对 HEAD 直接返回 401（实测），
+ *   用 HEAD 探测会把唯一可用的源误判成死链，导致永远不提示更新。
+ * - **拿到响应头就要销毁流**。服务器可能忽略 Range 直接返回 200 + 整个安装包，
+ *   读下去等于白下 324MB；responseType 设成 stream 才有机会在首块数据前中断。
+ */
+export async function probeOne(url: string, timeoutMs = PROBE_TIMEOUT_MS): Promise<ProbeAttempt> {
+	try {
+		const res = await axios.get(url, {
+			responseType: 'stream',
+			timeout: timeoutMs,
+			maxRedirects: 5,
+			headers: { 'User-Agent': DOWNLOAD_USER_AGENT, Range: 'bytes=0-0' },
+			proxy: proxyFor(url),
+			validateStatus: () => true
+		});
+		try {
+			res.data?.destroy?.();
+		} catch {}
+		// 200 是服务器忽略了 Range（仍然可用），206 才是标准的分段响应
+		const ok = res.status === 200 || res.status === 206;
+		return { url, ok, detail: `HTTP ${res.status}` };
+	} catch (e: any) {
+		const detail = e?.code === 'ECONNABORTED' ? `超时 ${timeoutMs}ms` : e?.code || e?.message || String(e);
+		return { url, ok: false, detail: String(detail) };
+	}
+}
+
+/**
+ * 并发探测所有下载源，任一可达即可。
+ *
+ * 必须并发：两个源都不可达时，串行会把 6 秒超时叠加成 12 秒，
+ * 而这只是启动时的一次后台判断，不该拖住用户。
+ */
+export async function probeSources(
+	sources: string[],
+	opts: { timeoutMs?: number; onLog?: (level: 'info' | 'warn', msg: string) => void } = {}
+): Promise<ProbeResult> {
+	const list = normalizeUrls(sources);
+	if (!list.length) return { ok: false, attempts: [] };
+
+	const attempts = await Promise.all(list.map((url) => probeOne(url, opts.timeoutMs ?? PROBE_TIMEOUT_MS)));
+	const hit = attempts.find((a) => a.ok);
+
+	const log = opts.onLog || (() => {});
+	for (const a of attempts) {
+		log(a.ok ? 'info' : 'warn', `探测 ${hostOf(a.url)}：${a.detail}`);
+	}
+
+	return { ok: !!hit, url: hit?.url, attempts };
 }

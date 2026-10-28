@@ -5,9 +5,9 @@ import { join, dirname } from 'path';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rm, rmSync, statSync, writeFileSync } from 'fs';
 import * as fsMod from 'fs';
 import { getCurrentWebContents, moveWindowToTop } from '../utils';
-import { downloadFromMirrors, hostOf, normalizeUrls } from '../utils/download-source';
+import { downloadFromMirrors, hostOf, normalizeUrls, probeSources } from '../utils/download-source';
 import { resolveInstallDir, spawnSilentInstaller } from '../utils/installer';
-import { detectLinuxDistro, pickPlatformInstaller } from '../utils/platform-installer';
+import { detectLinuxDistro, pickPlatformInstaller, resolveDownloadTargets } from '../utils/platform-installer';
 import { HonghuApi, UpdateInformationResource } from '@honghu-desktop/common';
 
 const logger = Logger('updater');
@@ -24,6 +24,11 @@ export interface UpdateCheckResult {
 	latest?: string;
 	hasUpdate: boolean;
 	error?: 'network' | 'unknown';
+	/**
+	 * 有新版，但该平台的下载地址当前全部不可达：本次不弹更新提示。
+	 * 渲染端据此给出「已发布但暂时下载不了」的说明，而不是误报「已是最新」。
+	 */
+	blocked?: 'unreachable';
 }
 
 export interface UpdateDownloadResult {
@@ -287,6 +292,35 @@ export async function checkUpdate(manual = false): Promise<UpdateCheckResult> {
 				});
 			}
 		} else {
+			/*
+			 * 提示前先确认「点更新真的能下到包」。
+			 *
+			 * 官网清单是 push 即上线的，而 Release 附件要等 CI 传完（324MB 安装包 + 镜像同步），
+			 * 中间存在一段窗口期；清单写错、附件被删、公司网络封了 GitHub/GitCode 也会造成同样结果。
+			 * 这些情况下弹窗只会把用户推向一个死链，所以探测不到就静默跳过，下次启动重试。
+			 */
+			const targets = resolveDownloadTargets(newest, {
+				platform: process.platform,
+				arch: process.arch,
+				distro: process.platform === 'linux' ? detectLinuxDistro() : undefined
+			});
+
+			if (targets.length) {
+				const probe = await probeSources(targets, {
+					onLog: (level, msg) => (level === 'warn' ? logger.warn(msg) : logger.info(msg))
+				});
+				if (!probe.ok) {
+					logger.warn(
+						`新版本 ${newest.tag} 的下载源全部不可达，本次不提示更新（下次启动重试）：` +
+							probe.attempts.map((a) => `${hostOf(a.url)}=${a.detail}`).join(', ')
+					);
+					return { ok: true, current, latest: newest.tag, hasUpdate: true, blocked: 'unreachable' };
+				}
+			} else {
+				// 清单连下载页都没给：交给 updateApp 的兜底分支，那里会打开官网
+				logger.warn(`新版本 ${newest.tag} 没有任何可用下载地址，仍按可达处理（由下载页兜底）`);
+			}
+
 			moveWindowToTop();
 			getCurrentWebContents().send('detect-new-app-version', newest);
 		}
