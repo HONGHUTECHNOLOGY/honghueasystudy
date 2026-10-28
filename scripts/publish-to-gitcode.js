@@ -167,22 +167,49 @@ async function getUploadUrl({ apiBase, repo, tag, token, fileName }) {
 }
 
 /** 上传是 PUT 到预签名地址，返回的 headers 必须原样透传（OBS 用它校验策略） */
-async function putToStorage({ uploadUrl, headers, buffer, fileName }) {
-	/*
-	 * 安装包是 300MB+ 的单个附件，固定 10 分钟在慢线路下会被自己掐断。
-	 * 按 512KB/s 的下限估算所需时间，再留 60 秒余量。
-	 */
-	const estimated = Math.ceil(buffer.length / (512 * 1024)) * 1000 + 60000;
-	const timeout = Math.max(10 * 60 * 1000, estimated);
-	const res = await fetch(uploadUrl, {
-		method: 'PUT',
-		headers: { ...headers, 'Content-Length': String(buffer.length) },
-		body: buffer,
-		signal: AbortSignal.timeout(timeout)
+/*
+ * 为什么不用 fetch：Node 内置 fetch（undici）有 headersTimeout=300s 的硬限制，
+ * 指「请求发出 → 收到响应头」的时长，AbortSignal.timeout 盖不住它。OBS 要收完
+ * 整个 body 才回响应头，300MB+ 附件在 CI 带宽下必然超过 5 分钟 → 大文件全部
+ * fetch failed（实测每个都恰好在 ~5min 挂掉）。https.request 没有这个限制，
+ * 只有空闲超时（socket 连续无数据才计时），慢上传不受影响。
+ */
+function putOnce(uploadUrl, headers, buffer) {
+	return new Promise((resolve, reject) => {
+		const u = new URL(uploadUrl);
+		const mod = u.protocol === 'http:' ? require('http') : require('https');
+		const req = mod.request(
+			u,
+			{ method: 'PUT', headers: { ...headers, 'Content-Length': buffer.length } },
+			(res) => {
+				const chunks = [];
+				res.on('data', (c) => chunks.push(c));
+				res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+			}
+		);
+		// 空闲超时：连续 30 分钟无数据才判死（不是总时长），512KB/s 传 582MB 也够
+		req.setTimeout(30 * 60 * 1000, () => req.destroy(new Error('连接空闲超过 30 分钟')));
+		req.on('error', reject);
+		req.end(buffer);
 	});
-	if (!res.ok) {
-		throw new ApiError(res.status, await res.text().catch(() => ''), `上传 ${fileName}`);
+}
+
+async function putToStorage({ uploadUrl, headers, buffer, fileName }) {
+	let lastErr;
+	for (let attempt = 1; attempt <= 3; attempt++) {
+		try {
+			const res = await putOnce(uploadUrl, headers, buffer);
+			if (res.status >= 200 && res.status < 300) return;
+			throw new ApiError(res.status, res.body, `上传 ${fileName}`);
+		} catch (e) {
+			lastErr = e;
+			if (attempt < 3) {
+				console.warn(`[gitcode] 上传 ${fileName} 第 ${attempt} 次失败（${e.message}），60 秒后重试`);
+				await new Promise((r) => setTimeout(r, 60000));
+			}
+		}
 	}
+	throw lastErr;
 }
 
 /** 用 Range GET 探测：GitCode 的附件 HEAD 请求会返回 401，只能这么验 */
