@@ -28,18 +28,20 @@
 
 ```bash
 # 1) 打就地更新包：产出 dist/update/app-<ver>.zip + .sha256 + update-meta.json
+#    meta 里的 tagHint 会读根 package.json（插件版本），例如 v5.2.0
 node scripts/pack-app-update.js
 
-# 2) 上传到 GitHub Release（建议单独开一条桌面端版本线 tag: desktop-v<ver>，
-#    不要和扩展的 release-please tag 混用；CI 也会自动产出同名 zip 并附在 Release 里）
-gh release create desktop-v3.2.0 --title "桌面端 3.2.0" --notes "..." \
-  honghueasystudy_desktop/packages/app/dist/update/app-3.2.0.zip
+# 2) 上传到扩展那一条 Release（tag = 插件版本 v5.x.x）——
+#    扩展包和桌面安装包是同一批产物、挂在同一个 Release 下，不要另开 tag
+gh release upload v5.2.0 honghueasystudy_desktop/packages/app/dist/update/app-3.2.0.zip
+#    若该 Release 还不存在：gh release create v5.2.0 --title "..." --notes "..."
 
 # 2.5) 同步到 GitCode（国内加速源；CI 配了 GITCODE_TOKEN 时这一步已自动完成，可跳过）
-GITCODE_TOKEN=xxx node scripts/publish-to-gitcode.js --tag desktop-v3.2.0 \
+GITCODE_TOKEN=xxx node scripts/publish-to-gitcode.js --tag v5.2.0 \
   --file honghueasystudy_desktop/packages/app/dist/update/app-3.2.0.zip
 
 # 3) 写入清单（同时同步 ocs-app-infos.json 旧副本）
+#    Release tag 默认取根 package.json，不用手填；
 #    默认生成 GitCode 优先、GitHub 兜底的双源；--verify 会在写之前逐个探测链接是否可用
 node scripts/write-update-manifest.js \
   --meta honghueasystudy_desktop/packages/app/dist/update/update-meta.json \
@@ -47,11 +49,22 @@ node scripts/write-update-manifest.js \
   --verify
 ```
 
+**两个 tag 不要混用**（这是最容易踩的坑）：
+
+| 用途 | 取值 | 例子 | 参与版本比较？ |
+| --- | --- | --- | --- |
+| 清单 `versions[].tag` | 桌面版本 `meta.version` | `3.2.1` | ✅ 与 `app.getVersion()` 比大小 |
+| Release tag | 根 `package.json` 版本 | `v5.2.0` | ❌ 只用来拼下载地址 |
+
+清单 `tag` 若误写成插件版本（例如 `5.2.0`），客户端 3.2.0 会认为「5.2.0 > 3.2.0 有新版本」，
+装完仍是 3.2.0，下次启动又提示——陷入死循环、永远装不完。
+桌面端真要脱离插件单独发版时，才显式传 `--tag desktop-v3.2.1`。
+
 字段含义：
 
 | 字段 | 作用 |
 | --- | --- |
-| `tag` | 版本号，与 `app.getVersion()` 做 semver 比较（允许带 `v` 前缀） |
+| `tag` | **桌面版本**，与 `app.getVersion()` 做 semver 比较（允许带 `v` 前缀） |
 | `description` | 更新弹窗内按 新增 / 修复 / 其他 分组展示 |
 | `url` | 首选下载地址，同时也是没有 `urls` 时唯一可用的地址 |
 | `urls` | 多源地址，按优先级排列；客户端逐个尝试，失败自动切下一个 |
@@ -72,15 +85,15 @@ GitHub Release 在国内经常只有几十 KB/s 甚至直接超时，所以客�
   实测该地址 302 跳转到 `file-cdn.gitcode.com`，**免登录可下载、支持 Range**（用 HEAD 会返回 401，
   探测和下载都必须用带 Range 的 GET）。
 
-- 发布时在 GitCode 建**同名 tag**（如 `desktop-v3.2.1`）并上传**同一个 zip**。
+- 发布时在 GitCode 的**同一个 Release**（tag 同样是 `v5.x.x`）下上传**同一个 zip**。
   两个源必须是字节一致的文件——否则 sha256 校验失败，客户端会切回 GitHub 重新下载。
   上传有两条路，二者结果一致：
   - **CI 自动**（推荐）：在仓库 Secrets 里配 `GITCODE_TOKEN`，`desktop-build.yml` 的
     `upload-release` 会用 `scripts/publish-to-gitcode.js` 把**同一批 artifacts**
     （更新包 + 扩展包）同步过去，不再二次打包。未配置 token 时该步骤整步跳过，
     GitHub 发布不受影响；配置了则失败即红，避免清单指向不存在的镜像附件。
-  - **本地手动**：`GITCODE_TOKEN=xxx node scripts/publish-to-gitcode.js --tag desktop-v3.2.1 --file <zip>`
-    （可重复 `--file`；`--dry-run` 只看计划，`--force` 覆盖同名附件）。
+  - **本地手动**：`GITCODE_TOKEN=xxx node scripts/publish-to-gitcode.js --tag v5.2.0 --file <zip>`
+    （tag 用插件版本线；可重复 `--file`；`--dry-run` 只看计划，`--force` 覆盖同名附件）。
   - 机制与 GitHub 不同：先 `GET .../releases/{tag}/upload_url` 拿华为 OBS 预签名地址，
     再 `PUT` 原始字节并原样透传返回的 `x-obs-*` 头；上传完自动用 Range GET 校验可下载。
 - 客户端行为：按 `urls` 顺序尝试，任一源连不上、20 秒收不到数据、大小或 sha256 不符都会立刻切下一个；

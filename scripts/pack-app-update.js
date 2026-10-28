@@ -32,6 +32,8 @@ const yazl = gulpZipRequire('yazl');
 
 const ROOT = path.resolve(__dirname, '..');
 const APP_PKG = path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app', 'package.json');
+/** 根 package.json = 插件（油猴脚本）版本线。发布用的是它的 tag，见下方 tagHint 说明 */
+const ROOT_PKG = path.join(ROOT, 'package.json');
 const DEFAULT_DIR = path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app', 'dist', 'win-unpacked', 'resources', 'app');
 const DEFAULT_OUT = path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app', 'dist', 'update');
 
@@ -99,6 +101,14 @@ function readVersion() {
 	return JSON.parse(fs.readFileSync(APP_PKG, 'utf8')).version;
 }
 
+function readRootVersion() {
+	try {
+		return String(JSON.parse(fs.readFileSync(ROOT_PKG, 'utf8')).version || '').trim();
+	} catch {
+		return '';
+	}
+}
+
 function fail(msg) {
 	console.error('[pack-app-update] ' + msg);
 	process.exit(1);
@@ -150,24 +160,35 @@ async function main() {
 	const sha256 = await sha256File(outFile);
 	fs.writeFileSync(outFile + '.sha256', `${sha256}  app-${version}.zip\n`);
 
+	const rootVersion = readRootVersion();
+	/**
+	 * Release tag 用插件版本（根 package.json），不用桌面版本。
+	 * 扩展和桌面安装包是一起发到同一个 Release 的，tag 一直是 v5.x.x 这条线；
+	 * 桌面版本（3.x）只作为清单里参与 semver 比较的 tag 字段。
+	 * 若桌面端要脱离插件单独发版，打包/写清单时显式传 --tag desktop-v<x.y.z>。
+	 */
+	const tagHint = rootVersion ? `v${rootVersion}` : `desktop-v${version}`;
+
 	const meta = {
 		version,
+		rootVersion: rootVersion || null,
 		file: `app-${version}.zip`,
 		size,
 		sha256,
 		entries: files.length,
 		skipped: skipped.count,
-		tagHint: `desktop-v${version}`,
+		tagHint,
 		builtAt: new Date().toISOString()
 	};
 	fs.writeFileSync(path.join(args.out, 'update-meta.json'), JSON.stringify(meta, null, 2) + '\n');
 
 	console.log(`[pack-app-update] 打包完成`);
-	console.log(`  版本      ${version}`);
+	console.log(`  桌面版本  ${version}`);
+	console.log(`  插件版本  ${rootVersion || '（未读到根 package.json）'}`);
 	console.log(`  文件      ${path.relative(ROOT, outFile)}  (${(size / 1024 / 1024).toFixed(2)} MB)`);
 	console.log(`  条目      ${files.length} 个`);
 	console.log(`  SHA256    ${sha256}`);
-	console.log(`\n下一步：把该 zip 上传到 Release（tag: ${meta.tagHint}），然后执行`);
+	console.log(`\n下一步：把该 zip 上传到 Release（tag: ${tagHint}，与扩展包同一个 Release），然后执行`);
 	console.log(`  node scripts/write-update-manifest.js --meta ${path.relative(ROOT, path.join(args.out, 'update-meta.json'))}`);
 }
 

@@ -15,6 +15,13 @@
  *   node scripts/write-update-manifest.js --meta ... --dry-run       # 只打印，不写文件
  *   node scripts/write-update-manifest.js --meta ... --tag desktop-v3.2.0 --repo owner/repo
  *
+ * 关于 tag（两个 tag 不要混用）：
+ * - 清单里的 tag 字段 = **桌面版本**（meta.version，如 3.2.1），客户端用它和 app.getVersion() 比大小
+ * - Release tag = **插件版本**（默认取根 package.json，如 v5.2.1），只用来拼下载地址；
+ *   扩展包和桌面安装包发在同一个 Release 里，tag 走插件线
+ * - 桌面端要脱离插件单独发版时才需要 --tag desktop-v<x.y.z>
+ *   混用会让客户端「每次都提示更新、装完还是旧版本」
+ *
  * 说明：
  * - url 必须是就地更新包（app-<version>.zip），mac/linux 不走它
  * - app_downloads 里 mac/linux 指向 Release 页面而不是具体安装包：
@@ -29,6 +36,34 @@ const MANIFEST = path.join(ROOT, 'website', 'api', 'honghu-app-infos.json');
 /** 旧文件名的同内容副本，供旧版客户端读取 */
 const LEGACY_MANIFEST = path.join(ROOT, 'website', 'api', 'ocs-app-infos.json');
 const BUILDER = path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app', 'electron.builder.json');
+/** 根 package.json = 插件版本线；扩展与桌面共用同一个 Release tag */
+const ROOT_PKG = path.join(ROOT, 'package.json');
+
+function readRootVersion() {
+	try {
+		return String(JSON.parse(fs.readFileSync(ROOT_PKG, 'utf8')).version || '').trim();
+	} catch {
+		return '';
+	}
+}
+
+/**
+ * 决定 Release tag（只用来拼下载地址，不参与版本比较）。
+ *
+ * 扩展包和桌面安装包是发在同一个 Release 里的，tag 一直走插件版本 `v5.x.x`；
+ * 清单里的 `tag` 字段才是桌面版本（3.x），两者必须分开，混用会导致
+ * 「检测到更新 → 装完还是旧版本 → 下次启动又提示」的死循环。
+ *
+ * 优先级：--tag 显式指定 > 根 package.json（插件线）> meta.rootVersion > meta.tagHint > 兜底。
+ */
+function resolveReleaseTag(args, meta) {
+	if (args.tag) return { tag: args.tag, from: '--tag 显式指定' };
+	const rootVersion = readRootVersion();
+	if (rootVersion) return { tag: `v${rootVersion}`, from: '根 package.json（插件版本）' };
+	if (meta.rootVersion) return { tag: `v${meta.rootVersion}`, from: 'meta.rootVersion' };
+	if (meta.tagHint) return { tag: meta.tagHint, from: 'meta.tagHint' };
+	return { tag: `desktop-v${meta.version}`, from: '桌面版本兜底' };
+}
 
 function parseArgs(argv) {
 	const out = {
@@ -145,7 +180,8 @@ async function main() {
 		console.error('[update-manifest] meta 缺少 version');
 		process.exit(1);
 	}
-	const tag = args.tag || meta.tagHint || `desktop-v${version}`;
+	const resolved = resolveReleaseTag(args, meta);
+	const tag = resolved.tag;
 	const releasePage = `https://github.com/${args.repo}/releases/tag/${tag}`;
 	const zipFileName = meta.file || `app-${version}.zip`;
 	const githubZipUrl = `https://github.com/${args.repo}/releases/download/${tag}/${zipFileName}`;
@@ -177,6 +213,9 @@ async function main() {
 		`https://github.com/${args.repo}/releases/download/${tag}/${encodeURIComponent(`${productName}-${version}-setup-${os}-${arch}.${ext}`)}`;
 
 	if (!meta.sha256) console.warn('[update-manifest] ⚠ meta 没有 sha256，客户端将跳过完整性校验');
+
+	console.log(`[update-manifest] 桌面版本 ${version}（清单 tag，参与 semver 比较）`);
+	console.log(`[update-manifest] 插件版本 ${tag}（Release tag，只拼下载地址，来源：${resolved.from}）`);
 
 	const entry = {
 		tag: version,
@@ -237,7 +276,8 @@ async function main() {
 	}
 
 	if (!args.dryRun) {
-		console.log(`\n[update-manifest] 版本     ${version}`);
+		console.log(`\n[update-manifest] 桌面版本 ${version}   → 清单 tag（参与比较）`);
+		console.log(`[update-manifest] 插件版本 ${tag}   → Release tag（只拼地址，来源：${resolved.from}）`);
 		console.log(`[update-manifest] 下载源   ${uniqueSources.length} 个（客户端按顺序回退）`);
 		for (const u of uniqueSources) console.log(`                    ${u}`);
 		console.log(`[update-manifest] 校验     ${meta.sha256 || '（缺失）'}`);
