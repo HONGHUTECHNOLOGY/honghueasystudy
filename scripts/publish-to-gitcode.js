@@ -253,16 +253,33 @@ async function main() {
 	let release = await getRelease({ apiBase: args.apiBase, repo: args.repo, tag: args.tag, token: args.token });
 	if (!release) {
 		console.log('[gitcode] Release 不存在，尝试创建');
-		release = await createRelease({
-			apiBase: args.apiBase,
-			repo: args.repo,
-			tag: args.tag,
-			token: args.token,
-			name: args.name || args.tag,
-			body,
-			target: args.target
-		});
-		console.log('[gitcode] Release 已创建');
+		// GitCode 与 GitHub 是两个独立仓库：GITHUB_SHA（尤其是 CI 里经 API 创建的提交）
+		// 在 GitCode 上并不存在，直接当 target_commitish 会 400「<sha> is not exist」。
+		// 依次尝试：显式 target → main → master，任一成功即止。
+		const targets = [];
+		for (const t of [args.target, 'main', 'master']) {
+			if (t && !targets.includes(t)) targets.push(t);
+		}
+		let lastErr = null;
+		for (const target of targets) {
+			try {
+				release = await createRelease({
+					apiBase: args.apiBase,
+					repo: args.repo,
+					tag: args.tag,
+					token: args.token,
+					name: args.name || args.tag,
+					body,
+					target
+				});
+				console.log(`[gitcode] Release 已创建（target=${target}）`);
+				break;
+			} catch (e) {
+				lastErr = e;
+				console.warn(`[gitcode] 用 target=${target} 创建失败，换下一个：${e.message}`);
+			}
+		}
+		if (!release) throw lastErr || new Error('创建 GitCode Release 失败');
 	} else {
 		console.log('[gitcode] Release 已存在，复用');
 	}
