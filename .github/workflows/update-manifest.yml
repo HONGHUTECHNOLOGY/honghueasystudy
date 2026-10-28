@@ -4,9 +4,9 @@ name: Update Manifest
 # 并直接提交推回 main —— CF Pages 检测到 push 自动重建，客户端随即检测到更新。
 #
 # 触发方：
-#   1) GitCode 原生工作流（.gitcode/workflows/release-publish.yml）在上传完全部
-#      附件后自动派发 —— 此时 GitCode 链接可达，探链才能全绿；
-#   2) 手动触发（GitCode 工作流未配 GITHUB_PAT 时的兜底，或探链失败重跑）。
+#   1) publish-gitcode.yml 在 GitCode 附件上传完成后自动派发 ——
+#      此时 GitCode 链接可达，探链才能全绿；
+#   2) 手动触发（兜底，或探链失败重跑）。
 #
 # 探链是 fail-closed：GitCode / GitHub 任一附件 Range GET 不通过就拒绝写清单，
 # 正好兜住「镜像缺包」——清单里 GitCode 在 urls[0]，缺包等于镜像没用。

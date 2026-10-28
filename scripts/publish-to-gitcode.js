@@ -231,13 +231,18 @@ async function getUploadUrl({ apiBase, repo, tag, token, fileName }) {
  * fetch failed（实测每个都恰好在 ~5min 挂掉）。https.request 没有这个限制，
  * 只有空闲超时（socket 连续无数据才计时），慢上传不受影响。
  */
-function putOnce(uploadUrl, headers, buffer) {
+/*
+ * 流式上传：不把整个文件读进内存（此前 readFileSync 会让 8 路并发 × 582MB
+ * 轻松吃掉 4GB+ 内存，托管 runner 直接 OOM 卡死）。Content-Length 用 stat
+ * 预先算好，文件内容经 ReadStream 边读边发。
+ */
+function putOnce(uploadUrl, headers, filePath, size) {
 	return new Promise((resolve, reject) => {
 		const u = new URL(uploadUrl);
 		const mod = u.protocol === 'http:' ? require('http') : require('https');
 		const req = mod.request(
 			u,
-			{ method: 'PUT', headers: { ...headers, 'Content-Length': buffer.length } },
+			{ method: 'PUT', headers: { ...headers, 'Content-Length': size } },
 			(res) => {
 				const chunks = [];
 				res.on('data', (c) => chunks.push(c));
@@ -255,13 +260,16 @@ function putOnce(uploadUrl, headers, buffer) {
 		// 空闲超时：连续 30 分钟无数据才判死（不是总时长），512KB/s 传 582MB 也够
 		req.setTimeout(30 * 60 * 1000, () => req.destroy(new Error('连接空闲超过 30 分钟')));
 		req.on('error', reject);
-		req.end(buffer);
+		// 读流出错（磁盘/权限等）要传导给请求，否则请求会挂着等数据直到空闲超时
+		const stream = fs.createReadStream(filePath);
+		stream.on('error', (e) => req.destroy(e));
+		stream.pipe(req);
 	});
 }
 
 /** 单次 PUT。重试逻辑在调用方：每次重试都要重新获取预签名 URL（有过期时间） */
-async function putToStorage({ uploadUrl, headers, buffer, fileName }) {
-	const res = await putOnce(uploadUrl, headers, buffer);
+async function putToStorage({ uploadUrl, headers, filePath, size, fileName }) {
+	const res = await putOnce(uploadUrl, headers, filePath, size);
 	if (res.status >= 200 && res.status < 300) return;
 	throw new ApiError(res.status, res.body, `上传 ${fileName}`);
 }
@@ -432,8 +440,8 @@ async function main() {
 						token: args.token,
 						fileName: f.name
 					});
-					const buffer = fs.readFileSync(f.path);
-					await putToStorage({ uploadUrl: url, headers: headers || {}, buffer, fileName: f.name });
+					const size = fs.statSync(f.path).size;
+					await putToStorage({ uploadUrl: url, headers: headers || {}, filePath: f.path, size, fileName: f.name });
 					lastPutErr = null;
 					break;
 				} catch (e) {

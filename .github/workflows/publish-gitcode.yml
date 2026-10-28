@@ -1,0 +1,121 @@
+name: Publish to GitCode
+
+# GitCode 镜像发布：把 GitHub Release 的安装包同步到 GitCode（客户端清单 urls[0]）。
+#
+# 为什么是独立 workflow、为什么这么慢也要做：
+#   - GitHub CI（海外）→ GitCode OBS（国内）单连接 ~100KB/s，只能靠多路并发把
+#     2.7GB 压到 1~2 小时（GitCode 预签名 PUT 不支持分片，没法更快）。
+#   - 与 desktop-build 拆开：打包失败不会连带镜像发布；镜像失败也只需重跑本
+#     workflow（脚本幂等：已上传且校验过的附件自动跳过）。
+#
+# 触发方式：手动 dispatch。发版全流程 = desktop-build（打包+发 GitHub Release）
+# → 跑完后来这里填 tag 点一下 → 完成后自动派发 update-manifest 回写清单。
+#
+# 前置：仓库 Secrets 需配置 GITCODE_TOKEN（GitCode 个人访问令牌）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag（如 v5.2.0），GitHub 与 GitCode 一致"
+        required: true
+        type: string
+      artifact_run_id:
+        description: "可选：复用该 run 的构建产物（跳过重新打包）"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-gitcode
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # 2.7GB 慢速上传 + 最多 3 轮重试，留足余量（GitHub job 上限 6 小时）
+    timeout-minutes: 330
+    env:
+      GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+    steps:
+      # 发布要跑仓库里的 scripts/publish-to-gitcode.js（仅内置模块，无需装依赖）
+      - name: Check out scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts
+          sparse-checkout-cone-mode: false
+
+      - name: Download build artifacts
+        if: ${{ !inputs.artifact_run_id }}
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Download artifacts from previous run
+        if: ${{ inputs.artifact_run_id }}
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 产物按 artifact 名分了目录，拍平到根；安装包统一 honghueasystudy- 前缀
+      # （与 GitHub Release 附件命名一致，客户端清单里的 URL 用实际文件名）
+      - name: Flatten artifact directories
+        run: |
+          find artifacts -mindepth 2 -type f -exec mv {} artifacts/ \;
+          find artifacts -mindepth 1 -type d -empty -delete
+          for f in artifacts/鸿鹄易学-*; do
+            [ -f "$f" ] || continue
+            base=$(basename "$f")
+            mv "$f" "artifacts/honghueasystudy-${base#鸿鹄易学-}"
+          done
+          ls -lh artifacts/
+
+      - name: Fetch release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ inputs.tag }}
+        run: gh release download "$TAG_NAME" --dir /tmp --pattern 'release-notes.md' --clobber
+
+      # 安装包排最前：它们才是客户端真正下载的文件，失败要尽早暴露。
+      # --concurrency 8：单连接 ~100KB/s，8 路把 2.7GB 压到 1~2 小时。
+      # 脚本幂等：Release 已存在的同名附件自动跳过，重跑只补缺的。
+      - name: Upload to GitCode Release
+        run: |
+          TAG_NAME=${{ inputs.tag }}
+          FILES=()
+          for f in artifacts/*.exe artifacts/*.dmg artifacts/*.AppImage artifacts/*.deb artifacts/*.rpm \
+                   artifacts/app-*.zip artifacts/*.zip.sha256 artifacts/extension.zip; do
+            if [ -f "$f" ]; then FILES+=(--file "$f"); fi
+          done
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "没有可同步的附件（安装包 / 更新包 / 扩展均缺失）"
+            exit 1
+          fi
+          ls -lh artifacts/
+          node scripts/publish-to-gitcode.js \
+            --tag "$TAG_NAME" \
+            --name "$TAG_NAME" \
+            --notes-file /tmp/release-notes.md \
+            --concurrency 8 \
+            --purge-stale \
+            --require-token \
+            "${FILES[@]}"
+
+      # workflow_dispatch 是 GITHUB_TOKEN 防递归规则的豁免事件，可以直接派发。
+      # 此时 GitCode 附件已就位，update-manifest 的探链才能全绿。
+      - name: Dispatch update manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ inputs.tag }}
+        run: |
+          gh workflow run update-manifest.yml --ref main -f tag="$TAG_NAME"
+          echo "已派发 update-manifest（回写更新清单并触发 CF 重建）"
