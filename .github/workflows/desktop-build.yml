@@ -276,18 +276,26 @@ jobs:
       # GitCode 镜像：国内直连 GitHub Release 常被限速或 DNS 污染，客户端清单把
       # GitCode 放 urls[0]、GitHub 作兜底，因此两个源的包必须字节一致——这里复用
       # 同一批 artifacts，不重新打包。
+      #
+      # 必须「全部」同步：installers.win32/darwin/linux 的 urls[0] 都是 GitCode，
+      # 少传任何一个，对应平台的用户每次更新都要先吃一次 404/超时才回退 GitHub，
+      # 镜像等于没用。GitCode 官方限制 Release 单附件 ≤ 2GB、总容量不限，324MB 安装包可传。
       # 未配置 GITCODE_TOKEN 时整步跳过（GitHub 发布不受影响）；配置了就严格校验，
       # 失败即红，避免清单指向一个不存在的镜像附件。
       - name: Publish artifacts to GitCode
         if: env.GITCODE_TOKEN != ''
         run: |
           TAG_NAME=${GITHUB_REF#refs/tags/}
-          EXTRA=()
-          for f in artifacts/app-*.zip artifacts/extension.zip; do
-            [ -f "$f" ] && EXTRA+=(--file "$f")
+          ls -lh artifacts/
+          FILES=()
+          # 安装包排在最前：它们才是客户端真正下载的文件，上传失败要尽早暴露，
+          # 而不是先花时间传完扩展和旧版 zip 才发现 300MB 的包传不上去。
+          for f in artifacts/*.exe artifacts/*.dmg artifacts/*.AppImage artifacts/*.deb artifacts/*.rpm \
+                   artifacts/app-*.zip artifacts/extension.zip; do
+            if [ -f "$f" ]; then FILES+=(--file "$f"); fi
           done
-          if [ ${#EXTRA[@]} -eq 0 ]; then
-            echo "没有可同步的附件（app-*.zip / extension.zip 均缺失）"
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "没有可同步的附件（安装包 / 更新包 / 扩展均缺失）"
             exit 1
           fi
           node scripts/publish-to-gitcode.js \
@@ -295,4 +303,4 @@ jobs:
             --name "$TAG_NAME" \
             --notes-file /tmp/final-body.md \
             --require-token \
-            "${EXTRA[@]}"
+            "${FILES[@]}"
