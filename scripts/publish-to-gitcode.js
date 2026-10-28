@@ -429,9 +429,14 @@ async function main() {
 			 * 预签名 URL 有时效（实测 ~30 分钟就 401 Authorization Required）。
 			 * 重试必须连 upload_url 一起重新获取，绝不能复用第一次拿到的地址 ——
 			 * 否则第一次超时后，后面两次重试全部 401 白跑。
+			 *
+			 * 5xx 是网关瞬时故障（2026-10-28 实测 GitCode 文件网关抖动约 10 分钟，
+			 * 期间全部 PUT 502，恢复后同样的请求 200）：指数退避 1→2→4→8 分钟，
+			 * 累计 ~15 分钟，足以熬过一次网关抖动；4xx 参数/签名类错误重试无意义，
+			 * 3 次封顶。
 			 */
 			let lastPutErr = null;
-			for (let attempt = 1; attempt <= 3; attempt++) {
+			for (let attempt = 1; attempt <= 5; attempt++) {
 				try {
 					const { url, headers } = await getUploadUrl({
 						apiBase: args.apiBase,
@@ -446,10 +451,14 @@ async function main() {
 					break;
 				} catch (e) {
 					lastPutErr = e;
-					if (attempt < 3) {
-						console.warn(`[gitcode] 上传 ${f.name} 第 ${attempt} 次失败（${e.message}），60 秒后重新获取上传地址再试`);
-						// 延迟可用环境变量覆盖（契约测试注入小值，避免 60s×2 的真实等待）
-						const delay = Number(process.env.GITCODE_RETRY_DELAY_MS) || 60000;
+					const is5xx = e instanceof ApiError && e.status >= 500;
+					if (attempt < (is5xx ? 5 : 3)) {
+						const base = Number(process.env.GITCODE_RETRY_DELAY_MS) || 60000;
+						// 延迟可用环境变量注入固定值（契约测试用）；默认指数退避
+						const delay = process.env.GITCODE_RETRY_DELAY_MS ? base : Math.min(base * 2 ** (attempt - 1), 480000);
+						console.warn(
+							`[gitcode] 上传 ${f.name} 第 ${attempt} 次失败（${e.message}），${Math.round(delay / 1000)} 秒后重新获取上传地址再试`
+						);
 						await new Promise((r) => setTimeout(r, delay));
 					}
 				}
