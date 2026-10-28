@@ -2,11 +2,11 @@ import { app, dialog, clipboard, shell } from 'electron';
 import { gt, rcompare } from 'semver';
 import { Logger } from '../logger';
 import { join, dirname } from 'path';
-import { existsSync, mkdirSync, readdirSync, rm, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rm, rmSync, statSync, writeFileSync } from 'fs';
 import * as fsMod from 'fs';
 import { getCurrentWebContents, moveWindowToTop } from '../utils';
 import { downloadFromMirrors, hostOf, normalizeUrls } from '../utils/download-source';
-import { assertSafeInstallDir, spawnSilentInstaller } from '../utils/installer';
+import { resolveInstallDir, spawnSilentInstaller } from '../utils/installer';
 import { HonghuApi, UpdateInformationResource } from '@honghu-desktop/common';
 
 const logger = Logger('updater');
@@ -28,7 +28,7 @@ export interface UpdateCheckResult {
 export interface UpdateDownloadResult {
 	ok: boolean;
 	/** 失败原因，供渲染端展示 */
-	reason?: 'no-installer' | 'cancelled';
+	reason?: 'no-installer' | 'no-install-dir' | 'cancelled';
 	tag?: string;
 	/** 安装包大小（字节） */
 	size?: number;
@@ -44,7 +44,21 @@ interface PendingInstaller {
 	size?: number;
 }
 
+/** 落盘的待安装任务（重启后还能继续装，避免白下 260MB） */
+interface PendingMeta {
+	tag: string;
+	exePath: string;
+	installDir?: string;
+	size?: number;
+	downloadedAt: number;
+}
+
+const PENDING_META_NAME = 'pending.json';
+
 let pendingInstaller: PendingInstaller | null = null;
+
+/** 主程序名：注册表反推的目录里要确认确实是本程序，防止装进同名残留目录 */
+const APP_EXE_NAMES = ['鸿鹄易学.exe'];
 
 /**
  * 从版本清单里挑出比当前版本更高的最新一条。
@@ -120,6 +134,97 @@ function pendingDir() {
 	return join(app.getPath('temp'), PENDING_DIR_NAME);
 }
 
+function pendingMetaPath() {
+	return join(pendingDir(), PENDING_META_NAME);
+}
+
+function savePendingMeta(pending: PendingInstaller) {
+	try {
+		mkdirSync(pendingDir(), { recursive: true });
+		const meta: PendingMeta = {
+			tag: pending.tag,
+			exePath: pending.exePath,
+			installDir: pending.installDir,
+			size: pending.size,
+			downloadedAt: Date.now()
+		};
+		writeFileSync(pendingMetaPath(), JSON.stringify(meta, null, 4));
+	} catch (e) {
+		// 记录失败不影响本次安装，只是重启后要重新下载
+		logger.warn('写入待安装任务记录失败', e);
+	}
+}
+
+/** 清掉待安装任务（安装包 + 记录） */
+export function clearPendingInstaller() {
+	pendingInstaller = null;
+	try {
+		rmSync(pendingDir(), { recursive: true, force: true });
+	} catch (e) {
+		logger.warn('清理安装包临时目录失败', e);
+	}
+}
+
+/**
+ * 恢复上次已下载但未安装的安装包。
+ *
+ * NSIS 静默安装完成后不会拉起应用，用户也可能点了「稍后安装」就直接关掉软件；
+ * 这两种情况下安装包已经躺在临时目录里，重启后应当直接提示安装而不是重新下 260MB。
+ * 只能靠落盘的 pending.json 认出来 —— 内存里的 pendingInstaller 随进程退出就没了。
+ */
+export async function restorePendingInstaller(): Promise<boolean> {
+	if (!app.isPackaged) return false;
+	try {
+		if (!existsSync(pendingMetaPath())) return false;
+
+		const meta = JSON.parse(readFileSync(pendingMetaPath(), 'utf8')) as PendingMeta;
+		if (!meta || typeof meta.exePath !== 'string' || !existsSync(meta.exePath)) {
+			logger.info('待安装任务已失效（安装包不存在），清理');
+			clearPendingInstaller();
+			return false;
+		}
+		// 大小对不上说明文件被截断或替换过，不敢直接装
+		if (meta.size && statSync(meta.exePath).size !== meta.size) {
+			logger.warn('安装包大小与记录不符，清理');
+			clearPendingInstaller();
+			return false;
+		}
+
+		const current = app.getVersion();
+		let newer = false;
+		try {
+			newer = typeof meta.tag === 'string' && gt(meta.tag, current);
+		} catch {
+			newer = false;
+		}
+		if (!newer) {
+			// 版本已经不低了：说明上次装成功了，安装包可以清掉
+			logger.info(`待安装版本 ${meta.tag} 不高于当前 ${current}，已安装，清理残留`);
+			clearPendingInstaller();
+			return false;
+		}
+
+		pendingInstaller = {
+			tag: meta.tag,
+			exePath: meta.exePath,
+			installDir: meta.installDir || '',
+			size: meta.size
+		};
+		logger.info(`恢复上次已下载的安装包：${meta.tag}（${meta.exePath}）`);
+		getCurrentWebContents().send('update-downloaded', {
+			tag: meta.tag,
+			size: meta.size,
+			installDir: meta.installDir,
+			runDir: dirname(app.getPath('exe')),
+			restored: true
+		});
+		return true;
+	} catch (e) {
+		logger.warn('恢复待安装任务失败', e);
+		return false;
+	}
+}
+
 /** 临时盘剩余空间（字节）；拿不到就返回 -1，不阻塞更新 */
 function freeSpaceOf(dir: string): number {
 	try {
@@ -168,15 +273,35 @@ export async function checkUpdate(manual = false): Promise<UpdateCheckResult> {
 	logger.info('检测更新', { current, count: versions.length, newest: newest?.tag, manual });
 
 	if (newest) {
-		moveWindowToTop();
-		getCurrentWebContents().send('detect-new-app-version', newest);
+		const downloaded = pendingInstaller && pendingInstaller.tag === newest.tag;
+		if (downloaded) {
+			// 安装包已经在临时目录里：再弹「发现新版本」只会让人重复下载一遍
+			logger.info('该版本安装包已下载完成，等待用户安装');
+			if (manual) {
+				getCurrentWebContents().send('update-downloaded', {
+					tag: pendingInstaller!.tag,
+					size: pendingInstaller!.size,
+					installDir: pendingInstaller!.installDir,
+					restored: true
+				});
+			}
+		} else {
+			moveWindowToTop();
+			getCurrentWebContents().send('detect-new-app-version', newest);
+		}
 	}
 
 	return { ok: true, current, latest: newest?.tag || current, hasUpdate: !!newest };
 }
 
-/** 启动时静默检测，保持原有行为 */
+/**
+ * 启动时静默检测。
+ *
+ * 先恢复上次已下载但没装的安装包（静默安装后应用不会自动启动，用户也可能点了「稍后」），
+ * 再检测版本 —— 顺序不能反：cleanupUpdateResidue 在没有待安装任务时会把临时目录整个删掉。
+ */
 export async function updater() {
+	await restorePendingInstaller();
 	await checkUpdate(false);
 }
 
@@ -212,9 +337,6 @@ export async function updateApp(newVersion: UpdateInformationResource): Promise<
 		return { ok: false, reason: 'cancelled' };
 	}
 
-	// 安装目录 = 当前运行的 exe 所在目录。
-	// 不能依赖注册表的 InstallLocation：实测 electron-builder 生成的卸载项里该字段是空的。
-	const installDir = dirname(app.getPath('exe'));
 	const installer = newVersion.installers?.win32;
 	const sources = normalizeUrls(installer?.urls);
 
@@ -232,8 +354,29 @@ export async function updateApp(newVersion: UpdateInformationResource): Promise<
 		return { ok: false, reason: 'no-installer' };
 	}
 
-	// 提前校验安装目录，避免下完 261MB 才发现装不了
-	assertSafeInstallDir(installDir);
+	// 安装目录：可信的当前 exe 目录 → 注册表记录的安装位置。
+	// 用户可能在 win-unpacked / 临时目录里跑旧副本，或装了新版但没重启，
+	// 这时当前 exe 所在目录并不是真正要覆盖的位置，必须回退到注册表。
+	const resolved = await resolveInstallDir({ exePath: app.getPath('exe'), exeNames: APP_EXE_NAMES });
+	if (!resolved.dir) {
+		logger.warn('无法确定安装目录，改为打开下载页：' + JSON.stringify(resolved.candidates));
+		const page = newVersion.app_downloads?.win32 || 'https://easystudy.honghutech.eu.org';
+		await shell.openExternal(page);
+		await dialog.showMessageBox({
+			title: '鸿鹄易学更新程序',
+			message: `新版本 ${tag} 需要手动安装。\n\n${resolved.error}\n已为你打开下载页面，下载安装包后覆盖安装即可。`,
+			type: 'info',
+			noLink: true
+		});
+		return { ok: false, reason: 'no-install-dir' };
+	}
+	const installDir = resolved.dir;
+	logger.info(`安装目录（来源：${resolved.source === 'registry' ? '注册表' : '当前运行目录'}）：${installDir}`);
+	if (resolved.registryDir && resolved.registryDir.toLowerCase() !== installDir.toLowerCase()) {
+		logger.warn(`注册表记录的目录（${resolved.registryDir}）与将安装的目录不一致`);
+	}
+
+	// 目录合法性已在 resolveInstallDir 里逐个候选校验过（存在性 + 内含主程序 exe）
 
 	const dir = pendingDir();
 	const exePath = join(dir, installer.name || `honghu-setup-${tag}.exe`);
@@ -271,7 +414,13 @@ export async function updateApp(newVersion: UpdateInformationResource): Promise<
 		else logger.info('安装包 SHA256 校验通过（' + hostOf(used) + '）');
 
 		pendingInstaller = { tag, exePath, installDir, size: installer.size };
-		getCurrentWebContents().send('update-downloaded', { tag, size: installer.size, installDir });
+		savePendingMeta(pendingInstaller);
+		getCurrentWebContents().send('update-downloaded', {
+			tag,
+			size: installer.size,
+			installDir,
+			runDir: dirname(app.getPath('exe'))
+		});
 		return { ok: true, tag, size: installer.size, installDir };
 	} catch (e) {
 		logger.error('更新包下载失败', e);
@@ -303,15 +452,23 @@ export async function installUpdate(): Promise<{ ok: boolean }> {
 	const pending = pendingInstaller;
 	if (!pending) throw new Error('没有待安装的更新包，请重新检查更新');
 	if (!existsSync(pending.exePath)) {
-		pendingInstaller = null;
+		clearPendingInstaller();
 		throw new Error('安装包已被清理，请重新检查更新');
 	}
 
-	// 二次校验：安装包可能被替换或损坏
-	assertSafeInstallDir(pending.installDir);
+	// 安装目录重新解析：从下载到现在可能已经变了
+	// （用户在别的目录装了新版、或换了启动方式），不能照搬下载时的结论
+	const resolved = await resolveInstallDir({ exePath: app.getPath('exe'), exeNames: APP_EXE_NAMES, force: true });
+	if (!resolved.dir) {
+		throw new Error(resolved.error || '无法确定安装目录');
+	}
+	if (resolved.dir.toLowerCase() !== (pending.installDir || '').toLowerCase()) {
+		logger.warn(`覆盖安装目录已变化：${pending.installDir || '(空)'} → ${resolved.dir}`);
+	}
+	pending.installDir = resolved.dir;
 
 	logger.info(`启动安装程序：${pending.exePath}`);
-	logger.info(`覆盖安装目录：${pending.installDir}`);
+	logger.info(`覆盖安装目录：${pending.installDir}（来源：${resolved.source === 'registry' ? '注册表' : '当前运行目录'}）`);
 
 	await spawnSilentInstaller({
 		exePath: pending.exePath,

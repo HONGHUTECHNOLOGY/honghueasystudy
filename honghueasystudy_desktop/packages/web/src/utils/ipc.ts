@@ -79,33 +79,53 @@ export function activeIpcRenderListener() {
 	/**
 	 * 安装包下载并校验完成。
 	 * 此时还不退出应用 —— 用户可能正在做题，让他自己决定什么时候装。
+	 *
+	 * restored = true 表示这是上次就已经下好的安装包（软件重启后恢复），
+	 * 不再重复下载，直接提示安装。
 	 */
-	ipcRenderer.on('update-downloaded', (e, info: { tag?: string; size?: number; installDir?: string }) => {
-		Notification.remove('updater');
-		if (!info || !info.tag) return;
+	ipcRenderer.on(
+		'update-downloaded',
+		(e, info: { tag?: string; size?: number; installDir?: string; runDir?: string; restored?: boolean }) => {
+			Notification.remove('updater');
+			if (!info || !info.tag) return;
 
-		Modal.confirm({
-			title: '安装包已下载完成',
-			okText: '立即安装',
-			cancelText: '稍后安装',
-			maskClosable: false,
-			width: 460,
-			async onOk() {
-				await closeBrowsersForUpdate();
-				try {
-					await remote.methods.call('installUpdate');
-				} catch (err) {
-					Message.error('启动安装失败：' + err);
-				}
-			},
-			content: () =>
-				h('div', [
-					h('div', `新版本 ${info.tag} 已下载完成。`),
-					h('div', '点击「立即安装」会关闭本软件并开始安装，安装完成后自动重新启动。'),
-					info.installDir ? h('div', { style: 'margin-top:8px;opacity:.6;font-size:12px' }, `安装目录：${info.installDir}`) : null
-				])
-		});
-	});
+			// 当前跑的不是安装目录里那份（解压副本 / win-unpacked / 旧目录）时要说清楚，
+			// 否则用户装完还从原来那个入口打开，会以为更新没生效
+			const elsewhere =
+				!!info.runDir && !!info.installDir && info.runDir.toLowerCase() !== info.installDir.toLowerCase();
+
+			Modal.confirm({
+				title: info.restored ? '已下载的更新待安装' : '安装包已下载完成',
+				okText: '立即安装',
+				cancelText: '稍后安装',
+				maskClosable: false,
+				width: 480,
+				async onOk() {
+					await closeBrowsersForUpdate();
+					try {
+						await remote.methods.call('installUpdate');
+					} catch (err) {
+						Message.error('启动安装失败：' + err);
+					}
+				},
+				content: () =>
+					h('div', [
+						h('div', info.restored ? `新版本 ${info.tag} 的安装包上次已经下载完成，随时可以安装。` : `新版本 ${info.tag} 已下载完成。`),
+						h('div', '点击「立即安装」会关闭本软件并开始安装，安装完成后请重新打开软件。'),
+						info.installDir
+							? h('div', { style: 'margin-top:8px;opacity:.6;font-size:12px' }, `安装目录：${info.installDir}`)
+							: null,
+						elsewhere
+							? h(
+									'div',
+									{ style: 'margin-top:8px;font-size:12px;color:#ff7d00' },
+									`当前运行的程序不在安装目录内（${info.runDir}），更新会安装到上面的安装目录。安装完成后请从该目录或桌面快捷方式启动。`
+							  )
+							: null
+					])
+			});
+		}
+	);
 
 	// 显示浏览器
 	ipcRenderer.on('show-browser-in-app', (e, uid) => {
