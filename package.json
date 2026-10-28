@@ -1,6 +1,6 @@
 {
 	"name": "honghueasystudy",
-  "version": "5.2.0",
+	"version": "5.2.0",
 	"description": "鸿鹄易学 - 在线网络课程辅助工具",
 	"packageManager": "pnpm@11.21.0",
 	"types": "./lib/src/core/index.d.ts",
