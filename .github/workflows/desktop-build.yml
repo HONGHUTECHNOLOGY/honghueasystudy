@@ -170,7 +170,33 @@ jobs:
       - name: Build desktop app
         run: |
           pnpm -C honghueasystudy_desktop exec gulp -f ./scripts/tsc.js
-          pnpm -C honghueasystudy_desktop exec gulp -f ./scripts/build-app.js
+          if [ "${{ matrix.platform }}" != "mac" ]; then
+            pnpm -C honghueasystudy_desktop exec gulp -f ./scripts/build-app.js
+            exit 0
+          fi
+          # macOS 上 DMG 打包偶发 `hdiutil detach -force: Resource busy`：
+          # electron-builder 用 Finder/AppleScript 摆图标，Spotlight 又会索引新挂载的卷，
+          # 两者都可能让卷在卸载时仍被占用。做法：先关索引，失败则清理挂载卷后重试。
+          sudo mdutil -a -i off || true
+          for attempt in 1 2 3; do
+            echo "::group::mac 打包第 ${attempt} 次尝试"
+            if pnpm -C honghueasystudy_desktop exec gulp -f ./scripts/build-app.js; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "::warning::mac 第 ${attempt} 次打包失败（多为 DMG 卸载被占用），清理后重试"
+            # 只清理本项目挂载的卷，绝不能碰系统盘
+            for v in /Volumes/鸿鹄*; do
+              [ -d "$v" ] && hdiutil detach -force "$v" || true
+            done
+            killall Finder 2>/dev/null || true
+            rm -rf honghueasystudy_desktop/packages/app/dist/mac \
+                   honghueasystudy_desktop/packages/app/dist/*.dmg || true
+            sleep 3
+          done
+          echo "::error::mac 打包连续 3 次失败，请查看上方 hdiutil 报错"
+          exit 1
         env:
           USE_HARD_LINKS: false
           PLATFORM: ${{ matrix.platform }}
