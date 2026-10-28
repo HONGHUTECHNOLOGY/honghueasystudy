@@ -303,45 +303,30 @@ jobs:
           # 只传文件：用 find 兜底，目录永远不会被当成附件
           find artifacts -type f -print0 | xargs -0 gh release upload "$TAG_NAME" --clobber
 
-      - name: Append desktop & extension release notes
+      # Release 说明只保留「更新日志 + 使用方法」：release-please 写的更新日志保留在正文，
+      # 这里追加固定段落。不再自动生成下载链接清单与官网快捷访问
+      # （Assets 里本来就有全部附件，罗列一遍只会让说明冗长）。
+      - name: Append usage notes to release body
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           TAG_NAME=${{ inputs.tag || github.ref_name }}
           TAG_NAME=${TAG_NAME#refs/tags/}
-          DL="https://github.com/${GH_REPO}/releases/download/${TAG_NAME}"
 
-          NOTES_FILE=/tmp/desktop-notes.md
-          EXT_VERSION="${{ needs.build-extension.outputs.ext_version }}"
-          {
-            echo ''
-            echo '---'
-            echo ''
-            echo '## 🖥️ 桌面端与浏览器扩展下载'
-            echo ''
-            echo "> 桌面端、浏览器扩展与用户脚本版本线相互独立，各自按自身版本号发布。"
-            echo ''
-            for f in artifacts/*; do
-              name=$(basename "$f")
-              case "$name" in
-                *.exe)         label="Windows 64位安装包（不支持 Win7）" ;;
-                *.dmg)         label="macOS 镜像" ;;
-                *.AppImage)    label="Linux AppImage" ;;
-                *.deb)         label="Linux deb 包" ;;
-                *.rpm)         label="Linux rpm 包" ;;
-                extension.zip) label="浏览器扩展 v${EXT_VERSION}（解压后在扩展管理页加载）" ;;
-                app-*.zip)     label="Windows 就地更新包（客户端自动更新下载，无需手动安装）" ;;
-                *.zip.sha256)  label="更新包校验值" ;;
-                *)             label="$name" ;;
-              esac
-              echo "- [${label}](${DL}/${name})"
-            done
-            echo ''
-            echo '### 🔗 快捷访问'
-            echo '- [官网](https://honghueasystudy.honghutech.eu.org/)'
-            echo '- [官网软件下载（更快）](https://honghueasystudy.honghutech.eu.org/docs/app)'
-          } > "$NOTES_FILE"
+          NOTES_FILE=/tmp/usage-notes.md
+          cat > "$NOTES_FILE" <<'NOTES'
+
+          ---
+
+          ## 📦 使用方法
+
+          **方法一**：使用 Edge 浏览器可直接访问扩展商店下载：[鸿鹄易学 Edge 扩展链接](https://microsoftedge.microsoft.com/addons/detail/%E9%B8%BF%E9%B9%A4%E6%98%93%E5%AD%A6/ocidllankdjkcieeefhgmgnkppcbdfhh)（更新可能不及时）
+
+          **方法二**：解压 `extension.zip` 后，在 Chrome/Edge 浏览器中打开扩展页面，开启开发者模式，点击加载已解压缩的扩展，选择解压后文件所在的文件夹即可添加扩展。
+
+          **方法三**：下载系统对应桌面端安装包，安装后在桌面端创建浏览器，浏览器会自动注入扩展，并且桌面端支持辅助操控（适用于智慧树及中国大学 MOOC）。
+          NOTES
 
           EXISTING_BODY=$(gh release view "$TAG_NAME" --json body -q .body 2>/dev/null || echo "")
           # 幂等：先剥离本段落旧内容再追加，避免重复触发时说明叠加
