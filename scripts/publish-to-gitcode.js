@@ -157,6 +157,20 @@ async function createRelease({ apiBase, repo, tag, token, name, body, target }) 
 	return res.json().catch(() => ({}));
 }
 
+/** Release 已存在时也同步说明：CI 每次都重发完整 final-body.md，直接覆盖不会叠加 */
+async function updateReleaseBody({ apiBase, repo, releaseId, token, name, body }) {
+	const payload = {};
+	if (name) payload.name = name;
+	if (body !== undefined) payload.body = body;
+	const res = await apiFetch(`${apiBase}/repos/${repo}/releases/${releaseId}`, {
+		token,
+		method: 'PATCH',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload)
+	});
+	if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''), '更新 Release 说明');
+}
+
 async function getUploadUrl({ apiBase, repo, tag, token, fileName }) {
 	const url = `${apiBase}/repos/${repo}/releases/${encodeURIComponent(tag)}/upload_url?file_name=${encodeURIComponent(fileName)}`;
 	const res = await apiFetch(url, { token });
@@ -309,6 +323,24 @@ async function main() {
 		if (!release) throw lastErr || new Error('创建 GitCode Release 失败');
 	} else {
 		console.log('[gitcode] Release 已存在，复用');
+		// 说明也要同步：脚本此前只在创建时写 notes，Release 已存在时说明会停在
+		// 首次创建的旧文案（CI 传来的 --notes-file 是完整正文，覆盖写不会叠加）
+		if (body && release.id) {
+			try {
+				await updateReleaseBody({
+					apiBase: args.apiBase,
+					repo: args.repo,
+					releaseId: release.id,
+					token: args.token,
+					name: args.name || release.name,
+					body
+				});
+				console.log('[gitcode] Release 说明已更新');
+			} catch (e) {
+				// 说明更新失败不阻断附件上传，但要在结果里可见
+				console.warn(`[gitcode] Release 说明更新失败（不阻断上传）：${e.message}`);
+			}
+		}
 	}
 
 	const existing = new Map(((release && release.assets) || []).map((a) => [a.name, a]));
