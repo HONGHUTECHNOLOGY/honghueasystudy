@@ -58,6 +58,7 @@ function parseArgs(argv) {
 		else if (a === '--download-base') out.downloadBase = argv[++i];
 		else if (a === '--dry-run') out.dryRun = true;
 		else if (a === '--force') out.force = true;
+		else if (a === '--concurrency') out.concurrency = Number(argv[++i]) || 4;
 		else if (a === '--require-token') out.requireToken = true;
 		else if (a === '--no-download-check') out.skipDownloadCheck = true;
 		else if (a === '-h' || a === '--help') out.help = true;
@@ -348,11 +349,20 @@ async function main() {
 	let skipped = 0;
 	const failures = [];
 
-	for (const f of files) {
+	/*
+	 * 并发上传：CI（Azure 海外）→ 华为 OBS（国内）单连接实测只有 ~100KB/s，
+	 * 2.7GB 串行要 7 小时以上；4 路并发把墙钟时间压到 2 小时左右。
+	 * 每个 worker 独立取任务（单线程 idx++ 无竞态），附件间互不影响。
+	 */
+	const CONCURRENCY = Math.max(1, Math.min(Number(args.concurrency) || 4, files.length));
+	let cursor = 0;
+
+	async function uploadOne(f) {
+		const startedAt = Date.now();
 		if (existing.has(f.name) && !args.force) {
 			console.log(`[gitcode] 跳过 ${f.name}：Release 中已存在同名附件（--force 可重传）`);
 			skipped++;
-			continue;
+			return;
 		}
 		try {
 			const { url, headers } = await getUploadUrl({
@@ -365,7 +375,7 @@ async function main() {
 			const buffer = fs.readFileSync(f.path);
 			await putToStorage({ uploadUrl: url, headers: headers || {}, buffer, fileName: f.name });
 			uploaded++;
-			console.log(`[gitcode] 已上传 ${f.name}`);
+			console.log(`[gitcode] 已上传 ${f.name}（耗时 ${Math.round((Date.now() - startedAt) / 60000)} 分钟）`);
 
 			if (!args.skipDownloadCheck) {
 				const probe = await verifyDownload({
@@ -381,6 +391,15 @@ async function main() {
 			console.error(`[gitcode] 上传失败 ${f.name}：${e.message}`);
 		}
 	}
+
+	await Promise.all(
+		Array.from({ length: CONCURRENCY }, async function worker() {
+			while (cursor < files.length) {
+				const f = files[cursor++];
+				await uploadOne(f);
+			}
+		})
+	);
 
 	console.log(`\n[gitcode] 结果：上传 ${uploaded} / 跳过 ${skipped} / 失败 ${failures.length}`);
 	if (failures.length) {
