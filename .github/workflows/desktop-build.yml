@@ -2,6 +2,14 @@ name: Desktop Build (win/mac/linux)
 
 on:
   workflow_dispatch:
+    # 发布链（上传 Release / GitCode 镜像 / 回写清单）仅在 tag 触发时执行；
+    # 若发布步骤失败，修复后可从 main 手动 dispatch 并在 tag 里填版本号重跑发布链，
+    # 不必重新构建（build 矩阵照常跑，产物一致）。
+    inputs:
+      tag:
+        description: "发布目标 tag（如 v5.2.0），留空则只在 tag 触发时发布"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -197,7 +205,7 @@ jobs:
   # 上传到该 tag 对应的 GitHub Release，并追加「桌面端与扩展下载」说明段落。
   upload-release:
     needs: [build, build-extension]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
     runs-on: ubuntu-latest
     # 提到 job 级，step 的 if 才能读到（step 级 env 不参与 if 求值）
     env:
@@ -210,25 +218,35 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      # upload-artifact 保留 dist/ 目录结构：安装包在根、更新包与 update-meta.json
+      # 在 update/ 子目录。统一拍平，后面的 gh release upload / 下载链接生成 /
+      # GitCode 同步 / 清单脚本的全局匹配才能命中，也避免目录被当成附件上传。
+      - name: Flatten artifact directories
+        run: |
+          find artifacts -mindepth 2 -type f -exec mv {} artifacts/ \;
+          ls -lh artifacts/
+
       - name: Upload artifacts to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          TAG_NAME=${GITHUB_REF#refs/tags/}
+          TAG_NAME=${{ inputs.tag || github.ref_name }}
+          TAG_NAME=${TAG_NAME#refs/tags/}
           echo "Uploading artifacts to release: $TAG_NAME"
-          ls -lh artifacts/
-          # release-please 已创建正式 Release 时 create 会失败，静默跳过；
-          # 手动对 tag dispatch 且无 Release 时则创建草稿
-          gh release create "$TAG_NAME" --draft --generate-notes || true
-          gh release upload "$TAG_NAME" artifacts/* --clobber
+          # 已有正式 Release（release-please 创建）就不建草稿，避免残留 untagged 草稿；
+          # 手动对 tag dispatch 且无 Release 时才补建草稿
+          gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --draft --generate-notes
+          # 只传文件：用 find 兜底，目录永远不会被当成附件
+          find artifacts -type f -print0 | xargs -0 gh release upload "$TAG_NAME" --clobber
 
       - name: Append desktop & extension release notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          TAG_NAME=${GITHUB_REF#refs/tags/}
+          TAG_NAME=${{ inputs.tag || github.ref_name }}
+          TAG_NAME=${TAG_NAME#refs/tags/}
           DL="https://github.com/${GH_REPO}/releases/download/${TAG_NAME}"
 
           NOTES_FILE=/tmp/desktop-notes.md
@@ -285,13 +303,14 @@ jobs:
       - name: Publish artifacts to GitCode
         if: env.GITCODE_TOKEN != ''
         run: |
-          TAG_NAME=${GITHUB_REF#refs/tags/}
+          TAG_NAME=${{ inputs.tag || github.ref_name }}
+          TAG_NAME=${TAG_NAME#refs/tags/}
           ls -lh artifacts/
           FILES=()
           # 安装包排在最前：它们才是客户端真正下载的文件，上传失败要尽早暴露，
           # 而不是先花时间传完扩展和旧版 zip 才发现 300MB 的包传不上去。
           for f in artifacts/*.exe artifacts/*.dmg artifacts/*.AppImage artifacts/*.deb artifacts/*.rpm \
-                   artifacts/app-*.zip artifacts/extension.zip; do
+                   artifacts/app-*.zip artifacts/*.zip.sha256 artifacts/extension.zip; do
             if [ -f "$f" ]; then FILES+=(--file "$f"); fi
           done
           if [ ${#FILES[@]} -eq 0 ]; then
@@ -315,7 +334,7 @@ jobs:
   # 属预期行为：请先在仓库 Secrets 配置 GITCODE_TOKEN。
   update-manifest:
     needs: [upload-release]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
     runs-on: ubuntu-latest
     steps:
       # 清单要提交到 main 才会被 CF 发布，所以这里检出 main 而不是 tag
@@ -335,6 +354,10 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      # 同 upload-release：拍平 update/ 子目录，update-meta.json 落到 artifacts/ 根
+      - name: Flatten artifact directories
+        run: find artifacts -mindepth 2 -type f -exec mv {} artifacts/ \;
+
       # write-update-manifest 的探链通过 createRequire 从桌面端 app 包解析 axios；
       # 本 job 不装 workspace 依赖，在仓库根补装一份（模块解析会向上找到它）
       - name: Install axios for link probing
@@ -342,7 +365,7 @@ jobs:
 
       - name: Write update manifest
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           node scripts/write-update-manifest.js \
             --meta artifacts/update-meta.json \
@@ -353,7 +376,7 @@ jobs:
 
       - name: Commit manifest to main
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
