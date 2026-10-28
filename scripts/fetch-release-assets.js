@@ -79,12 +79,33 @@ function downloadOnce(url, dest, expectSize, expectSha) {
 					const tmp = `${dest}.part`;
 					const ws = fs.createWriteStream(tmp);
 					let received = 0;
+					/*
+					 * 一次性终止闸门：连接中途断开（aborted/ECONNRESET）时，res 在
+					 * 'error' 之后仍会补发缓冲的 'data'（实测触发），若此刻已切到
+					 * 下一镜像、而旧流继续往已 destroy 的 WriteStream write，会抛
+					 * ERR_STREAM_DESTROYED 崩掉整个进程。所有失败路径统一走
+					 * abortAttempt：标记 dead → 掐断 res → 销毁 ws → 清理 .part →
+					 * reject（重复调用无害）。end 与 error 互斥，靠 dead 保证只走一次。
+					 */
+					let dead = false;
+					const abortAttempt = (err) => {
+						if (dead) return;
+						dead = true;
+						res.destroy();
+						ws.destroy();
+						try { fs.unlinkSync(tmp); } catch {}
+						reject(err);
+					};
+					ws.on('error', (e) => abortAttempt(e));
 					res.on('data', (c) => {
+						if (dead || ws.destroyed) return;
 						received += c.length;
 						hash.update(c);
-						if (!ws.write(c)) res.pause(), ws.once('drain', () => res.resume());
+						if (!ws.write(c)) res.pause(), ws.once('drain', () => !dead && res.resume());
 					});
 					res.on('end', () => {
+						if (dead) return;
+						dead = true;
 						ws.end(() => {
 							try {
 								const size = fs.statSync(tmp).size;
@@ -104,11 +125,8 @@ function downloadOnce(url, dest, expectSize, expectSha) {
 							}
 						});
 					});
-					res.on('error', (e) => {
-						ws.destroy();
-						try { fs.unlinkSync(tmp); } catch {}
-						reject(e);
-					});
+					res.on('aborted', () => abortAttempt(new Error('aborted')));
+					res.on('error', (e) => abortAttempt(e));
 				}
 			);
 			req.on('socket', (socket) => socket.on('error', () => {}));
