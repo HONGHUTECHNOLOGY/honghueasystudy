@@ -168,10 +168,11 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           ARCH: ${{ matrix.arch }}
 
-      # 就地更新包：resources/app 的全量 zip，客户端更新时整体替换该目录后重启。
-      # 根目录必须是 resources/app 里的内容（不能再套一层），所以用专用的
-      # scripts/pack-app-update.js，而不是复用安装包；同时产出 sha256 供客户端校验。
-      - name: Pack in-place update bundle (Windows only)
+      # 旧版兼容包：resources/app 的全量 zip。
+      # 新版客户端（>=3.2.1）已改为下载安装包（dist/*.exe）静默覆盖安装 —— 只换 app 目录
+      # 无法更新 Electron 运行时、内置扩展 resources/extension、bin/chrome 等 app 之外的内容。
+      # 这个 zip 仅用于让 <=3.2.0 的已装用户还能升级上来，等其淘汰后可删。
+      - name: Pack legacy in-place update bundle (Windows only)
         if: matrix.platform == 'win'
         run: node scripts/pack-app-update.js
 
