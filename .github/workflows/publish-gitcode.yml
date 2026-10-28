@@ -27,6 +27,9 @@ on:
 
 permissions:
   contents: write
+  # 末步 gh workflow run update-manifest.yml 需要 actions: write（GITHUB_TOKEN
+  # 默认无此权限，缺失时 dispatch 步骤 403）
+  actions: write
 
 concurrency:
   group: publish-gitcode
