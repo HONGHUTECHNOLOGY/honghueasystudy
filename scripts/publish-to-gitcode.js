@@ -40,6 +40,7 @@ function parseArgs(argv) {
 		apiBase: process.env.GITCODE_API_BASE || API_BASE,
 		downloadBase: process.env.GITCODE_DOWNLOAD_BASE || DOWNLOAD_BASE,
 		dryRun: false,
+		purgeStale: false,
 		force: false,
 		requireToken: false,
 		skipDownloadCheck: false
@@ -58,6 +59,7 @@ function parseArgs(argv) {
 		else if (a === '--download-base') out.downloadBase = argv[++i];
 		else if (a === '--dry-run') out.dryRun = true;
 		else if (a === '--force') out.force = true;
+		else if (a === '--purge-stale') out.purgeStale = true;
 		else if (a === '--concurrency') out.concurrency = Number(argv[++i]) || 4;
 		else if (a === '--require-token') out.requireToken = true;
 		else if (a === '--no-download-check') out.skipDownloadCheck = true;
@@ -170,6 +172,40 @@ async function updateReleaseBody({ apiBase, repo, releaseId, token, name, body }
 		body: JSON.stringify(payload)
 	});
 	if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''), '更新 Release 说明');
+}
+
+/** 删除 Release 上的一个附件 */
+async function deleteAsset({ apiBase, repo, releaseId, assetId, token }) {
+	const res = await apiFetch(`${apiBase}/repos/${repo}/releases/${releaseId}/assets/${assetId}`, {
+		token,
+		method: 'DELETE'
+	});
+	// GitCode 对已不存在的附件可能返回 404，视为已删除
+	if (!res.ok && res.status !== 404) {
+		throw new ApiError(res.status, await res.text().catch(() => ''), '删除附件');
+	}
+}
+
+/**
+ * 清理 Release 上不在本次 --file 列表里的附件（改名/失败重试留下的旧命名残留）。
+ * GitCode 会为源码自动生成 `<tag>.zip/.tar.gz/...` 附件，这些必须保留。
+ */
+async function purgeStaleAssets({ apiBase, repo, release, keepNames, tag, token }) {
+	const assets = (release && release.assets) || [];
+	for (const a of assets) {
+		const name = a.name || a.file_name;
+		if (!name || keepNames.has(name)) continue;
+		// 源码归档：名为 tag.zip / tag.tar.gz / tag.tar.bz2 / tag.tar
+		if (new RegExp(`^${tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.(zip|tar|tar\\.gz|tar\\.bz2)$`).test(name)) {
+			continue;
+		}
+		try {
+			await deleteAsset({ apiBase, repo, releaseId: release.id, assetId: a.id, token });
+			console.log(`[gitcode] 已删除过期附件 ${name}`);
+		} catch (e) {
+			console.warn(`[gitcode] 删除过期附件 ${name} 失败（不阻断）：${e.message}`);
+		}
+	}
 }
 
 async function getUploadUrl({ apiBase, repo, tag, token, fileName }) {
@@ -342,6 +378,19 @@ async function main() {
 				console.warn(`[gitcode] Release 说明更新失败（不阻断上传）：${e.message}`);
 			}
 		}
+	}
+
+	// --purge-stale：清掉不在本次列表里的附件（安装包改名、失败重试的残留），
+	// GitCode 自动生成的源码归档（tag.zip 等）保留
+	if (args.purgeStale && release && release.id) {
+		await purgeStaleAssets({
+			apiBase: args.apiBase,
+			repo: args.repo,
+			release,
+			keepNames: new Set(files.map((f) => f.name)),
+			tag: args.tag,
+			token: args.token
+		});
 	}
 
 	const existing = new Map(((release && release.assets) || []).map((a) => [a.name, a]));

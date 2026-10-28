@@ -287,6 +287,14 @@ jobs:
           find artifacts -mindepth 2 -type f -exec mv {} artifacts/ \;
           # 搬空后残留的空目录会让「遍历 artifacts/*」把它当成附件
           find artifacts -mindepth 1 -type d -empty -delete
+          # 安装包统一用 ASCII 前缀：中文「鸿鹄易学-」在 GitCode 附件列表/OBS 对象名
+          # 里可能被吞掉或转码异常，且对用户无意义；清单脚本按 -setup-os-arch 解析，
+          # 前缀无关，改名安全。
+          for f in artifacts/鸿鹄易学-*; do
+            [ -f "$f" ] || continue
+            base=$(basename "$f")
+            mv "$f" "artifacts/honghueasystudy-${base#鸿鹄易学-}"
+          done
           ls -lh artifacts/
 
       - name: Upload artifacts to GitHub Release
@@ -300,6 +308,15 @@ jobs:
           # 已有正式 Release（release-please 创建）就不建草稿，避免残留 untagged 草稿；
           # 手动对 tag dispatch 且无 Release 时才补建草稿
           gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --draft --generate-notes
+          # 清掉历史命名残留（如 鸿鹄易学-*）：--clobber 只覆盖同名，不删旧名，
+          # 不清理会出现中英文两套安装包并存
+          while IFS= read -r asset; do
+            [ -n "$asset" ] || continue
+            if [ ! -f "artifacts/$asset" ]; then
+              echo "删除过期附件: $asset"
+              gh release delete-asset "$TAG_NAME" "$asset" --yes || true
+            fi
+          done < <(gh release view "$TAG_NAME" --json assets -q '.assets[].name' 2>/dev/null || true)
           # 只传文件：用 find 兜底，目录永远不会被当成附件
           find artifacts -type f -print0 | xargs -0 gh release upload "$TAG_NAME" --clobber
 
@@ -369,6 +386,7 @@ jobs:
             --tag "$TAG_NAME" \
             --name "$TAG_NAME" \
             --notes-file /tmp/final-body.md \
+            --purge-stale \
             --require-token \
             "${FILES[@]}"
 
@@ -412,9 +430,17 @@ jobs:
           run-id: ${{ inputs.artifact_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 同 upload-release：拍平 update/ 子目录，update-meta.json 落到 artifacts/ 根
+      # 同 upload-release：拍平 update/ 子目录，update-meta.json 落到 artifacts/ 根；
+      # 安装包同步改名为 honghueasystudy- 前缀 —— 清单里的下载 URL 用的是实际文件名
       - name: Flatten artifact directories
-        run: find artifacts -mindepth 2 -type f -exec mv {} artifacts/ \;
+        run: |
+          find artifacts -mindepth 2 -type f -exec mv {} artifacts/ \;
+          for f in artifacts/鸿鹄易学-*; do
+            [ -f "$f" ] || continue
+            base=$(basename "$f")
+            mv "$f" "artifacts/honghueasystudy-${base#鸿鹄易学-}"
+          done
+          ls -lh artifacts/
 
       # write-update-manifest 的探链通过 createRequire 从桌面端 app 包解析 axios；
       # 本 job 不装 workspace 依赖，在仓库根补装一份（模块解析会向上找到它）

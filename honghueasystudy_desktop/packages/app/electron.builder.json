@@ -29,7 +29,7 @@
   },
   "win": {
     "icon": "public/favicon.png",
-    "artifactName": "鸿鹄易学-${version}-setup-${os}-${arch}.${ext}",
+    "artifactName": "honghueasystudy-${version}-setup-${os}-${arch}.${ext}",
     "target": [
       {
         "target": "nsis"
@@ -62,7 +62,7 @@
   },
   "mac": {
     "icon": "public/favicon.icns",
-    "artifactName": "鸿鹄易学-${version}-setup-${os}-${arch}.${ext}",
+    "artifactName": "honghueasystudy-${version}-setup-${os}-${arch}.${ext}",
     "target": [
       {
         "target": "dmg"
@@ -96,7 +96,7 @@
   },
   "linux": {
     "icon": "public/favicon.png",
-    "artifactName": "鸿鹄易学-${version}-setup-${os}-${arch}.${ext}",
+    "artifactName": "honghueasystudy-${version}-setup-${os}-${arch}.${ext}",
     "target": [
       {
         "target": "AppImage"
