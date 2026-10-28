@@ -38,23 +38,31 @@ jobs:
 
       - name: Ensure node
         run: |
-          if ! command -v node >/dev/null 2>&1; then
-            echo "runner 无 node，从 npmmirror 安装 v22"
-            curl -fsSL -o /tmp/node.tar.xz https://registry.npmmirror.com/-/binary/node/v22.14.0/node-v22.14.0-linux-x64.tar.xz
-            mkdir -p /usr/local/lib/nodejs
-            tar -xJf /tmp/node.tar.xz -C /usr/local/lib/nodejs --strip-components=1
-            ln -sf /usr/local/lib/nodejs/bin/node /usr/local/bin/node
-            ln -sf /usr/local/lib/nodejs/bin/npm /usr/local/bin/npm
+          if command -v node >/dev/null 2>&1; then
+            echo "系统 node: $(node -v)"
+          else
+            # 托管 runner 无 node：装到 $HOME（免 root），用 .tar.gz（免 xz 依赖）
+            echo "runner 无 node，从 npmmirror 安装 v22 到 ~/nodejs"
+            curl -fSL --retry 3 -o /tmp/node.tar.gz \
+              https://registry.npmmirror.com/-/binary/node/v22.14.0/node-v22.14.0-linux-x64.tar.gz
+            rm -rf "$HOME/nodejs"
+            mkdir -p "$HOME/nodejs"
+            tar -xzf /tmp/node.tar.gz -C "$HOME/nodejs" --strip-components=1
+            "$HOME/nodejs/bin/node" -v
           fi
-          node -v
 
       # 下载全部附件（含 assets-manifest.json / release-notes.md / update-meta.json）
       - name: Fetch GitHub Release assets
-        run: node scripts/fetch-release-assets.js --tag "${{ inputs.tag }}" --repo HONGHUTECHNOLOGY/honghueasystudy --out artifacts
+        run: |
+          export PATH="$HOME/nodejs/bin:$PATH"
+          command -v node >/dev/null || { echo "::error::node 不可用"; exit 1; }
+          node -v
+          node scripts/fetch-release-assets.js --tag "${{ inputs.tag }}" --repo HONGHUTECHNOLOGY/honghueasystudy --out artifacts
 
       # 发布到 GitCode：近网上传，发布脚本自带重试 + 下载校验 + 残留清理
       - name: Publish to GitCode Release
         run: |
+          export PATH="$HOME/nodejs/bin:$PATH"
           TAG="${{ inputs.tag }}"
           FILES=()
           for f in artifacts/*.exe artifacts/*.dmg artifacts/*.AppImage artifacts/*.deb artifacts/*.rpm \
