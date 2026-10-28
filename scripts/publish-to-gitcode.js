@@ -244,6 +244,14 @@ function putOnce(uploadUrl, headers, buffer) {
 				res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
 			}
 		);
+		/*
+		 * EPIPE 崩溃修复：req.destroy() 后底层 TLSSocket 可能还残留写队列，
+		 * 触发 socket 的 'error'（EPIPE）。req.on('error') 只覆盖请求对象，
+		 * 盖不住 TLSSocket 上的事件 —— 没人监听就会「Unhandled 'error' event」
+		 * 直接崩掉整个进程，其余并发上传全部陪葬。这里静默吞掉 socket 错误，
+		 * 真正的失败由 req.setTimeout / req.on('error') 上报。
+		 */
+		req.on('socket', (socket) => socket.on('error', () => {}));
 		// 空闲超时：连续 30 分钟无数据才判死（不是总时长），512KB/s 传 582MB 也够
 		req.setTimeout(30 * 60 * 1000, () => req.destroy(new Error('连接空闲超过 30 分钟')));
 		req.on('error', reject);
@@ -251,22 +259,11 @@ function putOnce(uploadUrl, headers, buffer) {
 	});
 }
 
+/** 单次 PUT。重试逻辑在调用方：每次重试都要重新获取预签名 URL（有过期时间） */
 async function putToStorage({ uploadUrl, headers, buffer, fileName }) {
-	let lastErr;
-	for (let attempt = 1; attempt <= 3; attempt++) {
-		try {
-			const res = await putOnce(uploadUrl, headers, buffer);
-			if (res.status >= 200 && res.status < 300) return;
-			throw new ApiError(res.status, res.body, `上传 ${fileName}`);
-		} catch (e) {
-			lastErr = e;
-			if (attempt < 3) {
-				console.warn(`[gitcode] 上传 ${fileName} 第 ${attempt} 次失败（${e.message}），60 秒后重试`);
-				await new Promise((r) => setTimeout(r, 60000));
-			}
-		}
-	}
-	throw lastErr;
+	const res = await putOnce(uploadUrl, headers, buffer);
+	if (res.status >= 200 && res.status < 300) return;
+	throw new ApiError(res.status, res.body, `上传 ${fileName}`);
 }
 
 /** 用 Range GET 探测：GitCode 的附件 HEAD 请求会返回 401，只能这么验 */
@@ -420,15 +417,36 @@ async function main() {
 			return;
 		}
 		try {
-			const { url, headers } = await getUploadUrl({
-				apiBase: args.apiBase,
-				repo: args.repo,
-				tag: args.tag,
-				token: args.token,
-				fileName: f.name
-			});
-			const buffer = fs.readFileSync(f.path);
-			await putToStorage({ uploadUrl: url, headers: headers || {}, buffer, fileName: f.name });
+			/*
+			 * 预签名 URL 有时效（实测 ~30 分钟就 401 Authorization Required）。
+			 * 重试必须连 upload_url 一起重新获取，绝不能复用第一次拿到的地址 ——
+			 * 否则第一次超时后，后面两次重试全部 401 白跑。
+			 */
+			let lastPutErr = null;
+			for (let attempt = 1; attempt <= 3; attempt++) {
+				try {
+					const { url, headers } = await getUploadUrl({
+						apiBase: args.apiBase,
+						repo: args.repo,
+						tag: args.tag,
+						token: args.token,
+						fileName: f.name
+					});
+					const buffer = fs.readFileSync(f.path);
+					await putToStorage({ uploadUrl: url, headers: headers || {}, buffer, fileName: f.name });
+					lastPutErr = null;
+					break;
+				} catch (e) {
+					lastPutErr = e;
+					if (attempt < 3) {
+						console.warn(`[gitcode] 上传 ${f.name} 第 ${attempt} 次失败（${e.message}），60 秒后重新获取上传地址再试`);
+						// 延迟可用环境变量覆盖（契约测试注入小值，避免 60s×2 的真实等待）
+						const delay = Number(process.env.GITCODE_RETRY_DELAY_MS) || 60000;
+						await new Promise((r) => setTimeout(r, delay));
+					}
+				}
+			}
+			if (lastPutErr) throw lastPutErr;
 			uploaded++;
 			console.log(`[gitcode] 已上传 ${f.name}（耗时 ${Math.round((Date.now() - startedAt) / 60000)} 分钟）`);
 

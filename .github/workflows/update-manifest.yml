@@ -1,0 +1,86 @@
+name: Update Manifest
+
+# 更新清单回写：把本次版本的 versions[] 条目写进 website/api/honghu-app-infos.json
+# 并直接提交推回 main —— CF Pages 检测到 push 自动重建，客户端随即检测到更新。
+#
+# 触发方：
+#   1) GitCode 原生工作流（.gitcode/workflows/release-publish.yml）在上传完全部
+#      附件后自动派发 —— 此时 GitCode 链接可达，探链才能全绿；
+#   2) 手动触发（GitCode 工作流未配 GITHUB_PAT 时的兜底，或探链失败重跑）。
+#
+# 探链是 fail-closed：GitCode / GitHub 任一附件 Range GET 不通过就拒绝写清单，
+# 正好兜住「镜像缺包」——清单里 GitCode 在 urls[0]，缺包等于镜像没用。
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag（如 v5.2.0），与 GitHub Release 一致"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-manifest
+  cancel-in-progress: false
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      # 清单要提交到 main 才会被 CF 发布，所以这里检出 main 而不是 tag
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.14"
+
+      # 从 GitHub Release 下载全部附件（update-meta.json 供版本/哈希，
+      # 安装包供 findPlatformInstallers 扫描；GH 内网下载很快）。
+      # 附件已在 upload-release 拍平改名（honghueasystudy- 前缀），直接可用。
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p artifacts
+          gh release download "${{ inputs.tag }}" --dir artifacts --clobber
+          ls -lh artifacts/
+
+      # write-update-manifest 的探链通过 createRequire 从桌面端 app 包解析 axios；
+      # 本 job 不装 workspace 依赖，在仓库根补装一份（模块解析会向上找到它）
+      - name: Install axios for link probing
+        run: npm install --no-save "axios@^0.25.0"
+
+      - name: Write update manifest
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          node scripts/write-update-manifest.js \
+            --meta artifacts/update-meta.json \
+            --artifacts artifacts \
+            --tag "$RELEASE_TAG" \
+            --notes "other: 桌面端与扩展同步更新，详见发布页" \
+            --verify
+
+      - name: Commit manifest to main
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add website/api/
+          if git diff --cached --quiet; then
+            echo "清单无变化（重复触发或版本已存在），跳过提交"
+            exit 0
+          fi
+          git commit -m "chore(release): 同步 ${RELEASE_TAG} 更新清单"
+          # GITHUB_TOKEN 的 push 不会触发其他 workflow（无循环风险）；
+          # 若 main 有分支保护，这里会失败 —— 需允许 GITHUB_TOKEN 推送或改用 PAT
+          git push origin HEAD:main

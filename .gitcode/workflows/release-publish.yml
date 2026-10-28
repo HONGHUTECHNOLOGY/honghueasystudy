@@ -1,0 +1,100 @@
+name: Publish Release (GitCode)
+
+# GitCode 原生发布：替代旧「GitHub CI 跨岸上传 OBS」链路。
+#
+# 为什么挪到这里：GitHub Actions（Azure 海外）→ GitCode OBS（国内）单连接
+# 只有 ~100KB/s，2.7GB 附件 4 路并发也要 2 小时；且 GitCode 预签名上传 URL
+# 约 30 分钟过期，慢连接一旦超时，重试全部 401 白跑。GitCode runner 在国内，
+# 调 api.gitcode.com 上传 OBS 是近网，分钟级完成。
+#
+# 流程：
+#   1) 从 GitHub Release 拉附件（镜像优先直连兜底，size+sha256 双校验，
+#      文件清单来自 Release 里的 assets-manifest.json —— 不访问 api.github.com）
+#   2) 用 release-notes.md 原文创建/更新 GitCode Release 并上传全部附件
+#   3) 派发 GitHub 的 update-manifest.yml 回写更新清单（需 secrets 配 GITHUB_PAT）
+#
+# 前置配置（仓库 Settings → Secrets）：
+#   GITCODE_TOKEN —— GitCode 个人访问令牌（api 权限）
+#   GITHUB_PAT    —— GitHub PAT（contents+actions 权限；不配则第 3 步跳过，
+#                    需手动触发 GitHub 的 update-manifest.yml）
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag（如 v5.2.0），与 GitHub Release tag 一致"
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+      GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
+    steps:
+      - name: Checkout
+        uses: checkout
+
+      - name: Ensure node
+        run: |
+          if ! command -v node >/dev/null 2>&1; then
+            echo "runner 无 node，从 npmmirror 安装 v22"
+            curl -fsSL -o /tmp/node.tar.xz https://registry.npmmirror.com/-/binary/node/v22.14.0/node-v22.14.0-linux-x64.tar.xz
+            mkdir -p /usr/local/lib/nodejs
+            tar -xJf /tmp/node.tar.xz -C /usr/local/lib/nodejs --strip-components=1
+            ln -sf /usr/local/lib/nodejs/bin/node /usr/local/bin/node
+            ln -sf /usr/local/lib/nodejs/bin/npm /usr/local/bin/npm
+          fi
+          node -v
+
+      # 下载全部附件（含 assets-manifest.json / release-notes.md / update-meta.json）
+      - name: Fetch GitHub Release assets
+        run: node scripts/fetch-release-assets.js --tag "${{ inputs.tag }}" --repo HONGHUTECHNOLOGY/honghueasystudy --out artifacts
+
+      # 发布到 GitCode：近网上传，发布脚本自带重试 + 下载校验 + 残留清理
+      - name: Publish to GitCode Release
+        run: |
+          TAG="${{ inputs.tag }}"
+          FILES=()
+          for f in artifacts/*.exe artifacts/*.dmg artifacts/*.AppImage artifacts/*.deb artifacts/*.rpm \
+                   artifacts/app-*.zip artifacts/*.zip.sha256 artifacts/extension.zip \
+                   artifacts/assets-manifest.json artifacts/release-notes.md artifacts/update-meta.json; do
+            if [ -f "$f" ]; then FILES+=(--file "$f"); fi
+          done
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "::error::没有可上传的附件"
+            exit 1
+          fi
+          node scripts/publish-to-gitcode.js \
+            --tag "$TAG" \
+            --name "$TAG" \
+            --notes-file artifacts/release-notes.md \
+            --purge-stale \
+            --require-token \
+            "${FILES[@]}"
+
+      # GitCode 附件就位后回写更新清单（探链 fail-closed，必须在上传完成后跑）
+      - name: Dispatch update-manifest on GitHub
+        run: |
+          TAG="${{ inputs.tag }}"
+          if [ -z "$GITHUB_PAT" ]; then
+            echo "::warning::未配置 GITHUB_PAT secret，无法自动派发清单回写。"
+            echo "请到 GitHub 仓库 → Actions → Update Manifest → Run workflow，填 tag=$TAG 手动触发。"
+            exit 0
+          fi
+          for i in 1 2 3 4 5; do
+            CODE=$(curl -sS -o /tmp/dispatch-res.txt -w "%{http_code}" -X POST \
+              -H "Authorization: Bearer $GITHUB_PAT" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/HONGHUTECHNOLOGY/honghueasystudy/actions/workflows/update-manifest.yml/dispatches" \
+              -d "{\"ref\":\"main\",\"inputs\":{\"tag\":\"$TAG\"}}" || echo curl_fail)
+            if [ "$CODE" = "204" ]; then
+              echo "已派发 update-manifest.yml（tag=$TAG）"
+              exit 0
+            fi
+            echo "派发第 $i 次失败（HTTP $CODE），30 秒后重试：$(cat /tmp/dispatch-res.txt 2>/dev/null | head -3)"
+            sleep 30
+          done
+          echo "::warning::派发 update-manifest 失败（api.github.com 不稳定），请手动到 GitHub Actions 触发 Update Manifest，tag=$TAG"
+          exit 0

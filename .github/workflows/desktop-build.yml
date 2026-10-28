@@ -2,9 +2,12 @@ name: Desktop Build (win/mac/linux)
 
 on:
   workflow_dispatch:
-    # 发布链（上传 Release / GitCode 镜像 / 回写清单）仅在 tag 触发时执行；
+    # 发布链（上传 GitHub Release / GitCode 镜像 / 回写清单）仅在 tag 触发时执行；
     # 若发布步骤失败，修复后可从 main 手动 dispatch 并在 tag 里填版本号重跑发布链，
     # 不必重新构建（build 矩阵照常跑，产物一致）。
+    # GitCode 镜像与清单回写已拆到独立链路：
+    #   - GitCode 发布：.gitcode/workflows/release-publish.yml（GitCode 原生 Action，国内 runner）
+    #   - 清单回写：update-manifest.yml（由 GitCode 发布完成后自动派发，或手动触发）
     inputs:
       tag:
         description: "发布目标 tag（如 v5.2.0），留空则只在 tag 触发时发布"
@@ -242,24 +245,23 @@ jobs:
   # Release 发布：仅当以 tag 为 ref 触发时执行（release-tag.yml 在 Release 创建后
   # 自动派发，或手动 dispatch 时填 tag）。把桌面端全部平台产物与 extension.zip
   # 上传到该 tag 对应的 GitHub Release，并追加「桌面端与扩展下载」说明段落。
+  # 同时上传 assets-manifest.json（附件清单+sha256）与 release-notes.md：
+  # GitCode 原生工作流（release-publish.yml）不访问 api.github.com，靠这两个
+  # 固定文件名的附件完成「下载清单 + 复用 Release 说明」。
   upload-release:
     needs: [build, build-extension]
     # always()：skip_build 时 build/build-extension 被跳过，默认语义会把本 job 一起跳过
     if: ${{ always() && (startsWith(github.ref, 'refs/tags/') || inputs.tag != '') && needs.build.result != 'failure' && needs.build-extension.result != 'failure' }}
     runs-on: ubuntu-latest
-    # 提到 job 级，step 的 if 才能读到（step 级 env 不参与 if 求值）
-    env:
-      GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
 
     steps:
-      # GitCode 同步要跑仓库里的 scripts/publish-to-gitcode.js，
-      # 本 job 只下载产物、默认没有工作区 —— 必须显式检出（脚本仅用内置模块，无需装依赖）
-      - name: Check out scripts
+      # 检出仓库提供 git/gh 上下文（gh release 系列命令依赖仓库定位）
+      - name: Check out repository
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag && 'main' || github.ref }}
           sparse-checkout: |
-            scripts
+            README.md
           sparse-checkout-cone-mode: false
 
       - name: Download all build artifacts
@@ -357,121 +359,45 @@ jobs:
             echo '<!-- DESKTOP-RELEASE-NOTES-END -->'
           } > /tmp/final-body.md
           gh release edit "$TAG_NAME" --notes-file /tmp/final-body.md
+          # GitCode 工作流会原样复用这份正文创建/更新 GitCode Release
+          cp /tmp/final-body.md artifacts/release-notes.md
 
-      # GitCode 镜像：国内直连 GitHub Release 常被限速或 DNS 污染，客户端清单把
-      # GitCode 放 urls[0]、GitHub 作兜底，因此两个源的包必须字节一致——这里复用
-      # 同一批 artifacts，不重新打包。
-      #
-      # 必须「全部」同步：installers.win32/darwin/linux 的 urls[0] 都是 GitCode，
-      # 少传任何一个，对应平台的用户每次更新都要先吃一次 404/超时才回退 GitHub，
-      # 镜像等于没用。GitCode 官方限制 Release 单附件 ≤ 2GB、总容量不限，324MB 安装包可传。
-      # 未配置 GITCODE_TOKEN 时整步跳过（GitHub 发布不受影响）；配置了就严格校验，
-      # 失败即红，避免清单指向一个不存在的镜像附件。
-      - name: Publish artifacts to GitCode
-        if: env.GITCODE_TOKEN != ''
-        run: |
-          TAG_NAME=${{ inputs.tag || github.ref_name }}
-          TAG_NAME=${TAG_NAME#refs/tags/}
-          ls -lh artifacts/
-          FILES=()
-          # 安装包排在最前：它们才是客户端真正下载的文件，上传失败要尽早暴露，
-          # 而不是先花时间传完扩展和旧版 zip 才发现 300MB 的包传不上去。
-          for f in artifacts/*.exe artifacts/*.dmg artifacts/*.AppImage artifacts/*.deb artifacts/*.rpm \
-                   artifacts/app-*.zip artifacts/*.zip.sha256 artifacts/extension.zip; do
-            if [ -f "$f" ]; then FILES+=(--file "$f"); fi
-          done
-          if [ ${#FILES[@]} -eq 0 ]; then
-            echo "没有可同步的附件（安装包 / 更新包 / 扩展均缺失）"
-            exit 1
-          fi
-          node scripts/publish-to-gitcode.js \
-            --tag "$TAG_NAME" \
-            --name "$TAG_NAME" \
-            --notes-file /tmp/final-body.md \
-            --purge-stale \
-            --require-token \
-            "${FILES[@]}"
-
-  # 更新清单自动回写：把本次版本的 versions[] 条目写进 website/api/honghu-app-infos.json
-  # 并直接提交推回 main —— CF Pages 检测到 push 自动重建，客户端随即检测到更新。
-  # 免去「本地跑脚本 + 手动提交」这一步，实现点一下 Action 即完成发版。
-  #
-  # 必须排在 upload-release 之后：--verify 默认对 GitCode + GitHub 的每个附件做
-  # Range GET 探链（fail-closed），附件没传完就会拒绝写入 —— 正好兜住镜像缺包的情况。
-  # GITCODE_TOKEN 未配置时 GitCode 步骤被跳过，这里会因 GitCode 链接 404 而失败，
-  # 属预期行为：请先在仓库 Secrets 配置 GITCODE_TOKEN。
-  update-manifest:
-    needs: [upload-release]
-    if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
-    runs-on: ubuntu-latest
-    steps:
-      # 清单要提交到 main 才会被 CF 发布，所以这里检出 main 而不是 tag
-      - name: Check out main
-        uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.14"
-
-      - name: Download build artifacts
-        if: ${{ !inputs.skip_build }}
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: Download artifacts from previous run
-        if: ${{ inputs.skip_build }}
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-          run-id: ${{ inputs.artifact_run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      # 同 upload-release：拍平 update/ 子目录，update-meta.json 落到 artifacts/ 根；
-      # 安装包同步改名为 honghueasystudy- 前缀 —— 清单里的下载 URL 用的是实际文件名
-      - name: Flatten artifact directories
-        run: |
-          find artifacts -mindepth 2 -type f -exec mv {} artifacts/ \;
-          for f in artifacts/鸿鹄易学-*; do
-            [ -f "$f" ] || continue
-            base=$(basename "$f")
-            mv "$f" "artifacts/honghueasystudy-${base#鸿鹄易学-}"
-          done
-          ls -lh artifacts/
-
-      # write-update-manifest 的探链通过 createRequire 从桌面端 app 包解析 axios；
-      # 本 job 不装 workspace 依赖，在仓库根补装一份（模块解析会向上找到它）
-      - name: Install axios for link probing
-        run: npm install --no-save "axios@^0.25.0"
-
-      - name: Write update manifest
+      # 附件清单（文件名 + 大小 + sha256）：GitCode 工作流下载附件时只依赖
+      # 可镜像的 releases/download 直链，不访问 api.github.com；清单里的
+      # size/sha256 用来拦截镜像返回的 200+HTML 错误页
+      - name: Generate assets manifest
         env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        working-directory: artifacts
         run: |
-          node scripts/write-update-manifest.js \
-            --meta artifacts/update-meta.json \
-            --artifacts artifacts \
-            --tag "$RELEASE_TAG" \
-            --notes "other: 桌面端与扩展同步更新，详见发布页" \
-            --verify
+          TAG_NAME="${{ inputs.tag || github.ref_name }}"
+          TAG_NAME="${TAG_NAME#refs/tags/}"
+          node -e '
+            const fs = require("fs"), crypto = require("crypto");
+            const tag = process.argv[1];
+            const files = fs.readdirSync(".")
+              .filter((f) => fs.statSync(f).isFile() && f !== "assets-manifest.json")
+              .sort()
+              .map((f) => ({
+                name: f,
+                size: fs.statSync(f).size,
+                sha256: crypto.createHash("sha256").update(fs.readFileSync(f)).digest("hex")
+              }));
+            fs.writeFileSync("assets-manifest.json", JSON.stringify({
+              tag,
+              generated_at: new Date().toISOString(),
+              files
+            }, null, 2));
+            console.log("清单包含", files.length, "个附件");
+          ' "$TAG_NAME"
+          # 清单与说明正文一并上 Release：GitCode 侧靠固定文件名拉取
+          gh release upload "$TAG_NAME" assets-manifest.json release-notes.md --clobber
+          ls -lh
 
-      - name: Commit manifest to main
-        env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add website/api/
-          if git diff --cached --quiet; then
-            echo "清单无变化（重复触发或版本已存在），跳过提交"
-            exit 0
-          fi
-          git commit -m "chore(release): 同步 ${RELEASE_TAG} 更新清单"
-          # GITHUB_TOKEN 的 push 不会触发其他 workflow（无循环风险）；
-          # 若 main 有分支保护，这里会失败 —— 需允许 GITHUB_TOKEN 推送或改用 PAT
-          git push origin HEAD:main
+  # 更新清单回写已拆分到 update-manifest.yml：
+  # GitCode 附件由 .gitcode/workflows/release-publish.yml（国内 runner）上传，
+  # 完成后自动派发 update-manifest.yml —— 此时 GitCode 链接可达，
+  # write-update-manifest 的 Range GET 探链（fail-closed）才能全绿通过。
+  # GitCode 工作流未配置 GITHUB_PAT 时，需在 GitHub Actions 手动触发
+  # update-manifest.yml 并填 tag。
