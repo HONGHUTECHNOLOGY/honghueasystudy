@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write # 显式派发 release-tag.yml 需要
 
 jobs:
   release-pr:
@@ -23,9 +24,12 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # 「一键发版」：PR 创建后直接设置自动合并，检查通过即合入，
-      # 合入触发 release-tag.yml 建 Release 并派发 desktop-build。
-      # 仓库未开启 Allow auto-merge 或分支保护要求人工审批时这里只告警不失败，
+      # 「一键发版」：PR 创建后直接设置自动合并，检查通过即合入；
+      # 合入后显式派发 release-tag.yml 建 Release 并派发 desktop-build。
+      # 关键：GITHUB_TOKEN 完成的合并，其 pull_request 事件因 GitHub 防递归规则
+      # 不会触发 release-tag.yml，所以这里必须轮询等合并后用 workflow_dispatch
+      # （豁免事件）显式派发。人工在 PR 页面合并则事件正常触发，无需本步骤。
+      # 仓库未开启 Allow auto-merge 或分支保护要求人工审批时只告警不失败，
       # 此时需要人到 Pull requests 页面手动点合并。
       - name: Auto-merge release PR
         if: ${{ steps.release.outputs.prs != '' }}
@@ -46,6 +50,26 @@ jobs:
             if gh pr merge "$pr" --auto --squash; then
               echo "PR #$pr 已设置自动合并"
             else
-              echo "::warning::PR #$pr 无法设置自动合并 —— 需要在仓库 Settings 勾选 Allow auto-merge，且分支保护未要求人工审批；请到 Pull requests 手动合并"
+              echo "::warning::PR #$pr 无法设置自动合并 —— 需要在仓库 Settings 勾选 Allow auto-merge，且分支保护未要求人工审批；请到 Pull requests 手动合并（人工合并会自动触发后续流程）"
+            fi
+          done
+
+          # 轮询等待合并（每 15s 一次，最多 10 分钟），合并后显式派发 Release Tag
+          for pr in $PRS; do
+            merged=0
+            state=""
+            for i in $(seq 1 40); do
+              state=$(gh pr view "$pr" --json state,merged -q '.state + "/" + (.merged|tostring)' 2>/dev/null || echo unknown)
+              if [ "$state" = "MERGED/true" ]; then merged=1; break; fi
+              if [ "$state" = "CLOSED/false" ]; then break; fi
+              sleep 15
+            done
+            if [ "$merged" = "1" ]; then
+              echo "PR #$pr 已合并，派发 Release Tag workflow"
+              gh workflow run release-tag.yml --ref main --repo "$GH_REPO"
+            elif [ "$state" = "CLOSED/false" ]; then
+              echo "::warning::PR #$pr 被关闭且未合并，跳过派发"
+            else
+              echo "::warning::等待 PR #$pr 合并超时（10 分钟）。人工合并后 pull_request 事件会自动触发 Release Tag，无需重跑本 workflow"
             fi
           done

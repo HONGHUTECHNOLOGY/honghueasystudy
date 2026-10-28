@@ -1,6 +1,12 @@
 name: Release Tag
 
+# 两种触发方式：
+# 1. pull_request 合并（人工在 PR 页面点合并时，merge 事件正常触发）
+# 2. workflow_dispatch（Release PR workflow 里 GITHUB_TOKEN 完成自动合并后显式派发 ——
+#    GITHUB_TOKEN 产生的 merge 事件因防递归规则不会触发本 workflow，必须显式派发；
+#    workflow_dispatch 是 GitHub 文档明确豁免的事件，GITHUB_TOKEN 可触发）
 on:
+  workflow_dispatch:
   pull_request:
     types: [closed]
     branches:
@@ -14,8 +20,8 @@ permissions:
 
 jobs:
   release-tag:
-    # 只在 PR 被合并时执行
-    if: github.event.pull_request.merged == true
+    # 只在 PR 被合并或显式派发时执行
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
@@ -33,4 +39,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # 同理：GITHUB_TOKEN 建 tag 的 push 事件不会触发 desktop-build，
+          # 用 workflow_dispatch（豁免事件）显式派发
           gh workflow run desktop-build.yml --ref ${{ steps.release.outputs.tag_name }} --repo ${{ github.repository }}
