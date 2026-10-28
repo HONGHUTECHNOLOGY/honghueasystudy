@@ -45,6 +45,7 @@ GITCODE_TOKEN=xxx node scripts/publish-to-gitcode.js --tag v5.2.0 \
 
 # 3) 写入清单（同时同步 ocs-app-infos.json 旧副本）
 #    会自动在 dist 下找安装包、算 sha256/size，写进 installers.win32；
+#    mac/linux 产物不在本机时，自动从该 tag 的 Release 附件列表补（只补 name/size，不下载文件）；
 #    Release tag 默认取根 package.json，不用手填；--verify 会在写之前逐个探测链接
 node scripts/write-update-manifest.js \
   --meta honghueasystudy_desktop/packages/app/dist/update/update-meta.json \
@@ -52,15 +53,45 @@ node scripts/write-update-manifest.js \
   --verify
 ```
 
+> 跨平台产物在 CI 的 artifacts 里、而 Release 还没建时，第 3 步会拿不到 mac/linux 条目
+> （日志有 `读取 Release <tag> 附件失败`）。此时先等 CI 发布完，或把各平台产物下载到同一目录后用
+> `--artifacts <目录>` 指定；`--no-remote-assets` 可跳过联网查询。
+
+### 跨平台：mac / linux 只给直链，不自动安装
+
+| | Windows | macOS | Linux |
+| --- | --- | --- | --- |
+| 检测新版本 | ✅ | ✅ | ✅ |
+| 下载 | 客户端多源下载 + 校验 sha256 | 打开系统浏览器下载 | 打开系统浏览器下载 |
+| 安装 | `setup.exe /S` 静默覆盖 | 用户拖进「应用程序」 | 替换 AppImage / dpkg / rpm |
+| 清单字段 | `installers.win32`（对象） | `installers.darwin`（数组） | `installers.linux`（数组） |
+
+不自动装的原因：
+
+- mac 打包配置是 `"identity": null`（未签名未公证），替换 `.app` 后 Gatekeeper 会报
+  「无法验证开发者」直接拒开；Electron 官方 `autoUpdater` 也要求已签名。
+- linux 的 deb/rpm 走包管理器、装到 `/opt` 需要 root，无法静默；AppImage 虽然能自替换，
+  但当前不做（`app.getPath('exe')` 指向 `/tmp/.mount_*` 挂载点，需改用 `process.env.APPIMAGE`）。
+
+客户端挑选规则（`app/src/utils/platform-installer.ts`）：
+
+- 架构必须一致（arm64 / x64），对不上就退回 Release 页面，绝不把错架构的包给用户
+- linux 优先 AppImage（自包含、免 root），没有时按 `/etc/os-release` 在 deb / rpm 之间选
+- 清单里没有对应条目时回退 `app_downloads[platform]`（Release 页面）
+
 ### 更新方式：下载安装包，静默覆盖安装
 
-客户端（>= 3.2.1）检测到新版本后的流程：
+客户端（>= 3.2.1）在 Windows 上检测到新版本后的流程：
 
 ```
 读 installers.win32 → 多源下载 setup.exe → 校验 sha256/大小
 → 弹「安装包已下载完成」→ 用户点「立即安装」→ 关闭浏览器实例
-→ setup.exe /S /D=<当前安装目录> → 应用退出 → 安装完成自动启动
+→ setup.exe /S /D=<安装目录> → 应用退出 → 安装完成后需重新打开软件
 ```
+
+`/S` 静默安装不会执行 NSIS 的 `runAfterFinish`，所以装完不会自动拉起应用。
+为此待安装任务会落盘到 `%TEMP%/honghu-update/pending.json`：用户点了「稍后安装」或装完没重启，
+下次启动能直接恢复、提示安装，不用重下 320MB。
 
 为什么用安装包而不是替换 `resources/app`：
 
@@ -74,14 +105,15 @@ node scripts/write-update-manifest.js \
 
 几个实现约束（改客户端时不要破坏）：
 
-- 安装目录取 `dirname(app.getPath('exe'))`，**不能读注册表**：electron-builder 生成的卸载项里
-  `InstallLocation` 是空的（实测）。
+- 安装目录优先取**注册表**卸载项的记录，`dirname(app.getPath('exe'))` 只作兜底：
+  用户可能从解压副本 / `win-unpacked` / 装了新版却没重启的旧目录启动，按 exe 目录覆盖会装错位置。
+  `InstallLocation` 实测为空，所以从 `DisplayIcon` / `UninstallString` 反推，并校验目录存在且内含主程序 exe。
 - NSIS 的 `/D=` 必须是最后一个参数且**路径不加引号**，所以子进程要开
   `windowsVerbatimArguments: true`，否则 Node 会自动加引号、装出一个带引号的目录。
 - 安装器必须以 detached 方式启动，并在启动后再 `app.quit()`；应用以管理员（High 完整性）运行时，
   没退出就装会因文件占用失败。
-- 运行在打包目录（路径含 `win-unpacked`）时拒绝自动安装，避免覆盖构建产物。
-- 清单缺 `installers.win32` 时不要静默失败，退回「打开下载页手动安装」。
+- 候选目录若落在打包目录（路径含 `win-unpacked`）或临时目录，一律判为不可信，回退注册表。
+- 清单缺 `installers.win32`、或所有候选目录都不可用时，不要静默失败，退回「打开下载页手动安装」。
 
 `url` / `urls`（zip）保留的唯一原因是兼容 <= 3.2.0 的已装用户——那份代码只会走就地更新。
 等这批用户升级完，可以移除。
@@ -103,13 +135,12 @@ node scripts/write-update-manifest.js \
 | --- | --- |
 | `tag` | **桌面版本**，与 `app.getVersion()` 做 semver 比较（允许带 `v` 前缀） |
 | `description` | 更新弹窗内按 新增 / 修复 / 其他 分组展示 |
-| `installers.win32.urls` | 安装包多源地址，按优先级排列（GitCode → GitHub），客户端逐个回退 |
-| `installers.win32.sha256` | 安装包校验值，不匹配立即中止，不会启动安装器 |
-| `installers.win32.size` | 字节数，下载后复核 + 磁盘预检 |
-| `installers.win32.name` | 安装包文件名，用于本地临时文件名 |
+| `installers.win32` | Windows 安装包：多源地址、sha256、大小、文件名 |
+| `installers.darwin` | mac dmg 数组，每条含 `arch`（`arm64`/`x64`）、`ext`、`urls`、`name` |
+| `installers.linux` | linux 安装包数组，`arch` + `ext`（`AppImage`/`deb`/`rpm`）区分 |
 | `url` / `urls` | **旧版 zip 的就地更新地址**，仅 <=3.2.0 客户端使用 |
 | `sha256` / `size` | 旧版 zip 的校验值与大小 |
-| `app_downloads` | mac / linux 打开对应链接手动安装；`win32` 用作手动下载兜底 |
+| `app_downloads` | 各平台兜底下载页；清单里没有对应平台安装包时才用 |
 
 ### GitCode 镜像（国内加速）
 

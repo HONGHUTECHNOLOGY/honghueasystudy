@@ -7,6 +7,7 @@ import * as fsMod from 'fs';
 import { getCurrentWebContents, moveWindowToTop } from '../utils';
 import { downloadFromMirrors, hostOf, normalizeUrls } from '../utils/download-source';
 import { resolveInstallDir, spawnSilentInstaller } from '../utils/installer';
+import { detectLinuxDistro, pickPlatformInstaller } from '../utils/platform-installer';
 import { HonghuApi, UpdateInformationResource } from '@honghu-desktop/common';
 
 const logger = Logger('updater');
@@ -28,7 +29,7 @@ export interface UpdateCheckResult {
 export interface UpdateDownloadResult {
 	ok: boolean;
 	/** 失败原因，供渲染端展示 */
-	reason?: 'no-installer' | 'no-install-dir' | 'cancelled';
+	reason?: 'no-installer' | 'no-install-dir' | 'manual-download' | 'cancelled';
 	tag?: string;
 	/** 安装包大小（字节） */
 	size?: number;
@@ -319,17 +320,37 @@ export async function updateApp(newVersion: UpdateInformationResource): Promise<
 	}
 	const { tag } = newVersion;
 
-	// mac / linux：下载 exe 没有意义，直接打开对应平台的下载页
+	// mac / linux：不做自动安装（mac 未签名会被 Gatekeeper 拦，linux 的 deb/rpm 需要 root），
+	// 但按当前平台+架构挑出对应安装包，直接开下载链接，不让用户去 Release 页自己找
 	if (process.platform !== 'win32') {
+		const pick = pickPlatformInstaller(newVersion.installers, {
+			platform: process.platform,
+			arch: process.arch,
+			distro: process.platform === 'linux' ? detectLinuxDistro() : undefined
+		});
+		if (pick) {
+			logger.info(`下载 ${process.platform}/${process.arch} 安装包：${pick.installer.name}（${pick.installer.ext}）`);
+			await shell.openExternal(pick.installer.urls[0]);
+			await dialog.showMessageBox({
+				title: '鸿鹄易学更新程序',
+				message: `新版本 ${tag}\n\n${pick.guide}`,
+				type: 'info',
+				noLink: true
+			});
+			return { ok: false, reason: 'manual-download' };
+		}
+
+		// 清单里没有对应平台的包（只发了 Windows），或没有匹配当前架构的产物：退回下载页
 		const platformUrl = (newVersion.app_downloads as Record<string, string | undefined> | undefined)?.[process.platform];
+		logger.warn(`清单没有 ${process.platform}/${process.arch} 的安装包，改为打开下载页`);
 		await shell.openExternal(platformUrl || 'https://easystudy.honghutech.eu.org');
 		await dialog.showMessageBox({
 			title: '鸿鹄易学更新程序',
-			message: `新版本 ${tag} 需要手动安装：已为你打开下载页面，请下载对应系统的最新安装包，覆盖安装后即可完成更新。`,
+			message: `新版本 ${tag} 需要手动安装。\n\n已为你打开下载页面，请下载与当前系统架构（${process.arch}）匹配的安装包，安装后重新打开软件。`,
 			type: 'info',
 			noLink: true
 		});
-		return { ok: false, reason: 'cancelled' };
+		return { ok: false, reason: 'manual-download' };
 	}
 
 	if (!app.isPackaged) {

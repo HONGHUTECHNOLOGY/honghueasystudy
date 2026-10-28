@@ -58,6 +58,10 @@ export interface UpdateInstaller {
 	size?: number;
 	/** 文件名，仅用于日志与本地临时文件名 */
 	name?: string;
+	/** CPU 架构：mac/linux 有 arm64 与 x64 两套产物，必须按架构挑选，下错架构装不上 */
+	arch?: string;
+	/** 安装包格式：dmg / AppImage / deb / rpm */
+	ext?: string;
 }
 
 /** 版本更新信息 */
@@ -65,14 +69,18 @@ export interface UpdateInformationResource {
 	tag: string;
 	description: Record<'feat' | 'fix' | 'other', string[]>;
 	/**
-	 * Windows **安装包**（setup exe）的下载信息。
+	 * 各平台安装包的下载信息。
 	 *
-	 * 客户端拿到后下载 → 校验 sha256 → `setup.exe /S /D=<当前安装目录>` 静默覆盖安装 → 重启。
-	 * 用安装包而不是就地替换 app 目录，是因为 `resources/app` 之外还有 Electron 运行时、
-	 * 内置扩展 `resources/extension`、`bin/chrome`、`bin/cloudflared`、`bin/ocr`，
-	 * 只换 app 层会让这些停留在旧版本（扩展改动永远送不到已装用户）。
+	 * Windows 走「下载 → 校验 → setup.exe /S 静默覆盖安装」，这里只需要一个 x64 包；
+	 * mac / linux 目前只做「按平台+架构给出直链，由系统浏览器下载后手动安装」，
+	 * 因为 mac 未签名（替换 .app 会被 Gatekeeper 拒开）、linux 的 deb/rpm 需要 root。
+	 * 所以后两者是数组：同一平台可能有 arm64 / x64，linux 还分 AppImage / deb / rpm。
 	 */
-	installers?: Partial<Record<'win32' | 'darwin' | 'linux', UpdateInstaller>>;
+	installers?: {
+		win32?: UpdateInstaller;
+		darwin?: UpdateInstaller[];
+		linux?: UpdateInstaller[];
+	};
 	/**
 	 * 旧版就地更新包（zip，根目录即 resources/app 的内容）。
 	 * @deprecated 仅为了让已装的旧版本客户端（<= 3.2.0）还能升级上来而保留；

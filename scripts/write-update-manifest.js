@@ -23,9 +23,11 @@
  *   混用会让客户端「每次都提示更新、装完还是旧版本」
  *
  * 说明：
- * - url 必须是就地更新包（app-<version>.zip），mac/linux 不走它
- * - app_downloads 里 mac/linux 指向 Release 页面而不是具体安装包：
- *   字段只能填一个链接，而 mac 有 arm64/x64 两个 dmg，指页面让用户自己选更稳
+ * - url 必须是就地更新包（app-<version>.zip），只在旧客户端上用；新版走 installers
+ * - installers.win32 = setup.exe，客户端全自动安装
+ * - installers.darwin / installers.linux 是数组（按 arch + 格式区分）：
+ *   mac 未签名、linux 的 deb/rpm 需要 root，客户端不自动装，只把对应直链交给浏览器下载；
+ *   产物不在本机时字段缺省，客户端退回 app_downloads 里的 Release 页面
  */
 
 const fs = require('fs');
@@ -78,6 +80,8 @@ function parseArgs(argv) {
 		verify: false,
 		zipUrl: null,
 		installer: null,
+		artifacts: [],
+		noRemoteAssets: false,
 		manifest: MANIFEST,
 		dryRun: false,
 		noLegacy: false
@@ -94,6 +98,8 @@ function parseArgs(argv) {
 		else if (a === '--verify') out.verify = true;
 		else if (a === '--zip-url') out.zipUrl = argv[++i];
 		else if (a === '--installer') out.installer = path.resolve(argv[++i]);
+		else if (a === '--artifacts') out.artifacts.push(path.resolve(argv[++i]));
+		else if (a === '--no-remote-assets') out.noRemoteAssets = true;
 		else if (a === '--manifest') out.manifest = path.resolve(argv[++i]);
 		else if (a === '--dry-run') out.dryRun = true;
 		else if (a === '--no-legacy') out.noLegacy = true;
@@ -105,6 +111,20 @@ function parseArgs(argv) {
 const PROBE_UA =
 	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
+/** axios 装在桌面端 app 包里，脚本层面没有直接依赖；加载失败时相关能力自动跳过 */
+let axiosRef;
+function getAxios() {
+	if (axiosRef !== undefined) return axiosRef;
+	try {
+		const { createRequire } = require('module');
+		const req = createRequire(path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app', 'package.json'));
+		axiosRef = req('axios');
+	} catch {
+		axiosRef = null;
+	}
+	return axiosRef;
+}
+
 /**
  * 探测下载源是否真的可用。
  *
@@ -112,28 +132,76 @@ const PROBE_UA =
  * 所以必须用带 Range 的 GET 并跟随重定向；只取 1 字节，不会把整个包拉下来。
  */
 async function probeUrl(url) {
-	let axios;
+	const axios = getAxios();
+	if (!axios) return { ok: false, detail: '未找到 axios（跳过探测）' };
+
+	let host = '';
 	try {
-		// axios 装在桌面端 app 包里，脚本层面没有直接依赖
-		const { createRequire } = require('module');
-		const req = createRequire(path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app', 'package.json'));
-		axios = req('axios');
+		host = new URL(url).hostname.toLowerCase();
 	} catch {
-		return { ok: false, detail: '未找到 axios（跳过探测）' };
+		// 非法 URL 交给 axios 报错
 	}
-	try {
-		const res = await axios.get(url, {
-			headers: { 'User-Agent': PROBE_UA, Range: 'bytes=0-1' },
-			timeout: 20000,
-			maxRedirects: 5,
-			validateStatus: () => true,
-			responseType: 'arraybuffer'
-		});
-		const ok = res.status === 200 || res.status === 206;
-		return { ok, detail: `HTTP ${res.status}` };
-	} catch (e) {
-		return { ok: false, detail: e?.message || String(e) };
+	// GitCode 走国内 CDN，经代理反而可能拿到错误页；GitHub 在部分网络下必须走代理
+	const directOnly = /(^|\.)gitcode\.com$/.test(host);
+	const configs = directOnly ? [{ proxy: false }] : [{}, { proxy: false }];
+
+	let last = '未知错误';
+	for (const extra of configs) {
+		try {
+			const res = await axios.get(url, {
+				headers: { 'User-Agent': PROBE_UA, Range: 'bytes=0-1' },
+				timeout: 20000,
+				maxRedirects: 5,
+				validateStatus: () => true,
+				responseType: 'arraybuffer',
+				...extra
+			});
+			if (res.status === 200 || res.status === 206) return { ok: true, detail: `HTTP ${res.status}` };
+			last = `HTTP ${res.status}`;
+		} catch (e) {
+			last = e?.message || String(e);
+		}
 	}
+	return { ok: false, detail: last };
+}
+
+/**
+ * 读 Release 的附件列表。
+ *
+ * mac / linux 产物是 CI 在各自 runner 上构建的，本地跑这个脚本时通常只有 Windows 安装包。
+ * 只靠本机扫描会让 installers.darwin / linux 永远为空（等于这个功能没生效），
+ * 所以缺失的从 Release 附件列表补：官方 API 直接给 name / size，公开仓库无需 token。
+ * 注意这些包客户端不自动安装，只是把直链交给浏览器，因此没有 sha256 也能接受。
+ */
+async function fetchReleaseAssets(repo, tag) {
+	const axios = getAxios();
+	if (!axios) return [];
+	const headers = { 'User-Agent': PROBE_UA, Accept: 'application/vnd.github+json' };
+	const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+	if (token) headers.Authorization = `Bearer ${token}`;
+	const url = `https://api.github.com/repos/${repo}/releases/tags/${tag}`;
+
+	// axios 0.25 对「https 目标 + http 代理」的处理不可靠（表现为 socket hang up），
+	// 所以先直连，失败再退回环境代理；两者都失败才放弃（字段留空，客户端回退 Release 页）
+	for (const extra of [{ proxy: false }, {}]) {
+		try {
+			const res = await axios.get(url, { headers, timeout: 20000, validateStatus: () => true, ...extra });
+			if (res.status === 200) {
+				return (res.data?.assets || []).map((a) => ({
+					name: String(a.name || ''),
+					size: Number(a.size) || 0,
+					/** GitHub 自 2024 起提供 "sha256:<hex>" */
+					digest: String(a.digest || '')
+				}));
+			}
+			// 明确的 HTTP 状态（404 表示 Release 还没建）不需要再换通道重试
+			console.warn(`[update-manifest] ⚠ 读取 Release ${tag} 附件失败（HTTP ${res.status}），跨平台字段可能留空`);
+			return [];
+		} catch (e) {
+			if (extra.proxy !== false) console.warn('[update-manifest] ⚠ 读取 Release 附件出错：' + (e?.message || e));
+		}
+	}
+	return [];
 }
 
 /** 把 `feat:` / `fix:` / `other:` 前缀解析成 updater 弹窗能展示的分组 */
@@ -186,6 +254,69 @@ function findWinInstaller(productName, version) {
 	return null;
 }
 
+
+/**
+ * 扫出 mac / linux 安装包。
+ *
+ * 客户端在非 Windows 上不做自动安装（mac 未签名，替换 .app 会被 Gatekeeper 拒开；
+ * linux 的 deb/rpm 需要 root），但仍要「点一下就下到对应架构的正确包」，
+ * 否则用户会被丢到 Release 页面自己分辨 arm64/x64、dmg/AppImage。
+ *
+ * 文件名本身就是信息源：electron-builder 的 artifactName 是
+ * `${productName}-${version}-setup-${os}-${arch}.${ext}`，os 在 mac 上是 mac。
+ * 产物不在本机时（只打了 Windows）返回空数组，客户端会退回 Release 页面。
+ */
+/**
+ * 从产物文件名解析平台 / 架构 / 格式。
+ *
+ * 文件名来自 electron.builder.json 的 artifactName：
+ * `${productName}-${version}-setup-${os}-${arch}.${ext}`，os 在 mac 上是 mac。
+ * 例：鸿鹄易学-3.2.1-setup-mac-arm64.dmg → darwin / arm64 / dmg
+ */
+function parseArtifactName(name, version) {
+	const m = /-setup-(mac|linux|win)-(x64|arm64)\.([A-Za-z0-9]+)$/i.exec(String(name || ''));
+	if (!m) return null;
+	if (version && !String(name).includes(version)) return null;
+	const os = m[1].toLowerCase();
+	return {
+		platform: os === 'mac' ? 'darwin' : os,
+		arch: m[2].toLowerCase(),
+		ext: m[3]
+	};
+}
+
+function findPlatformInstallers(version, extraDirs = []) {
+	const distDir = path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app', 'dist');
+	const dirs = [distDir, ...extraDirs].filter((d) => d && fs.existsSync(d));
+	const found = new Map();
+
+	for (const dir of dirs) {
+		let files = [];
+		try {
+			files = fs.readdirSync(dir);
+		} catch {
+			continue;
+		}
+		for (const name of files) {
+			const parsed = parseArtifactName(name, version);
+			if (!parsed || parsed.platform === 'win') continue;
+			const key = `${parsed.platform}-${parsed.arch}-${parsed.ext.toLowerCase()}`;
+			// 多个目录里出现同名产物时，先扫到的（dist 优先）为准
+			if (found.has(key)) continue;
+			found.set(key, { ...parsed, file: path.join(dir, name), name });
+		}
+	}
+
+	// 稳定顺序：自包含格式（dmg / AppImage）排在包管理器格式前面
+	const rank = (e) => (/^(dmg|appimage)$/i.test(e.ext) ? 0 : 1);
+	return [...found.values()].sort(
+		(a, b) =>
+			a.platform.localeCompare(b.platform) ||
+			a.arch.localeCompare(b.arch) ||
+			rank(a) - rank(b) ||
+			a.ext.localeCompare(b.ext)
+	);
+}
 
 function compareVersionDesc(a, b) {
 	const parse = (v) => String(v).replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
@@ -287,6 +418,70 @@ async function main() {
 		);
 	}
 
+	/*
+	 * mac / linux 安装包：本地有产物时算 sha256，没有的从 Release 附件列表补
+	 * （CI 在各自 runner 上构建，本地发版只有 Windows 安装包）。
+	 * 客户端对这两类只做「挑一个直链交给浏览器」，不校验也不自动安装，缺 sha256 可接受。
+	 */
+	const platformItems = [];
+	const platformSeen = new Set();
+	for (const item of findPlatformInstallers(version, args.artifacts)) {
+		platformSeen.add(`${item.platform}-${item.arch}-${item.ext.toLowerCase()}`);
+		platformItems.push({
+			platform: item.platform,
+			arch: item.arch,
+			ext: item.ext,
+			name: item.name,
+			size: fs.statSync(item.file).size,
+			sha256: await sha256File(item.file)
+		});
+	}
+
+	if (!args.noRemoteAssets) {
+		for (const asset of await fetchReleaseAssets(args.repo, tag)) {
+			const parsed = parseArtifactName(asset.name, version);
+			if (!parsed || parsed.platform === 'win') continue;
+			const key = `${parsed.platform}-${parsed.arch}-${parsed.ext.toLowerCase()}`;
+			if (platformSeen.has(key)) continue;
+			platformSeen.add(key);
+			platformItems.push({
+				...parsed,
+				name: asset.name,
+				size: asset.size,
+				sha256: /^sha256:/i.test(asset.digest) ? asset.digest.slice(7).toLowerCase() : ''
+			});
+		}
+	}
+
+	const darwinInstallers = [];
+	const linuxInstallers = [];
+	for (const item of platformItems) {
+		const urls = [];
+		if (gitcodeBase && !args.noMirror) urls.push(downloadUrl(gitcodeBase, item.name));
+		urls.push(downloadUrl(githubBase, item.name));
+		for (const m of args.mirrors) urls.push(m);
+		const entryInstaller = {
+			arch: item.arch,
+			ext: item.ext,
+			name: item.name,
+			urls: [...new Set(urls)],
+			...(item.sha256 ? { sha256: item.sha256 } : {}),
+			...(item.size ? { size: item.size } : {})
+		};
+		(item.platform === 'darwin' ? darwinInstallers : linuxInstallers).push(entryInstaller);
+	}
+	// 本地扫描与远程补充会混在一起，统一按「架构 → 自包含格式优先」排一次，客户端拿到的顺序才稳定
+	const rankExt = (i) => (/^(dmg|appimage)$/i.test(String(i.ext)) ? 0 : 1);
+	for (const list of [darwinInstallers, linuxInstallers]) {
+		list.sort((a, b) => a.arch.localeCompare(b.arch) || rankExt(a) - rankExt(b) || a.ext.localeCompare(b.ext));
+	}
+	if (platformItems.length === 0) {
+		console.warn(
+			'[update-manifest] ⚠ 没找到 mac / linux 安装包（本机 dist 与 Release 附件都没有）\n' +
+				'  mac/linux 客户端会退回「打开 Release 页面」。跨平台产物不在默认位置时用 --artifacts <目录> 指定。'
+		);
+	}
+
 	if (!meta.sha256) console.warn('[update-manifest] ⚠ meta 没有 sha256，旧版客户端将跳过完整性校验');
 
 	console.log(`[update-manifest] 桌面版本 ${version}（清单 tag，参与 semver 比较）`);
@@ -295,11 +490,25 @@ async function main() {
 		console.log(`[update-manifest] 安装包   ${winInstaller.name}  ${(winInstaller.size / 1024 / 1024).toFixed(1)}MB`);
 		console.log(`[update-manifest] 校验     ${winInstaller.sha256}`);
 	}
+	for (const i of [...darwinInstallers, ...linuxInstallers]) {
+		console.log(
+			`[update-manifest] 跨平台   ${i.name}  ${i.arch}/${i.ext}  ${(i.size / 1024 / 1024).toFixed(1)}MB`
+		);
+	}
 
+	const hasAnyInstaller = winInstaller || darwinInstallers.length || linuxInstallers.length;
 	const entry = {
 		tag: version,
 		description: parseNotes(args.notes),
-		...(winInstaller ? { installers: { win32: winInstaller } } : {}),
+		...(hasAnyInstaller
+			? {
+					installers: {
+						...(winInstaller ? { win32: winInstaller } : {}),
+						...(darwinInstallers.length ? { darwin: darwinInstallers } : {}),
+						...(linuxInstallers.length ? { linux: linuxInstallers } : {})
+					}
+			  }
+			: {}),
 		/*
 		 * 旧版客户端（<= 3.2.0）只会读 url/urls 走 zip 就地更新。
 		 * 保留这几个字段，它们才能升级到本版；新客户端会忽略。
@@ -309,7 +518,7 @@ async function main() {
 			: {}),
 		app_downloads: {
 			win32: downloadUrl(githubBase, foundInstaller?.name || winName),
-			// 单字段无法区分 mac arm64/x64 与 linux 的 deb/rpm/AppImage，统一指 Release 页面
+			// 兜底链接：清单里没有对应平台安装包时（只发了 Windows）才用得上
 			darwin: releasePage,
 			linux: releasePage
 		}
@@ -320,7 +529,12 @@ async function main() {
 		console.log('[update-manifest] 探测下载源…');
 		let failed = 0;
 		/** 真正会被下载的是安装包；zip 只在旧客户端上用到，一并探测 */
-		const targets = [...(winInstaller ? winInstaller.urls : []), ...uniqueSources];
+		const targets = [
+			...(winInstaller ? winInstaller.urls : []),
+			...darwinInstallers.flatMap((i) => i.urls),
+			...linuxInstallers.flatMap((i) => i.urls),
+			...uniqueSources
+		];
 		for (const u of [...new Set(targets)]) {
 			const r = await probeUrl(u);
 			console.log(`  ${r.ok ? '✓' : '✗'} ${u}  (${r.detail})`);
@@ -376,7 +590,12 @@ async function main() {
 	}
 }
 
-main().catch((e) => {
-	console.error('[update-manifest] 执行失败:', e);
-	process.exit(1);
-});
+if (require.main === module) {
+	main().catch((e) => {
+		console.error('[update-manifest] 执行失败:', e);
+		process.exit(1);
+	});
+}
+
+// 供测试直接引用纯函数（扫描文件名、解析参数），不重复实现一套
+module.exports = { findPlatformInstallers, parseArtifactName, parseArgs, parseNotes, fetchReleaseAssets };
