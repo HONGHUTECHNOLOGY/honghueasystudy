@@ -324,16 +324,18 @@ jobs:
           # 只传文件：用 find 兜底，目录永远不会被当成附件
           find artifacts -type f -print0 | xargs -0 gh release upload "$TAG_NAME" --clobber
 
-      # Release 说明只保留「更新日志 + 使用方法」：release-please 写的更新日志保留在正文，
-      # 这里追加固定段落。不再自动生成下载链接清单与官网快捷访问
-      # （Assets 里本来就有全部附件，罗列一遍只会让说明冗长）。
+      # Release 说明 = 更新日志 + 使用方法 + 下载链接。方法排序：桌面端（最推荐）
+      # → Edge 商店 → 手动加载扩展；下载表格从 artifacts 动态生成（排除 app-*.zip
+      # 更新包与校验/清单文件），每行同时给 GitCode（国内快）与 GitHub 两个链接。
       - name: Append usage notes to release body
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          TAG_NAME_RAW: ${{ inputs.tag || github.ref_name }}
         run: |
-          TAG_NAME=${{ inputs.tag || github.ref_name }}
-          TAG_NAME=${TAG_NAME#refs/tags/}
+          TAG_NAME=${TAG_NAME_RAW#refs/tags/}
+          VER=${TAG_NAME#v}
+          REPO_FULL="$GH_REPO"
 
           NOTES_FILE=/tmp/usage-notes.md
           cat > "$NOTES_FILE" <<'NOTES'
@@ -342,12 +344,38 @@ jobs:
 
           ## 📦 使用方法
 
-          **方法一**：使用 Edge 浏览器可直接访问扩展商店下载：[鸿鹄易学 Edge 扩展链接](https://microsoftedge.microsoft.com/addons/detail/%E9%B8%BF%E9%B9%A4%E6%98%93%E5%AD%A6/ocidllankdjkcieeefhgmgnkppcbdfhh)（更新可能不及时）
+          **方法一**：下载系统对应桌面端安装包，安装后在桌面端创建浏览器，浏览器会自动注入扩展，并且桌面端支持辅助操控（适用于智慧树及中国大学 MOOC）。
 
-          **方法二**：解压 `extension.zip` 后，在 Chrome/Edge 浏览器中打开扩展页面，开启开发者模式，点击加载已解压缩的扩展，选择解压后文件所在的文件夹即可添加扩展。
+          **方法二**：使用 Edge 浏览器可直接访问扩展商店下载：[鸿鹄易学 Edge 扩展链接](https://microsoftedge.microsoft.com/addons/detail/%E9%B8%BF%E9%B9%A4%E6%98%93%E5%AD%A6/ocidllankdjkcieeefhgmgnkppcbdfhh)（更新可能不及时）
 
-          **方法三**：下载系统对应桌面端安装包，安装后在桌面端创建浏览器，浏览器会自动注入扩展，并且桌面端支持辅助操控（适用于智慧树及中国大学 MOOC）。
+          **方法三**：解压 `extension.zip` 后，在 Chrome/Edge 浏览器中打开扩展页面，开启开发者模式，点击加载已解压缩的扩展，选择解压后文件所在的文件夹即可添加扩展。
           NOTES
+
+          # 下载表格：从产物目录动态生成（安装包 + extension.zip；排除更新包/校验/清单）
+          LINKS_FILE=/tmp/download-links.md
+          {
+            echo ''
+            echo '## ⬇️ 下载'
+            echo ''
+            echo '| 平台 | 下载 |'
+            echo '|---|---|'
+            for f in \
+              "honghueasystudy-${VER}-setup-win-x64.exe|Windows x64" \
+              "honghueasystudy-${VER}-setup-mac-arm64.dmg|macOS（Apple Silicon）" \
+              "honghueasystudy-${VER}-setup-mac-x64.dmg|macOS（Intel）" \
+              "honghueasystudy-${VER}-setup-linux-amd64.deb|Linux Debian/Ubuntu" \
+              "honghueasystudy-${VER}-setup-linux-x86_64.rpm|Linux Fedora/openSUSE" \
+              "honghueasystudy-${VER}-setup-linux-x86_64.AppImage|Linux 通用（x86_64）" \
+              "honghueasystudy-${VER}-setup-linux-arm64.AppImage|Linux 通用（arm64）" \
+              "extension.zip|浏览器扩展"; do
+              fname="${f%%|*}"; label="${f#*|}"
+              if [ -f "artifacts/$fname" ]; then
+                echo "| $label | [GitCode](https://gitcode.com/honghutech/honghueasystudy/releases/download/${TAG_NAME}/${fname}) · [GitHub](https://github.com/${REPO_FULL}/releases/download/${TAG_NAME}/${fname}) |"
+              fi
+            done
+            echo ''
+            echo '> 国内网络推荐 GitCode 链接；`app-*.zip` 为桌面端在线更新包，手动安装无需下载。'
+          } >> "$NOTES_FILE"
 
           EXISTING_BODY=$(gh release view "$TAG_NAME" --json body -q .body 2>/dev/null || echo "")
           # 幂等：先剥离本段落旧内容再追加，避免重复触发时说明叠加
