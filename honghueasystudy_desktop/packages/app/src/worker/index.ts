@@ -34,6 +34,8 @@ interface PageState {
 	visible: boolean;
 	focused: boolean;
 	known: boolean;
+	/** 本次采样中第一次出现（用户刚开的标签，几乎一定在前台） */
+	fresh: boolean;
 	/** 最近一次被观测到持有焦点的时间 */
 	focusedAt: number;
 	/** 最近一次被观测到可见的时间 */
@@ -76,6 +78,10 @@ export class ScriptWorker {
 	private lastActivePage?: Page;
 	/** 每页的 CDP 会话：用来关掉 Playwright 的焦点模拟（否则 hasFocus 恒为 true） */
 	private cdpSessions = new WeakMap<Page, any>();
+	/** 已经出现过的页面：用于识别「用户刚打开的新标签」 */
+	private seenPages = new WeakSet<Page>();
+	/** 焦点冲突（多页同时 focused）是否已记过日志，避免每次轮询刷屏 */
+	private focusConflictLogged = false;
 	/** 每页最近一次被观测到在前台/可见的时间，用于「浏览器整体失焦」时回退 */
 	private pageActivity = new WeakMap<Page, { focusedAt: number; visibleAt: number }>();
 	static langs?: Langs;
@@ -404,8 +410,11 @@ export class ScriptWorker {
 					title = '';
 				}
 
-				/** 必须先关掉焦点模拟，否则读出来的 focused 全为 true */
-				await this.disableFocusEmulation(page);
+				/**
+				 * 必须先关掉焦点模拟，否则读出来的 focused 全为 true。
+				 * 返回值是 CDP 会话（拿不到为 undefined），后面采样失败时用它兜底。
+				 */
+				const session = await this.disableFocusEmulation(page);
 
 				let visible = false;
 				let focused = false;
@@ -429,12 +438,46 @@ export class ScriptWorker {
 					// 页面正在跳转/已关闭：记为未知，不参与打分
 				}
 
+				/**
+				 * CDP 兜底采样。
+				 *
+				 * 用户随手开的新标签页常常是 chrome://newtab 这类 WebUI 页面，
+				 * page.evaluate 拿不到执行上下文（或超时）→ known 永远为 false。
+				 * 而唯一能确认「它是前台」的手段就是读这两个状态，不兜底的话
+				 * 新标签连候选都进不去，远程会一直停在旧标签上。
+				 */
+				if (!known && session) {
+					try {
+						const raw = await Promise.race([
+							session.send('Runtime.evaluate', {
+								expression: 'document.visibilityState + "|" + (document.hasFocus() ? "1" : "0")',
+								returnByValue: true
+							}),
+							new Promise<any>((resolve) => setTimeout(() => resolve(undefined), 900))
+						]);
+						const value = raw && raw.result && raw.result.value;
+						if (typeof value === 'string' && value.includes('|')) {
+							const [v, f] = value.split('|');
+							if (v) {
+								visible = v === 'visible';
+								focused = f === '1';
+								known = true;
+							}
+						}
+					} catch {
+						// 兜底也拿不到（页面已销毁）：维持未知
+					}
+				}
+
 				const activity = this.pageActivity.get(page) || { focusedAt: 0, visibleAt: 0 };
 				if (known) {
 					if (focused) activity.focusedAt = now;
 					if (visible) activity.visibleAt = now;
 					this.pageActivity.set(page, activity);
 				}
+
+				const fresh = !this.seenPages.has(page);
+				if (fresh) this.seenPages.add(page);
 
 				return {
 					page,
@@ -443,6 +486,7 @@ export class ScriptWorker {
 					visible,
 					focused,
 					known,
+					fresh,
 					focusedAt: activity.focusedAt,
 					visibleAt: activity.visibleAt
 				};
@@ -450,56 +494,74 @@ export class ScriptWorker {
 		);
 	}
 
-	/** 关掉 Playwright 对单个页面的焦点模拟（幂等，会话缓存复用） */
-	private async disableFocusEmulation(page: Page): Promise<void> {
+	/** 关掉 Playwright 对单个页面的焦点模拟（幂等，会话缓存复用），返回 CDP 会话供兜底采样用 */
+	private async disableFocusEmulation(page: Page): Promise<any | undefined> {
+		let session = this.cdpSessions.get(page);
 		try {
-			let session = this.cdpSessions.get(page);
 			if (!session) {
 				session = await page.context().newCDPSession(page);
 				this.cdpSessions.set(page, session);
 			}
 			await session.send('Emulation.setFocusEmulationEnabled', { enabled: false });
+			return session;
 		} catch {
 			/** 页面已销毁或会话失效：丢掉缓存，下次采样重建 */
 			this.cdpSessions.delete(page);
+			return undefined;
 		}
 	}
 
 	/**
 	 * 挑出唯一的「当前页」
 	 *
-	 * 打分：真实持有焦点 3 > 可见 2 > 未知 -1（不参与）。
-	 * 同分（多个窗口都可见、或整个浏览器失焦）时依次：沿用上次的页面 →
-	 * 最近被聚焦的那一页 → 最新创建的页面（新开的标签通常就在前台）。
+	 * 打分：真实焦点 5 > 可见 4 > 「刚出现且采样不到」3 > 采样不到 1 > 不可见 0。
+	 *
+	 * 三个关键点：
+	 * 1. 采样失败（known=false）的页面**不再被直接排除**。原来只给 known 的页面打分，
+	 *    而新开的 chrome://newtab 类页面永远读不到状态 → 连候选都进不去；剩下几个
+	 *    后台标签全是 0 分打平，靠 lastActivePage 沿用 → 远程永远停在旧标签上。
+	 * 2. 新出现的页面给一档加成：用户刚点的标签按定义就在前台，即使读不到状态，
+	 *    也该优先于旧的后台标签。
+	 * 3. 只有一个标签能真正持有焦点。若同时有多个页面声称 focused，说明焦点模拟
+	 *    还没关掉（富余情况下 Playwright 会连 visibilityState 一起伪造），
+	 *    这时焦点信号整批不可信，降级只用可见性 + 新页/上次判定。
 	 */
 	private resolveActivePage(states: PageState[]): Page | undefined {
 		if (states.length === 0) return undefined;
 
-		const scored = states.filter((state) => state.known);
-		if (scored.length === 0) {
-			/** 全部采样失败（页面都在导航）：沿用上次，别乱切 */
-			if (this.lastActivePage && states.some((state) => state.page === this.lastActivePage)) {
-				return this.lastActivePage;
-			}
-			return states[states.length - 1].page;
+		const focusTrusted = states.filter((state) => state.focused).length <= 1;
+
+		/** 只在状态翻转时记一行，便于事后定位「焦点模拟没关掉」的现场 */
+		if (!focusTrusted && !this.focusConflictLogged) {
+			this.debug(
+				'多个页面同时报告持有焦点（焦点模拟未生效），本次降级为可见性判定：',
+				states.map((state) => `${state.visible ? 'V' : '-'}${state.focused ? 'F' : '-'} ${state.url.slice(0, 60)}`).join(' | ')
+			);
+			this.focusConflictLogged = true;
+		} else if (focusTrusted) {
+			this.focusConflictLogged = false;
 		}
 
-		const scoreOf = (state: PageState) => (state.focused ? 3 : state.visible ? 2 : 0);
-		const bestScore = Math.max(...scored.map(scoreOf));
-		const tied = scored.filter((state) => scoreOf(state) === bestScore);
+		const scoreOf = (state: PageState) => {
+			if (focusTrusted && state.focused) return 5;
+			if (state.visible) return 4;
+			if (!state.known) return state.fresh ? 3 : 1;
+			return 0;
+		};
+
+		const bestScore = Math.max(...states.map(scoreOf));
+		const tied = states.filter((state) => scoreOf(state) === bestScore);
 
 		let chosen: PageState;
 		if (tied.length === 1) {
 			chosen = tied[0];
 		} else {
-			const last = tied.find((state) => state.page === this.lastActivePage);
-			if (last) {
-				chosen = last;
-			} else {
-				chosen = tied.reduce((a, b) =>
+			chosen =
+				tied.find((state) => state.fresh) ||
+				tied.find((state) => state.page === this.lastActivePage) ||
+				tied.reduce((a, b) =>
 					b.focusedAt > a.focusedAt || (b.focusedAt === a.focusedAt && b.visibleAt >= a.visibleAt) ? b : a
 				);
-			}
 		}
 
 		this.lastActivePage = chosen.page;
