@@ -750,6 +750,27 @@ export class ScriptWorker {
 
 		const browser = this.browser;
 		const wantRefresh = !options || options.refresh !== false;
+
+		/**
+		 * 只有导航页、也没有任何平台线索时，别急着开新标签：
+		 * 那会留下一个永远读不到课的空白页，用户看到的就是「又莫名多了个空白网页」。
+		 * 直接返回提示，让用户先去跑登录脚本。
+		 */
+		const serverPort = this.store?.server?.port || 15319;
+		const hasUsablePage = browser.pages().some((item) => !item.isClosed() && !isBookmarksPageUrl(item.url(), serverPort));
+		if (!hasUsablePage) {
+			const known = this.rememberedPlatform() || (await this.platformFromCookies());
+			if (!known) {
+				return {
+					platform: '',
+					pageUrl: '',
+					pageTitle: '',
+					courses: [],
+					hint: '还没有检测到教学平台的登录状态，请先运行登录脚本（或在桌面端浏览器里打开课程列表）。'
+				};
+			}
+		}
+
 		const page = await this.acquireAutomationPage({ requirePlatform: true });
 
 		/**
@@ -1017,8 +1038,14 @@ export class ScriptWorker {
 		if (!this.browser) throw new Error('浏览器尚未启动');
 
 		const browser = this.browser;
-		const alive = () => browser.pages().filter((item) => !item.isClosed());
-		const cached = this.automationPage && !this.automationPage.isClosed() ? this.automationPage : undefined;
+		const serverPort = this.store?.server?.port || 15319;
+		/** 导航页要留着显示启动进度：远程读课程一旦把它导航到平台页，用户的导航页就没了 */
+		const isNav = (item: Page) => isBookmarksPageUrl(item.url(), serverPort);
+		const alive = () => browser.pages().filter((item) => !item.isClosed() && !isNav(item));
+		const cached =
+			this.automationPage && !this.automationPage.isClosed() && !isNav(this.automationPage)
+				? this.automationPage
+				: undefined;
 		const requirePlatform = !!(options && options.requirePlatform);
 
 		/** 1) 正在用的这一页就合适：直接复用（标记、滚动位置都还在） */
@@ -1154,6 +1181,28 @@ function normalizeUrl(url: string): string {
 		return `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, '')}`.toLowerCase();
 	} catch {
 		return String(url || '').toLowerCase();
+	}
+}
+
+/**
+ * 是不是鸿鹄易学的导航页（浏览器启动时加载的那一页，负责显示启动进度）。
+ *
+ * 它挂在本地 http 服务上，长得和普通网页一样，因此极容易被「找一页来用」的逻辑征用：
+ * 启动脚本把它当登录页导航走、远程读课程把它当课程页导航走，结果导航页消失；
+ * 之后启动流程再往它写状态文字时（`document.body.textContent` 兜底），
+ * 那张已经变成平台页的标签就被清成孤零零一行「浏览器初始化完成。」。
+ * 凡是要挑页面的地方都必须把它排除掉。
+ */
+export function isBookmarksPageUrl(url: string, serverPort?: number): boolean {
+	if (!/^https?:/i.test(String(url || ''))) return false;
+	try {
+		const u = new URL(url);
+		if (u.pathname !== '/index.html') return false;
+		if (!u.hash.startsWith('#/bookmarks')) return false;
+		if (typeof serverPort === 'number' && serverPort > 0 && u.port && Number(u.port) !== serverPort) return false;
+		return true;
+	} catch {
+		return false;
 	}
 }
 
@@ -1352,26 +1401,42 @@ export async function launchBrowser({
 
 				// 后续初始化步骤转为后台执行：失败只记日志，不再影响启动状态
 				try {
+					/** 浏览器启动时自带的那一页：改造成导航页，之后只往它写启动进度 */
+					const [blankPage] = browser.pages();
+					/** 导航页可能还没挂载完，缺接口只提示一次，避免刷屏 */
+					let stepTipWarned = false;
+
 					/**
 					 * 显示步骤提示
 					 */
 					const step = async (tips: string | string[], opts?: { loading?: boolean; warn?: boolean }) => {
 						const { loading = true, warn = false } = opts || {};
-						await blankPage.evaluate(
-							(state) => {
-								// @ts-ignore 鸿鹄易学导航页自带的方法
-								const setState = window.setBookmarkLoadingState;
-								if (setState) {
+						/**
+						 * 只往「还是导航页」的那一页写状态。
+						 *
+						 * 页面一旦被登录脚本或用户导航到别的站点，`setBookmarkLoadingState` 就不存在了；
+						 * 以前这里会退回 `document.body.textContent = tips`，把一张真实网页清成一行文字 ——
+						 * 这正是「登录完成后页面变成一行『浏览器初始化完成。』」的成因。
+						 * 现在拿不到接口就什么都不写：宁可少一条提示，也不能毁掉页面内容。
+						 */
+						if (!blankPage || blankPage.isClosed() || !isBookmarksPageUrl(blankPage.url(), serverPort)) return;
+						const applied = await blankPage
+							.evaluate(
+								(state) => {
+									// @ts-ignore 鸿鹄易学导航页自带的方法
+									const setState = window.setBookmarkLoadingState;
+									if (typeof setState !== 'function') return false;
 									setState(state);
-								} else {
-									window.document.body.textContent = state.tips.join('\n');
-								}
-							},
-							{ tips: Array.isArray(tips) ? tips : [tips], loading, warn }
-						);
+									return true;
+								},
+								{ tips: Array.isArray(tips) ? tips : [tips], loading, warn }
+							)
+							.catch(() => false);
+						if (!applied && !stepTipWarned) {
+							stepTipWarned = true;
+							console.warn('导航页尚未就绪（缺少 setBookmarkLoadingState），启动提示暂不显示');
+						}
 					};
-
-					const [blankPage] = browser.pages();
 
 					// 加载本地导航页
 					await blankPage.goto(bookmarksPageUrl || 'about:blank');
@@ -1390,8 +1455,15 @@ export async function launchBrowser({
 					// 监听网络请求
 					browserNetworkRoute(authToken, browser);
 
-					// 运行自动化程序
-					await runAutomationScripts({ browser, automationScripts, serverPort, step, onDone: onAutomationDone });
+					// 运行自动化程序（导航页不参与，脚本自己新开标签）
+					await runAutomationScripts({
+						browser,
+						automationScripts,
+						serverPort,
+						step,
+						navPage: blankPage,
+						onDone: onAutomationDone
+					});
 
 					await step('浏览器初始化完成。', { loading: false });
 					console.log('浏览器初始化全部完成');
@@ -1436,22 +1508,27 @@ export async function runAutomationScripts(opts: {
 	serverPort: number;
 	automationScripts: AS[];
 	step: (tips: string | string[], opts?: { loading?: boolean; warn?: boolean }) => Promise<void>;
+	/** 导航页（启动进度页）：绝不能被脚本占用 */
+	navPage?: Page;
 	/** 跑完后把「落在哪一页 / 哪个平台」交回 worker，供远程端读课程、选课直接复用 */
 	onDone?: (result: { page?: Page; platformId?: string }) => void;
-}) {	const { automationScripts, browser, serverPort, step, onDone } = opts;
+}) {	const { automationScripts, browser, serverPort, step, navPage, onDone } = opts;
 
 	if (!automationScripts.length) return;
 
 	/**
-	 * 挑一张页交给脚本：优先复用启动时留下的空白导航页。
+	 * 挑一张页交给脚本：**一律新开**。
 	 *
-	 * 以前这里一律 `browser.newPage()`，浏览器里就会多出一张 about:blank，
-	 * 用户从远程端看过来就是「莫名多了个空白网页」。
+	 * 曾经为了不「多一个空白页」去复用启动时留下的页面，结果把导航页导航走了：
+	 * 用户再也看不到导航页，启动流程收尾时还会往那张已经变成平台页的标签里写状态文字，
+	 * 整页被清成一行「浏览器初始化完成。」。导航页必须留着，脚本自己新开一张。
+	 * 只有真存在一张闲置的 about:blank 时才顺手复用。
 	 */
 	const pickScriptPage = async (): Promise<Page> => {
 		const alive = browser.pages().filter((item) => !item.isClosed());
-		const blank = alive.find((item) => !item.url() || item.url() === 'about:blank');
-		return blank || alive[alive.length - 1] || (await browser.newPage());
+		const usable = alive.filter((item) => item !== navPage && !isBookmarksPageUrl(item.url(), serverPort));
+		const spare = usable.find((item) => !item.url() || item.url() === 'about:blank');
+		return spare || (await browser.newPage());
 	};
 
 	for (const ps of automationScripts) {
