@@ -2,7 +2,7 @@ import { Instance as Chalk } from 'chalk';
 import { LoggerCore } from '../logger.core';
 import path, { basename } from 'path';
 import fs from 'fs';
-import { chromium, BrowserContext, Page, LaunchOptions, Response, Request } from 'playwright-core';
+import { chromium, BrowserContext, Page, Frame, ElementHandle, LaunchOptions, Response, Request } from 'playwright-core';
 import { AppStore } from '../../types';
 import { AutomationScripts } from '../scripts/index';
 import { Config } from '../scripts/interface';
@@ -1034,7 +1034,21 @@ export class ScriptWorker {
 		 */
 		let platform = detectCoursePlatform(page.url()) || this.rememberedPlatform() || (await this.platformFromCookies());
 
-		const extract = async (target: Page) => {
+		/**
+		 * 超星把「我的课程」整个放在 iframe 里（`i.chaoxing.com/base` 主文档只有导航），
+		 * 主文档域名常常认不出平台，得连各 frame 的 URL 一起看。
+		 */
+		if (!platform) {
+			for (const frame of page.frames()) {
+				const hit = detectCoursePlatform(frame.url());
+				if (hit) {
+					platform = hit;
+					break;
+				}
+			}
+		}
+
+		const extract = async (target: Page | Frame) => {
 			/** 先把列表滚到底：智慧树的共享课就藏在懒加载的第二批里 */
 			await autoScrollForCourses(target);
 			return target
@@ -1046,7 +1060,7 @@ export class ScriptWorker {
 
 		let items: { id: string; name: string; url: string; label?: string }[] = [];
 		let pageTitle = '';
-		let used = page;
+		let used: Page | Frame = page;
 
 		/**
 		 * 1) 先在已经开着的页面上抽，**不要**一上来就导航
@@ -1056,12 +1070,27 @@ export class ScriptWorker {
 		 *
 		 * 用户常同时开着课程页和视频页，所以主页面抽不到时再试其他平台标签（最多 4 个）。
 		 */
-		const attempts: Page[] = [page];
+		const attempts: (Page | Frame)[] = [page];
 		browser.pages().forEach((item) => {
 			if (item === page || item.isClosed() || attempts.length >= 4) return;
 			if (!detectCoursePlatform(item.url())) return;
 			attempts.push(item);
 		});
+
+		/**
+		 * 课程列表可能在 iframe 里（超星「我的课程」就是）：主文档抽不到时，
+		 * 把候选页的 frame 也加进来试，顺序排在所有主文档之后（主文档优先，便宜）。
+		 */
+		const frameTargets: Frame[] = [];
+		for (const source of attempts.slice() as Page[]) {
+			for (const frame of source.frames()) {
+				if (frameTargets.length >= 6) break;
+				if (frame === source.mainFrame()) continue;
+				if (!detectCoursePlatform(frame.url())) continue;
+				frameTargets.push(frame);
+			}
+		}
+		attempts.push(...frameTargets);
 
 		for (const target of attempts) {
 			const result = await extract(target);
@@ -1097,20 +1126,31 @@ export class ScriptWorker {
 			/** 课程列表大多是异步渲染，直接抽取会抽到空列表 */
 			await page.waitForTimeout(2500);
 
-			const result = await extract(page);
-			if (result && result.items.length) {
-				items = result.items;
-				pageTitle = result.pageTitle || pageTitle;
-				used = page;
-			} else if (result && !pageTitle) {
-				pageTitle = result.pageTitle || '';
+			/** 导航后 frame 会重建，必须重新收集（超星「我的课程」就在 iframe 里） */
+			const afterNav: (Page | Frame)[] = [page];
+			for (const frame of page.frames()) {
+				if (frame === page.mainFrame()) continue;
+				if (!detectCoursePlatform(frame.url())) continue;
+				afterNav.push(frame);
+			}
+
+			for (const target of afterNav) {
+				const result = await extract(target);
+				if (!result) continue;
+				if (result.items.length) {
+					items = result.items;
+					pageTitle = result.pageTitle || pageTitle;
+					used = target;
+					break;
+				}
+				if (!pageTitle) pageTitle = result.pageTitle || '';
 			}
 		}
 
 		const finalPlatform = detectCoursePlatform(used.url()) || platform;
 		if (items.length) {
-			/** 抽到课程的那一页就是后续「进入课程」要点击的页面 */
-			this.automationPage = used;
+			/** 抽到课程的那一页就是后续「进入课程」要点击的页面（frame 里抽到的就记它的宿主页） */
+			this.automationPage = toPage(used);
 			this.automationPlatformId = finalPlatform?.id || '';
 		}
 
@@ -1143,7 +1183,25 @@ export class ScriptWorker {
 		/** 优先用读课程列表那一页：上面的 `data-hh-course` 标记就是在这里打的 */
 		const page = await this.acquireAutomationPage();
 
-		let handle = await page.$(`[data-hh-course="${id}"]`);
+		/**
+		 * 标记可能打在 iframe 里（超星「我的课程」整个在 mooc2-ans 的 iframe 内），
+		 * 主文档 `page.$` 一定找不到，必须逐个 frame 找。
+		 */
+		const findMarked = async (which: string): Promise<{ handle: ElementHandle | null; frame: Frame | null }> => {
+			const direct = await page.$(`[data-hh-course="${which}"]`).catch(() => null);
+			if (direct) return { handle: direct, frame: null };
+			for (const frame of page.frames()) {
+				if (frame === page.mainFrame()) continue;
+				const found = await frame.$(`[data-hh-course="${which}"]`).catch(() => null);
+				if (found) return { handle: found, frame: frame };
+			}
+			return { handle: null, frame: null };
+		};
+
+		const located = await findMarked(id);
+		let handle: ElementHandle | null = located.handle;
+		/** 抽到课程的 frame：重定位抽取要在同一个 frame 里做，否则抽到的是另一份 DOM */
+		let courseFrame: Frame | null = located.frame;
 		let directUrl = '';
 
 		/**
@@ -1174,11 +1232,35 @@ export class ScriptWorker {
 			 * （用户刚登录完就点课程时，课程页的异步渲染经常刚好重载一次）。
 			 */
 			const name = wantName;
-			/** 懒加载列表（智慧树共享课）不滚到底抽不到，重定位前同样先滚 */
-			await autoScrollForCourses(page);
-			const again = await page.evaluate(extractCoursesInPage, {
-				platform: detectCoursePlatform(page.url())?.id || ''
-			});
+			/**
+			 * 重新抽取的目标：优先原来那个 frame；没有就主文档 + 各 frame 依次试。
+			 */
+			const extractTargets: (Page | Frame)[] = courseFrame ? [courseFrame] : [page];
+			if (!courseFrame) {
+				for (const frame of page.frames()) {
+					if (frame === page.mainFrame()) continue;
+					if (!detectCoursePlatform(frame.url())) continue;
+					extractTargets.push(frame);
+				}
+			}
+
+			let again: Awaited<ReturnType<typeof extractCoursesInPage>> | undefined;
+			let againFrame: Frame | null = courseFrame;
+			for (const target of extractTargets) {
+				/** 懒加载列表（智慧树共享课）不滚到底抽不到，重定位前同样先滚 */
+				await autoScrollForCourses(target);
+				const result = await target
+					.evaluate(extractCoursesInPage, {
+						platform: detectCoursePlatform(target.url())?.id || ''
+					})
+					.catch(() => undefined);
+				if (result && result.items.length) {
+					again = result;
+					againFrame = target === page ? null : (target as Frame);
+					break;
+				}
+			}
+			if (!again) throw new Error('课程列表已过期，请重新刷新课程列表');
 			/**
 			 * 同一门课会同时挂「AI智课」和「共享课」两个班，课程名完全一样。
 			 * 先按原标记的序号取（卡片顺序在同一页面里稳定），名字对得上才用，
@@ -1191,61 +1273,91 @@ export class ScriptWorker {
 				(name ? again.items.find((item) => item.name === name) : undefined);
 			if (hit) {
 				directUrl = hit.url;
-				handle = await page.$(`[data-hh-course="${hit.id}"]`);
+				handle = againFrame
+					? await againFrame.$(`[data-hh-course="${hit.id}"]`).catch(() => null)
+					: await page.$(`[data-hh-course="${hit.id}"]`).catch(() => null);
+				if (againFrame) courseFrame = againFrame;
 			}
 			if (!directUrl && !handle) throw new Error('课程列表已过期，请重新刷新课程列表');
 		}
 
 		const before = this.browser.pages().length;
+		/**
+		 * 进入后的课程页单独记，**不覆盖 `automationPage`**：
+		 * 那个字段是「课程列表页」，被课程页顶掉的话，下次读列表会去课程页里找课，一门都找不到。
+		 */
+		let enteredPage: Page | null = null;
 
-		if (directUrl) {
-			this.info(`[远程] 按课程名重新定位并进入：${directUrl}`);
-			await page.goto(directUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
-		} else {
+		/** 有直链就按 URL 进入（超星），没有才能靠点击（智慧树） */
+		let linkTarget = directUrl;
+		if (!linkTarget) {
 			const rawHref = await handle!.getAttribute('href');
-			if (rawHref && /^https?:/i.test(rawHref.trim())) {
-				const target = new URL(rawHref.trim(), page.url()).href;
-				this.info(`[远程] 进入课程：${target}`);
-				await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 45000 });
+			if (rawHref && /^https?:/i.test(rawHref.trim())) linkTarget = new URL(rawHref.trim(), page.url()).href;
+		}
+
+		if (linkTarget) {
+			this.info(`[远程] 进入课程：${linkTarget}`);
+			/**
+			 * 新开标签进入：课程列表页得留着，用户才能接着点下一门
+			 * （以前直接 `page.goto` 会把列表页顶掉，想换门课只能手工退回来）。
+			 */
+			const tab = await page.context().newPage().catch(() => null);
+			if (tab) {
+				await tab
+					.goto(linkTarget, { waitUntil: 'domcontentloaded', timeout: 45000 })
+					.catch((e: any) =>
+						this.warn('[远程] 打开课程页失败：', String(e && e.message ? e.message : e))
+					);
+				enteredPage = tab;
 			} else {
-				/** 没有 href 的卡片（Vue/React 站点靠 click 跳转）只能点 */
-				this.info('[远程] 课程卡片无直链，改为点击进入');
-				/**
-				 * 有些站点会在卡片上方盖一层透明 div（智慧树 AI 教学中心就是），
-				 * Playwright 的真实鼠标点击会被它拦下并一直重试到超时。
-				 * 先探一次是否被遮挡：被遮挡就直接派发 click，省掉几秒空等。
-				 */
-				const covered = await handle!
-					.evaluate((el) => {
-						const box = (el as HTMLElement).getBoundingClientRect();
-						const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-						return !!top && top !== el && !el.contains(top);
-					})
-					.catch(() => false);
+				await page.goto(linkTarget, { waitUntil: 'domcontentloaded', timeout: 45000 });
+				enteredPage = page;
+			}
+		} else {
+			/** 没有 href 的卡片（Vue/React 站点靠 click 跳转）只能点 */
+			this.info('[远程] 课程卡片无直链，改为点击进入');
+			/**
+			 * 有些站点会在卡片上方盖一层透明 div（智慧树 AI 教学中心就是），
+			 * Playwright 的真实鼠标点击会被它拦下并一直重试到超时。
+			 * 先探一次是否被遮挡：被遮挡就直接派发 click，省掉几秒空等。
+			 */
+			const covered = await handle!
+				.evaluate((el) => {
+					const box = (el as HTMLElement).getBoundingClientRect();
+					const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+					return !!top && top !== el && !el.contains(top);
+				})
+				.catch(() => false);
 
-				if (covered) {
-					this.warn('[远程] 课程卡片被透明层遮挡，改用脚本派发点击');
-					await handle!.evaluate((el) => (el as HTMLElement).click()).catch(() => {});
-				} else {
-					await handle!
-						.click({ timeout: 3000 })
-						.catch(() => handle!.evaluate((el) => (el as HTMLElement).click()).catch(() => {}));
-				}
-				await page.waitForTimeout(3000);
+			if (covered) {
+				this.warn('[远程] 课程卡片被透明层遮挡，改用脚本派发点击');
+				await handle!.evaluate((el) => (el as HTMLElement).click()).catch(() => {});
+			} else {
+				await handle!
+					.click({ timeout: 3000 })
+					.catch(() => handle!.evaluate((el) => (el as HTMLElement).click()).catch(() => {}));
+			}
+			await page.waitForTimeout(3000);
 
-				const pages = this.browser.pages();
-				if (pages.length > before) {
-					const popup = pages[pages.length - 1];
-					this.automationPage = popup;
-					await popup.waitForLoadState('domcontentloaded').catch(() => {});
-				}
+			const pages = this.browser.pages();
+			if (pages.length > before) {
+				const popup = pages[pages.length - 1];
+				enteredPage = popup;
+				await popup.waitForLoadState('domcontentloaded').catch(() => {});
+			} else {
+				enteredPage = page;
 			}
 		}
 
-		const active = this.automationPage && !this.automationPage.isClosed() ? this.automationPage : page;
+		const active = enteredPage && !enteredPage.isClosed() ? enteredPage : page;
 		/** 进入课程后把这一页顶到最前，电脑前的人能直接看到刷课界面 */
 		await active.bringToFront().catch(() => {});
-		const title = await active.title().catch(() => '');
+		/**
+		 * 标题兜底用课程名：分享课/SPA 课程页在 DOMContentLoaded 时 title 还是站点名
+		 * （远程端就显示成「已进入课程：智慧树」），空或明显不是课程名时一律用课程名。
+		 */
+		const rawTitle = await active.title().catch(() => '');
+		const title = rawTitle && rawTitle !== '智慧树' && rawTitle !== '超星' ? rawTitle : wantName || rawTitle;
 		return { url: active.url(), title };
 	}
 
@@ -1515,6 +1627,12 @@ export function isBookmarksPageUrl(url: string, serverPort?: number): boolean {
  * - 同一门课常同时存在封面链接和标题链接，必须按 URL + 名称去重；
  * - 抽到的元素就地打 `data-hh-course` 标记，供「进入课程」按标记点击。
  */
+/** Frame 有 page() 方法，Page 没有——用它区分两种抽取目标 */
+function toPage(target: Page | Frame): Page {
+	const maybe = target as Frame;
+	return typeof maybe.page === 'function' ? maybe.page() : (target as Page);
+}
+
 /**
  * 课程列表常常「滚到底才加载下一批」，抽取前先把列表滚到底并等数量稳定。
  *
@@ -1522,14 +1640,23 @@ export function isBookmarksPageUrl(url: string, serverPort?: number): boolean {
  * 才会出现在 DOM 里。而且它的滚动发生在内层 `.el-scrollbar__wrap` 上，
  * `window.scrollTo` 完全无效（页面本身高度就等于视口高度），必须找到真正的滚动容器。
  */
-export async function autoScrollForCourses(page: Page, maxRounds = 10): Promise<void> {
-	const countCards = () =>
-		page
-			.evaluate(() => document.querySelectorAll('div.course-card, [class*="course-card"]').length)
-			.catch(() => 0);
+export async function autoScrollForCourses(target: Page | Frame, maxRounds = 10): Promise<void> {
+	const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+	/**
+	 * 变化判定同时看「课程卡片数」和「元素总数」：
+	 * 卡片选择器各站不同（智慧树 `.course-card`、超星 `.course`），
+	 * 元素总数则是通用的——滚到底加载出新内容，总数一定变。
+	 */
+	const snapshot = () =>
+		target
+			.evaluate(() => ({
+				cards: document.querySelectorAll('div.course-card, [class*="course-card"], .course').length,
+				nodes: document.querySelectorAll('*').length
+			}))
+			.catch(() => ({ cards: 0, nodes: 0 }));
 
 	const scrollToEnd = () =>
-		page
+		target
 			.evaluate(() => {
 				/** 找最像列表的滚动容器：纵向可滚，且可滚动距离最大 */
 				const found: { el: HTMLElement; score: number }[] = [];
@@ -1552,21 +1679,21 @@ export async function autoScrollForCourses(page: Page, maxRounds = 10): Promise<
 			})
 			.catch(() => false);
 
-	let last = await countCards();
+	let last = await snapshot();
 	/** 页面里一张课程卡片都没有：不是列表页（视频页/空白页），滚也没用 */
-	if (!last) {
+	if (!last.cards) {
 		await scrollToEnd();
-		await page.waitForTimeout(700);
-		last = await countCards();
-		if (!last) return;
+		await sleep(700);
+		last = await snapshot();
+		if (!last.cards) return;
 	}
 
 	let stable = 0;
 	for (let round = 0; round < maxRounds; round++) {
 		const hadScroller = await scrollToEnd();
-		await page.waitForTimeout(hadScroller ? 700 : 400);
-		const now = await countCards();
-		if (now === last) {
+		await sleep(hadScroller ? 700 : 400);
+		const now = await snapshot();
+		if (now.cards === last.cards && now.nodes === last.nodes) {
 			stable++;
 			/**
 			 * 连续两轮数量不变才认为加载到底：首屏滚到底往往只是「发出请求」，
@@ -1698,7 +1825,7 @@ export function extractCoursesInPage(arg: { platform: string }): {
 	 * `card` 要选**整张卡的根节点**：这类卡片没有 `<a>`，靠 click 打开，
 	 * 标记打在根节点上才点得动（打在标题上时，外层常有一层透明 div 挡住真实鼠标点击）。
 	 */
-	const KNOWN_CARDS: { host: RegExp; card: string; name: string; label: string }[] = [
+	const KNOWN_CARDS: { host: RegExp; card: string; name: string; label: string; url?: string }[] = [
 		{
 			/**
 			 * 智慧树 AI 教学中心：div.course-card > h4 = 课程名。
@@ -1709,6 +1836,19 @@ export function extractCoursesInPage(arg: { platform: string }): {
 			card: 'div.course-card',
 			name: 'h4',
 			label: '[class*="type-tag" i], [class*="course-tag" i]'
+		},
+		{
+			/**
+			 * 超星「我的课程」：列表在 iframe（`mooc2-ans.chaoxing.com/visit/interaction`）里，
+			 * 卡片根 `.course`，课程名 `.course-name`（textContent 为空时看 title 属性），
+			 * 标题链接 `.course-info a[href]` 直指 `mooc1.chaoxing.com/visit/stucoursemiddle`。
+			 * 超星不标课程类型，label 留空。
+			 */
+			host: /(^|\.)chaoxing\.com$/i,
+			card: '.course',
+			name: '.course-name',
+			label: '',
+			url: '.course-info a[href]'
 		}
 	];
 
@@ -1719,6 +1859,8 @@ export function extractCoursesInPage(arg: { platform: string }): {
 			if (items.length >= 30) break;
 			const nameEl = card.querySelector(knownRule.name) as HTMLElement | null;
 			let name = clean((nameEl && nameEl.textContent) || '');
+			/** 标题被 ellipsis 截断时 textContent 仍是全名，但个别站点只把全名放在 title 属性里 */
+			if (!name && nameEl) name = clean(nameEl.getAttribute('title') || '');
 			/** 标题节点没渲染出来时退到封面图的 alt（真实站点里两者一致） */
 			if (!name) {
 				const img = card.querySelector('img') as HTMLImageElement | null;
@@ -1726,9 +1868,17 @@ export function extractCoursesInPage(arg: { platform: string }): {
 			}
 			if (!name) continue;
 
-			const labelEl = card.querySelector(knownRule.label) as HTMLElement | null;
+			const labelEl = knownRule.label ? (card.querySelector(knownRule.label) as HTMLElement | null) : null;
 			const label = clean((labelEl && labelEl.textContent) || '').slice(0, 12);
-			push(name, '', card, label);
+
+			/** 有直链就用直链（超星），没有就让「进入课程」去点卡片（智慧树） */
+			let href = '';
+			if (knownRule.url) {
+				const link = card.querySelector(knownRule.url) as HTMLAnchorElement | null;
+				const raw = clean((link && (link.getAttribute('href') || link.href)) || '');
+				if (raw && /^https?:/i.test(raw)) href = raw;
+			}
+			push(name, href, card, label);
 		}
 	}
 

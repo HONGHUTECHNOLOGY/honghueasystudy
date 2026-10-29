@@ -806,7 +806,8 @@ export async function enterCourseById(uid: string, id: string, name: string) {
 	state.automationBusy[uid] = 'enter';
 	try {
 		const res = await api.enterCourse(uid, id, name);
-		toast(`已进入课程：${(res.data && (res.data.title || res.data.url)) || name}`, 'success');
+		/** 提示只用课程名：页面 title 在 SPA 课程页上常是站点名（「智慧树」/「超星」） */
+		toast(`已进入课程：${name}`, 'success');
 		/** 进入后刷新一次快照，让「打开的页面」立刻反映新课程页 */
 		refresh();
 		return res.data;
