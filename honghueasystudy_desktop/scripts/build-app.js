@@ -3,7 +3,7 @@ const del = require('del');
 const zip = require('gulp-zip');
 const path = require('path');
 const { execOut } = require('./utils');
-const { readFileSync, existsSync } = require('fs');
+const { readFileSync, existsSync, openSync, closeSync } = require('fs');
 const chromeInstall = require('./chrome.install').default;
 const { downloadOcr, verifyOcr } = require('../../scripts/ocr.install');
 const { downloadCloudflared, verifyCloudflared } = require('./cloudflared.install');
@@ -40,6 +40,67 @@ function buildApp() {
 
 function cleanOutput() {
 	return del([`../packages/app/dist/app${version}.zip`], { force: true });
+}
+
+/**
+ * 构建前置防呆：输出目录里的主程序正在运行就直接中止。
+ *
+ * 用户习惯直接双击 `dist/<platform>-unpacked/鸿鹄易学.exe` 使用（不是装到 Program Files），
+ * 一旦应用还开着，electron-builder 会在准备阶段把该目录删掉一半，然后在复制 ffmpeg.dll 时
+ * 报 EBUSY 中止，留下缺 `lib/`、`node_modules/`、`locales/` 的残骸。之后再点 exe 就是
+ * `Cannot find module ...\resources\app\lib\index.js`，看起来像「装坏了」。
+ *
+ * 探测方式：对加载中的动态库做「写入方式打开」，被占用时返回 EBUSY。
+ * 实测（win）：exe 和 icudtl.dat 的 rename 都不可靠（exe 甚至能改名成功、
+ * icudtl.dat 则是 rename 失败但写入打开成功），只有 ffmpeg.dll / libEGL.dll
+ * 的「写入打开」是稳定信号 —— 这恰好也是构建真正卡住的那类文件。
+ */
+function verifyOutputUnused(done) {
+	const platform = process.env.PLATFORM || 'win';
+	const arch = process.env.ARCH || 'x64';
+	const dirName = platform === 'linux' && arch === 'arm64' ? 'linux-arm64-unpacked' : `${platform}-unpacked`;
+	const outDir = path.resolve(__dirname, `../packages/app/dist/${dirName}`);
+	if (!existsSync(outDir)) {
+		done();
+		return;
+	}
+
+	const { productName } = JSON.parse(
+		readFileSync(path.resolve(__dirname, '../packages/app/electron.builder.json')).toString()
+	);
+	/** 加载中会被独占的动态库；按平台给候选，命中任意一个即判定「正在运行」 */
+	let probes;
+	if (platform === 'win') {
+		probes = ['ffmpeg.dll', 'libGLESv2.dll', 'libEGL.dll'].map((f) => path.join(outDir, f));
+	} else if (platform === 'darwin') {
+		const fw = path.join(outDir, `${productName}.app`, 'Contents', 'Frameworks', 'Electron Framework.framework');
+		probes = [path.join(fw, 'Electron Framework'), path.join(fw, 'Versions', 'A', 'Electron Framework')];
+	} else {
+		probes = ['libffmpeg.so', 'libGLESv2.so'].map((f) => path.join(outDir, f));
+	}
+
+	const locked = probes.find((file) => {
+		if (!existsSync(file)) return false;
+		try {
+			closeSync(openSync(file, 'r+'));
+			return false;
+		} catch (err) {
+			return err.code === 'EBUSY' || err.code === 'EPERM' || err.code === 'EACCES';
+		}
+	});
+
+	if (!locked) {
+		done();
+		return;
+	}
+	done(
+		new Error(
+			`[build-app] ❌ 输出目录里的程序正在运行（${path.basename(locked)} 被占用），已中止构建。\n` +
+				'继续构建会把该目录删掉一半再失败，留下缺 lib/ 与 node_modules/ 的残骸，' +
+				'下次启动只会报 "Cannot find module ...\\resources\\app\\lib\\index.js"。\n' +
+				`请先完全退出「${productName}」（含托盘 / 后台进程）后重试。`
+		)
+	);
 }
 
 function packResource() {
@@ -95,6 +156,10 @@ exports.default = series(
 	verifyOcr,
 	verifyCloudflared,
 	verifyLinuxOcr,
+	verifyOutputUnused,
 	buildApp,
 	packResource
 );
+
+// 单独可跑：`gulp -f ./scripts/build-app.js verifyOutputUnused`（用于排查"构建失败留下残骸"）
+exports.verifyOutputUnused = verifyOutputUnused;
