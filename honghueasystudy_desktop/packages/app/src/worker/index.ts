@@ -85,12 +85,20 @@ export class ScriptWorker {
 	/** 每页最近一次被观测到在前台/可见的时间，用于「浏览器整体失焦」时回退 */
 	private pageActivity = new WeakMap<Page, { focusedAt: number; visibleAt: number }>();
 	/**
-	 * 远程自动化（登录 / 选课）专用页面
+	 * 远程自动化（登录 / 选课）使用的页面
 	 *
-	 * 单独开一个标签跑登录，跑完留在这一页上读课程列表，不碰用户正在看的刷课页。
-	 * 登录态是按 context 共享的 Cookie，所以新标签同样已登录。
+	 * 优先复用**已经存在的标签**：浏览器如果配了「启动后自动运行自动程序」，
+	 * 登录态和课程页早就在某个标签里了，这时再 `newPage()` 得到的是一张
+	 * about:blank —— 既抽不到课程，又会在电脑上莫名多出一个空白标签。
 	 */
 	private automationPage?: Page;
+	/**
+	 * 上一次识别到的平台 id
+	 *
+	 * 登录脚本有时会自己开新标签、或把原页面关掉，此时手上没有平台页面了；
+	 * 记住上一次的平台，`course.list` 才仍然知道该打开哪个课程列表页。
+	 */
+	private automationPlatformId = '';
 	static langs?: Langs;
 	static lang: (key: keyof Langs, def?: string, replace?: Record<string, string>) => string = (key, def, replace) => {
 		const result = _get(ScriptWorker.langs, key, def);
@@ -222,6 +230,23 @@ export class ScriptWorker {
 		/** 启动浏览器 */
 		try {
 			await launchBrowser({
+				/**
+				 * 启动时自动跑的登录脚本跑完后，把「登录后落在哪一页 / 哪个平台」记住。
+				 *
+				 * 不接这一步的话，远程端来读课程时 worker 对登录结果一无所知：
+				 * 它既不知道去哪个平台读课程，也不知道该复用哪一张标签，
+				 * 只能自己新开一张 —— 那正好是一张 about:blank，于是一门课都读不到。
+				 */
+				onAutomationDone: (result) => {
+					if (result.platformId) {
+						this.automationPlatformId = result.platformId;
+						console.log(`[启动] 自动化程序落地平台：${result.platformId}`);
+					}
+					if (result.page && !result.page.isClosed()) {
+						this.automationPage = result.page;
+						console.log(`[启动] 自动化程序落地页：${result.page.url()}`);
+					}
+				},
 				onLaunch: (browser) => {
 					this.browser = browser;
 
@@ -690,6 +715,19 @@ export class ScriptWorker {
 
 		const url = page.url();
 		const title = await page.title().catch(() => '');
+
+		/**
+		 * 登录脚本经常自己开新标签（滑块验证、扫码、单点登录都要跳），
+		 * 结束时得重新认一下「登录后的落点在哪一页」，否则紧接着抽课程
+		 * 还会抽旧页面，一门课都读不到。
+		 */
+		const landed = (this.browser?.pages() || []).find(
+			(item) => !item.isClosed() && detectCoursePlatform(item.url())
+		);
+		if (landed) this.automationPage = landed;
+		const platform = detectCoursePlatform((landed || page).url());
+		if (platform) this.automationPlatformId = platform.id;
+
 		this.info(`[远程] 自动化脚本执行完成：${name} → ${title || url}`);
 		return { name, url, title, duration: Date.now() - startedAt };
 	}
@@ -710,34 +748,111 @@ export class ScriptWorker {
 	}> {
 		if (!this.browser) throw new Error('浏览器尚未启动');
 
-		const page = await this.acquireAutomationPage();
-		let platform = detectCoursePlatform(page.url());
+		const browser = this.browser;
+		const wantRefresh = !options || options.refresh !== false;
+		const page = await this.acquireAutomationPage({ requirePlatform: true });
 
-		if (options?.refresh !== false && platform) {
+		/**
+		 * 平台判定四层兜底：当前页 → 记住的上次平台 → Cookie 域 → 放弃。
+		 *
+		 * 「识别不到课程」最常见的原因不是没登录，而是拿到了一张空白页；
+		 * 登录脚本跑完又常把临时标签关掉（扫码 / 单点登录流程），页面上一点痕迹都不剩。
+		 * Cookie 是按 context 持久化的，只要还留着一个平台域名的 Cookie，
+		 * 就知道该去哪个平台读课程。
+		 */
+		let platform = detectCoursePlatform(page.url()) || this.rememberedPlatform() || (await this.platformFromCookies());
+
+		const extract = async (target: Page) =>
+			target
+				.evaluate(extractCoursesInPage, {
+					platform: detectCoursePlatform(target.url())?.id || platform?.id || ''
+				})
+				.catch(() => undefined);
+
+		let items: { id: string; name: string; url: string }[] = [];
+		let pageTitle = '';
+		let used = page;
+
+		/**
+		 * 1) 先在已经开着的页面上抽，**不要**一上来就导航
+		 *
+		 * 登录脚本跑完常常就停在「我的课程」页，课程是全的；以前这里无条件先跳到平台首页，
+		 * 等于把现成能用的页面顶掉，反而一门课都读不到。
+		 *
+		 * 用户常同时开着课程页和视频页，所以主页面抽不到时再试其他平台标签（最多 4 个）。
+		 */
+		const attempts: Page[] = [page];
+		browser.pages().forEach((item) => {
+			if (item === page || item.isClosed() || attempts.length >= 4) return;
+			if (!detectCoursePlatform(item.url())) return;
+			attempts.push(item);
+		});
+
+		for (const target of attempts) {
+			const result = await extract(target);
+			if (!result) continue;
+			if (result.items.length) {
+				items = result.items;
+				pageTitle = result.pageTitle || pageTitle;
+				used = target;
+				break;
+			}
+			if (!pageTitle) pageTitle = result.pageTitle || '';
+		}
+
+		/**
+		 * 2) 确实抽不到，才去打开课程列表页重试
+		 *
+		 * 只在用户主动刷新、或当前页根本不是网页时做；
+		 * 静默探测（refresh=false）遇到普通网页就到此为止，不去打扰用户正在看的东西。
+		 */
+		const onBlankPage = !/^https?:/i.test(page.url());
+		if (!items.length && platform && (wantRefresh || onBlankPage)) {
 			const target = platform.listUrl;
 			if (normalizeUrl(page.url()) !== normalizeUrl(target)) {
 				this.info(`[远程] 打开课程列表页：${target}`);
 				await page
 					.goto(target, { waitUntil: 'domcontentloaded', timeout: 45000 })
 					.catch((e: any) => this.warn('[远程] 打开课程列表页失败：', String(e && e.message ? e.message : e)));
+				/** 后台标签的渲染会被 Chromium 节流，抽列表前先顶到前台 */
+				await page.bringToFront().catch(() => {});
 			}
 			platform = detectCoursePlatform(page.url()) || platform;
+			this.automationPlatformId = platform.id;
 			/** 课程列表大多是异步渲染，直接抽取会抽到空列表 */
 			await page.waitForTimeout(2500);
+
+			const result = await extract(page);
+			if (result && result.items.length) {
+				items = result.items;
+				pageTitle = result.pageTitle || pageTitle;
+				used = page;
+			} else if (result && !pageTitle) {
+				pageTitle = result.pageTitle || '';
+			}
 		}
 
-		const result = await page.evaluate(extractCoursesInPage, { platform: platform?.id || '' });
-		const pageTitle = (result && result.pageTitle) || '';
-		const courses = (result && result.items) || [];
+		const finalPlatform = detectCoursePlatform(used.url()) || platform;
+		if (items.length) {
+			/** 抽到课程的那一页就是后续「进入课程」要点击的页面 */
+			this.automationPage = used;
+			this.automationPlatformId = finalPlatform?.id || '';
+		}
 
-		const hint = courses.length
+		const hint = items.length
 			? ''
-			: platform
-				? `未在${platform.id}课程页识别到课程（当前页面：${pageTitle || page.url()}）。请确认登录已完成，或在桌面端浏览器里手动打开课程列表后点「刷新」。`
-				: '当前页面不属于支持的教学平台，请先运行登录脚本。';
+			: finalPlatform
+				? `已识别为${finalPlatform.label}，但没读到课程（当前页面：${pageTitle || used.url()}）。课程页可能还没加载完，点「刷新课程列表」重试，或在桌面端浏览器里打开「我的课程」后再点刷新。`
+				: '没有检测到教学平台的登录状态。请先在桌面端浏览器里完成登录（或运行登录脚本），再点「刷新课程列表」。';
 
-		this.info(`[远程] 课程列表：识别到 ${courses.length} 门课程（${platform?.id || '未知平台'}）`);
-		return { platform: platform?.id || '', pageUrl: page.url(), pageTitle, courses, hint };
+		this.info(`[远程] 课程列表：识别到 ${items.length} 门课程（${finalPlatform?.id || '未知平台'}）`);
+		return {
+			platform: finalPlatform?.id || '',
+			pageUrl: used.url(),
+			pageTitle,
+			courses: items,
+			hint
+		};
 	}
 
 	/** 进入指定课程（列表项由 listCourses 打标记，这里按标记点击或直接跳转） */
@@ -747,12 +862,25 @@ export class ScriptWorker {
 		const id = String((options && options.id) || '').trim();
 		if (!id) throw new Error('缺少课程标识');
 
-		const page =
-			this.automationPage && !this.automationPage.isClosed() ? this.automationPage : await this.pickActivePage();
-		if (!page) throw new Error('没有可用的页面，请先运行登录脚本并刷新课程列表');
+		const wantName = String((options && options.name) || '').trim();
+
+		/** 优先用读课程列表那一页：上面的 `data-hh-course` 标记就是在这里打的 */
+		const page = await this.acquireAutomationPage();
 
 		let handle = await page.$(`[data-hh-course="${id}"]`);
 		let directUrl = '';
+
+		/**
+		 * 每轮抽课都会重新编号（c1/c2/…），手机端如果还拿着上一轮的列表来点，
+		 * 标记可能已经指到别的课程上。名字对不上就按名字重找，别把用户送进错误的课。
+		 */
+		if (handle && wantName) {
+			const marked = ((await handle.textContent().catch(() => '')) || '').replace(/\s+/g, ' ').trim();
+			if (marked && marked.indexOf(wantName) === -1 && wantName.indexOf(marked) === -1) {
+				this.warn(`[远程] 课程标记与名称不一致（标记：${marked}，期望：${wantName}），按名称重新定位`);
+				handle = null;
+			}
+		}
 
 		if (!handle) {
 			/**
@@ -760,7 +888,7 @@ export class ScriptWorker {
 			 * 按课程名重新抽取一次再定位，比直接报「列表过期」体验好得多
 			 * （用户刚登录完就点课程时，课程页的异步渲染经常刚好重载一次）。
 			 */
-			const name = String((options && options.name) || '').trim();
+			const name = wantName;
 			const again = await page.evaluate(extractCoursesInPage, {
 				platform: detectCoursePlatform(page.url())?.id || ''
 			});
@@ -840,13 +968,90 @@ export class ScriptWorker {
 		return configs;
 	}
 
-	/** 取（或新开）自动化专用页面：优先复用上次那页，避免每次登录都堆一个新标签 */
-	private async acquireAutomationPage(): Promise<Page> {
+	/** 上一次识别到的平台（登录脚本把页面搞丢时的兜底） */
+	private rememberedPlatform(): (typeof COURSE_PLATFORMS)[number] | undefined {
+		if (!this.automationPlatformId) return undefined;
+		return COURSE_PLATFORMS.find((item) => item.id === this.automationPlatformId);
+	}
+
+	/**
+	 * 用浏览器 Cookie 推断用户登录过哪个平台
+	 *
+	 * 浏览器配了「启动后自动运行自动程序」时，登录是脚本自己跑的：
+	 * 扫码 / 单点登录常常把临时标签关掉，页面上一点痕迹都留不下，
+	 * 但 Cookie 挂在 context 上不会跟着页面消失 —— 这是最后一个可靠的线索。
+	 *
+	 * 多个平台同时有 Cookie 时按 COURSE_PLATFORMS 的顺序取（zjy 排在 icve 前）。
+	 */
+	private async platformFromCookies(): Promise<(typeof COURSE_PLATFORMS)[number] | undefined> {
+		if (!this.browser) return undefined;
+
+		const cookies = await this.browser.cookies().catch(() => [] as { domain?: string }[]);
+		if (!cookies.length) return undefined;
+
+		const ids: { [key: string]: boolean } = {};
+		for (const cookie of cookies) {
+			/** Cookie 的 domain 是裸域名（`.chaoxing.com`），`detectCoursePlatform` 要完整 URL，这里直接匹正则 */
+			const host = String((cookie as { domain?: string }).domain || '').replace(/^\./, '');
+			if (!host) continue;
+			const platform = COURSE_PLATFORMS.find((item) => item.match.test(host));
+			if (platform) ids[platform.id] = true;
+		}
+
+		const hit = COURSE_PLATFORMS.find((item) => ids[item.id]);
+		if (hit) this.info(`[远程] 依据 Cookie 推断平台：${hit.id}`);
+		return hit;
+	}
+
+	/**
+	 * 取（或复用）自动化页面
+	 *
+	 * 顺序：缓存页 → 已有教学平台页 → 任意普通网页 → 任意标签 → 最后才新开。
+	 * `requirePlatform` 为真时，缓存页不在平台上就不算数，继续往下找。
+	 *
+	 * 之所以这么绕：浏览器配了「启动后自动运行自动程序」时，登录态和课程页
+	 * 早就在某个标签里了；不先找它就 newPage()，拿到的是 about:blank ——
+	 * 课程一门也抽不到，还会在电脑上莫名多出一个空白标签。
+	 */
+	private async acquireAutomationPage(options?: { requirePlatform?: boolean }): Promise<Page> {
 		if (!this.browser) throw new Error('浏览器尚未启动');
 
-		if (this.automationPage && !this.automationPage.isClosed()) return this.automationPage;
+		const browser = this.browser;
+		const alive = () => browser.pages().filter((item) => !item.isClosed());
+		const cached = this.automationPage && !this.automationPage.isClosed() ? this.automationPage : undefined;
+		const requirePlatform = !!(options && options.requirePlatform);
 
-		const page = await this.browser.newPage();
+		/** 1) 正在用的这一页就合适：直接复用（标记、滚动位置都还在） */
+		if (cached && (!requirePlatform || detectCoursePlatform(cached.url()))) return cached;
+
+		/** 2) 已有教学平台的页面：自动登录脚本跑完通常就停在这里 */
+		const platformPage = alive().find((item) => detectCoursePlatform(item.url()));
+		if (platformPage) {
+			this.automationPage = platformPage;
+			return platformPage;
+		}
+
+		if (cached) return cached;
+
+		/** 3) 任意普通网页：优先真正的前台页，其次最新打开的 */
+		const webPages = alive().filter((item) => /^https?:/i.test(item.url()));
+		if (webPages.length) {
+			const active = await this.pickActivePage();
+			const page = active && webPages.indexOf(active) >= 0 ? active : webPages[webPages.length - 1];
+			this.automationPage = page;
+			return page;
+		}
+
+		/** 4) 连普通网页都没有（只剩 start-page / about:blank）：复用它，别再多开一个 */
+		const rest = alive();
+		if (rest.length) {
+			const page = rest[rest.length - 1];
+			this.automationPage = page;
+			return page;
+		}
+
+		/** 5) 一个标签都没有，才新开 */
+		const page = await browser.newPage();
 		this.automationPage = page;
 		/** 让电脑前的人也能看到登录过程（用户是远程点的，说明人就在等） */
 		await page.bringToFront().catch(() => {});
@@ -922,10 +1127,15 @@ export class ScriptWorker {
 
 /** 支持「远程选课」的平台：识别域名与各自的课程列表页 */
 const COURSE_PLATFORMS = [
-	{ id: 'chaoxing', match: /(^|\.)chaoxing\.com$/i, listUrl: 'http://i.chaoxing.com/base' },
-	{ id: 'zhihuishu', match: /(^|\.)zhihuishu\.com$/i, listUrl: 'https://onlineweb.zhihuishu.com/onlinestuh5' },
-	{ id: 'zjy', match: /(^|\.)zjy2\.icve\.com\.cn$/i, listUrl: 'https://zjy2.icve.com.cn/study/index' },
-	{ id: 'icve', match: /(^|\.)icve\.com\.cn$/i, listUrl: 'https://mooc.icve.com.cn/cms/' }
+	{ id: 'chaoxing', label: '超星学习通', match: /(^|\.)chaoxing\.com$/i, listUrl: 'http://i.chaoxing.com/base' },
+	{
+		id: 'zhihuishu',
+		label: '智慧树',
+		match: /(^|\.)zhihuishu\.com$/i,
+		listUrl: 'https://onlineweb.zhihuishu.com/onlinestuh5'
+	},
+	{ id: 'zjy', label: '职教云', match: /(^|\.)zjy2\.icve\.com\.cn$/i, listUrl: 'https://zjy2.icve.com.cn/study/index' },
+	{ id: 'icve', label: '智慧职教', match: /(^|\.)icve\.com\.cn$/i, listUrl: 'https://mooc.icve.com.cn/cms/' }
 ];
 
 export function detectCoursePlatform(url: string): (typeof COURSE_PLATFORMS)[number] | undefined {
@@ -1060,7 +1270,8 @@ export async function launchBrowser({
 	browserInfo,
 	uid,
 	config,
-	onLaunch
+	onLaunch,
+	onAutomationDone
 }: Required<Pick<LaunchOptions, 'executablePath' | 'headless' | 'args'>> & {
 	/** 用户数据目录 */
 	userDataDir: string;
@@ -1079,6 +1290,13 @@ export async function launchBrowser({
 	uid: string;
 	config?: BrowserConfig;
 	onLaunch?: (browser: BrowserContext) => void;
+	/**
+	 * 启动时自动跑的自动化程序结束后的回调
+	 *
+	 * 把「登录后最终停在哪一页 / 落在哪个平台」交回给 worker：
+	 * 远程端随后要点「选课」时，就不用猜去哪儿读课程了。
+	 */
+	onAutomationDone?: (result: { page?: Page; platformId?: string }) => void;
 }) {
 	return new Promise<void>((resolve, reject) => {
 		/** 握手耗时参考：全新 profile 约 0.5~2 秒；已有大量会话/扩展的 profile 可达 10~15 秒 */
@@ -1173,7 +1391,7 @@ export async function launchBrowser({
 					browserNetworkRoute(authToken, browser);
 
 					// 运行自动化程序
-					await runAutomationScripts({ browser, automationScripts, serverPort, step });
+					await runAutomationScripts({ browser, automationScripts, serverPort, step, onDone: onAutomationDone });
 
 					await step('浏览器初始化完成。', { loading: false });
 					console.log('浏览器初始化全部完成');
@@ -1213,42 +1431,75 @@ function transformScriptConfigToRaw(configs: AS['configs']) {
 /**
  * 运行自动化程序
  */
-async function runAutomationScripts(opts: {
+export async function runAutomationScripts(opts: {
 	browser: BrowserContext;
 	serverPort: number;
 	automationScripts: AS[];
 	step: (tips: string | string[], opts?: { loading?: boolean; warn?: boolean }) => Promise<void>;
-}) {
-	const { automationScripts, browser, serverPort, step } = opts;
+	/** 跑完后把「落在哪一页 / 哪个平台」交回 worker，供远程端读课程、选课直接复用 */
+	onDone?: (result: { page?: Page; platformId?: string }) => void;
+}) {	const { automationScripts, browser, serverPort, step, onDone } = opts;
 
-	if (automationScripts.length) {
-		// 执行自动化程序
-		for (const ps of automationScripts) {
-			await step(`正在执行自动化程序 - ${ps.name} ...`);
-			const configs = transformScriptConfigToRaw(ps.configs);
+	if (!automationScripts.length) return;
 
-			for (const script of AutomationScripts) {
-				if (script.name === ps.name) {
-					script.on('script-data', (...msg) => console.log(...msg));
-					script.on('script-error', (...msg) =>
-						console.error('自动化程序错误：', ...msg.map((m) => ScriptWorker.getTransformedErrorMessage(m)))
-					);
-					try {
-						await script.run(await browser.newPage(), configs, {
-							ocrApiUrl: `http://localhost:${serverPort}/ocr`,
-							ocrApiImageKey: 'image',
-							detBackgroundKey: 'det_bg',
-							detTargetKey: 'det_target'
-						});
-					} catch (err) {
-						console.error(
-							'自动化程序错误：',
-							ScriptWorker.getTransformedErrorMessage(err instanceof Error ? err.message : String(err))
-						);
-					}
-					break;
-				}
+	/**
+	 * 挑一张页交给脚本：优先复用启动时留下的空白导航页。
+	 *
+	 * 以前这里一律 `browser.newPage()`，浏览器里就会多出一张 about:blank，
+	 * 用户从远程端看过来就是「莫名多了个空白网页」。
+	 */
+	const pickScriptPage = async (): Promise<Page> => {
+		const alive = browser.pages().filter((item) => !item.isClosed());
+		const blank = alive.find((item) => !item.url() || item.url() === 'about:blank');
+		return blank || alive[alive.length - 1] || (await browser.newPage());
+	};
+
+	for (const ps of automationScripts) {
+		await step(`正在执行自动化程序 - ${ps.name} ...`);
+		const configs = transformScriptConfigToRaw(ps.configs);
+
+		for (const script of AutomationScripts) {
+			if (script.name !== ps.name) continue;
+
+			script.on('script-data', (...msg) => console.log(...msg));
+			script.on('script-error', (...msg) =>
+				console.error('自动化程序错误：', ...msg.map((m) => ScriptWorker.getTransformedErrorMessage(m)))
+			);
+
+			const page = await pickScriptPage();
+
+			try {
+				await script.run(page, configs, {
+					ocrApiUrl: `http://localhost:${serverPort}/ocr`,
+					ocrApiImageKey: 'image',
+					detBackgroundKey: 'det_bg',
+					detTargetKey: 'det_target'
+				});
+			} catch (err) {
+				console.error(
+					'自动化程序错误：',
+					ScriptWorker.getTransformedErrorMessage(err instanceof Error ? err.message : String(err))
+				);
 			}
+
+			/** 登录脚本常自己开新标签（扫码 / 滑块 / 单点登录），落地页未必是传进去那张 */
+			const alive = browser.pages().filter((item) => !item.isClosed());
+			const landed = alive
+				.slice()
+				.reverse()
+				.find((item) => detectCoursePlatform(item.url()));
+			const platformId = detectCoursePlatform(landed?.url() || '')?.id;
+
+			/**
+			 * 脚本什么都没干就结束（配置错、直接抛错等）会留下一张纯空白页：
+			 * 既没有内容也没有平台信息，关掉比留着干净（仅当还有别的页面可留）。
+			 */
+			if (!landed && alive.length > 1 && !page.isClosed() && (!page.url() || page.url() === 'about:blank')) {
+				await page.close().catch(() => {});
+			}
+
+			onDone?.({ page: landed, platformId });
+			break;
 		}
 	}
 }

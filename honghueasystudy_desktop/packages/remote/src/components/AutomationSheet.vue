@@ -237,6 +237,7 @@ import {
 	enterCourseById,
 	fetchAutomation,
 	loadScripts,
+	probeCourses,
 	refreshCourseList,
 	runLoginScript,
 	state,
@@ -257,6 +258,8 @@ const current = computed<RemoteScript | undefined>(() => scripts.value.find((ite
 const form = reactive<Record<string, any>>({});
 const scriptsError = ref('');
 const entering = ref('');
+/** 打开面板时静默读一次课程：有反馈，用户才不会以为「一门课都没有」 */
+const probing = ref(false);
 
 /** 正在执行登录（本地请求在途，或后端任务处于 running） */
 const running = computed(() => state.automationBusy[uid.value] === 'run' || job.value?.state === 'running');
@@ -315,6 +318,7 @@ function fieldsHint(script: RemoteScript): string {
 const emptyText = computed(() => {
 	if (!browser.value || browser.value.status !== 'launched') return '浏览器未运行，请先在详情里启动浏览器';
 	if (running.value) return '登录完成后会自动读取课程列表…';
+	if (probing.value) return '正在读取课程列表…';
 	if (job.value && job.value.state === 'error') return '登录未完成，课程列表暂不可用';
 	if (job.value && job.value.hint) return job.value.hint;
 	return '还没有课程列表。登录完成后会自动读取，也可以点右上角「刷新」。';
@@ -378,6 +382,25 @@ onMounted(async () => {
 	}
 
 	await fetchAutomation(uid.value);
+
+	/**
+	 * 浏览器开着「启动后自动运行自动程序」时，课程页通常早就打开了：
+	 * 进来静默探一次（不导航、不弹提示），能读就直接列出来，省一步「刷新」。
+	 */
+	if (!job.value || !job.value.courses.length) {
+		/**
+		 * 状态同步有延迟，不能只认 `launched`：只要浏览器还没关就探一次。
+		 * 探测本身有 catch，浏览器没起来时静默失败，不影响面板。
+		 */
+		if (browser.value && browser.value.status !== 'closed') {
+			probing.value = true;
+			try {
+				await probeCourses(uid.value);
+			} finally {
+				probing.value = false;
+			}
+		}
+	}
 
 	pollTimer = setInterval(() => {
 		if (job.value && job.value.state === 'running') fetchAutomation(uid.value);

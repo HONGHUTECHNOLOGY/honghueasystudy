@@ -778,6 +778,29 @@ export async function refreshCourseList(uid: string) {
 	}
 }
 
+/**
+ * 静默探测课程列表（不弹提示）
+ *
+ * 浏览器配了「启动后自动运行自动程序」时，课程页早就开着；打开面板先探一次，
+ * 能读就直接列出来，用户不必先点「刷新」。
+ *
+ * 不会动用户正在看的页面；只有当前页根本不是网页（about:blank / 只剩导航页）时，
+ * 才会按平台打开课程列表 —— 那种页面没什么可打扰的，不打开就永远读不到课程。
+ */
+export async function probeCourses(uid: string): Promise<void> {
+	try {
+		const res = await api.refreshCourses(uid, false);
+		const job = res && res.job;
+		if (!job) return;
+		/** 已经有课程就别覆盖，免得把刚跑完登录的结果冲掉 */
+		const existing = state.automation[uid];
+		if (existing && existing.courses.length) return;
+		state.automation[uid] = job;
+	} catch {
+		/* 探测失败保持安静，用户点「刷新」时会给明确错误 */
+	}
+}
+
 /** 进入课程，之后由桌面端扩展里的刷课脚本接管 */
 export async function enterCourseById(uid: string, id: string, name: string) {
 	state.automationBusy[uid] = 'enter';
