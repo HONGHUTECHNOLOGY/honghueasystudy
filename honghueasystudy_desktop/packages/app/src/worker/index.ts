@@ -1034,12 +1034,15 @@ export class ScriptWorker {
 		 */
 		let platform = detectCoursePlatform(page.url()) || this.rememberedPlatform() || (await this.platformFromCookies());
 
-		const extract = async (target: Page) =>
-			target
+		const extract = async (target: Page) => {
+			/** 先把列表滚到底：智慧树的共享课就藏在懒加载的第二批里 */
+			await autoScrollForCourses(target);
+			return target
 				.evaluate(extractCoursesInPage, {
 					platform: detectCoursePlatform(target.url())?.id || platform?.id || ''
 				})
 				.catch(() => undefined);
+		};
 
 		let items: { id: string; name: string; url: string; label?: string }[] = [];
 		let pageTitle = '';
@@ -1171,6 +1174,8 @@ export class ScriptWorker {
 			 * （用户刚登录完就点课程时，课程页的异步渲染经常刚好重载一次）。
 			 */
 			const name = wantName;
+			/** 懒加载列表（智慧树共享课）不滚到底抽不到，重定位前同样先滚 */
+			await autoScrollForCourses(page);
 			const again = await page.evaluate(extractCoursesInPage, {
 				platform: detectCoursePlatform(page.url())?.id || ''
 			});
@@ -1510,6 +1515,71 @@ export function isBookmarksPageUrl(url: string, serverPort?: number): boolean {
  * - 同一门课常同时存在封面链接和标题链接，必须按 URL + 名称去重；
  * - 抽到的元素就地打 `data-hh-course` 标记，供「进入课程」按标记点击。
  */
+/**
+ * 课程列表常常「滚到底才加载下一批」，抽取前先把列表滚到底并等数量稳定。
+ *
+ * 智慧树 AI 教学中心就是典型：首屏只渲染 16 门 AI 智课，3 门共享课必须把列表滚到底
+ * 才会出现在 DOM 里。而且它的滚动发生在内层 `.el-scrollbar__wrap` 上，
+ * `window.scrollTo` 完全无效（页面本身高度就等于视口高度），必须找到真正的滚动容器。
+ */
+export async function autoScrollForCourses(page: Page, maxRounds = 10): Promise<void> {
+	const countCards = () =>
+		page
+			.evaluate(() => document.querySelectorAll('div.course-card, [class*="course-card"]').length)
+			.catch(() => 0);
+
+	const scrollToEnd = () =>
+		page
+			.evaluate(() => {
+				/** 找最像列表的滚动容器：纵向可滚，且可滚动距离最大 */
+				const found: { el: HTMLElement; score: number }[] = [];
+				const all = document.querySelectorAll('div,main,section,ul');
+				for (let i = 0; i < all.length; i++) {
+					const el = all[i] as HTMLElement;
+					if (el.scrollHeight <= el.clientHeight + 40) continue;
+					const style = getComputedStyle(el);
+					if (!/(auto|scroll)/.test(style.overflowY)) continue;
+					found.push({ el: el, score: el.scrollHeight - el.clientHeight });
+				}
+				found.sort((a, b) => b.score - a.score);
+				if (found.length) {
+					found[0].el.scrollTop = found[0].el.scrollHeight;
+					return true;
+				}
+				/** 没有内层容器就退到整页滚动 */
+				window.scrollTo(0, document.documentElement.scrollHeight);
+				return false;
+			})
+			.catch(() => false);
+
+	let last = await countCards();
+	/** 页面里一张课程卡片都没有：不是列表页（视频页/空白页），滚也没用 */
+	if (!last) {
+		await scrollToEnd();
+		await page.waitForTimeout(700);
+		last = await countCards();
+		if (!last) return;
+	}
+
+	let stable = 0;
+	for (let round = 0; round < maxRounds; round++) {
+		const hadScroller = await scrollToEnd();
+		await page.waitForTimeout(hadScroller ? 700 : 400);
+		const now = await countCards();
+		if (now === last) {
+			stable++;
+			/**
+			 * 连续两轮数量不变才认为加载到底：首屏滚到底往往只是「发出请求」，
+			 * 数据要几百毫秒才回来，只等一轮容易把共享课这种懒加载批次漏掉。
+			 */
+			if (stable >= 2) break;
+		} else {
+			stable = 0;
+			last = now;
+		}
+	}
+}
+
 export function extractCoursesInPage(arg: { platform: string }): {
 	items: { id: string; name: string; url: string; label?: string }[];
 	pageTitle: string;
