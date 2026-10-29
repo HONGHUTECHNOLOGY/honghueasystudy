@@ -11,7 +11,9 @@ import { CommandBridge, CommandResultPayload } from './command';
 import { detectNetwork, NetworkReport } from './network';
 import { buildLanUrls, buildLanUrlsSync, normalizeClientIp } from './network.addr';
 import { createQRCodeSafe, QRCodeResult } from './qr';
+import { AutomationJob, AutomationRunner } from './automation';
 import { RemoteServer, RemoteSnapshot, ServiceInfo } from './server';
+import { RemoteScriptInfo } from './script-catalog';
 import { CloudflaredTunnel, TunnelStatus } from './tunnel';
 
 const logger = Logger('remote-control');
@@ -20,6 +22,9 @@ type RemoteControlStore = typeof OriginalAppStore.remoteControl;
 
 /** 公网检测结果缓存时长 */
 const NETWORK_CACHE_TTL = 5 * 60 * 1000;
+
+/** 自动化任务结构定义在 automation.ts，这里重新导出供 server.ts 引用 */
+export type { AutomationJob };
 
 export interface RemoteControlStatus {
 	running: boolean;
@@ -78,6 +83,8 @@ export class RemoteControlService {
 	private stateTimer?: ReturnType<typeof setInterval>;
 	private networkReport?: { report: NetworkReport; ts: number };
 	private listeners: ((status: RemoteControlStatus) => void)[] = [];
+	/** 「登录 → 选课」编排（惰性创建，内部持有每个实例的任务状态） */
+	private _automation?: AutomationRunner;
 	private inited = false;
 
 	/**
@@ -120,6 +127,19 @@ export class RemoteControlService {
 			this._bridge = new CommandBridge(() => this.window);
 		}
 		return this._bridge;
+	}
+
+	/** 远程自动化编排：命令走同一条 CommandBridge，结果通过 SSE 推送 */
+	private get automation(): AutomationRunner {
+		if (!this._automation) {
+			this._automation = new AutomationRunner(
+				(action, payload) => this.bridge.dispatch(action, payload),
+				(job) => {
+					if (this.server) this.server.broadcast('automation', job);
+				}
+			);
+		}
+		return this._automation;
 	}
 
 	private get tunnel(): CloudflaredTunnel {
@@ -197,7 +217,12 @@ export class RemoteControlService {
 					listSessions: () => this.auth.list(),
 					revokeSession: (id) => this.auth.revoke(id),
 					refreshCode: () => this.auth.getCode(),
-					requestStateRefresh: () => this.requestStateRefresh()
+					requestStateRefresh: () => this.requestStateRefresh(),
+					listScripts: () => this.listScripts(),
+					getAutomation: (uid) => this.getAutomation(uid),
+					startAutomation: (opts) => this.startAutomation(opts),
+					refreshCourses: (opts) => this.refreshCourses(opts),
+					enterCourse: (opts) => this.enterCourse(opts)
 				},
 				this.bridge
 			);
@@ -273,9 +298,60 @@ export class RemoteControlService {
 	handleState(snapshot: RemoteSnapshot): void {
 		this.lastStateAt = Date.now();
 		this.snapshot = snapshot;
+		/** 浏览器关闭/重开：登录态与课程标记都失效，清掉旧的自动化结果，避免远程看到过期的课程列表 */
+		/** 浏览器关闭：登录态与课程标记全部失效，清掉旧任务，避免远程端看到过期的课程列表 */
+		try {
+			snapshot.browsers.forEach((item) => {
+				if (item.status === 'closed') this.automation.forget(item.uid);
+			});
+		} catch {
+			// 快照结构异常不影响状态下发
+		}
 		if (this.server) {
 			this.server.broadcast('state', snapshot);
 		}
+	}
+
+	// ---------------------------------------------------------------- 远程自动化
+
+	/** 远程台可选的自动化脚本（登录脚本目录） */
+	listScripts(): RemoteScriptInfo[] {
+		return this.automation.listScripts();
+	}
+
+	/** 某实例最近一次自动化任务 */
+	getAutomation(uid: string): AutomationJob | undefined {
+		return this.automation.get(uid);
+	}
+
+	/**
+	 * 远程触发登录脚本
+	 *
+	 * 两件事在这里完成：用最新快照校验浏览器是否就绪，然后把编排交给 AutomationRunner。
+	 * 登录本身要过滑块验证码、等跳转，几十秒到几分钟都可能，手机锁屏就会掐断 fetch，
+	 * 所以立刻返回 running，真实结果通过 SSE（automation）推给远程端。
+	 */
+	startAutomation(opts: { uid: string; name: string; configs?: Record<string, any> }): AutomationJob {
+		const uid = String((opts && opts.uid) || '');
+		const browser = this.snapshot ? this.snapshot.browsers.find((item) => item.uid === uid) : undefined;
+		if (!browser) throw new Error('浏览器实例不存在');
+
+		return this.automation.start({
+			uid,
+			name: String((opts && opts.name) || ''),
+			configs: (opts && opts.configs) || {},
+			browserStatus: browser.status
+		});
+	}
+
+	/** 重新读取课程列表（登录完成后的「刷新」按钮） */
+	refreshCourses(opts: { uid: string; refresh?: boolean }): Promise<AutomationJob> {
+		return this.automation.refresh(opts);
+	}
+
+	/** 进入课程（进入后由桌面端扩展里的刷课脚本接管） */
+	enterCourse(opts: { uid: string; id: string; name?: string }): Promise<{ url: string; title: string }> {
+		return this.automation.enter(opts);
 	}
 
 	/**

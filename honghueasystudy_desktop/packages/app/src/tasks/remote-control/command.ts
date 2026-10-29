@@ -3,8 +3,20 @@ import { Logger } from '../../logger';
 
 const logger = Logger('remote-command');
 
-/** 命令超时时间 */
+/** 命令超时时间（默认） */
 const COMMAND_TIMEOUT = 15000;
+
+/**
+ * 按动作覆盖的超时时间
+ *
+ * 登录要等验证码/滑块、跳转，慢的时候一分钟以上；选课要等页面渲染。
+ * 统一 15 秒会把正常流程判成超时，而命令其实还在跑，远程端只能反复点。
+ */
+const TIMEOUT_BY_ACTION: { [action: string]: number } = {
+	'script.run': 6 * 60 * 1000,
+	'course.list': 2 * 60 * 1000,
+	'course.enter': 2 * 60 * 1000
+};
 
 /** 允许远程执行的命令白名单 */
 export const ALLOWED_ACTIONS = [
@@ -14,7 +26,13 @@ export const ALLOWED_ACTIONS = [
 	'browser.batchLaunch',
 	'browser.batchClose',
 	'browser.getPages',
-	'browser.snapshot'
+	'browser.snapshot',
+	/** 运行自动化脚本（登录等），payload: { uid, name, configs } */
+	'script.run',
+	/** 读取课程列表，payload: { uid, refresh? } */
+	'course.list',
+	/** 进入课程，payload: { uid, id } */
+	'course.enter'
 ] as const;
 
 export type RemoteAction = (typeof ALLOWED_ACTIONS)[number];
@@ -67,7 +85,7 @@ export class CommandBridge {
 	}
 
 	/** 分发命令到渲染进程并等待结果 */
-	dispatch(action: string, payload: any = {}): Promise<any> {
+	dispatch(action: string, payload: any = {}, timeoutMs?: number): Promise<any> {
 		if (!isAllowedAction(action)) {
 			return Promise.reject(new Error('不支持的操作：' + action));
 		}
@@ -78,12 +96,13 @@ export class CommandBridge {
 		}
 
 		const id = `${Date.now()}-${++this.seq}`;
+		const timeout = timeoutMs || TIMEOUT_BY_ACTION[action] || COMMAND_TIMEOUT;
 
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.pending.delete(id);
 				reject(new Error('操作超时，请稍后重试'));
-			}, COMMAND_TIMEOUT);
+			}, timeout);
 
 			this.pending.set(id, { resolve, reject, timer });
 

@@ -155,6 +155,29 @@
 							class="spinner"
 						></span>
 					</div>
+
+					<!-- 远程自动化入口：登录脚本 + 选课（进入课程后交给刷课脚本） -->
+					<button
+						v-if="browser.status === 'launched'"
+						type="button"
+						class="automate"
+						@click="emit('automate')"
+					>
+						<span class="automate__icon">
+							<Icon
+								name="wand"
+								:size="16"
+							/>
+						</span>
+						<span class="automate__text">
+							<b>自动登录 / 选课</b>
+							<small class="faint">手机填账号 → 电脑执行 → 选课进入课程</small>
+						</span>
+						<Icon
+							name="chevron"
+							:size="15"
+						/>
+					</button>
 				</div>
 
 				<div class="col">
@@ -346,7 +369,7 @@ import {
 } from '../store';
 import { formatAgo, formatDuration } from '../utils';
 
-const emit = defineEmits<{ (e: 'close'): void }>();
+const emit = defineEmits<{ (e: 'close'): void; (e: 'automate'): void }>();
 
 const thumb = ref('');
 /** 连续拉图失败次数：失败时清掉旧图给出可见反馈，避免画面永远停格在过期截图上 */
@@ -907,6 +930,58 @@ async function bringToFront() {
 
 .actions .btn {
 	flex: 1;
+}
+
+/* 远程自动化入口：视觉上比普通按钮更「入口」，引导用户点进登录/选课 */
+.automate {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	width: 100%;
+	padding: 10px 11px;
+	border: 1px solid var(--line);
+	border-radius: 13px;
+	background: linear-gradient(135deg, rgba(124, 108, 255, 0.13), rgba(78, 168, 255, 0.06));
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	transition: border-color 0.16s var(--ease), transform 0.16s var(--ease);
+}
+
+.automate:active {
+	transform: scale(0.99);
+}
+
+.automate:hover {
+	border-color: var(--line-brand);
+}
+
+.automate__icon {
+	width: 30px;
+	height: 30px;
+	border-radius: 10px;
+	display: grid;
+	place-items: center;
+	flex: none;
+	background: var(--brand-soft);
+	color: var(--brand-text);
+}
+
+.automate__text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.automate__text b {
+	font-size: 12.5px;
+	font-weight: 600;
+}
+
+.automate__text small {
+	font-size: 10.5px;
 }
 
 /* ------------------------------------------------------------------ 页面 / 日志 */

@@ -5,7 +5,10 @@ import fs from 'fs';
 import { Logger } from '../../logger';
 import { RateLimiter, RemoteAuth, RemoteSession } from './auth';
 import { CommandBridge, isAllowedAction } from './command';
+import { RemoteScriptInfo } from './script-catalog';
 import { TunnelStatus } from './tunnel';
+/** 仅类型引用：import type 会被完全擦除，不会引入循环依赖 */
+import type { AutomationJob } from './index';
 
 const logger = Logger('remote-server');
 
@@ -63,6 +66,16 @@ export interface RemoteServerContext {
 	refreshCode(): string;
 	/** 催渲染进程立即上报一次快照（主进程定时器驱动，不依赖渲染进程的定时器） */
 	requestStateRefresh(): void;
+	/** 远程台可选的自动化脚本（登录脚本目录） */
+	listScripts(): RemoteScriptInfo[];
+	/** 某实例最近一次自动化任务 */
+	getAutomation(uid: string): AutomationJob | undefined;
+	/** 触发登录脚本（后台执行，立即返回 running 状态） */
+	startAutomation(opts: { uid: string; name: string; configs?: Record<string, any> }): AutomationJob;
+	/** 重新读取课程列表 */
+	refreshCourses(opts: { uid: string; refresh?: boolean }): Promise<AutomationJob>;
+	/** 进入课程 */
+	enterCourse(opts: { uid: string; id: string; name?: string }): Promise<{ url: string; title: string }>;
 }
 
 /** 快照缓存的有效期（ms） */
@@ -369,6 +382,86 @@ export class RemoteServer {
 			}
 		});
 
+		/** ---------- 远程自动化：登录脚本 → 选课 ---------- */
+
+		/** 可选的自动化脚本目录（名称 + 表单字段声明） */
+		app.get('/api/scripts', auth, (req, res) => {
+			try {
+				res.json({ ok: true, scripts: this.ctx.listScripts() });
+			} catch (e) {
+				logger.warn('读取自动化脚本目录失败：' + errText(e));
+				res.status(500).json({ ok: false, error: '读取脚本目录失败' });
+			}
+		});
+
+		app.get('/api/automation/:uid', auth, (req, res) => {
+			const uid = String(req.params.uid || '');
+			if (!uid) {
+				res.status(400).json({ ok: false, error: '缺少 uid' });
+				return;
+			}
+			res.json({ ok: true, job: this.ctx.getAutomation(uid) || null });
+		});
+
+		/**
+		 * 触发登录脚本
+		 *
+		 * 立刻返回 running 状态，真实结果通过 SSE 的 automation 事件推送；
+		 * 手机锁屏掐断请求也不会影响桌面端继续执行。
+		 */
+		app.post('/api/automation/run', auth, csrfGuard, (req, res) => {
+			if (!this.commandLimiter.take()) {
+				res.status(429).json({ ok: false, error: '操作过于频繁，请稍后再试' });
+				return;
+			}
+			const body = req.body || {};
+			try {
+				const job = this.ctx.startAutomation({
+					uid: String(body.uid || ''),
+					name: String(body.name || ''),
+					configs: body.configs && typeof body.configs === 'object' ? body.configs : {}
+				});
+				res.json({ ok: true, job });
+			} catch (e) {
+				res.status(400).json({ ok: false, error: errText(e) });
+			}
+		});
+
+		app.post('/api/automation/courses', auth, csrfGuard, async (req, res) => {
+			if (!this.commandLimiter.take()) {
+				res.status(429).json({ ok: false, error: '操作过于频繁，请稍后再试' });
+				return;
+			}
+			const body = req.body || {};
+			try {
+				const job = await this.ctx.refreshCourses({
+					uid: String(body.uid || ''),
+					refresh: body.refresh !== false
+				});
+				res.json({ ok: true, job });
+			} catch (e) {
+				res.status(500).json({ ok: false, error: errText(e) });
+			}
+		});
+
+		app.post('/api/automation/enter', auth, csrfGuard, async (req, res) => {
+			if (!this.commandLimiter.take()) {
+				res.status(429).json({ ok: false, error: '操作过于频繁，请稍后再试' });
+				return;
+			}
+			const body = req.body || {};
+			try {
+				const data = await this.ctx.enterCourse({
+					uid: String(body.uid || ''),
+					id: String(body.id || ''),
+					name: String(body.name || '')
+				});
+				res.json({ ok: true, data });
+			} catch (e) {
+				res.status(500).json({ ok: false, error: errText(e) });
+			}
+		});
+
 		app.get('/api/snapshot/:uid', auth, async (req, res) => {
 			const uid = String(req.params.uid || '');
 			if (!uid) {
@@ -493,6 +586,12 @@ function sanitizeServiceInfo(info: ServiceInfo) {
 		appVersion: info.appVersion,
 		deviceName: info.deviceName
 	};
+}
+
+/** 统一把异常转成一句人话 */
+function errText(e: any): string {
+	if (!e) return '未知错误';
+	return String(e && e.message ? e.message : e);
 }
 
 function getClientIp(req: express.Request): string {

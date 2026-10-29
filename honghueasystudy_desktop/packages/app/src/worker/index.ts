@@ -84,6 +84,13 @@ export class ScriptWorker {
 	private focusConflictLogged = false;
 	/** 每页最近一次被观测到在前台/可见的时间，用于「浏览器整体失焦」时回退 */
 	private pageActivity = new WeakMap<Page, { focusedAt: number; visibleAt: number }>();
+	/**
+	 * 远程自动化（登录 / 选课）专用页面
+	 *
+	 * 单独开一个标签跑登录，跑完留在这一页上读课程列表，不碰用户正在看的刷课页。
+	 * 登录态是按 context 共享的 Cookie，所以新标签同样已登录。
+	 */
+	private automationPage?: Page;
 	static langs?: Langs;
 	static lang: (key: keyof Langs, def?: string, replace?: Record<string, string>) => string = (key, def, replace) => {
 		const result = _get(ScriptWorker.langs, key, def);
@@ -621,6 +628,231 @@ export class ScriptWorker {
 		return best;
 	}
 
+	// ------------------------------------------------------------ 远程自动化
+
+	/**
+	 * 远程触发一次自动化脚本（登录类）
+	 *
+	 * 两个关键点：
+	 * 1. 这些脚本内部用 `emit('script-error')` 报错，**不抛异常**（cx/zhs 全是这个写法）。
+	 *    只 await run() 会把失败当成功，远程端看到「已完成」其实根本没登上，
+	 *    所以必须临时挂监听，把错误收集起来转成 reject。
+	 * 2. 配置来自手机端手填，需要按脚本声明的 configs 逐项校验（必填、类型），
+	 *    不能直接把请求体原样塞进去。
+	 */
+	async runAutomationScript(options: {
+		name: string;
+		configs?: Record<string, any>;
+	}): Promise<{ name: string; url: string; title: string; duration: number }> {
+		if (!this.browser) throw new Error('浏览器尚未启动');
+
+		const name = String((options && options.name) || '').trim();
+		if (!name) throw new Error('缺少脚本名称');
+
+		const script = AutomationScripts.find((item) => item.name === name);
+		if (!script) throw new Error('未知的自动化脚本：' + name);
+
+		const configs = this.buildAutomationConfig(script, (options && options.configs) || {});
+		const page = await this.acquireAutomationPage();
+
+		const errors: string[] = [];
+		const onError = (...args: any[]) => errors.push(args.map((item) => String(item)).join(' '));
+		const onData = (...args: any[]) => this.info(...args);
+
+		script.on('script-data', onData);
+		script.on('script-error', onError);
+
+		const startedAt = Date.now();
+		try {
+			this.info(`[远程] 开始执行自动化脚本：${name}（${page.url()}）`);
+			/**
+			 * AutomationScripts 是各脚本类型组成的联合，`run` 的 configs 被推导成
+			 * 具体字面量类型；这里的配置是按脚本声明动态构造的，只能放宽类型。
+			 */
+			await (script.run as any)(page, configs, {
+				ocrApiUrl: `http://localhost:${this.store?.server.port || 15319}/ocr`,
+				ocrApiImageKey: 'image',
+				detBackgroundKey: 'det_bg',
+				detTargetKey: 'det_target'
+			});
+		} catch (e) {
+			errors.push(e instanceof Error ? e.message : String(e));
+		} finally {
+			script.off('script-data', onData);
+			script.off('script-error', onError);
+		}
+
+		if (errors.length) {
+			const message = errors.join('；');
+			this.error('[远程] 自动化脚本失败：', message);
+			throw new Error(ScriptWorker.getTransformedErrorMessage(message));
+		}
+
+		const url = page.url();
+		const title = await page.title().catch(() => '');
+		this.info(`[远程] 自动化脚本执行完成：${name} → ${title || url}`);
+		return { name, url, title, duration: Date.now() - startedAt };
+	}
+
+	/**
+	 * 读取当前平台课程列表
+	 *
+	 * `refresh` 为 true 时先打开平台课程页（登录完成后手机端点「刷新课程列表」走这条），
+	 * 否则只在当前页面上抽取。抽取到的元素会就地打上 `data-hh-course` 标记，
+	 * 之后「进入课程」按标记点击 —— 这样对纯 JS 跳转、没有 href 的卡片也有效。
+	 */
+	async listCourses(options?: { refresh?: boolean }): Promise<{
+		platform: string;
+		pageUrl: string;
+		pageTitle: string;
+		courses: { id: string; name: string; url: string }[];
+		hint: string;
+	}> {
+		if (!this.browser) throw new Error('浏览器尚未启动');
+
+		const page = await this.acquireAutomationPage();
+		let platform = detectCoursePlatform(page.url());
+
+		if (options?.refresh !== false && platform) {
+			const target = platform.listUrl;
+			if (normalizeUrl(page.url()) !== normalizeUrl(target)) {
+				this.info(`[远程] 打开课程列表页：${target}`);
+				await page
+					.goto(target, { waitUntil: 'domcontentloaded', timeout: 45000 })
+					.catch((e: any) => this.warn('[远程] 打开课程列表页失败：', String(e && e.message ? e.message : e)));
+			}
+			platform = detectCoursePlatform(page.url()) || platform;
+			/** 课程列表大多是异步渲染，直接抽取会抽到空列表 */
+			await page.waitForTimeout(2500);
+		}
+
+		const result = await page.evaluate(extractCoursesInPage, { platform: platform?.id || '' });
+		const pageTitle = (result && result.pageTitle) || '';
+		const courses = (result && result.items) || [];
+
+		const hint = courses.length
+			? ''
+			: platform
+				? `未在${platform.id}课程页识别到课程（当前页面：${pageTitle || page.url()}）。请确认登录已完成，或在桌面端浏览器里手动打开课程列表后点「刷新」。`
+				: '当前页面不属于支持的教学平台，请先运行登录脚本。';
+
+		this.info(`[远程] 课程列表：识别到 ${courses.length} 门课程（${platform?.id || '未知平台'}）`);
+		return { platform: platform?.id || '', pageUrl: page.url(), pageTitle, courses, hint };
+	}
+
+	/** 进入指定课程（列表项由 listCourses 打标记，这里按标记点击或直接跳转） */
+	async enterCourse(options: { id: string; name?: string }): Promise<{ url: string; title: string }> {
+		if (!this.browser) throw new Error('浏览器尚未启动');
+
+		const id = String((options && options.id) || '').trim();
+		if (!id) throw new Error('缺少课程标识');
+
+		const page =
+			this.automationPage && !this.automationPage.isClosed() ? this.automationPage : await this.pickActivePage();
+		if (!page) throw new Error('没有可用的页面，请先运行登录脚本并刷新课程列表');
+
+		let handle = await page.$(`[data-hh-course="${id}"]`);
+		let directUrl = '';
+
+		if (!handle) {
+			/**
+			 * 页面在中途刷新/跳转过，之前的标记就没了。
+			 * 按课程名重新抽取一次再定位，比直接报「列表过期」体验好得多
+			 * （用户刚登录完就点课程时，课程页的异步渲染经常刚好重载一次）。
+			 */
+			const name = String((options && options.name) || '').trim();
+			const again = await page.evaluate(extractCoursesInPage, {
+				platform: detectCoursePlatform(page.url())?.id || ''
+			});
+			const hit = name ? again.items.find((item) => item.name === name) : undefined;
+			if (hit) {
+				directUrl = hit.url;
+				handle = await page.$(`[data-hh-course="${hit.id}"]`);
+			}
+			if (!directUrl && !handle) throw new Error('课程列表已过期，请重新刷新课程列表');
+		}
+
+		const before = this.browser.pages().length;
+
+		if (directUrl) {
+			this.info(`[远程] 按课程名重新定位并进入：${directUrl}`);
+			await page.goto(directUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+		} else {
+			const rawHref = await handle!.getAttribute('href');
+			if (rawHref && /^https?:/i.test(rawHref.trim())) {
+				const target = new URL(rawHref.trim(), page.url()).href;
+				this.info(`[远程] 进入课程：${target}`);
+				await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 45000 });
+			} else {
+				/** 没有 href 的卡片（Vue/React 站点靠 click 跳转）只能点 */
+				this.info('[远程] 课程卡片无直链，改为点击进入');
+				await handle!
+					.click({ timeout: 8000 })
+					.catch(() => handle!.evaluate((el) => (el as HTMLElement).click()).catch(() => {}));
+				await page.waitForTimeout(3000);
+
+				const pages = this.browser.pages();
+				if (pages.length > before) {
+					const popup = pages[pages.length - 1];
+					this.automationPage = popup;
+					await popup.waitForLoadState('domcontentloaded').catch(() => {});
+				}
+			}
+		}
+
+		const active = this.automationPage && !this.automationPage.isClosed() ? this.automationPage : page;
+		/** 进入课程后把这一页顶到最前，电脑前的人能直接看到刷课界面 */
+		await active.bringToFront().catch(() => {});
+		const title = await active.title().catch(() => '');
+		return { url: active.url(), title };
+	}
+
+	/** 校验并填充脚本配置：只接受脚本声明过的字段，必填缺失直接报错 */
+	private buildAutomationConfig(
+		script: (typeof AutomationScripts)[number],
+		input: Record<string, any>
+	): Record<string, any> {
+		const defs = ((script as any).configs || {}) as Record<string, Config>;
+		const configs: Record<string, any> = {};
+		const missing: string[] = [];
+
+		for (const key of Object.keys(defs)) {
+			const def = defs[key] || ({} as Config);
+			const hasInput = Object.prototype.hasOwnProperty.call(input || {}, key);
+			let value: any = hasInput ? input[key] : def.value;
+
+			if (def.type === 'number') {
+				value = value === '' || value === undefined || value === null ? '' : Number(value);
+				if (value !== '' && !Number.isFinite(value)) value = '';
+			} else if (def.type === 'switch') {
+				value = !!value;
+			} else if (typeof value === 'string') {
+				value = value.trim();
+			}
+
+			if (def.required && (value === '' || value === undefined || value === null)) {
+				missing.push(def.label || key);
+			}
+			configs[key] = value;
+		}
+
+		if (missing.length) throw new Error('请填写完整：' + missing.join('、'));
+		return configs;
+	}
+
+	/** 取（或新开）自动化专用页面：优先复用上次那页，避免每次登录都堆一个新标签 */
+	private async acquireAutomationPage(): Promise<Page> {
+		if (!this.browser) throw new Error('浏览器尚未启动');
+
+		if (this.automationPage && !this.automationPage.isClosed()) return this.automationPage;
+
+		const page = await this.browser.newPage();
+		this.automationPage = page;
+		/** 让电脑前的人也能看到登录过程（用户是远程点的，说明人就在等） */
+		await page.bringToFront().catch(() => {});
+		return page;
+	}
+
 	/** 取真正的前台页；判定不出时退回最新页面（与页面列表的选择保持一致） */
 	private async pickActivePage(): Promise<Page | undefined> {
 		const pages = this.browser?.pages() || [];
@@ -686,6 +918,120 @@ export class ScriptWorker {
 	error(...msg: any[]) {
 		console.error(bgRedBright(loggerPrefix()), ...msg);
 	}
+}
+
+/** 支持「远程选课」的平台：识别域名与各自的课程列表页 */
+const COURSE_PLATFORMS = [
+	{ id: 'chaoxing', match: /(^|\.)chaoxing\.com$/i, listUrl: 'http://i.chaoxing.com/base' },
+	{ id: 'zhihuishu', match: /(^|\.)zhihuishu\.com$/i, listUrl: 'https://onlineweb.zhihuishu.com/onlinestuh5' },
+	{ id: 'zjy', match: /(^|\.)zjy2\.icve\.com\.cn$/i, listUrl: 'https://zjy2.icve.com.cn/study/index' },
+	{ id: 'icve', match: /(^|\.)icve\.com\.cn$/i, listUrl: 'https://mooc.icve.com.cn/cms/' }
+];
+
+export function detectCoursePlatform(url: string): (typeof COURSE_PLATFORMS)[number] | undefined {
+	try {
+		const host = new URL(url).hostname;
+		return COURSE_PLATFORMS.find((item) => item.match.test(host));
+	} catch {
+		return undefined;
+	}
+}
+
+/** 只比较「协议 + 主机 + 路径」，忽略末尾斜杠与查询串，避免无意义的重复导航 */
+function normalizeUrl(url: string): string {
+	try {
+		const u = new URL(url);
+		return `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, '')}`.toLowerCase();
+	} catch {
+		return String(url || '').toLowerCase();
+	}
+}
+
+/**
+ * 页面内抽取课程列表（在浏览器里执行，不能引用外部变量）
+ *
+ * 踩过的坑写在这里：
+ * - 不能只看 `a[href]`：智慧树/职教云的课程卡片是 JS 跳转，没有 href；
+ * - 不能只按文本猜：导航栏里「我的课程」「全部课程」会被误判成课程；
+ * - 同一门课常同时存在封面链接和标题链接，必须按 URL + 名称去重；
+ * - 抽到的元素就地打 `data-hh-course` 标记，供「进入课程」按标记点击。
+ */
+export function extractCoursesInPage(arg: { platform: string }): {
+	items: { id: string; name: string; url: string }[];
+	pageTitle: string;
+} {
+	const BAD = /^(登录|注册|退出|注销|首页|帮助|下载|客户端|客服|更多|设置|消息|通知|购物车|充值|会员|全部课程|我的课程|课程中心|学习中心|返回|上一页|下一页|搜索)$/;
+	const COURSE_RX: { [key: string]: RegExp } = {
+		chaoxing: /(chaoxing\.com\/(mycourse|mooc[0-9]?-ans\/mycourse|visit\/interaction)|\/course\/[0-9]+)/i,
+		zhihuishu:
+			/(onlinestuh5|studyspace|studyvideoh5|studyplush5|fusioncourseh5|studywisdomh5|smartcoursestudent|ai-smart-course-student-pro|singleCourse)/i,
+		zjy: /(zjy2\.icve\.com\.cn\/study)/i,
+		icve: /(icve\.com\.cn\/(cms|course)|courseInfo)/i
+	};
+
+	const clean = (text: string) => String(text || '').replace(/\s+/g, ' ').trim();
+	const items: { id: string; name: string; url: string }[] = [];
+	const seenUrl: { [key: string]: boolean } = {};
+	const seenName: { [key: string]: boolean } = {};
+	const platformRx = COURSE_RX[arg && arg.platform ? arg.platform : ''];
+
+	const push = (name: string, url: string, el: Element) => {
+		const title = clean(name);
+		if (!title || title.length < 2 || title.length > 60) return;
+		if (BAD.test(title)) return;
+		if (/^[0-9\s.:%+-]+$/.test(title)) return;
+		if (seenName[title]) return;
+		if (url && seenUrl[url]) return;
+
+		seenName[title] = true;
+		if (url) seenUrl[url] = true;
+
+		const id = 'c' + (items.length + 1);
+		(el as HTMLElement).setAttribute('data-hh-course', id);
+		items.push({ id: id, name: title, url: url });
+	};
+
+	/** 1) 有直链的课程条目 */
+	const anchors = Array.prototype.slice.call(document.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+	for (const anchor of anchors) {
+		if (items.length >= 30) break;
+		const raw = anchor.getAttribute('href') || '';
+		if (!raw || raw.indexOf('javascript:') === 0 || raw === '#') continue;
+
+		let abs = '';
+		try {
+			abs = new URL(raw, location.href).href;
+		} catch {
+			continue;
+		}
+		if (!/^https?:/i.test(abs)) continue;
+
+		const matched = platformRx ? platformRx.test(abs) : false;
+		const generic = /course|kecheng|interaction|study/i.test(abs);
+		if (!matched && !generic) continue;
+
+		const img = anchor.querySelector('img') as HTMLImageElement | null;
+		const name = clean(anchor.textContent || '') || anchor.getAttribute('title') || (img ? clean(img.alt) : '');
+		push(name, abs, anchor);
+	}
+
+	/** 2) 没有直链的卡片（JS 跳转站点）：只在链接里一无所获时兜底 */
+	if (items.length === 0) {
+		const nodes = Array.prototype.slice.call(
+			document.querySelectorAll('[class*="course" i], [class*="kecheng" i]')
+		) as HTMLElement[];
+		for (const node of nodes) {
+			if (items.length >= 30) break;
+			if (node.getAttribute('data-hh-course')) continue;
+			/** 只取最内层的卡片，否则外层容器会带着整页文字被当成一门课 */
+			if (node.querySelector('[class*="course" i], [class*="kecheng" i]')) continue;
+			const text = clean(node.textContent || '');
+			if (text.length < 4 || text.length > 60) continue;
+			push(text, '', node);
+		}
+	}
+
+	return { items: items, pageTitle: document.title || '' };
 }
 
 /** 格式化浏览器拓展启动参数 */

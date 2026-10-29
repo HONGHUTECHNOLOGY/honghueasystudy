@@ -59,6 +59,46 @@ export interface ServiceInfo {
 
 export type AuthMode = 'pair' | 'password' | 'none';
 
+/** 自动化脚本的表单字段（来自桌面端脚本声明） */
+export interface RemoteScriptField {
+	key: string;
+	label: string;
+	type: 'text' | 'password' | 'number' | 'textarea' | 'select' | 'switch';
+	required: boolean;
+	placeholder?: string;
+	options?: { label: string; value: any }[];
+	value?: any;
+	max?: number;
+	min?: number;
+}
+
+export interface RemoteScript {
+	name: string;
+	icon: string;
+	fields: RemoteScriptField[];
+}
+
+export interface RemoteCourse {
+	id: string;
+	name: string;
+	url: string;
+}
+
+/** 登录 → 选课 的自动化任务状态 */
+export interface AutomationJob {
+	uid: string;
+	name: string;
+	state: 'idle' | 'running' | 'done' | 'error';
+	message: string;
+	startedAt: number;
+	finishedAt: number;
+	updatedAt: number;
+	courses: RemoteCourse[];
+	platform: string;
+	pageUrl: string;
+	hint: string;
+}
+
 export interface PingResult {
 	ok: boolean;
 	authed: boolean;
@@ -128,6 +168,34 @@ export const api = {
 		request<{ ok: boolean; data: any }>('/api/command', {
 			method: 'POST',
 			body: JSON.stringify({ action, payload })
+		}),
+
+	/** 自动化脚本目录（登录脚本 + 表单字段） */
+	scripts: () => request<{ ok: boolean; scripts: RemoteScript[] }>('/api/scripts'),
+
+	/** 某实例最近一次自动化任务（登录进度 / 课程列表） */
+	automation: (uid: string) =>
+		request<{ ok: boolean; job: AutomationJob | null }>(`/api/automation/${encodeURIComponent(uid)}`),
+
+	/** 触发登录脚本：立即返回 running，结果走 SSE */
+	runAutomation: (uid: string, name: string, configs: Record<string, any>) =>
+		request<{ ok: boolean; job: AutomationJob }>('/api/automation/run', {
+			method: 'POST',
+			body: JSON.stringify({ uid, name, configs })
+		}),
+
+	/** 重新读取课程列表 */
+	refreshCourses: (uid: string, refresh = true) =>
+		request<{ ok: boolean; job: AutomationJob }>('/api/automation/courses', {
+			method: 'POST',
+			body: JSON.stringify({ uid, refresh })
+		}),
+
+	/** 进入课程（之后由桌面端刷课脚本接管） */
+	enterCourse: (uid: string, id: string, name: string) =>
+		request<{ ok: boolean; data: { url: string; title: string } }>('/api/automation/enter', {
+			method: 'POST',
+			body: JSON.stringify({ uid, id, name })
 		})
 };
 

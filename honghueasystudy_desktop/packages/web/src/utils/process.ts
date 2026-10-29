@@ -242,6 +242,16 @@ export class Process extends EventEmitter {
 	 * 子进程侧通过 replyId 回传，见 packages/app/script.js。
 	 */
 	callWorker(event: string, ...args: any[]): Promise<any> {
+		return this.callWorkerTimeout(event, args, 15000);
+	}
+
+	/**
+	 * 带自定义超时的 RPC
+	 *
+	 * 远程登录脚本要处理验证码/滑块、跳转、等待登录态，一分钟以上很正常；
+	 * 沿用 15 秒会在脚本还在跑的时候先报超时，用户只能重复点，反而制造并发登录。
+	 */
+	callWorkerTimeout(event: string, args: any[], timeoutMs: number): Promise<any> {
 		return new Promise((resolve, reject) => {
 			const shell = this.shell;
 			if (!shell || !shell.connected) {
@@ -268,7 +278,7 @@ export class Process extends EventEmitter {
 			const timer = setTimeout(() => {
 				cleanup();
 				reject(new Error('操作超时，可能是浏览器页面无响应'));
-			}, 15000);
+			}, timeoutMs);
 
 			cleanup = () => {
 				clearTimeout(timer);

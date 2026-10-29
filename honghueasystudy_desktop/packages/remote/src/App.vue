@@ -126,7 +126,13 @@
 
 		<DetailSheet
 			v-if="ui.detailUid"
-			@close="ui.detailUid = ''"
+			@close="closeDetail"
+			@automate="ui.automationOpen = true"
+		/>
+
+		<AutomationSheet
+			v-if="ui.detailUid && ui.automationOpen"
+			@close="ui.automationOpen = false"
 		/>
 	</div>
 </template>
@@ -140,6 +146,7 @@ import AboutView from './components/AboutView.vue';
 import TabBar from './components/TabBar.vue';
 import ToastStack from './components/ToastStack.vue';
 import DetailSheet from './components/DetailSheet.vue';
+import AutomationSheet from './components/AutomationSheet.vue';
 import Icon from './components/Icon.vue';
 import { NAV_ITEMS, findNav } from './nav';
 import { bootstrap, refreshManually, state, ui } from './store';
@@ -158,6 +165,12 @@ let ticker: ReturnType<typeof setInterval> | undefined;
 const agoText = computed(() => (state.lastUpdate ? formatAgo(state.lastUpdate, now.value) + '同步' : ''));
 
 const refreshing = ref(false);
+
+/** 关闭详情时连带收起自动化面板，避免下次点开别的实例时残留 */
+function closeDetail() {
+	ui.automationOpen = false;
+	ui.detailUid = '';
+}
 
 async function doRefresh() {
 	if (refreshing.value) return;

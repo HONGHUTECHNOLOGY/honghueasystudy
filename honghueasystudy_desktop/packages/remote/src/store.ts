@@ -1,5 +1,14 @@
 import { reactive } from 'vue';
-import { api, AuthError, BrowserSnapshot, RemoteSnapshot, ServiceInfo, TunnelStatus } from './api';
+import {
+	api,
+	AuthError,
+	AutomationJob,
+	BrowserSnapshot,
+	RemoteScript,
+	RemoteSnapshot,
+	ServiceInfo,
+	TunnelStatus
+} from './api';
 import { copyText } from './utils';
 
 export interface ToastItem {
@@ -39,6 +48,12 @@ interface State {
 	 * 这里改成跟踪快照自身的时间戳是否推进。
 	 */
 	snapshotAt: number;
+	/** 自动化脚本目录（登录脚本 + 字段声明） */
+	scripts: RemoteScript[];
+	/** 每个实例最近一次「登录 → 选课」任务 */
+	automation: { [uid: string]: AutomationJob };
+	/** 自动化相关请求的进行中标记：uid → run / courses / enter */
+	automationBusy: { [uid: string]: 'run' | 'courses' | 'enter' };
 }
 
 export const state = reactive<State>({
@@ -60,13 +75,18 @@ export const state = reactive<State>({
 	toasts: [],
 	pending: {},
 	lastUpdate: 0,
-	snapshotAt: 0
+	snapshotAt: 0,
+	scripts: [],
+	automation: {},
+	automationBusy: {}
 });
 
 /** 界面态（与业务数据分开） */
 export const ui = reactive({
 	tab: 'home' as 'home' | 'logs' | 'about',
 	detailUid: '',
+	/** 是否打开了「自动登录 / 选课」面板（挂在当前详情实例上） */
+	automationOpen: false,
 	theme: 'auto' as ThemeMode
 });
 
@@ -405,6 +425,16 @@ export function connect() {
 		} catch {}
 	});
 
+	/** 登录脚本跑完 / 课程列表刷新完成：桌面端主动推送，不必等轮询 */
+	source.addEventListener('automation', (event: MessageEvent) => {
+		try {
+			const job = JSON.parse(event.data) as AutomationJob;
+			if (!job || !job.uid) return;
+			state.automation[job.uid] = job;
+			if (job.state !== 'running') stopAutomationPoll(job.uid);
+		} catch {}
+	});
+
 	source.addEventListener('revoked', (event: MessageEvent) => {
 		let reason = '连接已被断开，请重新配对';
 		try {
@@ -653,5 +683,115 @@ export async function closeAllBrowsers() {
 		targets.forEach((b) => optimistic.delete(b.uid));
 		await refresh();
 		throw e;
+	}
+}
+
+// ------------------------------------------------------------------ 自动化（登录 → 选课）
+
+/** 进行中的自动化轮询：SSE 断线时仍能看到登录结果 */
+const automationTimers = new Map<string, ReturnType<typeof setInterval>>();
+
+/** 轮询上限：登录 + 选课最坏也就几分钟，超时后停掉，避免后台常驻 */
+const AUTOMATION_POLL_LIMIT = 8 * 60 * 1000;
+
+function startAutomationPoll(uid: string): void {
+	if (automationTimers.has(uid)) return;
+
+	const startedAt = Date.now();
+	const timer = setInterval(async () => {
+		if (Date.now() - startedAt > AUTOMATION_POLL_LIMIT) {
+			stopAutomationPoll(uid);
+			return;
+		}
+		const job = await fetchAutomation(uid);
+		if (!job || job.state !== 'running') stopAutomationPoll(uid);
+	}, 3000);
+
+	automationTimers.set(uid, timer);
+}
+
+function stopAutomationPoll(uid: string): void {
+	const timer = automationTimers.get(uid);
+	if (timer) {
+		clearInterval(timer);
+		automationTimers.delete(uid);
+	}
+}
+
+/** 拉取脚本目录（登录脚本 + 字段声明），只成功拉一次 */
+export async function loadScripts(force = false): Promise<RemoteScript[]> {
+	if (!force && state.scripts.length > 0) return state.scripts;
+	try {
+		const res = await api.scripts();
+		state.scripts = res.scripts || [];
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		else toast(e instanceof Error ? e.message : String(e), 'error');
+	}
+	return state.scripts;
+}
+
+/** 拉取某实例的自动化任务状态 */
+export async function fetchAutomation(uid: string): Promise<AutomationJob | null> {
+	try {
+		const res = await api.automation(uid);
+		if (res.job) state.automation[uid] = res.job;
+		return res.job;
+	} catch {
+		return null;
+	}
+}
+
+/** 触发登录脚本（配置为手机端手填） */
+export async function runLoginScript(uid: string, name: string, configs: Record<string, any>) {
+	state.automationBusy[uid] = 'run';
+	try {
+		const res = await api.runAutomation(uid, name, configs);
+		if (res.job) state.automation[uid] = res.job;
+		startAutomationPoll(uid);
+		toast('登录脚本已开始执行', 'success');
+		return res.job;
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		else toast(e instanceof Error ? e.message : String(e), 'error');
+		throw e;
+	} finally {
+		delete state.automationBusy[uid];
+	}
+}
+
+/** 重新读取课程列表 */
+export async function refreshCourseList(uid: string) {
+	state.automationBusy[uid] = 'courses';
+	try {
+		const res = await api.refreshCourses(uid, true);
+		if (res.job) state.automation[uid] = res.job;
+		const count = res.job ? res.job.courses.length : 0;
+		toast(count ? `识别到 ${count} 门课程` : '没有识别到课程', count ? 'success' : 'error');
+		return res.job;
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		else toast(e instanceof Error ? e.message : String(e), 'error');
+		throw e;
+	} finally {
+		delete state.automationBusy[uid];
+	}
+}
+
+/** 进入课程，之后由桌面端扩展里的刷课脚本接管 */
+export async function enterCourseById(uid: string, id: string, name: string) {
+	state.automationBusy[uid] = 'enter';
+	try {
+		const res = await api.enterCourse(uid, id, name);
+		toast(`已进入课程：${(res.data && (res.data.title || res.data.url)) || name}`, 'success');
+		/** 进入后刷新一次快照，让「打开的页面」立刻反映新课程页 */
+		refresh();
+		return res.data;
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		else toast(e instanceof Error ? e.message : String(e), 'error');
+		throw e;
+	} finally {
+		delete state.automationBusy[uid];
 	}
 }

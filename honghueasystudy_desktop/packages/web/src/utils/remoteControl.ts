@@ -335,6 +335,45 @@ async function executeCommand(action: string, payload: any): Promise<any> {
 			return base64;
 		}
 
+		/** 远程触发登录脚本：配置由手机端手填，子进程负责按脚本声明校验 */
+		case 'script.run': {
+			const running = Process.from(uid);
+			if (!running) throw new Error('该浏览器未运行');
+			if (running.status !== 'launched') throw new Error('浏览器尚未就绪，请稍后再试');
+
+			const name = String((payload && payload.name) || '');
+			if (!name) throw new Error('缺少脚本名称');
+
+			return running.callWorkerTimeout(
+				'runAutomationScript',
+				[{ name, configs: (payload && payload.configs) || {} }],
+				/** 登录脚本内含 60 秒登录超时 + 滑块重试，留足余量 */
+				5 * 60 * 1000
+			);
+		}
+
+		case 'course.list': {
+			const running = Process.from(uid);
+			if (!running) throw new Error('该浏览器未运行');
+			if (running.status !== 'launched') throw new Error('浏览器尚未就绪，请稍后再试');
+
+			const refresh = !(payload && payload.refresh === false);
+			return running.callWorkerTimeout('listCourses', [{ refresh }], 90 * 1000);
+		}
+
+		case 'course.enter': {
+			const running = Process.from(uid);
+			if (!running) throw new Error('该浏览器未运行');
+			if (running.status !== 'launched') throw new Error('浏览器尚未就绪，请稍后再试');
+
+			const id = String((payload && payload.id) || '');
+			if (!id) throw new Error('缺少课程标识');
+			/** 带上课程名：页面若已刷新（标记丢失），子进程按名称重新定位 */
+			const name = String((payload && payload.name) || '');
+
+			return running.callWorkerTimeout('enterCourse', [{ id, name }], 90 * 1000);
+		}
+
 		default:
 			throw new Error('不支持的操作');
 	}
