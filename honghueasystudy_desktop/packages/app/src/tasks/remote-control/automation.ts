@@ -12,7 +12,7 @@ export interface AutomationJob {
 	finishedAt: number;
 	updatedAt: number;
 	/** 登录完成后识别到的课程 */
-	courses: { id: string; name: string; url: string }[];
+	courses: { id: string; name: string; url: string; label?: string }[];
 	/** 识别到的平台（chaoxing / zhihuishu / zjy / icve，空串表示未识别） */
 	platform: string;
 	/** 当前所在页面 */

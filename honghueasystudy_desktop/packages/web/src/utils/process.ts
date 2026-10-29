@@ -498,7 +498,14 @@ export class Process extends EventEmitter {
 						});
 						this.worker?.('launch', {
 							userDataDir: this.browser.cachePath,
-							...this.launchOptions
+							...this.launchOptions,
+							/**
+							 * 开发者调试端口：>0 时 worker 会额外拼上 --remote-debugging-port。
+							 * 关闭开关传 0，保证不会因为历史参数继续对外开放端口。
+							 */
+							devToolsPort: store.render.setting.dev?.enabled
+								? Number(store.render.setting.dev?.port) || 0
+								: 0
 						});
 					} else {
 						// preCheck 失败（浏览器路径缺失等）：原实现 promise 永不落定，状态永久卡在 launching
@@ -522,6 +529,26 @@ export class Process extends EventEmitter {
 			// 关闭进程
 			this.worker?.('close');
 		});
+	}
+
+	/**
+	 * 一键导出当前页面信息（开发者调试）
+	 *
+	 * 落盘由 worker 直接完成：HTML 动辄几 MB，走 IPC 回传既慢又容易踩序列化上限。
+	 * 这里只带回目录、命中的同构容器数量和文件清单，够界面提示即可。
+	 */
+	dumpPage(page?: number) {
+		if (this.status !== 'launched') {
+			return Promise.reject(new Error('浏览器未运行，请先启动浏览器'));
+		}
+		return this.callWorkerTimeout('dumpPage', [{ page }], 60 * 1000) as Promise<{
+			dir: string;
+			url: string;
+			title: string;
+			platformId: string;
+			files: { name: string; size: number }[];
+			containerCount: number;
+		}>;
 	}
 
 	/** 显示当前的浏览器  */

@@ -82,6 +82,8 @@ export interface RemoteCourse {
 	id: string;
 	name: string;
 	url: string;
+	/** 课程类型角标：共享课 / 翻转课 / 公开课…（平台没标就没有） */
+	label?: string;
 }
 
 /** 登录 → 选课 的自动化任务状态 */

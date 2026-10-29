@@ -68,6 +68,46 @@
 		<a-card title="浏览器设置">
 			<BrowserPath></BrowserPath>
 
+			<Description label="开发者调试">
+				<a-tooltip
+					content="开启后启动浏览器会额外开放本机调试端口（DevTools / 调试工具 / AI 可直接连入查看真实页面），并在浏览器操作栏提供「导出网页信息」。排查识别不到课程、元素点不到这类问题时使用。"
+				>
+					<a-switch v-model="store.render.setting.dev.enabled" />
+				</a-tooltip>
+			</Description>
+
+			<template v-if="store.render.setting.dev.enabled">
+				<Description label="调试端口">
+					<a-input-number
+						v-model="store.render.setting.dev.port"
+						:min="1024"
+						:max="65535"
+						:step="1"
+						style="width: 150px"
+					/>
+					<a-button
+						size="mini"
+						type="text"
+						class="ms-2"
+						@click="copyDevAddress"
+					>
+						<Icon
+							type="content_copy"
+							class="me-1"
+						/>
+						复制地址
+					</a-button>
+				</Description>
+				<Description label="调试地址">
+					<span class="text-secondary">http://127.0.0.1:{{ store.render.setting.dev.port }}/json</span>
+				</Description>
+				<Description label="说明">
+					<span class="text-secondary" style="font-size: 12px">
+						只监听本机，不会暴露到局域网。修改端口后需重启浏览器生效；关闭开关同样需要重启浏览器才会收回端口。
+					</span>
+				</Description>
+			</template>
+
 			<Description label="原生弹窗">
 				<a-tooltip content="启用后，浏览器中的原版弹窗可能会影响脚本运行">
 					<a-switch v-model="store.render.setting.browser.enableDialog" />
@@ -217,6 +257,17 @@ async function onUserDataDirsFolderChange(previous: string, current: string) {
 	}
 
 	await forceClearBrowserCache('检测到浏览器缓存路径，正在清空之前的缓存数据...', previous);
+}
+
+/** 复制开发者调试地址（本机 CDP 入口） */
+async function copyDevAddress() {
+	const address = `http://127.0.0.1:${store.render.setting.dev?.port || 9222}/json`;
+	try {
+		await navigator.clipboard.writeText(address);
+		Message.success(`已复制：${address}`);
+	} catch {
+		Message.warning(`复制失败，请手动复制：${address}`);
+	}
 }
 
 function syncNote() {

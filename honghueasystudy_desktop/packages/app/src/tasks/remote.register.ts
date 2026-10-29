@@ -1,4 +1,4 @@
-import { ipcMain, app, dialog, BrowserWindow, desktopCapturer, safeStorage } from 'electron';
+import { ipcMain, app, dialog, BrowserWindow, desktopCapturer, safeStorage, shell } from 'electron';
 import { Logger } from '../logger';
 import { autoLaunch } from './auto.launch';
 import axios, { AxiosRequestConfig } from 'axios';
@@ -156,6 +156,11 @@ const methods = {
 	statisticFolderSize: statisticFolderSize,
 	getPlatform: () => process.platform,
 	getArch: () => process.arch,
+	/** 打开文件夹/文件（开发者调试导出目录等） */
+	openFolder: (target: string) => {
+		if (typeof target !== 'string' || !target) throw new Error('路径为空');
+		return shell.openPath(target);
+	},
 	updateApp: updateApp,
 	installUpdate: installUpdate,
 	/** 手动检测更新（设置页/侧边栏版本号触发）：返回结构化的检测结果供 UI 展示 */

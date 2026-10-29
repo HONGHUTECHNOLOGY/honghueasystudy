@@ -158,6 +158,13 @@ export class ScriptWorker {
 	async launch(
 		options: Required<Pick<LaunchOptions, 'executablePath' | 'headless' | 'args'>> & {
 			userDataDir: string;
+			/**
+			 * 开发者调试端口
+			 *
+			 * >0 时额外给浏览器加 `--remote-debugging-port`，外部工具（DevTools / 脚本 / AI）
+			 * 可以直接连进来看页面真实 DOM：http://127.0.0.1:<端口>/json
+			 */
+			devToolsPort?: number;
 		}
 	) {
 		if (this.extensionPaths.length) {
@@ -169,8 +176,24 @@ export class ScriptWorker {
 			this.debug('浏览器拓展为空');
 		}
 
-		/** 添加拓展启动参数 */
-		options.args = formatExtensionArguments(this.extensionPaths);
+		/**
+		 * 启动参数必须合并，不能覆盖。
+		 *
+		 * 原实现是 `options.args = formatExtensionArguments(...)`：前端传进来的任何参数
+		 * （自定义开关、调试端口）都会被这一行直接冲掉，排查页面问题最需要的入口就此消失。
+		 */
+		const extensionArguments = formatExtensionArguments(this.extensionPaths);
+		const extraArguments = Array.isArray(options.args) ? options.args : [];
+		options.args = [...extensionArguments, ...extraArguments];
+
+		if (options.devToolsPort && options.devToolsPort > 0) {
+			options.args.push(
+				`--remote-debugging-port=${options.devToolsPort}`,
+				// 外部 WebSocket 连接（DevTools / Puppeteer / Playwright connectOverCDP）必须放行来源
+				'--remote-allow-origins=*'
+			);
+			this.debug(`开发者调试端口已开放：http://127.0.0.1:${options.devToolsPort}`);
+		}
 
 		const start_time = Date.now();
 
@@ -291,7 +314,15 @@ export class ScriptWorker {
 				browserInfo: this.browserInfo,
 				uid: this.uid,
 				config: this.config,
-				...options
+				/**
+				 * 调试端口只用于拼启动参数，不往下传给 launchBrowser。
+				 * 用 delete 而不是解构丢弃，避免触发 noUnusedLocals。
+				 */
+				...(() => {
+					const rest = { ...options } as typeof options & { devToolsPort?: number };
+					delete rest.devToolsPort;
+					return rest;
+				})()
 			});
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
@@ -416,6 +447,223 @@ export class ScriptWorker {
 			title: state.title,
 			active: state.page === active
 		}));
+	}
+
+	/**
+	 * 一键获取当前页面信息（开发者调试用）
+	 *
+	 * 把页面「原样」落盘，交给人工或 AI 分析真实 DOM：
+	 * - `page.html`：完整 DOM 序列化
+	 * - `page.png`：当前视口截图
+	 * - `info.json`：URL / 标题 / 平台 / 同构容器分组 / 链接 / 文本块 / 表单 / 存储键
+	 *
+	 * 全程只读：不点击、不填表、不修改页面。落盘位置跟随日志目录
+	 * （`<logs>/debug-dumps/<时间戳>-<host>/`），方便直接打包发出去。
+	 */
+	async dumpPage(options?: { page?: number }): Promise<{
+		dir: string;
+		url: string;
+		title: string;
+		platformId: string;
+		files: { name: string; size: number }[];
+		containerCount: number;
+	}> {
+		const pages = (this.browser?.pages() || []).filter((item) => !item.isClosed());
+		if (pages.length === 0) throw new Error('浏览器尚未打开任何页面');
+
+		const requested = options && typeof options.page === 'number' ? options.page : -1;
+		let page: Page | undefined;
+		if (requested >= 0 && requested < pages.length) {
+			page = pages[requested];
+		} else {
+			/** 和截图/页面列表同一套「当前页」判定，避免抓到后台的验证码中转页 */
+			page = await this.pickActivePage();
+			if (!page) page = pages[pages.length - 1];
+		}
+
+		const url = page.url();
+		const title = await page.title().catch(() => '');
+		const platformId = detectCoursePlatform(url)?.id || '';
+
+		const root = path.join(this.store?.paths?.['logs-path'] || process.cwd(), 'debug-dumps');
+		const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+		let host = 'page';
+		try {
+			host = new URL(url).host.replace(/[^\w.-]/g, '_') || 'page';
+		} catch {
+			// about:blank / data: 之类没有 host
+		}
+		const dir = path.join(root, `${stamp}-${host}`);
+		fs.mkdirSync(dir, { recursive: true });
+
+		/**
+		 * 结构摘要
+		 *
+		 * 「同构重复容器」是识别列表/卡片最有效的线索：课程卡片、菜单项、章节行
+		 * 都是同一份 class 重复 N 次。这里按 `tag|class` 分组后按数量排序，
+		 * 顺带带上第一个样本的文本与 HTML，肉眼即可判断哪一组是课程列表。
+		 */
+		const summary = await page.evaluate(() => {
+			const flat = (el: Element) => (el.textContent || '').replace(/\s+/g, ' ').trim();
+
+			const groups = new Map<string, Element[]>();
+			const all = Array.from(document.querySelectorAll('body *')).slice(0, 3000);
+			for (const el of all) {
+				const cls = String(el.className || '').trim();
+				if (!cls || cls.length > 140) continue;
+				const key = el.tagName.toLowerCase() + '|' + cls;
+				const list = groups.get(key);
+				if (!list) {
+					groups.set(key, [el]);
+				} else if (list.length < 40) {
+					list.push(el);
+				}
+			}
+
+			const containers = Array.from(groups.entries())
+				.filter(([, list]) => list.length >= 2)
+				.sort((a, b) => b[1].length - a[1].length)
+				.slice(0, 40)
+				.map(([key, list]) => ({
+					key,
+					count: list.length,
+					text: flat(list[0]).slice(0, 160),
+					html: (list[0].outerHTML || '').replace(/\s+/g, ' ').slice(0, 500)
+				}));
+
+			/** 链接：判断「课程入口在哪」最直接 */
+			const links = Array.from(document.querySelectorAll('a[href]'))
+				.slice(0, 120)
+				.map((a) => ({
+					text: flat(a).slice(0, 60),
+					href: (a as HTMLAnchorElement).href,
+					title: a.getAttribute('title') || '',
+					cls: String(a.className || '').slice(0, 80)
+				}))
+				.filter((item) => item.text || item.title);
+
+			/** 独立的短文本块：课程名/作者名多半在这里，配合 class 更容易定选择器 */
+			const textBlocks: { tag: string; cls: string; text: string }[] = [];
+			for (const el of all) {
+				if (textBlocks.length >= 120) break;
+				if (el.children.length > 0) continue;
+				const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+				if (text.length < 2 || text.length > 60) continue;
+				textBlocks.push({
+					tag: el.tagName.toLowerCase(),
+					cls: String(el.className || '').slice(0, 80),
+					text
+				});
+			}
+
+			const fields = Array.from(document.querySelectorAll('input, textarea, select, button'))
+				.slice(0, 60)
+				.map((el) => ({
+					tag: el.tagName.toLowerCase(),
+					type: el.getAttribute('type') || '',
+					name: el.getAttribute('name') || '',
+					placeholder: el.getAttribute('placeholder') || '',
+					text: flat(el).slice(0, 40),
+					cls: String(el.className || '').slice(0, 60)
+				}));
+
+			/**
+			 * 存储键名
+			 *
+			 * 必须把取 storage 对象本身也包进 try：about:blank、沙箱 iframe、chrome:// 页面上
+			 * 读 localStorage 会直接抛 SecurityError，把整个摘要打挂（实测踩过）。
+			 */
+			const storageKeys = (getter: () => Storage) => {
+				try {
+					return Object.keys(getter()).slice(0, 60);
+				} catch {
+					return [];
+				}
+			};
+
+			const cookieNames = () => {
+				try {
+					return document.cookie
+						.split(';')
+						.map((item) => item.split('=')[0].trim())
+						.filter(Boolean);
+				} catch {
+					return [];
+				}
+			};
+
+			return {
+				href: location.href,
+				title: document.title,
+				readyState: document.readyState,
+				viewport: { width: window.innerWidth, height: window.innerHeight },
+				documentSize: {
+					width: document.documentElement.scrollWidth,
+					height: document.documentElement.scrollHeight
+				},
+				counts: {
+					elements: document.querySelectorAll('*').length,
+					links: document.querySelectorAll('a[href]').length,
+					iframes: document.querySelectorAll('iframe').length,
+					images: document.querySelectorAll('img').length
+				},
+				containers,
+				links,
+				textBlocks,
+				fields,
+				storage: {
+					local: storageKeys(() => localStorage),
+					session: storageKeys(() => sessionStorage),
+					/** 只留名字，不落 cookie 值 */
+					cookies: cookieNames()
+				},
+				iframes: Array.from(document.querySelectorAll('iframe')).map((item) => item.src).slice(0, 20)
+			};
+		});
+
+		const files: { name: string; size: number }[] = [];
+		const write = (name: string, content: string) => {
+			const target = path.join(dir, name);
+			fs.writeFileSync(target, content, 'utf8');
+			files.push({ name, size: fs.statSync(target).size });
+		};
+
+		write(
+			'info.json',
+			JSON.stringify(
+				{
+					dumpedAt: new Date().toISOString(),
+					url,
+					title,
+					platformId,
+					userAgent: await page.evaluate(() => navigator.userAgent).catch(() => ''),
+					summary
+				},
+				null,
+				2
+			)
+		);
+		write('page.html', await page.content());
+
+		try {
+			const shot = await page.screenshot({ type: 'png', timeout: 15000, animations: 'disabled', caret: 'hide' });
+			const target = path.join(dir, 'page.png');
+			fs.writeFileSync(target, shot);
+			files.push({ name: 'page.png', size: fs.statSync(target).size });
+		} catch (err) {
+			console.warn('截图失败（不影响 HTML 与结构摘要）：', err instanceof Error ? err.message : String(err));
+		}
+
+		console.log(`[调试] 已导出页面信息：${dir}`);
+
+		return {
+			dir,
+			url,
+			title,
+			platformId,
+			files,
+			containerCount: Array.isArray((summary as any)?.containers) ? (summary as any).containers.length : 0
+		};
 	}
 
 	/**
@@ -743,7 +991,8 @@ export class ScriptWorker {
 		platform: string;
 		pageUrl: string;
 		pageTitle: string;
-		courses: { id: string; name: string; url: string }[];
+		/** label 是课程类型角标（共享课 / 翻转课 / 公开课…），平台没标就为空 */
+		courses: { id: string; name: string; url: string; label?: string }[];
 		hint: string;
 	}> {
 		if (!this.browser) throw new Error('浏览器尚未启动');
@@ -757,7 +1006,9 @@ export class ScriptWorker {
 		 * 直接返回提示，让用户先去跑登录脚本。
 		 */
 		const serverPort = this.store?.server?.port || 15319;
-		const hasUsablePage = browser.pages().some((item) => !item.isClosed() && !isBookmarksPageUrl(item.url(), serverPort));
+		const hasUsablePage = browser
+			.pages()
+			.some((item) => !item.isClosed() && !isBookmarksPageUrl(item.url(), serverPort));
 		if (!hasUsablePage) {
 			const known = this.rememberedPlatform() || (await this.platformFromCookies());
 			if (!known) {
@@ -790,7 +1041,7 @@ export class ScriptWorker {
 				})
 				.catch(() => undefined);
 
-		let items: { id: string; name: string; url: string }[] = [];
+		let items: { id: string; name: string; url: string; label?: string }[] = [];
 		let pageTitle = '';
 		let used = page;
 
@@ -863,7 +1114,8 @@ export class ScriptWorker {
 		const hint = items.length
 			? ''
 			: finalPlatform
-				? `已识别为${finalPlatform.label}，但没读到课程（当前页面：${pageTitle || used.url()}）。课程页可能还没加载完，点「刷新课程列表」重试，或在桌面端浏览器里打开「我的课程」后再点刷新。`
+				? `已识别为${finalPlatform.label}，但没读到课程（当前页面：${pageTitle || used.url()}）。` +
+						'课程页可能还没加载完，点「刷新课程列表」重试，或在桌面端浏览器里打开「我的课程」后再点刷新。'
 				: '没有检测到教学平台的登录状态。请先在桌面端浏览器里完成登录（或运行登录脚本），再点「刷新课程列表」。';
 
 		this.info(`[远程] 课程列表：识别到 ${items.length} 门课程（${finalPlatform?.id || '未知平台'}）`);
@@ -896,10 +1148,19 @@ export class ScriptWorker {
 		 * 标记可能已经指到别的课程上。名字对不上就按名字重找，别把用户送进错误的课。
 		 */
 		if (handle && wantName) {
-			const marked = ((await handle.textContent().catch(() => '')) || '').replace(/\s+/g, ' ').trim();
-			if (marked && marked.indexOf(wantName) === -1 && wantName.indexOf(marked) === -1) {
-				this.warn(`[远程] 课程标记与名称不一致（标记：${marked}，期望：${wantName}），按名称重新定位`);
-				handle = null;
+			/** 新标记自带课程名：精确比对，避免子串误判（多门课名字只差个后缀） */
+			const markedName = String((await handle.getAttribute('data-hh-course-name').catch(() => '')) || '').trim();
+			if (markedName) {
+				if (markedName !== wantName) {
+					this.warn(`[远程] 课程标记与名称不一致（标记：${markedName}，期望：${wantName}），按名称重新定位`);
+					handle = null;
+				}
+			} else {
+				const marked = ((await handle.textContent().catch(() => '')) || '').replace(/\s+/g, ' ').trim();
+				if (marked && marked.indexOf(wantName) === -1 && wantName.indexOf(marked) === -1) {
+					this.warn(`[远程] 课程标记与名称不一致（标记：${marked}，期望：${wantName}），按名称重新定位`);
+					handle = null;
+				}
 			}
 		}
 
@@ -913,7 +1174,16 @@ export class ScriptWorker {
 			const again = await page.evaluate(extractCoursesInPage, {
 				platform: detectCoursePlatform(page.url())?.id || ''
 			});
-			const hit = name ? again.items.find((item) => item.name === name) : undefined;
+			/**
+			 * 同一门课会同时挂「AI智课」和「共享课」两个班，课程名完全一样。
+			 * 先按原标记的序号取（卡片顺序在同一页面里稳定），名字对得上才用，
+			 * 否则才退到「第一个同名」，避免点共享课结果进了 AI 智课。
+			 */
+			const seq = /^c(\d+)$/.exec(id);
+			const sameIndex = seq ? again.items[Number(seq[1]) - 1] : undefined;
+			const hit =
+				(sameIndex && sameIndex.name === name ? sameIndex : undefined) ||
+				(name ? again.items.find((item) => item.name === name) : undefined);
 			if (hit) {
 				directUrl = hit.url;
 				handle = await page.$(`[data-hh-course="${hit.id}"]`);
@@ -935,9 +1205,27 @@ export class ScriptWorker {
 			} else {
 				/** 没有 href 的卡片（Vue/React 站点靠 click 跳转）只能点 */
 				this.info('[远程] 课程卡片无直链，改为点击进入');
-				await handle!
-					.click({ timeout: 8000 })
-					.catch(() => handle!.evaluate((el) => (el as HTMLElement).click()).catch(() => {}));
+				/**
+				 * 有些站点会在卡片上方盖一层透明 div（智慧树 AI 教学中心就是），
+				 * Playwright 的真实鼠标点击会被它拦下并一直重试到超时。
+				 * 先探一次是否被遮挡：被遮挡就直接派发 click，省掉几秒空等。
+				 */
+				const covered = await handle!
+					.evaluate((el) => {
+						const box = (el as HTMLElement).getBoundingClientRect();
+						const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+						return !!top && top !== el && !el.contains(top);
+					})
+					.catch(() => false);
+
+				if (covered) {
+					this.warn('[远程] 课程卡片被透明层遮挡，改用脚本派发点击');
+					await handle!.evaluate((el) => (el as HTMLElement).click()).catch(() => {});
+				} else {
+					await handle!
+						.click({ timeout: 3000 })
+						.catch(() => handle!.evaluate((el) => (el as HTMLElement).click()).catch(() => {}));
+				}
 				await page.waitForTimeout(3000);
 
 				const pages = this.browser.pages();
@@ -1158,7 +1446,11 @@ const COURSE_PLATFORMS = [
 	{
 		id: 'zhihuishu',
 		label: '智慧树',
-		match: /(^|\.)zhihuishu\.com$/i,
+		/**
+		 * polymas.com 是智慧树的 AI 教学中心（hike-teaching-center.polymas.com），
+		 * 课程列表和「共享课」体系是同一套账号，不认它就会出现「已登录但识别不到平台」。
+		 */
+		match: /(^|\.)(zhihuishu|polymas)\.com$/i,
 		listUrl: 'https://onlineweb.zhihuishu.com/onlinestuh5'
 	},
 	{ id: 'zjy', label: '职教云', match: /(^|\.)zjy2\.icve\.com\.cn$/i, listUrl: 'https://zjy2.icve.com.cn/study/index' },
@@ -1211,82 +1503,350 @@ export function isBookmarksPageUrl(url: string, serverPort?: number): boolean {
  *
  * 踩过的坑写在这里：
  * - 不能只看 `a[href]`：智慧树/职教云的课程卡片是 JS 跳转，没有 href；
+ * - **不能把链接文本当课程名**：智慧树课程卡片里「教师名」「学校名」各自也是链接，
+ *   它们的文本短、URL 又带 `study`，按链接扫一遍得到的全是作者名。
+ *   正确做法是以「卡片」为单位，一张卡片出一门课，再在卡片里挑最像课程名的元素；
  * - 不能只按文本猜：导航栏里「我的课程」「全部课程」会被误判成课程；
  * - 同一门课常同时存在封面链接和标题链接，必须按 URL + 名称去重；
  * - 抽到的元素就地打 `data-hh-course` 标记，供「进入课程」按标记点击。
  */
 export function extractCoursesInPage(arg: { platform: string }): {
-	items: { id: string; name: string; url: string }[];
+	items: { id: string; name: string; url: string; label?: string }[];
 	pageTitle: string;
 } {
-	const BAD = /^(登录|注册|退出|注销|首页|帮助|下载|客户端|客服|更多|设置|消息|通知|购物车|充值|会员|全部课程|我的课程|课程中心|学习中心|返回|上一页|下一页|搜索)$/;
+	const platform = (arg && arg.platform) || '';
 	const COURSE_RX: { [key: string]: RegExp } = {
 		chaoxing: /(chaoxing\.com\/(mycourse|mooc[0-9]?-ans\/mycourse|visit\/interaction)|\/course\/[0-9]+)/i,
 		zhihuishu:
+			// eslint-disable-next-line max-len
 			/(onlinestuh5|studyspace|studyvideoh5|studyplush5|fusioncourseh5|studywisdomh5|smartcoursestudent|ai-smart-course-student-pro|singleCourse)/i,
 		zjy: /(zjy2\.icve\.com\.cn\/study)/i,
 		icve: /(icve\.com\.cn\/(cms|course)|courseInfo)/i
 	};
 
+	/** 导航 / 操作类文案，永远不是课程名 */
+	const BAD_TEXT =
+		// eslint-disable-next-line max-len
+		/^(登录|注册|退出|注销|首页|帮助|下载|客户端|客服|更多|设置|消息|通知|购物车|充值|会员|全部课程|我的课程|课程中心|学习中心|返回|上一页|下一页|搜索|去学习|继续学习|开始学习|进入课程|查看详情|详情|分享|退课|删除|已结束|未开始|进行中|学习中|已完成|换一换|查看全部|全部|更多课程|选课|我的学堂|学习进度|查看成绩)$/;
+
+	/** 课程类型角标：智慧树的「共享课 / 翻转课」等，其他平台也一并识别 */
+	const TYPE_RX =
+		/(AI\s*共享课|共享课|翻转课|公开课|慕课|MOOC|SPOC|微课|直播课|见面课|学位课|通识课|专业课|虚拟仿真|智慧课程|精品课程|在线课程|混合式课程|选修课|必修课)/i;
+
+	/** 学校 / 院系 */
+	const SCHOOL_RX = /(大学|学院|学校|中学|职院|职业技术学院|高等专科|研究院|研究所|党校|电大|开放大学|校区)/;
+
+	/** 教师称谓 */
+	const TEACHER_RX = /(老师|教授|副教授|讲师|助教|教师|导师|博士|硕士)/;
+
 	const clean = (text: string) => String(text || '').replace(/\s+/g, ' ').trim();
-	const items: { id: string; name: string; url: string }[] = [];
+
+	/** 2~4 个纯汉字、且不含学校/教师/类型词 —— 很像人名（作者名就是这么被误当课程名的） */
+	const looksLikePerson = (text: string) => {
+		const s = clean(text).replace(/\s+/g, '');
+		if (!/^[\u4e00-\u9fa5·]{2,4}$/.test(s)) return false;
+		if (SCHOOL_RX.test(s) || TEACHER_RX.test(s) || TYPE_RX.test(s)) return false;
+		return true;
+	};
+
+	/** 给一段文本打分：越高越像课程名 */
+	const scoreText = (el: Element, text: string) => {
+		const cls = String((el as HTMLElement).className || '').toLowerCase();
+		const tag = el.tagName.toLowerCase();
+		let score = 0;
+
+		/** class / 标签名里的信号最强 */
+		if (/name|title|tit/.test(cls)) score += 40;
+		if (/teacher|author|school|university|person|avatar|cover|pic|img|user|logo/.test(cls)) score -= 55;
+		if (/^h[1-4]$/.test(tag)) score += 30;
+		if (tag === 'p' || tag === 'span' || tag === 'div') score += 3;
+
+		/** 有 title 属性且与文本一致，说明这个元素就是标题本体 */
+		const attrTitle = clean(el.getAttribute('title') || '');
+		if (attrTitle && attrTitle === text) score += 15;
+
+		const len = text.length;
+		if (len >= 4 && len <= 40) score += 20;
+		else if (len === 2 || len === 3) score -= 4;
+		else if (len > 40 && len <= 60) score += 4;
+		else score -= 30;
+
+		if (TEACHER_RX.test(text)) score -= 45;
+		if (SCHOOL_RX.test(text)) score -= 40;
+		if (TYPE_RX.test(text)) score -= 30;
+		if (looksLikePerson(text)) score -= 15;
+		if (/\d{2,4}[-/年]\d{1,2}/.test(text)) score -= 25;
+		if (/^[\d\s.:%+-]+$/.test(text)) score -= 50;
+
+		return score;
+	};
+
+	const platformRx = COURSE_RX[platform];
+	const items: { id: string; name: string; url: string; label?: string }[] = [];
 	const seenUrl: { [key: string]: boolean } = {};
 	const seenName: { [key: string]: boolean } = {};
-	const platformRx = COURSE_RX[arg && arg.platform ? arg.platform : ''];
 
-	const push = (name: string, url: string, el: Element) => {
+	const push = (name: string, url: string, el: Element, label: string) => {
 		const title = clean(name);
 		if (!title || title.length < 2 || title.length > 60) return;
-		if (BAD.test(title)) return;
+		if (BAD_TEXT.test(title)) return;
 		if (/^[0-9\s.:%+-]+$/.test(title)) return;
-		if (seenName[title]) return;
+		/**
+		 * 去重键必须带上类型角标：同一门课会同时挂「AI智课」和「共享课」两个班，
+		 * 只按课程名去重会把共享课整条吃掉（真实页 19 张卡片只剩 17 条）。
+		 */
+		const seenKey = title + '\u0001' + label;
+		if (seenName[seenKey]) return;
 		if (url && seenUrl[url]) return;
 
-		seenName[title] = true;
+		seenName[seenKey] = true;
 		if (url) seenUrl[url] = true;
 
 		const id = 'c' + (items.length + 1);
 		(el as HTMLElement).setAttribute('data-hh-course', id);
-		items.push({ id: id, name: title, url: url });
+		/**
+		 * 一并记下课程名：卡片文本里还混着学期、教师、类型角标，
+		 * 「C语言程序设计」正好是「C语言程序设计A」的子串，只靠文本包含判断会进错课。
+		 */
+		(el as HTMLElement).setAttribute('data-hh-course-name', title);
+		const item: { id: string; name: string; url: string; label?: string } = { id: id, name: title, url: url };
+		if (label) item.label = label;
+		items.push(item);
 	};
 
-	/** 1) 有直链的课程条目 */
-	const anchors = Array.prototype.slice.call(document.querySelectorAll('a[href]')) as HTMLAnchorElement[];
-	for (const anchor of anchors) {
-		if (items.length >= 30) break;
-		const raw = anchor.getAttribute('href') || '';
-		if (!raw || raw.indexOf('javascript:') === 0 || raw === '#') continue;
+	/** 上一轮打的标记先清掉：标记可能落在过期的节点上（比如卡片改版前标记的是学期栏） */
+	Array.prototype.slice.call(document.querySelectorAll('[data-hh-course]')).forEach((el) => {
+		(el as HTMLElement).removeAttribute('data-hh-course');
+	});
 
-		let abs = '';
-		try {
-			abs = new URL(raw, location.href).href;
-		} catch {
-			continue;
+	/**
+	 * 已知站点的卡片结构（照真实 DOM 写死）
+	 *
+	 * 启发式打分在结构规整的站点上够用，但智慧树 AI 教学中心里「课程名」和「学期」
+	 * 是同一个 class（`div.line1.tool-tip-pro`），只靠文本特征分不出来，必须靠层级。
+	 *
+	 * `card` 要选**整张卡的根节点**：这类卡片没有 `<a>`，靠 click 打开，
+	 * 标记打在根节点上才点得动（打在标题上时，外层常有一层透明 div 挡住真实鼠标点击）。
+	 */
+	const KNOWN_CARDS: { host: RegExp; card: string; name: string; label: string }[] = [
+		{
+			/**
+			 * 智慧树 AI 教学中心：div.course-card > h4 = 课程名。
+			 * 类型角标有两套 DOM：AI 智课用 `.type-tag-component`，共享课用 `.course-tag`，
+			 * 只认前者会让共享课的 label 永远是空。
+			 */
+			host: /(^|\.)polymas\.com$/i,
+			card: 'div.course-card',
+			name: 'h4',
+			label: '[class*="type-tag" i], [class*="course-tag" i]'
 		}
-		if (!/^https?:/i.test(abs)) continue;
+	];
 
-		const matched = platformRx ? platformRx.test(abs) : false;
-		const generic = /course|kecheng|interaction|study/i.test(abs);
-		if (!matched && !generic) continue;
+	const knownRule = KNOWN_CARDS.find((rule) => rule.host.test(location.hostname));
+	if (knownRule) {
+		const knownCards = Array.prototype.slice.call(document.querySelectorAll(knownRule.card)) as HTMLElement[];
+		for (const card of knownCards) {
+			if (items.length >= 30) break;
+			const nameEl = card.querySelector(knownRule.name) as HTMLElement | null;
+			let name = clean((nameEl && nameEl.textContent) || '');
+			/** 标题节点没渲染出来时退到封面图的 alt（真实站点里两者一致） */
+			if (!name) {
+				const img = card.querySelector('img') as HTMLImageElement | null;
+				name = clean((img && img.alt) || '');
+			}
+			if (!name) continue;
 
-		const img = anchor.querySelector('img') as HTMLImageElement | null;
-		const name = clean(anchor.textContent || '') || anchor.getAttribute('title') || (img ? clean(img.alt) : '');
-		push(name, abs, anchor);
+			const labelEl = card.querySelector(knownRule.label) as HTMLElement | null;
+			const label = clean((labelEl && labelEl.textContent) || '').slice(0, 12);
+			push(name, '', card, label);
+		}
 	}
 
-	/** 2) 没有直链的卡片（JS 跳转站点）：只在链接里一无所获时兜底 */
-	if (items.length === 0) {
-		const nodes = Array.prototype.slice.call(
-			document.querySelectorAll('[class*="course" i], [class*="kecheng" i]')
+	/**
+	 * 在一张卡片里挑出最像课程名的那段文本
+	 *
+	 * 只取元素的「直接文本节点」，避免把「课程名 + 学校 + 教师」拼成一长串；
+	 * 唯一子元素时允许取子文本（覆盖 `<p class="name"><span>高等数学</span></p>` 这种写法）。
+	 */
+	const pickTitle = (card: HTMLElement): { el: HTMLElement; text: string } | null => {
+		let best: { el: HTMLElement; text: string; score: number } | null = null;
+		const nodes = ([card] as HTMLElement[]).concat(
+			Array.prototype.slice.call(card.querySelectorAll('*')) as HTMLElement[]
+		);
+
+		for (const el of nodes.slice(0, 80)) {
+			if (el.children.length > 3) continue;
+
+			let own = '';
+			for (let i = 0; i < el.childNodes.length; i++) {
+				const node = el.childNodes[i];
+				if (node.nodeType === 3) own += node.nodeValue || '';
+			}
+
+			let text = clean(own);
+			if (!text) {
+				const attrTitle = clean(el.getAttribute('title') || '');
+				if (attrTitle) text = attrTitle;
+			}
+			if (!text && el.children.length <= 1) text = clean(el.textContent || '');
+
+			if (!text || text.length < 2 || text.length > 60) continue;
+			if (BAD_TEXT.test(text)) continue;
+
+			const score = scoreText(el, text);
+			if (!best || score > best.score) best = { el: el, text: text, score: score };
+		}
+
+		return best && best.score > 0 ? { el: best.el, text: best.text } : null;
+	};
+
+	/**
+	 * 找「同构重复」的课程卡片
+	 *
+	 * 课程列表的卡片 class 完全一致，靠这个特征定位比写死选择器稳：
+	 * 智慧树改版换 class 也不会失效，只要它还是「重复的一张张卡片」。
+	 */
+	const findCards = (): HTMLElement[] => {
+		const all = Array.prototype.slice.call(
+			document.querySelectorAll('[class*="course" i], [class*="kecheng" i], [class*="lesson" i], [class*="subject" i]')
 		) as HTMLElement[];
-		for (const node of nodes) {
+
+		const groups: { [key: string]: HTMLElement[] } = {};
+		for (const el of all.slice(0, 600)) {
+			if (el.querySelector('script,style')) continue;
+			const cls = String(el.className || '').trim();
+			if (!cls) continue;
+			const key = el.tagName + '|' + cls;
+			if (!groups[key]) groups[key] = [];
+			groups[key].push(el);
+		}
+
+		const candidates = Object.keys(groups)
+			.map((key) => groups[key])
+			.filter((list) => list.length >= 2 && list.length <= 60);
+		candidates.sort((a, b) => b.length - a.length);
+
+		let best: { list: HTMLElement[]; score: number } | null = null;
+
+		for (const raw of candidates.slice(0, 6)) {
+			/** 组内互相嵌套说明抓到的是外层容器，把父节点剔掉 */
+			const list = raw.filter((el) => !raw.some((other) => other !== el && el.contains(other)));
+			if (list.length < 2) continue;
+
+			const take = Math.min(list.length, 12);
+			let good = 0;
+			let labels = 0;
+			for (const card of list.slice(0, take)) {
+				const picked = pickTitle(card);
+				if (picked && picked.text.length >= 3 && !looksLikePerson(picked.text)) good++;
+				if (TYPE_RX.test(clean(card.textContent || ''))) labels++;
+			}
+
+			const ratio = good / take;
+			/** 挑出来的东西大多像人名/学校名，说明这组不是课程卡片 */
+			if (ratio < 0.5) continue;
+
+			const score = ratio * 100 + Math.min(list.length, 30) + labels * 2;
+			if (!best || score > best.score) best = { list: list, score: score };
+		}
+
+		return best ? best.list : [];
+	};
+
+	/** 卡片里最像「课程入口」的链接 */
+	const pickUrl = (card: HTMLElement): string => {
+		let fallback = '';
+
+		/** 卡片本身就是个大链接（常见于整卡可点）时，直接用它的地址 */
+		const selfHref = String((card as HTMLAnchorElement).href || '');
+		if (card.tagName === 'A' && /^https?:/i.test(selfHref)) {
+			if (!/\/teacher|\/author|\/user\/|\/school\/|\/personal/i.test(selfHref)) return selfHref;
+		}
+
+		const anchors = Array.prototype.slice.call(card.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+		for (const anchor of anchors) {
+			const raw = anchor.getAttribute('href') || '';
+			if (!raw || raw.indexOf('javascript:') === 0 || raw === '#') continue;
+
+			let abs = '';
+			try {
+				abs = new URL(raw, location.href).href;
+			} catch {
+				continue;
+			}
+			if (!/^https?:/i.test(abs)) continue;
+
+			/** 教师 / 学校 / 个人主页也是平台域名，不能当课程入口 */
+			const cls = String(anchor.className || '').toLowerCase();
+			const absLc = abs.toLowerCase();
+			if (/teacher|author|school|person|user|avatar|logo|cover/.test(cls)) continue;
+			if (/\/teacher|\/author|\/user\/|\/school\/|\/personal/.test(absLc)) continue;
+
+			if (platformRx && platformRx.test(abs)) return abs;
+			if (!fallback && /course|study|kecheng|learn|class/i.test(abs)) fallback = abs;
+		}
+		return fallback;
+	};
+
+	/** 1) 卡片优先：一张卡片一门课，天然把作者名排除在外（已知站点上面已抽到就不再猜） */
+	const cards = items.length >= 2 ? [] : findCards();
+	for (const card of cards) {
+		if (items.length >= 30) break;
+		if (card.getAttribute('data-hh-course')) continue;
+
+		const picked = pickTitle(card);
+		if (!picked) continue;
+
+		const typeMatch = clean(card.textContent || '').match(TYPE_RX);
+		push(picked.text, pickUrl(card), picked.el, typeMatch ? clean(typeMatch[1]) : '');
+	}
+
+	/** 2) 卡片没找到时才退回到链接扫描（部分老站点只有链接） */
+	if (items.length < 2) {
+		const anchors = Array.prototype.slice.call(document.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+		for (const anchor of anchors) {
 			if (items.length >= 30) break;
-			if (node.getAttribute('data-hh-course')) continue;
-			/** 只取最内层的卡片，否则外层容器会带着整页文字被当成一门课 */
-			if (node.querySelector('[class*="course" i], [class*="kecheng" i]')) continue;
-			const text = clean(node.textContent || '');
-			if (text.length < 4 || text.length > 60) continue;
-			push(text, '', node);
+			const raw = anchor.getAttribute('href') || '';
+			if (!raw || raw.indexOf('javascript:') === 0 || raw === '#') continue;
+
+			let abs = '';
+			try {
+				abs = new URL(raw, location.href).href;
+			} catch {
+				continue;
+			}
+			if (!/^https?:/i.test(abs)) continue;
+
+			const matched = platformRx ? platformRx.test(abs) : false;
+			const generic = /course|kecheng|interaction|study/i.test(abs);
+			if (!matched && !generic) continue;
+
+			/** 教师 / 学校 / 个人主页的链接不是课程 */
+			const cls = String((anchor as HTMLElement).className || '').toLowerCase();
+			const hrefLc = abs.toLowerCase();
+			if (/teacher|author|school|person|user|avatar|logo/.test(cls)) continue;
+			if (/\/teacher|\/author|\/user\/|\/school\/|\/personal/.test(hrefLc)) continue;
+
+			/** 名字优先取链接内部的标题元素，其次 title 属性、图片 alt，最后才用链接文本 */
+			let name = '';
+			const inner = anchor.querySelector('[class*="name" i], [class*="title" i], h1, h2, h3, h4') as HTMLElement | null;
+			if (inner) name = clean(inner.textContent || '');
+			if (!name) name = clean(anchor.getAttribute('title') || '');
+			if (!name) {
+				const img = anchor.querySelector('img') as HTMLImageElement | null;
+				if (img) name = clean(img.alt || '');
+			}
+			if (!name) {
+				const raw2 = clean(anchor.textContent || '');
+				/** 很长的链接文本多半是整张卡片拼起来的，不要 */
+				name = raw2.length <= 40 ? raw2 : '';
+			}
+			if (!name) continue;
+
+			/** 2~3 字纯汉字又没别旁证，基本就是作者名/学校简称 */
+			if (name.length <= 3 && looksLikePerson(name) && !anchor.getAttribute('title')) continue;
+
+			push(name, abs, anchor, '');
 		}
 	}
 

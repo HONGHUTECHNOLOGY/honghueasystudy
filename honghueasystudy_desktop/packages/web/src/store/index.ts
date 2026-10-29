@@ -51,6 +51,13 @@ export type WebStore = {
 			custom: boolean;
 			executablePath: string;
 		};
+		/** 开发者调试 */
+		dev: {
+			/** 开启后：浏览器开放 CDP 调试端口，并可在浏览器操作栏一键导出网页信息 */
+			enabled: boolean;
+			/** CDP 调试端口（仅本机可连） */
+			port: number;
+		};
 		/** 当前的主题 */
 		theme: {
 			dark: boolean;
@@ -96,7 +103,15 @@ export type WebStore = {
 	};
 };
 
-const _store: AppStore & { render: WebStore } = defaultsDeep(remote['electron-store'].get('store'), {
+/**
+ * 默认值全集
+ *
+ * > 注意：必须「先解密、后 defaultsDeep」。磁盘上的 render 是加密字符串，
+ * > 若先合并默认值，会把整个默认 render 挂到一个字符串上（truthy 不触发补齐），
+ * > 随后解密结果整体覆盖 render —— 存档里没有的新增字段（如 setting.dev）就永远是
+ * > undefined，模板里一读 `dev.enabled` 就抛 TypeError，整块设置面板渲染失败白屏。
+ */
+const APP_DEFAULTS = {
 	remoteControl: {
 		enabled: false,
 		port: 15320,
@@ -147,6 +162,10 @@ const _store: AppStore & { render: WebStore } = defaultsDeep(remote['electron-st
 				custom: false,
 				executablePath: ''
 			},
+			dev: {
+				enabled: false,
+				port: 9222
+			},
 			theme: {
 				dark: false
 			},
@@ -177,21 +196,23 @@ const _store: AppStore & { render: WebStore } = defaultsDeep(remote['electron-st
 			}
 		}
 	} as WebStore
-});
+};
 
-// 解密数据（兼容新旧加密格式）
-// @ts-ignore - render 在磁盘上可能是加密后的字符串
-if (typeof _store.render === 'string') {
+/** 磁盘上的原始存档（render 可能还是加密字符串） */
+const rawStore: any = remote['electron-store'].get('store') || {};
+
+// 解密数据（兼容新旧加密格式）—— 必须在 defaultsDeep 之前，理由见 APP_DEFAULTS 注释
+if (typeof rawStore.render === 'string') {
 	try {
-		console.log('_store', _store);
-		// @ts-ignore
-		const renderStr = _store.render as string;
-		const data = JSON.parse(remote.methods.callSync('decryptRenderString' as any, renderStr));
-		Reflect.set(_store, 'render', data);
+		rawStore.render = JSON.parse(remote.methods.callSync('decryptRenderString' as any, rawStore.render));
 	} catch (e) {
 		console.error('数据解密失败：' + e);
+		/** 解不出来就当没有存档，交给默认值兜底，别让整个渲染端挂掉 */
+		delete rawStore.render;
 	}
 }
+
+const _store: AppStore & { render: WebStore } = defaultsDeep(rawStore, APP_DEFAULTS);
 
 /**
  * 远程控制配置由主进程独占维护（渲染端既不该读快照、也不该写回）。

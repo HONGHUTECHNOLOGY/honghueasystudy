@@ -200,6 +200,11 @@
 							:disabled="!!entering"
 							@click="doEnter(course)"
 						>
+							<span
+								v-if="course.label"
+								class="course__label"
+								>{{ course.label }}</span
+							>
 							<span class="course__name ellipsis">{{ course.name }}</span>
 							<span
 								v-if="entering === course.id"
@@ -781,6 +786,18 @@ textarea.input {
 
 .course:disabled {
 	opacity: 0.6;
+}
+
+.course__label {
+	flex: none;
+	padding: 1px 6px;
+	border-radius: 6px;
+	border: 1px solid var(--line-brand);
+	background: var(--brand-soft);
+	color: var(--brand-text);
+	font-size: 10px;
+	line-height: 1.6;
+	white-space: nowrap;
 }
 
 .course__name {
