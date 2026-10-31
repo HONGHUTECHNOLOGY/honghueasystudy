@@ -7,7 +7,13 @@
  *
  * 支持的占位符：
  *   {{VERSION}}          扩展 / 油猴脚本版本  <- 根 package.json 的 version
- *   {{DESKTOP_VERSION}}  桌面版版本           <- honghueasystudy_desktop/package.json 的 version
+ *   {{DESKTOP_VERSION}}  桌面版版本           <- honghueasystudy_desktop/packages/app/package.json
+ *                                               （release-please 与扩展版本一起升级；外层
+ *                                                honghueasystudy_desktop/package.json 是旧的工作区
+ *                                                版本，早已停更，不能再拿它当桌面版本）
+ *   {{TAG}}              Release tag           <- v + VERSION
+ *   {{GITCODE_RELEASE}}  GitCode 附件基址      <- https://gitcode.com/<owner>/<repo>/releases/download/<tag>
+ *   {{GITHUB_RELEASE}}   GitHub 附件基址       <- https://github.com/<owner>/<repo>/releases/download/<tag>
  *   {{COMMIT}}           短提交号             <- CF_PAGES_COMMIT_SHA / GITHUB_SHA / git rev-parse
  *   {{BUILD_DATE}}       构建日期 (YYYY-MM-DD)
  *
@@ -174,10 +180,23 @@ function main() {
     console.error('[web] 无法从根 package.json 读取 version');
     process.exit(1);
   }
-  const desktopVersion = readVersion(path.join('honghueasystudy_desktop', 'package.json')) || version;
+  /**
+   * 桌面版本必须读 packages/app/package.json。
+   *
+   * release-please 的 extra-files 只同步这一份（和根版本一起升），
+   * 外层 honghueasystudy_desktop/package.json 停留在 3.x 的工作区版本，仅作兜底。
+   */
+  const desktopVersion =
+    readVersion(path.join('honghueasystudy_desktop', 'packages', 'app', 'package.json')) ||
+    readVersion(path.join('honghueasystudy_desktop', 'package.json')) ||
+    version;
+  const tag = `v${version}`;
   const vars = {
     VERSION: version,
     DESKTOP_VERSION: desktopVersion,
+    TAG: tag,
+    GITCODE_RELEASE: `https://gitcode.com/honghutech/honghueasystudy/releases/download/${tag}`,
+    GITHUB_RELEASE: `https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/${tag}`,
     COMMIT: readCommit(),
     BUILD_DATE: today(),
   };
@@ -190,6 +209,7 @@ function main() {
   const manifest = {
     version: vars.VERSION,
     desktopVersion: vars.DESKTOP_VERSION,
+    tag: vars.TAG,
     commit: vars.COMMIT,
     builtAt: new Date().toISOString(),
   };
@@ -197,7 +217,7 @@ function main() {
 
   console.log(`[web] 源目录      ${path.relative(ROOT, SRC_DIR)}`);
   console.log(`[web] 输出目录    ${path.relative(ROOT, outDir)}  (${copied} 个文件)`);
-  console.log(`[web] 版本        v${vars.VERSION}  桌面版 v${vars.DESKTOP_VERSION}  commit ${vars.COMMIT}`);
+  console.log(`[web] 版本        v${vars.VERSION}  桌面版 v${vars.DESKTOP_VERSION}  tag ${vars.TAG}  commit ${vars.COMMIT}`);
   console.log(`[web] 扫描文本    ${stats.scanned} 个，改写 ${stats.changed} 个，替换 ${stats.hits} 处`);
 
   if (stats.unknown.size) {
