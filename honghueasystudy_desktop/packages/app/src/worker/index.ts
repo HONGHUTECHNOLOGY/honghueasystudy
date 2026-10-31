@@ -51,6 +51,56 @@ export interface MediaState {
 	duration: number;
 }
 
+/**
+ * 课程内部的三个目录
+ *
+ * 超星（以及同构的 mooc2 站点）把课程内容拆成三套互不相通的列表，
+ * 各自有独立的 iframe 和鉴权参数（`enc` 每个目录都不一样、由服务端在点击时算出），
+ * 所以只能「点菜单 → 读 iframe」，不能自己拼 URL。
+ */
+export type CatalogKind = 'chapter' | 'work' | 'exam';
+
+/** 目录里的一个条目：一个章节 / 一份作业 / 一场考试 */
+export interface CatalogItem {
+	/** 平台侧 id：chapterId / workId / examId */
+	id: string;
+	title: string;
+	/** 章节编号（1.2.3），作业与考试为空 */
+	no: string;
+	/** 章节层级（编号段数），作业与考试恒为 0 */
+	depth: number;
+	/**
+	 * 归一化状态
+	 *
+	 * `locked` 是超星「闯关模式」的产物：前面的任务点没做完，后面的章节连 onclick 都没有，
+	 * 点也点不进去 —— 自动刷课必须跳过它们，不能当普通「待完成」重试。
+	 */
+	status: 'done' | 'todo' | 'locked' | 'unknown';
+	/** 平台原文状态（已完成 / 待完成 / 待做 …） */
+	state: string;
+	/** 补充说明：`2 个任务点未完成` / `完成49%任务点可参加考试` / `剩余…` */
+	hint: string;
+	/** 是否可进入（有没有 onclick / href） */
+	clickable: boolean;
+	/** 原始 onclick 文本，进入时复用，省得再解析一遍 */
+	onclick: string;
+}
+
+/** 一个目录的读取结果 */
+export interface CourseCatalog {
+	kind: CatalogKind;
+	/** 目录名：章节 / 作业 / 考试 */
+	title: string;
+	url: string;
+	items: CatalogItem[];
+	/** 进度摘要，例如 `4/329 任务点`、`0/0`、`1 份作业` */
+	summary: string;
+	/** 列表是否为空 */
+	empty: boolean;
+	/** 给用户看的一句话（空态、全部锁定等） */
+	message: string;
+}
+
 interface Langs {
 	error_when_executable_not_found?: string;
 	error_when_browser_version_too_high?: string;
@@ -92,6 +142,14 @@ export class ScriptWorker {
 	 * about:blank —— 既抽不到课程，又会在电脑上莫名多出一个空白标签。
 	 */
 	private automationPage?: Page;
+	/**
+	 * 进入后的课程页（超星 `…/mycourse/stu?courseid=…`）
+	 *
+	 * 与 `automationPage` 刻意分开：那个字段是「课程列表页」，被课程页顶掉的话，
+	 * 下次读列表会去课程页里找课，一门都找不到。
+	 * 读章节 / 作业 / 考试都要在**这一个**页面上点菜单，所以必须单独记住它。
+	 */
+	private coursePage?: Page;
 	/**
 	 * 上一次识别到的平台 id
 	 *
@@ -901,6 +959,92 @@ export class ScriptWorker {
 		return best;
 	}
 
+	/**
+	 * 停止刷课（定时收尾 / 远程「暂停」）
+	 *
+	 * 为什么不能只 `video.pause()`：扩展里的学习循环在页内自己跑，
+	 * 暂停播放只是让它等在那儿，任务是「暂停」了，但页面还挂着、脚本还在轮询，
+	 * 用户第二天回来会看到一半的进度条卡住不动。
+	 *
+	 * 这里做三件事，按「有效程度」递进：
+	 *   1. 暂停所有 video/audio —— 立刻停止推进进度；
+	 *   2. 退出课程页（导航回导航页 / about:blank）—— 页内脚本随之销毁，
+	 *      已学进度由平台服务端保存，下次进入会从断点继续；
+	 *   3. 关浏览器交给上层（渲染进程按方案里的「到点动作」决定）。
+	 *
+	 * `keepTab` 为真时只暂停、不导航（用户可能只是想暂停一下看看）。
+	 */
+	async stopStudy(options?: { keepTab?: boolean }): Promise<{
+		paused: number;
+		leftPages: number;
+		message: string;
+	}> {
+		if (!this.browser) throw new Error('浏览器尚未启动');
+
+		const serverPort = this.store?.server?.port || 15319;
+		const isNav = (url: string) => isBookmarksPageUrl(url, serverPort);
+		const pages = this.browser.pages().filter((item) => !item.isClosed());
+
+		let paused = 0;
+		let leftPages = 0;
+
+		for (const page of pages) {
+			if (isNav(page.url())) continue;
+
+			/** 只处理「教学平台页」和自动化正在用的那一页，别去动用户自己开着的网页 */
+			const isStudy =
+				!!detectCoursePlatform(page.url()) ||
+				(this.automationPage && !this.automationPage.isClosed() && page === this.automationPage);
+			if (!isStudy) continue;
+
+			if (!options || !options.keepTab) {
+				for (const frame of page.frames().slice(0, 10)) {
+					const count = await frame
+						.evaluate(() => {
+							let n = 0;
+							(
+								Array.from(document.querySelectorAll('video,audio')) as (HTMLVideoElement | HTMLAudioElement)[]
+							).forEach((media) => {
+								if (!media.paused) {
+									try {
+										media.pause();
+										n += 1;
+									} catch {
+										// 某些播放器会拒绝外部 pause，忽略即可
+									}
+								}
+							});
+							return n;
+						})
+						.catch(() => 0);
+					paused += count;
+				}
+			}
+
+			if (options && options.keepTab) continue;
+
+			/**
+			 * 退出课程页而不是关掉标签：标签数量保持不变，用户看到的还是那张导航页，
+			 * 不会出现「刷完课少了几个标签」的困惑。
+			 */
+			const target = pages.length > 1 ? `http://localhost:${serverPort}/index.html#/bookmarks` : 'about:blank';
+			await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+			leftPages += 1;
+		}
+
+		this.automationPage = undefined;
+		this.automationPlatformId = '';
+
+		const message = leftPages
+			? `已暂停刷课并退出课程页（暂停 ${paused} 个媒体）`
+			: pages.length
+				? '已暂停播放（没有找到课程页）'
+				: '浏览器没有打开的页面';
+
+		this.info(`[自动化] ${message}`);
+		return { paused, leftPages, message };
+	}
+
 	// ------------------------------------------------------------ 远程自动化
 
 	/**
@@ -1358,7 +1502,274 @@ export class ScriptWorker {
 		 */
 		const rawTitle = await active.title().catch(() => '');
 		const title = rawTitle && rawTitle !== '智慧树' && rawTitle !== '超星' ? rawTitle : wantName || rawTitle;
+
+		/** 记住这个课程页：读章节 / 作业 / 考试都要在它上面点菜单 */
+		if (active && !active.isClosed() && isCoursePageUrl(active.url())) this.coursePage = active;
+
 		return { url: active.url(), title };
+	}
+
+	/**
+	 * 读课程内部目录（章节 / 作业 / 考试）
+	 *
+	 * 只能「点菜单 → 等 iframe → 在 iframe 里抽」：三个目录的 URL 各带一个
+	 * 由服务端在点击时算出来的 `enc`，前端拼不出来（拼错就是一张空白页）。
+	 */
+	async listCourseCatalog(options: { kind: CatalogKind }): Promise<CourseCatalog> {
+		if (!this.browser) throw new Error('浏览器尚未启动');
+
+		const kind = options && options.kind;
+		const meta = CATALOG_MENUS[kind];
+		if (!meta) throw new Error('未知的目录类型：' + String(kind));
+
+		const page = await this.requireCoursePage();
+		const frame = await this.openCatalog(page, kind);
+
+		const result = await frame.evaluate(extractCatalogInPage, { kind }).catch((e: any) => {
+			throw new Error('读取「' + meta.title + '」失败：' + String(e && e.message ? e.message : e));
+		});
+
+		return {
+			kind,
+			title: meta.title,
+			url: result.url || frame.url(),
+			items: result.items || [],
+			summary: result.summary || '',
+			empty: !!result.empty,
+			message: result.message || ''
+		};
+	}
+
+	/**
+	 * 进入目录里的某一条
+	 *
+	 * 章节跳到 `studentstudy`（刷课脚本接管），作业跳到 `dowork`、考试跳到答题页
+	 * （做题脚本接管）。这里只负责「把用户送到那一页」，跑不跑脚本由脚本自身决定。
+	 */
+	async openCatalogItem(options: { kind: CatalogKind; id: string; title?: string }): Promise<{
+		url: string;
+		title: string;
+		message: string;
+	}> {
+		if (!this.browser) throw new Error('浏览器尚未启动');
+
+		const kind = options && options.kind;
+		const meta = CATALOG_MENUS[kind];
+		if (!meta) throw new Error('未知的目录类型：' + String(kind));
+
+		const id = String((options && options.id) || '').trim();
+		if (!id) throw new Error('缺少条目标识');
+
+		const page = await this.requireCoursePage();
+		const frame = await this.openCatalog(page, kind);
+
+		const before = this.browser.pages().length;
+		const clicked: { ok: boolean; reason?: string; title?: string } = await frame
+			.evaluate(clickCatalogItemInPage, { kind, id })
+			.catch((e: any) => ({ ok: false, reason: String(e && e.message ? e.message : e) }));
+
+		if (!clicked || !clicked.ok) {
+			throw new Error(clicked && clicked.reason ? clicked.reason : '没有找到这一条，请刷新目录后重试');
+		}
+
+		const landed = await this.waitEnteredItem(page, kind, before, 30000);
+		const active = landed && !landed.isClosed() ? landed : page;
+		await active.bringToFront().catch(() => {});
+
+		const url = active.url();
+		const title = (await active.title().catch(() => '')) || clicked.title || meta.title;
+		return { url, title, message: landed ? '' : '已点击，但页面还没有跳转，稍等一下再看看' };
+	}
+
+	/**
+	 * 进入第一个还没刷完的章节（「自动推进进度」的起点）
+	 *
+	 * 为什么不自己一节一节循环：学习页和课程页是同一张标签，进课之后课程页就没了，
+	 * 中间想再读一次目录就得退出来——那会把正在播放的视频打断。
+	 * 超星脚本本来就带「自动跳转下一个未完成章节」（`autoJumpToUnFinishJob`），
+	 * 所以这里只负责把起点送到位，后面的推进交给脚本。
+	 *
+	 * `skipIds` 用于失败重试：某一节怎么也刷不动时，跳过它换下一节，避免死循环。
+	 */
+	async enterNextChapter(options?: { skipIds?: string[] }): Promise<{
+		entered: boolean;
+		chapterId: string;
+		title: string;
+		no: string;
+		remaining: number;
+		message: string;
+		url: string;
+	}> {
+		const skip = (options && options.skipIds) || [];
+		const catalog = await this.listCourseCatalog({ kind: 'chapter' });
+
+		/** 只挑「已解锁且还有任务点」的：locked 连 onclick 都没有，done 没必要再进 */
+		const todo = catalog.items.filter((item) => item.status === 'todo' && item.clickable && item.id);
+		const next = pickNextChapter(catalog.items, skip);
+
+		if (!next) {
+			const locked = catalog.items.filter((item) => item.status === 'locked').length;
+			return {
+				entered: false,
+				chapterId: '',
+				title: '',
+				no: '',
+				remaining: 0,
+				message:
+					locked > 0
+						? '能进的章节都刷完了，剩下 ' + locked + ' 节要先完成前面的闯关任务点'
+						: '这门课的章节已经全部完成',
+				url: catalog.url
+			};
+		}
+
+		const landed = await this.openCatalogItem({ kind: 'chapter', id: next.id, title: next.title });
+		return {
+			entered: true,
+			chapterId: next.id,
+			title: next.title,
+			no: next.no,
+			remaining: todo.length,
+			message: '已进入 ' + (next.no ? next.no + ' ' : '') + next.title,
+			url: landed.url
+		};
+	}
+
+	/**
+	 * 当前是否已经站在课程页上
+	 *
+	 * 界面上那三个目录（章节 / 作业 / 考试）只有课程页里才有入口，没进课时点下去
+	 * 必然报「还没有进入课程页」。所以点之前先问一句：不能只在进入课程的瞬间把按钮
+	 * 点亮——用户中途退回去、或者换了标签，状态就变了；反过来手工进课时也要能亮。
+	 *
+	 * 不抛异常：这是一个状态查询，返回 `ready: false` 就够了。
+	 */
+	async catalogReady(): Promise<{ ready: boolean; url: string }> {
+		if (!this.browser) return { ready: false, url: '' };
+
+		const cached = this.coursePage;
+		if (cached && !cached.isClosed() && isCoursePageUrl(cached.url())) {
+			return { ready: true, url: cached.url() };
+		}
+
+		const pages = this.browser.pages().filter((item) => !item.isClosed());
+		const hit = pages.find((item) => isCoursePageUrl(item.url()));
+		if (hit) {
+			/** 顺手补一下缓存：手工进课的情况靠这里把课程页认下来 */
+			this.coursePage = hit;
+			return { ready: true, url: hit.url() };
+		}
+
+		return { ready: false, url: '' };
+	}
+
+	/** 取课程页：缓存优先，其次按 URL 在现有标签里找 */
+	private async requireCoursePage(): Promise<Page> {
+		const cached = this.coursePage;
+		if (cached && !cached.isClosed() && isCoursePageUrl(cached.url())) return cached;
+
+		const pages = (this.browser ? this.browser.pages() : []).filter((item) => !item.isClosed());
+		const hit = pages.find((item) => isCoursePageUrl(item.url()));
+		if (hit) {
+			this.coursePage = hit;
+			return hit;
+		}
+
+		/** 停在平台页上但不带这套菜单（智慧树之类）：说清楚是「不支持」，别让用户以为漏点了什么 */
+		const platformHit = pages.find((item) => !!detectCoursePlatform(item.url()));
+		if (platformHit) {
+			throw new Error('当前这个平台没有「章节 / 作业 / 考试」三栏目录，暂时只支持超星。');
+		}
+
+		throw new Error('还没有进入课程页。请先进入一门课程，再读它的章节 / 作业 / 考试。');
+	}
+
+	/** 点菜单切到指定目录，并等它的 iframe 渲染出内容 */
+	private async openCatalog(page: Page, kind: CatalogKind): Promise<Frame> {
+		const meta = CATALOG_MENUS[kind];
+		await page.bringToFront().catch(() => {});
+
+		const clicked = await this.clickCatalogMenu(page, meta.dataname);
+		if (!clicked) {
+			/** 旧版课程页可能没有这排菜单，但 iframe 已经停在目标页上 */
+			const fallback = this.findCatalogFrame(page, kind);
+			if (fallback) return fallback;
+			throw new Error('这个课程页上没有「' + meta.title + '」入口');
+		}
+
+		const frame = await this.waitCatalogFrame(page, kind, 25000);
+		if (!frame) throw new Error('「' + meta.title + '」加载超时，请重试');
+		return frame;
+	}
+
+	/** 点课程页顶部菜单（`li[dataname=…]`） */
+	private async clickCatalogMenu(page: Page, dataname: string): Promise<boolean> {
+		const li = await page.$(`li[dataname="${dataname}"]`).catch(() => null);
+		if (!li) return false;
+		const link = (await li.$('a').catch(() => null)) || li;
+
+		/** 与课程卡片同样的坑：某些皮肤会在菜单上盖透明层，真实点击会被拦下并重试到超时 */
+		const covered = await link
+			.evaluate((el) => {
+				const box = (el as HTMLElement).getBoundingClientRect();
+				if (!box.width || !box.height) return true;
+				const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+				return !!top && top !== el && !el.contains(top);
+			})
+			.catch(() => false);
+
+		if (covered) {
+			await link.evaluate((el) => (el as HTMLElement).click()).catch(() => {});
+		} else {
+			await link
+				.click({ timeout: 3000 })
+				.catch(() => link.evaluate((el) => (el as HTMLElement).click()).catch(() => {}));
+		}
+		return true;
+	}
+
+	private findCatalogFrame(page: Page, kind: CatalogKind): Frame | undefined {
+		const part = CATALOG_MENUS[kind].framePart;
+		return page.frames().find((item) => item !== page.mainFrame() && item.url().includes(part));
+	}
+
+	private async waitCatalogFrame(page: Page, kind: CatalogKind, timeout: number): Promise<Frame | undefined> {
+		const deadline = Date.now() + timeout;
+		while (Date.now() < deadline) {
+			const frame = this.findCatalogFrame(page, kind);
+			if (frame) {
+				/** iframe 的 src 换掉之后 DOM 还要渲染，空 body 直接抽会拿到 0 条 */
+				const ready = await frame
+					.evaluate(() => (((document.body && document.body.innerText) || '').replace(/\s+/g, '').length > 8))
+					.catch(() => false);
+				if (ready) return frame;
+			}
+			await page.waitForTimeout(400);
+		}
+		return undefined;
+	}
+
+	/** 等条目跳转完成：章节走当前页导航，作业/考试多半开新标签 */
+	private async waitEnteredItem(
+		page: Page,
+		kind: CatalogKind,
+		beforeCount: number,
+		timeout: number
+	): Promise<Page | undefined> {
+		const want = CATALOG_MENUS[kind].enterUrlPart;
+		const deadline = Date.now() + timeout;
+
+		while (Date.now() < deadline) {
+			const pages = (this.browser ? this.browser.pages() : []).filter((item) => !item.isClosed());
+			const fresh = pages.length > beforeCount ? pages.slice(beforeCount) : [];
+			const hit = [page, ...fresh].find((item) => want.test(item.url()));
+			if (hit) {
+				await hit.waitForLoadState('domcontentloaded').catch(() => {});
+				return hit;
+			}
+			await page.waitForTimeout(500);
+		}
+		return undefined;
 	}
 
 	/** 校验并填充脚本配置：只接受脚本声明过的字段，必填缺失直接报错 */
@@ -1614,6 +2025,53 @@ export function isBookmarksPageUrl(url: string, serverPort?: number): boolean {
 		return false;
 	}
 }
+
+/**
+ * 是不是「课程主页」——进入某门课之后那一页，顶部有 章节/作业/考试 一排菜单。
+ *
+ * 故意排除 `studentstudy`：那是点进某一节之后的学习页，上面没有这排菜单，
+ * 拿它去点菜单只会一直找不到元素。
+ */
+export function isCoursePageUrl(url: string): boolean {
+	if (!/^https?:/i.test(String(url || ''))) return false;
+	if (/\/mycourse\/studentstudy/i.test(url)) return false;
+	return /\/mycourse\/(stu|studentcourse)(\?|$)/i.test(url);
+}
+
+/**
+ * 三个目录在课程页上的「菜单 dataname / iframe 特征 / 进入后的 URL 特征」
+ *
+ * dataname 取自超星课程页 `li[dataname]`（zj=章节 zy=作业 ks=考试）；
+ * framePart 用来在 page.frames() 里认出这个目录的 iframe；
+ * enterUrlPart 用来判断「点了这一条之后确实跳进去了」。
+ */
+interface CatalogMenu {
+	dataname: string;
+	title: string;
+	framePart: string;
+	enterUrlPart: RegExp;
+}
+
+const CATALOG_MENUS: Record<CatalogKind, CatalogMenu> = {
+	chapter: {
+		dataname: 'zj',
+		title: '章节',
+		framePart: 'studentcourse',
+		enterUrlPart: /\/mycourse\/studentstudy/i
+	},
+	work: {
+		dataname: 'zy',
+		title: '作业',
+		framePart: 'work/list',
+		enterUrlPart: /(work\/dowork|doHomeWorkNew|api\/work)/i
+	},
+	exam: {
+		dataname: 'ks',
+		title: '考试',
+		framePart: 'exam-list',
+		enterUrlPart: /(reVersionTestStart|exam-ans\/exam\/|exam\/test)/i
+	}
+};
 
 /**
  * 页面内抽取课程列表（在浏览器里执行，不能引用外部变量）
@@ -2073,6 +2531,267 @@ export function extractCoursesInPage(arg: { platform: string }): {
 	return { items: items, pageTitle: document.title || '' };
 }
 
+/**
+ * 在章节目录里挑出「下一个该刷的」
+ *
+ * 三个条件缺一不可：已解锁（有 onclick）、还有任务点（`todo`）、没被跳过。
+ * 抽成纯函数是为了能单测——真实页面上点一次菜单要好几秒，测试跑不动。
+ *
+ * 按目录顺序取第一个：超星是闯关模式，前面的没完成后面的本来也点不进去。
+ */
+export function pickNextChapter(items: CatalogItem[], skipIds?: string[]): CatalogItem | undefined {
+	const skip = skipIds || [];
+	return items.filter((item) => item.status === 'todo' && item.clickable && item.id && skip.indexOf(item.id) === -1)[0];
+}
+
+/**
+ * 页面内抽取课程目录（在浏览器里执行，不能引用外部变量）
+ *
+ * 三个目录的 DOM 完全不一样，按 kind 分派。踩过的坑：
+ * - 章节的「章名」节点（"1 必修部分"）既没有 id 也没有 onclick，不是可点条目，
+ *   但它是分组信息，必须保留，否则前端展示不出层级；
+ * - 超星开着「闯关模式」时，后面的章节**连 onclick 都没有**，靠这一点判定 locked；
+ * - 章节的「还剩几个任务点」写在隐藏域 `input.knowledgeJobCount` 里，不是文本；
+ * - 作业/考试的锁定态写在 `.span_tip[title]`（"完成49%任务点可参加考试"），
+ *   条目本身仍有 onclick，点下去只会弹「暂未开放」——必须提前拦下来。
+ */
+export function extractCatalogInPage(arg: { kind: CatalogKind }): {
+	url: string;
+	items: CatalogItem[];
+	summary: string;
+	empty: boolean;
+	message: string;
+} {
+	const norm = (value: any) =>
+		String(value === null || value === undefined ? '' : value)
+			.replace(/\s+/g, ' ')
+			.trim();
+
+	const kind = arg && arg.kind;
+	const items: CatalogItem[] = [];
+	let summary = '';
+	let message = '';
+
+	if (kind === 'chapter') {
+		const nodes = Array.prototype.slice.call(document.querySelectorAll('div.chapter_item')) as HTMLElement[];
+
+		for (const el of nodes) {
+			const idMatch = /^cur(\d+)$/.exec(el.id || '');
+			const onclick = el.getAttribute('onclick') || '';
+			const barEl = el.querySelector('.catalog_sbar');
+			const no = norm(barEl && barEl.textContent);
+			const nameEl = (el.querySelector('.catalog_name') || el) as HTMLElement;
+			const title = norm(nameEl.textContent).replace(no, '').trim();
+			if (!title) continue;
+
+			const stateEl = el.querySelector('.catalog_state');
+			const stateCls = stateEl ? String(stateEl.className || '') : '';
+			const jobEl = el.querySelector('input.knowledgeJobCount') as HTMLInputElement | null;
+			const pending = jobEl ? Number(jobEl.value || 0) : 0;
+			const taskText = norm((el.querySelector('.catalog_task') || el).textContent);
+
+			let status: CatalogItem['status'] = 'unknown';
+			let state = '';
+			let hint = '';
+
+			if (!idMatch && !onclick) {
+				/** 纯分组标题，如 "1 必修部分"：不是条目，只用来分段 */
+				state = '';
+			} else if (!onclick) {
+				status = 'locked';
+				state = '未解锁';
+				hint = taskText || '需先完成前面的闯关任务点';
+			} else if (/icon_yiwanc/.test(stateCls)) {
+				status = 'done';
+				state = '已完成';
+			} else if (pending > 0) {
+				status = 'todo';
+				state = '待完成';
+				hint = pending + ' 个任务点未完成';
+			} else if (/chuangguan/.test(stateCls)) {
+				status = 'locked';
+				state = '未解锁';
+				hint = taskText;
+			} else {
+				status = 'todo';
+				state = '未开始';
+				hint = taskText;
+			}
+
+			items.push({
+				id: idMatch ? idMatch[1] : '',
+				title,
+				no,
+				depth: no ? no.split('.').length : 1,
+				status,
+				state,
+				hint,
+				clickable: !!onclick,
+				onclick
+			});
+		}
+
+		const bodyText = norm(document.body && document.body.innerText);
+		const progress = /已完成任务点[:：]\s*(\d+)\s*\/\s*(\d+)/.exec(bodyText);
+		if (progress) summary = progress[1] + '/' + progress[2] + ' 任务点';
+	} else if (kind === 'work') {
+		const lis = Array.prototype.slice.call(
+			document.querySelectorAll('.bottomList ul > li, .work-list ul > li, .has-content ul > li')
+		) as HTMLElement[];
+
+		for (const el of lis) {
+			const onClickEl = el.querySelector('[onclick]') as HTMLElement | null;
+			const onclick = onClickEl ? onClickEl.getAttribute('onclick') || '' : '';
+			const titleEl = el.querySelector('.overHidden2, .title, p');
+			const title = norm(titleEl && titleEl.textContent) || norm(el.textContent).slice(0, 60);
+			if (!title) continue;
+
+			const state = norm((el.querySelector('.status') || {}).textContent);
+			const tipEl = el.querySelector('.span_tip');
+			const tip = tipEl ? norm(tipEl.getAttribute('title') || tipEl.textContent) : '';
+			const time = norm((el.querySelector('.time') || {}).textContent);
+			const digits = /(\d{6,})/.exec(onclick);
+
+			let status: CatalogItem['status'] = 'unknown';
+			if (!onclick) status = 'locked';
+			else if (/已完成|已提交|已批阅/.test(state)) status = 'done';
+			else if (tip && /任务点|未开放|无法|不能/.test(tip)) status = 'locked';
+			else status = 'todo';
+
+			items.push({
+				id: digits ? digits[1] : '',
+				title,
+				no: '',
+				depth: 0,
+				status,
+				state,
+				hint: [tip, time].filter(Boolean).join(' · '),
+				clickable: !!onclick,
+				onclick
+			});
+		}
+
+		const bodyText = norm(document.body && document.body.innerText);
+		const progress = /\b(\d+)\s*\/\s*(\d+)\b/.exec(bodyText);
+		if (progress) summary = progress[1] + '/' + progress[2];
+	} else {
+		const lis = Array.prototype.slice.call(
+			document.querySelectorAll('.bottomList ul > li, .exam-list ul > li')
+		) as HTMLElement[];
+
+		for (const el of lis) {
+			const onClickEl = el.querySelector('[onclick]') as HTMLElement | null;
+			const onclick = onClickEl ? onClickEl.getAttribute('onclick') || '' : '';
+			const titleEl = el.querySelector('.right-content p, p');
+			const title = norm(titleEl && titleEl.textContent) || norm(el.textContent).slice(0, 60);
+			if (!title) continue;
+
+			const state = norm((el.querySelector('p.status, .status') || {}).textContent);
+			const tipEl = el.querySelector('.span_tip');
+			const tip = tipEl ? norm(tipEl.getAttribute('title') || tipEl.textContent) : '';
+			const time = norm((el.querySelector('.time') || {}).textContent);
+
+			/** goTest(courseId, examId, …)，第 2 个参数就是 examId */
+			let id = '';
+			const go = /goTest\(([^)]*)\)/i.exec(onclick);
+			if (go) {
+				const parts = go[1].split(',');
+				id = String(parts[1] || '').replace(/["'\s]/g, '');
+			}
+
+			let status: CatalogItem['status'] = 'unknown';
+			if (!onclick) status = 'locked';
+			else if (/已完成|已交|已提交/.test(state)) status = 'done';
+			else if (tip && /任务点|未开放|未开始|无法|不能/.test(tip)) status = 'locked';
+			else status = 'todo';
+
+			items.push({
+				id,
+				title,
+				no: '',
+				depth: 0,
+				status,
+				state,
+				hint: [tip, time].filter(Boolean).join(' · '),
+				clickable: !!onclick,
+				onclick
+			});
+		}
+
+		const bodyText = norm(document.body && document.body.innerText);
+		if (/暂无考试/.test(bodyText)) message = '这门课还没有安排考试';
+	}
+
+	const real = items.filter((item) => !!item.id || item.status !== 'unknown');
+	if (!real.length && !message) {
+		const bodyText = norm(document.body && document.body.innerText);
+		message = /暂无作业/.test(bodyText) ? '这门课还没有布置作业' : '没有读到内容，请稍后重试';
+	}
+
+	return { url: location.href, items, summary, empty: real.length === 0, message };
+}
+
+/**
+ * 页面内点击目录里的某一条（在浏览器里执行，不能引用外部变量）
+ *
+ * 章节按 `#cur<chapterId>` 定位；考试按 `goTest(…, examId, …)` 里的 examId 比对；
+ * 其余按 onclick 文本里是否出现 id。点之前统一看一次 `.span_tip`，
+ * 锁定态点下去只会弹「暂未开放」，不如直接告诉用户原因。
+ */
+export function clickCatalogItemInPage(arg: { kind: CatalogKind; id: string }): {
+	ok: boolean;
+	reason?: string;
+	title?: string;
+} {
+	const norm = (value: any) =>
+		String(value === null || value === undefined ? '' : value)
+			.replace(/\s+/g, ' ')
+			.trim();
+
+	const kind = arg && arg.kind;
+	const id = String((arg && arg.id) || '');
+	if (!id) return { ok: false, reason: '缺少条目标识' };
+
+	let el: HTMLElement | null = null;
+
+	if (kind === 'chapter') {
+		el = document.querySelector('div.chapter_item#cur' + id) as HTMLElement | null;
+		if (el && !el.getAttribute('onclick')) {
+			return { ok: false, reason: '这一节还没解锁，需要先完成前面的闯关任务点' };
+		}
+	} else {
+		const selector =
+			kind === 'exam'
+				? '.bottomList li [onclick], .exam-list li [onclick]'
+				: '.bottomList li [onclick], .has-content li [onclick]';
+		const all = Array.prototype.slice.call(document.querySelectorAll(selector)) as HTMLElement[];
+
+		el =
+			all.find((node) => {
+				const text = node.getAttribute('onclick') || '';
+				if (kind === 'exam') {
+					const go = /goTest\(([^)]*)\)/i.exec(text);
+					if (!go) return false;
+					return String(go[1].split(',')[1] || '').replace(/["'\s]/g, '') === id;
+				}
+				return text.indexOf(id) !== -1;
+			}) || null;
+	}
+
+	if (!el) return { ok: false, reason: '页面上找不到这一条，请刷新目录后重试' };
+
+	const card = el.closest('li') || el;
+	const tipEl = card.querySelector('.span_tip');
+	const tip = tipEl ? norm(tipEl.getAttribute('title') || tipEl.textContent) : '';
+	if (tip && /任务点|未开放|无法|不能/.test(tip)) {
+		return { ok: false, reason: '这一条还没解锁：' + tip };
+	}
+
+	const title = norm(el.textContent).slice(0, 60);
+	el.click();
+	return { ok: true, title };
+}
+
 /** 格式化浏览器拓展启动参数 */
 function formatExtensionArguments(extensionPaths: string[]) {
 	const paths = extensionPaths.map((p) => p.replace(/\\/g, '/')).join(',');
@@ -2245,10 +2964,21 @@ export async function launchBrowser({
 						onDone: onAutomationDone
 					});
 
+					/**
+					 * 自动化程序全部结束。
+					 *
+					 * 必须显式通知渲染进程：自动刷课要等登录脚本跑完才能读课程列表，
+					 * 之前只能靠「猜一个延时」，登录慢一点（滑块、短信）就会读到空列表，
+					 * 登录快一点又白等半分钟。
+					 */
+					send('automation-done');
+
 					await step('浏览器初始化完成。', { loading: false });
 					console.log('浏览器初始化全部完成');
 				} catch (err) {
 					console.error('浏览器初始化步骤失败（不影响使用）：', err instanceof Error ? err.message : String(err));
+					/** 初始化中途失败也要给个「自动化阶段结束」的信号，否则自动刷课会白等 5 分钟超时 */
+					send('automation-done');
 				}
 			})
 			.catch((err) => {

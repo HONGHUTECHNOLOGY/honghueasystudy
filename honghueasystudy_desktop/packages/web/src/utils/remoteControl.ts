@@ -4,6 +4,21 @@ import { processEvents, Process, processes } from './process';
 import { Folder } from '../fs/folder';
 import { Browser } from '../fs/browser';
 import { store } from '../store';
+import type { AutomationTarget } from '@honghu-desktop/app/src/scripts/plan';
+import {
+	automationSummary,
+	catalogSupport,
+	enterNextChapter,
+	fetchCourseList,
+	getStatus,
+	isChaoxingCourseUrl,
+	markCourseReady,
+	pauseStudy,
+	readPlan,
+	refreshCourseReady,
+	runStudyNow,
+	writePlan
+} from './automationPlan';
 
 const { ipcRenderer } = electron;
 
@@ -61,6 +76,28 @@ interface BrowserSnapshotItem {
 	 * null 表示当前页没有 video。
 	 */
 	media: { playing: boolean; currentTime: number; duration: number } | null;
+	/** 自动化方案摘要（远程台据此显示「已开定时 / 正在刷哪门课」） */
+	automation: {
+		study: { enabled: boolean; courseName: string; target: AutomationTarget };
+		/** 当前课程页有没有「章节 / 作业 / 考试」三栏（undefined=还没进过课） */
+		catalog?: boolean;
+		/** 此刻是不是正站在课程页上：远程台据此把三个目录置灰/放开 */
+		courseReady: boolean;
+		schedule: {
+			enabled: boolean;
+			startTime: string;
+			endTime: string;
+			days: number[];
+			endAction: string;
+			maxMinutes: number;
+			nextRunAt: number;
+			summary: string;
+		};
+		state: 'idle' | 'waiting' | 'running' | 'done' | 'error';
+		message: string;
+		updatedAt: number;
+		enteredAt: number;
+	};
 }
 
 interface RemoteSnapshotPayload {
@@ -144,7 +181,9 @@ function buildSnapshot(): RemoteSnapshotPayload {
 								currentTime: Number(running.media.currentTime) || 0,
 								duration: Number(running.media.duration) || 0
 							}
-						: null
+						: null,
+				/** 方案摘要是纯对象，但内部的 course/schedule 来自响应式实体，仍走一次 JSON 归一 */
+				automation: JSON.parse(JSON.stringify(automationSummary(browser)))
 			});
 			if (running && running.logs && running.logs.length > 0) {
 				logs[browser.uid] = running.logs.slice(-MAX_LOGS);
@@ -371,7 +410,136 @@ async function executeCommand(action: string, payload: any): Promise<any> {
 			/** 带上课程名：页面若已刷新（标记丢失），子进程按名称重新定位 */
 			const name = String((payload && payload.name) || '');
 
-			return running.callWorkerTimeout('enterCourse', [{ id, name }], 90 * 1000);
+			const result = await running.callWorkerTimeout('enterCourse', [{ id, name }], 90 * 1000);
+			/**
+			 * 顺手判定这套课程页有没有「章节 / 作业 / 考试」三栏
+			 *
+			 * 只有超星有。判定结果随快照上报，手机端据此决定显示不显示那三个目录。
+			 */
+			catalogSupport[uid] = isChaoxingCourseUrl((result && result.url) || '');
+			/** 刚进课，课程页就开着：三个目录可以放开了 */
+			markCourseReady(uid, true);
+			return plain(result);
+		}
+
+		/**
+		 * ---------- 自动化方案 ----------
+		 *
+		 * 与上面 `script.run` 的根本区别：
+		 *   · `script.run` 是「临时执行一次」，用完即忘，不写配置；
+		 *   · 这里的方案会存进浏览器实体，**每次启动浏览器都自动执行**。
+		 * 远程台必须能分清这两件事，否则用户会以为「手机上点过一次，以后电脑开机就会自己跑」。
+		 */
+		case 'automation.get': {
+			const browser = Browser.from(uid);
+			if (!browser) throw new Error('浏览器实例不存在');
+			/**
+			 * 必须压成纯对象再回传。
+			 *
+			 * `browser.automationScripts` 是 Vue 的响应式数组，里面的 configs 也是代理；
+			 * Electron 的 IPC 走结构化克隆，代理对象会直接抛
+			 * `An object could not be cloned.` —— 表现就是远程台永远读不到已配置的脚本。
+			 *
+			 * 这条命令属于主进程内部动作（INTERNAL_ACTIONS），远程客户端不能直接调用：
+			 * 它返回的是**未脱敏**的原始脚本，只供 /api/plan/* 在服务端做脱敏与合并。
+			 */
+			return plain({ plan: readPlan(browser), scripts: browser.automationScripts || [] });
+		}
+
+		case 'automation.save': {
+			const browser = Browser.from(uid);
+			if (!browser) throw new Error('浏览器实例不存在');
+
+			const plan = writePlan(browser, payload && payload.plan);
+			/** 脚本列表由主进程按声明重建好（含密码合并），这里只做落盘 */
+			if (payload && Array.isArray(payload.scripts)) {
+				browser.automationScripts = payload.scripts;
+			}
+			return plain({ plan, scripts: browser.automationScripts || [] });
+		}
+
+		case 'automation.courses': {
+			const refresh = !(payload && payload.refresh === false);
+			return plain(await fetchCourseList(uid, { refresh }));
+		}
+
+		case 'automation.run': {
+			const browser = Browser.from(uid);
+			if (!browser) throw new Error('浏览器实例不存在');
+
+			const plan = readPlan(browser);
+			if (!plan.study.course) throw new Error('还没有选择要刷的课程');
+
+			/**
+			 * 后台执行、立即返回：读课程 + 进课程可能跨分钟，
+			 * 手机锁屏会把 HTTP 连接掐断，进度靠快照里的 automation 字段推送。
+			 */
+			runStudyNow(uid).catch((e) => console.error('自动刷课失败', e));
+			return plain({ started: true, status: getStatus(uid) });
+		}
+
+		case 'automation.stop': {
+			const browser = Browser.from(uid);
+			const message = await pauseStudy(uid, { keepTab: !!(payload && payload.keepTab) });
+			if (payload && payload.closeBrowser && browser) {
+				await browser.close().catch((e) => console.warn('关闭浏览器失败', e));
+			}
+			return plain({ message, status: getStatus(uid) });
+		}
+
+		case 'catalog.list': {
+			const running = Process.from(uid);
+			if (!running) throw new Error('该浏览器未运行');
+			if (running.status !== 'launched') throw new Error('浏览器尚未就绪，请稍后再试');
+
+			const kind = String((payload && payload.kind) || '');
+			if (!kind) throw new Error('缺少目录类型');
+
+			return plain(await running.callWorkerTimeout('listCourseCatalog', [{ kind }], 90 * 1000));
+		}
+
+		case 'catalog.open': {
+			const running = Process.from(uid);
+			if (!running) throw new Error('该浏览器未运行');
+			if (running.status !== 'launched') throw new Error('浏览器尚未就绪，请稍后再试');
+
+			const kind = String((payload && payload.kind) || '');
+			const id = String((payload && payload.id) || '');
+			if (!kind) throw new Error('缺少目录类型');
+			if (!id) throw new Error('缺少条目标识');
+
+			const result = await running.callWorkerTimeout('openCatalogItem', [{ kind, id }], 90 * 1000);
+			/** 进去之后当前页就不是课程页了（或被新标签顶上），顺手更新一次，界面按钮跟着变 */
+			refreshCourseReady(uid).catch(() => {});
+			return plain(result);
+		}
+
+		case 'catalog.next': {
+			const running = Process.from(uid);
+			if (!running) throw new Error('该浏览器未运行');
+			if (running.status !== 'launched') throw new Error('浏览器尚未就绪，请稍后再试');
+
+			const skipIds = payload && Array.isArray(payload.skipIds) ? payload.skipIds.map((x: any) => String(x)) : [];
+			const result = await enterNextChapter(uid, { skipIds });
+			/** 推进成功就跳到学习页了，课程页被顶掉，置灰状态要如实更新 */
+			refreshCourseReady(uid).catch(() => {});
+			return plain(result);
+		}
+
+		/**
+		 * 现在在不在课程页上
+		 *
+		 * 远程台据此把「章节 / 作业 / 考试」置灰或放开。浏览器没起来不是错，
+		 * 直接回 `ready: false`，界面上保持灰色即可，不必弹错误提示。
+		 */
+		case 'catalog.ready': {
+			const running = Process.from(uid);
+			if (!running || running.status !== 'launched') {
+				markCourseReady(uid, false);
+				return plain({ ready: false, url: '' });
+			}
+			const ready = await refreshCourseReady(uid);
+			return plain({ ready, url: '' });
 		}
 
 		default:
@@ -382,6 +550,20 @@ async function executeCommand(action: string, payload: any): Promise<any> {
 /** 简易延时 */
 function sleep(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * 压成纯对象
+ *
+ * IPC 的结构化克隆不接受 Vue 响应式代理（会抛 `An object could not be cloned.`）。
+ * 命令返回值一律过一遍，宁可多花一次 JSON 往返，也不要出现「命令执行成功但远程收不到」。
+ */
+function plain<T>(value: T): T {
+	try {
+		return JSON.parse(JSON.stringify(value)) as T;
+	} catch {
+		return value;
+	}
 }
 
 /** 从 payload 中收集要批量操作的 uid 列表；为空则取全部未运行（或已运行）实例 */
@@ -495,6 +677,8 @@ export function activeRemoteControlBridge() {
 	 */
 	processEvents.on('pages', schedulePush);
 	processEvents.on('progress', schedulePush);
+	/** 自动化方案的执行进度（等待登录 / 读课程 / 进课）也要立刻反映到远程台 */
+	processEvents.on('automation-state', schedulePush);
 	/**
 	 * 状态变化（启动中 / 已启动 / 关闭中 / 失败）立刻上报，不经 800ms 节流。
 	 *
@@ -560,6 +744,7 @@ export function activeRemoteControlBridge() {
 export function disposeRemoteControlBridge() {
 	processEvents.off('pages', schedulePush);
 	processEvents.off('progress', schedulePush);
+	processEvents.off('automation-state', schedulePush);
 	processEvents.off('status', sendState);
 	if (beatWorker) {
 		beatWorker.terminate();

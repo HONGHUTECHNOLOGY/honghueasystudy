@@ -67,6 +67,7 @@ import { closeAllBrowser, showClearBrowserCachesModal } from './utils/browser';
 import { changeTheme, fetchRemoteLangs, setAlwaysOnTop, setAutoLaunch } from './utils';
 import { activeIpcRenderListener } from './utils/ipc';
 import { activeRemoteControlBridge } from './utils/remoteControl';
+import { startAutomationScheduler } from './utils/automationPlan';
 import { getWindowsRelease } from './utils/os';
 import { observeVisibleBrand } from './utils/brand-sanitizer';
 import { currentBrowser } from './fs';
@@ -110,6 +111,15 @@ onMounted(async () => {
 
 	/** 开启远程控制桥接（状态上报 + 命令执行） */
 	activeRemoteControlBridge();
+
+	/**
+	 * 开启自动化调度
+	 *
+	 * 负责两件「用户不在电脑前也要发生」的事：每日定时拉起浏览器刷课、
+	 * 到点暂停/关闭。放在应用启动后执行，是因为它依赖配置树与 Process 实例，
+	 * 而这两者都要等 store 初始化完成。
+	 */
+	startAutomationScheduler();
 
 	/** 设置窗口边框 */
 	remote.os.call('platform').then(async (platform) => {

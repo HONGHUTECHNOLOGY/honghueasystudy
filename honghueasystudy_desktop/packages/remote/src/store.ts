@@ -3,7 +3,13 @@ import {
 	api,
 	AuthError,
 	AutomationJob,
+	AutomationPlan,
 	BrowserSnapshot,
+	CatalogItem,
+	CatalogKind,
+	CourseCatalog,
+	PlanScript,
+	RemoteCourse,
 	RemoteScript,
 	RemoteSnapshot,
 	ServiceInfo,
@@ -54,6 +60,34 @@ interface State {
 	automation: { [uid: string]: AutomationJob };
 	/** 自动化相关请求的进行中标记：uid → run / courses / enter */
 	automationBusy: { [uid: string]: 'run' | 'courses' | 'enter' };
+	/**
+	 * 自动化方案（每次启动自动执行的那一份）
+	 *
+	 * 与 `automation` 严格区分：`automation` 是「这一次临时跑」的任务状态，
+	 * 这里是落盘配置 + 脚本列表。两者混在一起，用户就会以为
+	 * 「随便跑一次登录，以后开机也会自动跑」。
+	 */
+	plans: { [uid: string]: { plan: AutomationPlan; scripts: PlanScript[] } };
+	/** 方案请求进行中标记 */
+	planBusy: { [uid: string]: 'load' | 'save' | 'run' | 'stop' | 'courses' };
+	/** 选课用的课程列表（按 uid 缓存，避免每次打开面板都重新读） */
+	planCourses: { [uid: string]: { courses: RemoteCourse[]; hint: string; platform: string } };
+	/**
+	 * 课程内部目录（章节 / 作业 / 考试）
+	 *
+	 * 按 `uid:kind` 缓存：读一次要点菜单 + 等 iframe，几秒钟起步，
+	 * 用户来回切 tab 不该每次都重读。
+	 */
+	catalogs: { [key: string]: CourseCatalog };
+	/** 目录读取/进入进行中（key 同 catalogs，进入时用 `uid:kind:itemId`） */
+	catalogBusy: { [key: string]: boolean };
+	/**
+	 * 这台浏览器此刻在不在课程页上
+	 *
+	 * 三个目录只有课程页里才有入口，没进课时点下去只会报错，所以要先置灰。
+	 * `undefined` = 还没问过（快照里的值优先），`false` = 问过了确实不在。
+	 */
+	catalogReady: { [uid: string]: boolean };
 }
 
 export const state = reactive<State>({
@@ -78,7 +112,13 @@ export const state = reactive<State>({
 	snapshotAt: 0,
 	scripts: [],
 	automation: {},
-	automationBusy: {}
+	automationBusy: {},
+	plans: {},
+	planBusy: {},
+	planCourses: {},
+	catalogs: {},
+	catalogBusy: {},
+	catalogReady: {}
 });
 
 /** 界面态（与业务数据分开） */
@@ -808,6 +848,8 @@ export async function enterCourseById(uid: string, id: string, name: string) {
 		const res = await api.enterCourse(uid, id, name);
 		/** 提示只用课程名：页面 title 在 SPA 课程页上常是站点名（「智慧树」/「超星」） */
 		toast(`已进入课程：${name}`, 'success');
+		/** 刚进课：课程页开着，三个目录可以放开了（不等快照） */
+		state.catalogReady[uid] = true;
 		/** 进入后刷新一次快照，让「打开的页面」立刻反映新课程页 */
 		refresh();
 		return res.data;
@@ -817,5 +859,206 @@ export async function enterCourseById(uid: string, id: string, name: string) {
 		throw e;
 	} finally {
 		delete state.automationBusy[uid];
+	}
+}
+
+// ------------------------------------------------------------------ 自动化方案（每次启动自动执行）
+
+/**
+ * 拉取方案
+ *
+ * `force=false` 时命中缓存直接返回：面板反复开关不该每次都走一趟局域网请求，
+ * 而方案本身很少变化，用户改动都走 `savePlan` 主动刷新缓存。
+ */
+export async function loadPlan(
+	uid: string,
+	force = false
+): Promise<{ plan: AutomationPlan; scripts: PlanScript[] } | null> {
+	if (!force && state.plans[uid]) return state.plans[uid];
+	state.planBusy[uid] = 'load';
+	try {
+		const res = await api.plan(uid);
+		state.plans[uid] = { plan: res.plan, scripts: res.scripts || [] };
+		return state.plans[uid];
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		else toast(e instanceof Error ? e.message : String(e), 'error');
+		return null;
+	} finally {
+		delete state.planBusy[uid];
+	}
+}
+
+/** 保存方案 */
+export async function savePlan(uid: string, plan: AutomationPlan, scripts: PlanScript[], baseline?: PlanScript[]) {
+	state.planBusy[uid] = 'save';
+	try {
+		const res = await api.savePlan(uid, plan, scripts, baseline);
+		state.plans[uid] = { plan: res.plan, scripts: res.scripts || [] };
+		toast('已保存，之后每次启动浏览器都会自动执行', 'success');
+		/** 快照里的定时文案要跟着变，主动催一次 */
+		refresh();
+		return state.plans[uid];
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		else toast(e instanceof Error ? e.message : String(e), 'error');
+		throw e;
+	} finally {
+		delete state.planBusy[uid];
+	}
+}
+
+/** 立即执行一次自动刷课（后台跑，进度看卡片状态） */
+export async function runPlanNow(uid: string) {
+	state.planBusy[uid] = 'run';
+	try {
+		await api.runPlan(uid);
+		toast('已开始自动刷课，进度会显示在下方', 'success');
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		else toast(e instanceof Error ? e.message : String(e), 'error');
+		throw e;
+	} finally {
+		delete state.planBusy[uid];
+	}
+}
+
+/** 暂停刷课 */
+export async function stopPlanNow(uid: string, opts?: { closeBrowser?: boolean }) {
+	state.planBusy[uid] = 'stop';
+	try {
+		const res = await api.stopPlan(uid, opts);
+		toast((res.data && res.data.message) || '已暂停刷课', 'success');
+		refresh();
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		else toast(e instanceof Error ? e.message : String(e), 'error');
+		throw e;
+	} finally {
+		delete state.planBusy[uid];
+	}
+}
+
+/** 读取课程列表（选课） */
+export async function loadPlanCourses(uid: string, refresh = true) {
+	state.planBusy[uid] = 'courses';
+	try {
+		const res = await api.planCourses(uid, refresh);
+		state.planCourses[uid] = {
+			courses: res.courses || [],
+			hint: res.hint || '',
+			platform: res.platform || ''
+		};
+		return state.planCourses[uid];
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		else toast(e instanceof Error ? e.message : String(e), 'error');
+		throw e;
+	} finally {
+		delete state.planBusy[uid];
+	}
+}
+
+/** 目录缓存的 key：一个浏览器 × 一种目录 */
+export function catalogKey(uid: string, kind: CatalogKind): string {
+	return uid + ':' + kind;
+}
+
+/**
+ * 问一次桌面端：现在在课程页上吗
+ *
+ * 「章节 / 作业 / 考试」三个目录只有课程页里才有入口。没进课时把它们点亮，
+ * 用户点下去只会收到「还没有进入课程页」；所以进面板、进完课、切 tab 之后都问一次，
+ * 问到 `ready` 才放开按钮。
+ *
+ * 不弹错误提示：浏览器没起来、还没进课都是正常状态，界面保持置灰就好。
+ */
+export async function refreshCatalogReady(uid: string): Promise<boolean> {
+	try {
+		const res = await api.catalogReady(uid);
+		const ready = !!(res.data && res.data.ready);
+		state.catalogReady[uid] = ready;
+		return ready;
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		state.catalogReady[uid] = false;
+		return false;
+	}
+}
+
+/**
+ * 读课程内部目录（章节 / 作业 / 考试）
+ *
+ * 读一次要点菜单并等 iframe 渲染，几秒钟起步，所以结果按 `uid:kind` 缓存；
+ * 传 `refresh` 才会重新去页面上读（刷完课回来看进度时用）。
+ */
+export async function loadCatalog(uid: string, kind: CatalogKind, refresh = false) {
+	const key = catalogKey(uid, kind);
+	if (!refresh && state.catalogs[key]) return state.catalogs[key];
+
+	state.catalogBusy[key] = true;
+	try {
+		const res = await api.catalogList(uid, kind);
+		state.catalogs[key] = res.data;
+		return res.data;
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		else toast(e instanceof Error ? e.message : String(e), 'error');
+		throw e;
+	} finally {
+		delete state.catalogBusy[key];
+	}
+}
+
+/**
+ * 进入目录里的某一条
+ *
+ * 章节会跳到学习页由刷课脚本接管，作业/考试跳到答题页由做题脚本接管。
+ * 进去之后把该目录标脏，下次打开会自动重读（任务点状态变了）。
+ */
+export async function openCatalogItem(uid: string, kind: CatalogKind, item: CatalogItem) {
+	const key = catalogKey(uid, kind) + ':' + item.id;
+	state.catalogBusy[key] = true;
+	try {
+		const res = await api.catalogOpen(uid, kind, item.id);
+		delete state.catalogs[catalogKey(uid, kind)];
+		/** 进去之后当前页就不是课程页了，问一次让三个目录如实置灰 */
+		refreshCatalogReady(uid).catch(() => {});
+		const title = res.data && res.data.title ? res.data.title : item.title;
+		toast('已进入：' + title, 'success');
+		return res.data;
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		else toast(e instanceof Error ? e.message : String(e), 'error');
+		throw e;
+	} finally {
+		delete state.catalogBusy[key];
+	}
+}
+
+/**
+ * 从当前进度继续刷
+ *
+ * 不是「挑一节」，而是让桌面端去找第一个还没刷完的章节并进入，
+ * 之后的章节由超星脚本按闯关顺序自己推进。
+ */
+export async function advanceCatalog(uid: string) {
+	const key = catalogKey(uid, 'chapter') + ':next';
+	state.catalogBusy[key] = true;
+	try {
+		const res = await api.catalogNext(uid);
+		const data = res.data;
+		/** 进没进成，章节状态都变了，让下次打开重新读 */
+		delete state.catalogs[catalogKey(uid, 'chapter')];
+		/** 推进成功就跳到学习页了，课程页被顶掉，置灰状态要跟着更新 */
+		refreshCatalogReady(uid).catch(() => {});
+		toast(data.message || (data.entered ? '已进入下一节' : '没有待完成的章节'), data.entered ? 'success' : 'info');
+		return data;
+	} catch (e) {
+		if (e instanceof AuthError) handleAuthLost('登录已失效，请重新配对');
+		else toast(e instanceof Error ? e.message : String(e), 'error');
+		throw e;
+	} finally {
+		delete state.catalogBusy[key];
 	}
 }

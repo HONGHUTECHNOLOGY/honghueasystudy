@@ -10,6 +10,7 @@ import EventEmitter from 'events';
 import { child_process } from './node';
 import { notify } from './notify';
 import { createProgress, feedProgress, TaskProgress } from './task-progress';
+import { normalizeBrowserScripts } from './automationScripts';
 
 export type RemoteScriptWorker = <W extends keyof ScriptWorker = keyof ScriptWorker>(
 	event: W,
@@ -206,6 +207,15 @@ export class Process extends EventEmitter {
 			/** 页面新增/跳转/关闭，节流后刷新页面列表 */
 			'page-changed': () => {
 				this.refreshPages();
+			},
+			/**
+			 * 启动时那批自动化脚本跑完了。
+			 *
+			 * 自动刷课要等这一刻才能读课程列表（登录没完成时列表是空的），
+			 * 所以既在实例上广播（等待方直接 await），也发到全局总线上（调度器用）。
+			 */
+			'automation-done': () => {
+				processEvents.emit('automation-done', this.uid);
 			}
 		};
 
@@ -222,7 +232,8 @@ export class Process extends EventEmitter {
 			store,
 			cachePath: this.browser.cachePath,
 			uid: this.uid,
-			automationScripts: this.browser.automationScripts,
+			/** 按当前脚本声明补全 configs：旧存档里缺字段的脚本也要能正常执行 */
+			automationScripts: normalizeBrowserScripts(this.browser.automationScripts),
 			browserInfo: {
 				name: this.browser.name,
 				notes: this.browser.notes,

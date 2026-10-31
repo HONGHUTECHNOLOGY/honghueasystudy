@@ -103,8 +103,8 @@ import { Modal, TableColumnData } from '@arco-design/web-vue';
 import uniqueId from 'lodash/uniqueId';
 import { store } from '../../store';
 import Icon from '../Icon.vue';
-import type { Config } from '@honghu-desktop/app/src/scripts/interface';
 import { remote } from '../../utils/remote';
+import { writeBrowserScripts } from '../../utils/automationScripts';
 import xlsx from 'xlsx';
 
 const props = defineProps<{
@@ -223,7 +223,6 @@ function onConfirm() {
 	const configsList: { browserName: string; configs: RawAutomationScript['configs'] }[] = [];
 
 	for (const obj of validData) {
-		const configs: RawAutomationScript['configs'] = Object.create({});
 		const object: Record<string, any> & { browserName: string } = JSON.parse(JSON.stringify(obj));
 
 		Reflect.deleteProperty(object, 'index');
@@ -232,17 +231,14 @@ function onConfirm() {
 		const browserName = object.browserName || '';
 		Reflect.deleteProperty(object, 'browserName');
 
-		for (const key in object) {
-			if (Object.prototype.hasOwnProperty.call(object, key)) {
-				Reflect.set(configs, key, {
-					hide: !!rawAutomationScript.value.configs[key]?.hide,
-					label: rawAutomationScript.value.configs[key]?.label,
-					value: object[key]
-				} as Config);
-			}
-		}
-		const finalBrowserName = browserName || state.browserNameFields.map((f) => configs[f]?.value || '').join(' ');
-		configsList.push({ browserName: finalBrowserName, configs });
+		/** 行数据就是值视图，configs 交给共享转换按声明重建（隐藏字段默认值也一并带上） */
+		const script = writeBrowserScripts([
+			{ name: rawAutomationScript.value.name, icon: rawAutomationScript.value.icon, values: object }
+		])[0];
+		if (!script) continue;
+
+		const finalBrowserName = browserName || state.browserNameFields.map((f) => script.configs[f]?.value || '').join(' ');
+		configsList.push({ browserName: finalBrowserName, configs: script.configs });
 	}
 
 	emits('confirm', props.rawAutomationScript, configsList);

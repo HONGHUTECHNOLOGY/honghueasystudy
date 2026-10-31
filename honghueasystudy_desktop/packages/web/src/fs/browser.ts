@@ -8,6 +8,7 @@ import { Folder, root } from './folder';
 import { BrowserOptions, BrowserOperateHistory, Tag, BrowserType, EntityOptions } from './interface';
 import { remote } from '../utils/remote';
 import { RawAutomationScript } from '../components/automation-scripts';
+import { defaultBrowserAutomation, type BrowserAutomation } from '@honghu-desktop/app/src/scripts/plan';
 import { child_process } from '../utils/node';
 
 export class Browser extends Entity implements BrowserOptions {
@@ -19,6 +20,8 @@ export class Browser extends Entity implements BrowserOptions {
 	histories: BrowserOperateHistory[];
 	parent: string;
 	automationScripts: RawAutomationScript[];
+	/** 自动化方案（自动刷课 + 每日定时），旧存档里没有，读取时统一走 normalize */
+	automation?: BrowserAutomation;
 
 	constructor(opts: BrowserOptions & EntityOptions) {
 		super(opts);
@@ -30,6 +33,7 @@ export class Browser extends Entity implements BrowserOptions {
 		this.parent = opts.parent;
 		// 兼容旧字段 playwrightScripts
 		this.automationScripts = opts.automationScripts ?? (opts as any).playwrightScripts ?? [];
+		this.automation = opts.automation ?? defaultBrowserAutomation();
 		this.cachePath = opts.cachePath;
 	}
 

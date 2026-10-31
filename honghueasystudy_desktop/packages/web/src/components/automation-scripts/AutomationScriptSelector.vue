@@ -75,6 +75,7 @@ import CommonSelector from '../CommonSelector.vue';
 import { remote } from '../../utils/remote';
 import { iconUrl } from '../../utils';
 import Icon from '../Icon.vue';
+import { normalizeBrowserScripts } from '../../utils/automationScripts';
 
 const state = reactive({
 	search: ''
@@ -131,8 +132,7 @@ function hiddenConfigLabels(configs: any = {}) {
 }
 
 function onConfirm(val: RawAutomationScript[]) {
-	console.log(JSON.parse(JSON.stringify(val)));
-	emits('confirm', JSON.parse(JSON.stringify(val)));
+	emits('confirm', normalizeBrowserScripts(JSON.parse(JSON.stringify(val))));
 }
 </script>
 

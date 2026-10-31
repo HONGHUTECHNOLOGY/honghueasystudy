@@ -156,7 +156,7 @@
 						></span>
 					</div>
 
-					<!-- 远程自动化入口：登录脚本 + 选课（进入课程后交给刷课脚本） -->
+					<!-- 远程自动化入口：临时遥控（点一次跑一次）+ 登录/选课脚本（每次启动都跑）+ 定时刷课 -->
 					<button
 						v-if="browser.status === 'launched'"
 						type="button"
@@ -170,8 +170,8 @@
 							/>
 						</span>
 						<span class="automate__text">
-							<b>自动登录 / 选课</b>
-							<small class="faint">手机填账号 → 电脑执行 → 选课进入课程</small>
+							<b>登录/选课脚本 · 定时刷课 · 临时控制</b>
+							<small class="faint">手机遥控电脑：临时点一次，或按方案自动跑</small>
 						</span>
 						<Icon
 							name="chevron"

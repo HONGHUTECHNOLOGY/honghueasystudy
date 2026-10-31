@@ -137,6 +137,7 @@ async function multipleCreate(
 			automationScripts: [
 				{
 					name: raw.name,
+					icon: raw.icon,
 					configs: item.configs
 				}
 			]

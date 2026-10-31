@@ -13,8 +13,9 @@ import { buildLanUrls, buildLanUrlsSync, normalizeClientIp } from './network.add
 import { createQRCodeSafe, QRCodeResult } from './qr';
 import { AutomationJob, AutomationRunner } from './automation';
 import { RemoteServer, RemoteSnapshot, ServiceInfo } from './server';
-import { RemoteScriptInfo } from './script-catalog';
+import { RemoteScriptInfo, AutomationScriptValues, buildAutomationScripts, exportAutomationScripts } from './script-catalog';
 import { CloudflaredTunnel, TunnelStatus } from './tunnel';
+import { normalizeBrowserAutomation, type BrowserAutomation } from '../../scripts/plan';
 
 const logger = Logger('remote-control');
 
@@ -100,6 +101,7 @@ export class RemoteControlService {
 		primary: '',
 		ts: 0
 	};
+
 	private lanTimer?: ReturnType<typeof setInterval>;
 
 	private _auth?: RemoteAuth;
@@ -222,7 +224,12 @@ export class RemoteControlService {
 					getAutomation: (uid) => this.getAutomation(uid),
 					startAutomation: (opts) => this.startAutomation(opts),
 					refreshCourses: (opts) => this.refreshCourses(opts),
-					enterCourse: (opts) => this.enterCourse(opts)
+					enterCourse: (opts) => this.enterCourse(opts),
+					getPlan: (uid) => this.getPlan(uid),
+					savePlan: (opts) => this.savePlan(opts),
+					runStudy: (uid) => this.runStudy(uid),
+					stopStudy: (opts) => this.stopStudy(opts),
+					listCourses: (opts) => this.listCourses(opts)
 				},
 				this.bridge
 			);
@@ -352,6 +359,105 @@ export class RemoteControlService {
 	/** 进入课程（进入后由桌面端扩展里的刷课脚本接管） */
 	enterCourse(opts: { uid: string; id: string; name?: string }): Promise<{ url: string; title: string }> {
 		return this.automation.enter(opts);
+	}
+
+	// ---------------------------------------------------------------- 自动化方案
+
+	/**
+	 * 读取自动化方案
+	 *
+	 * 「自动化方案」= 每次启动浏览器都会自动执行的那一份配置（脚本 + 刷课 + 定时），
+	 * 和上面 `startAutomation` 的「临时执行一次」是两件不同的事：
+	 * 前者落盘、长期生效，后者只在这次请求里跑一遍就忘。
+	 *
+	 * 脚本里的密码在这里统一抹掉：手机端没有理由拿到桌面端已存的账号密码。
+	 */
+	async getPlan(uid: string): Promise<{ plan: BrowserAutomation; scripts: AutomationScriptValues[] }> {
+		const id = String(uid || '');
+		if (!id) throw new Error('缺少浏览器实例');
+
+		const raw = await this.bridge.dispatch('automation.get', { uid: id });
+		return {
+			plan: normalizeBrowserAutomation(raw && raw.plan),
+			scripts: exportAutomationScripts((raw && raw.scripts) || [])
+		};
+	}
+
+	/**
+	 * 保存自动化方案
+	 *
+	 * 先读一次现有配置再合并：手机端提交的密码框总是空的（读不到原值），
+	 * 直接覆盖会把用户已保存的密码抹成空串，下次自动登录直接失败。
+	 */
+	async savePlan(opts: {
+		uid: string;
+		plan?: any;
+		scripts?: any[];
+		/** 手机打开面板时读到的脚本列表（三路合并的基线） */
+		baseline?: any[];
+	}): Promise<{ plan: BrowserAutomation; scripts: AutomationScriptValues[] }> {
+		const id = String((opts && opts.uid) || '');
+		if (!id) throw new Error('缺少浏览器实例');
+
+		const current = await this.bridge.dispatch('automation.get', { uid: id });
+
+		/**
+		 * 只在请求真的带了脚本列表时才重建。
+		 *
+		 * `scripts` 缺省表示「这次只改刷课/定时」，此时必须沿用桌面端已有的脚本；
+		 * 拿空数组去重建等于把用户配好的登录脚本整批删掉，
+		 * 表现为「在手机上改了个时间，电脑开机就不自动登录了」。
+		 */
+		const incomingScripts = opts && Array.isArray(opts.scripts) ? opts.scripts : null;
+		const baseline = opts && Array.isArray(opts.baseline) ? opts.baseline : undefined;
+		const scripts = incomingScripts
+			? buildAutomationScripts(incomingScripts, (current && current.scripts) || [], baseline)
+			: (current && current.scripts) || [];
+
+		/**
+		 * 定时器的记账字段由桌面端独占维护。
+		 *
+		 * `lastRunDate/lastStopDate/runStartedAt` 决定「今天是否已经自动跑过/收过尾」，
+		 * 手机端根本不知道这些值，如果跟着表单一起覆盖：
+		 * 用户在定时窗口内保存一次方案，桌面端就会以为「今天还没跑过」，
+		 * 于是又拉起一次浏览器（或重复收尾）。
+		 */
+		const previous = normalizeBrowserAutomation(current && current.plan);
+		const plan = normalizeBrowserAutomation(opts && opts.plan);
+		plan.schedule.lastRunDate = previous.schedule.lastRunDate;
+		plan.schedule.lastStopDate = previous.schedule.lastStopDate;
+		plan.schedule.runStartedAt = previous.schedule.runStartedAt;
+
+		const saved = await this.bridge.dispatch('automation.save', { uid: id, plan, scripts });
+		return {
+			plan: normalizeBrowserAutomation(saved && saved.plan),
+			scripts: exportAutomationScripts((saved && saved.scripts) || [])
+		};
+	}
+
+	/** 立即执行一次自动刷课（后台跑，进度随快照上报） */
+	runStudy(uid: string): Promise<any> {
+		const id = String(uid || '');
+		if (!id) return Promise.reject(new Error('缺少浏览器实例'));
+		return this.bridge.dispatch('automation.run', { uid: id });
+	}
+
+	/** 暂停刷课（可选顺便关浏览器） */
+	stopStudy(opts: { uid: string; keepTab?: boolean; closeBrowser?: boolean }): Promise<any> {
+		const id = String((opts && opts.uid) || '');
+		if (!id) return Promise.reject(new Error('缺少浏览器实例'));
+		return this.bridge.dispatch('automation.stop', {
+			uid: id,
+			keepTab: !!(opts && opts.keepTab),
+			closeBrowser: !!(opts && opts.closeBrowser)
+		});
+	}
+
+	/** 读课程列表（选课用） */
+	listCourses(opts: { uid: string; refresh?: boolean }): Promise<any> {
+		const id = String((opts && opts.uid) || '');
+		if (!id) return Promise.reject(new Error('缺少浏览器实例'));
+		return this.bridge.dispatch('automation.courses', { uid: id, refresh: opts && opts.refresh !== false });
 	}
 
 	/**

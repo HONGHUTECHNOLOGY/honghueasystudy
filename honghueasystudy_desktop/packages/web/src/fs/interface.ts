@@ -1,4 +1,5 @@
 import { RawAutomationScript } from '../components/automation-scripts';
+import type { BrowserAutomation } from '@honghu-desktop/app/src/scripts/plan';
 
 export type FolderType = 'folder' | 'root';
 export type BrowserType = 'browser';
@@ -48,8 +49,15 @@ export interface BrowserOptions extends EntityOptions {
 	renaming: boolean;
 	/** 历史 */
 	histories: BrowserOperateHistory[];
-	/** 自动化程序列表 */
+	/** 自动化程序列表（每次启动浏览器自动执行） */
 	automationScripts: RawAutomationScript[];
+	/**
+	 * 自动化方案：自动刷课 + 每日定时
+	 *
+	 * 与 `automationScripts` 分工：脚本负责「把号登上」，方案负责
+	 * 「登上去以后进哪门课、什么时间自动来一趟、到点怎么收尾」。
+	 */
+	automation?: BrowserAutomation;
 }
 
 /**

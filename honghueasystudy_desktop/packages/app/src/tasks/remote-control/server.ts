@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { Logger } from '../../logger';
 import { RateLimiter, RemoteAuth, RemoteSession } from './auth';
-import { CommandBridge, isAllowedAction } from './command';
+import { CommandBridge, isClientAction } from './command';
 import { RemoteScriptInfo } from './script-catalog';
 import { TunnelStatus } from './tunnel';
 /** 仅类型引用：import type 会被完全擦除，不会引入循环依赖 */
@@ -76,6 +76,22 @@ export interface RemoteServerContext {
 	refreshCourses(opts: { uid: string; refresh?: boolean }): Promise<AutomationJob>;
 	/** 进入课程 */
 	enterCourse(opts: { uid: string; id: string; name?: string }): Promise<{ url: string; title: string }>;
+	/** 读取自动化方案（每次启动自动执行的那一份，脚本密码已脱敏） */
+	getPlan(uid: string): Promise<{ plan: any; scripts: any[] }>;
+	/** 保存自动化方案（密码留空 = 保持原值） */
+	savePlan(opts: {
+		uid: string;
+		plan?: any;
+		scripts?: any[];
+		/** 三路合并基线：手机打开面板时读到的脚本，缺省时退回「表单即全部」 */
+		baseline?: any[];
+	}): Promise<{ plan: any; scripts: any[] }>;
+	/** 立即执行一次自动刷课 */
+	runStudy(uid: string): Promise<any>;
+	/** 暂停刷课 */
+	stopStudy(opts: { uid: string; keepTab?: boolean; closeBrowser?: boolean }): Promise<any>;
+	/** 读课程列表（选课用） */
+	listCourses(opts: { uid: string; refresh?: boolean }): Promise<any>;
 }
 
 /** 快照缓存的有效期（ms） */
@@ -369,7 +385,8 @@ export class RemoteServer {
 			const action = String((req.body && req.body.action) || '');
 			const payload = (req.body && req.body.payload) || {};
 
-			if (!isAllowedAction(action)) {
+			/** 客户端白名单：automation.get/save 只给主进程内部用，避免明文密码经命令通道泄露 */
+			if (!isClientAction(action)) {
 				res.status(400).json({ ok: false, error: '不支持的操作' });
 				return;
 			}
@@ -457,6 +474,101 @@ export class RemoteServer {
 					name: String(body.name || '')
 				});
 				res.json({ ok: true, data });
+			} catch (e) {
+				res.status(500).json({ ok: false, error: errText(e) });
+			}
+		});
+
+		/**
+		 * ---------- 自动化方案 ----------
+		 *
+		 * 与上面 `/api/automation/*` 的区别：那边是「临时执行一次」（登录/选课），
+		 * 这边是「落盘、以后每次启动浏览器都自动执行」的配置。
+		 * 路径单独开一段而不是复用 `/api/automation/:uid`，避免被参数路由吃掉。
+		 */
+
+		app.get('/api/plan/:uid', auth, async (req, res) => {
+			const uid = String(req.params.uid || '');
+			if (!uid) {
+				res.status(400).json({ ok: false, error: '缺少 uid' });
+				return;
+			}
+			try {
+				const data = await this.ctx.getPlan(uid);
+				res.json({ ok: true, ...data });
+			} catch (e) {
+				res.status(500).json({ ok: false, error: errText(e) });
+			}
+		});
+
+		app.post('/api/plan/save', auth, csrfGuard, async (req, res) => {
+			if (!this.commandLimiter.take()) {
+				res.status(429).json({ ok: false, error: '操作过于频繁，请稍后再试' });
+				return;
+			}
+			const body = req.body || {};
+			try {
+				const data = await this.ctx.savePlan({
+					uid: String(body.uid || ''),
+					plan: body.plan,
+					scripts: Array.isArray(body.scripts) ? body.scripts : undefined,
+					/** 三路合并基线：手机打开面板时读到的那份，缺失时退回整表覆盖 */
+					baseline: Array.isArray(body.baseline) ? body.baseline : undefined
+				});
+				/** 保存后立刻催一次快照：手机端「已保存」的提示要和卡片上的定时文案同时更新 */
+				this.ctx.requestStateRefresh();
+				res.json({ ok: true, ...data });
+			} catch (e) {
+				res.status(400).json({ ok: false, error: errText(e) });
+			}
+		});
+
+		app.post('/api/plan/run', auth, csrfGuard, async (req, res) => {
+			if (!this.commandLimiter.take()) {
+				res.status(429).json({ ok: false, error: '操作过于频繁，请稍后再试' });
+				return;
+			}
+			const body = req.body || {};
+			try {
+				const data = await this.ctx.runStudy(String(body.uid || ''));
+				res.json({ ok: true, data });
+			} catch (e) {
+				res.status(400).json({ ok: false, error: errText(e) });
+			}
+		});
+
+		app.post('/api/plan/stop', auth, csrfGuard, async (req, res) => {
+			if (!this.commandLimiter.take()) {
+				res.status(429).json({ ok: false, error: '操作过于频繁，请稍后再试' });
+				return;
+			}
+			const body = req.body || {};
+			try {
+				const data = await this.ctx.stopStudy({
+					uid: String(body.uid || ''),
+					keepTab: !!body.keepTab,
+					closeBrowser: !!body.closeBrowser
+				});
+				this.ctx.requestStateRefresh();
+				res.json({ ok: true, data });
+			} catch (e) {
+				res.status(500).json({ ok: false, error: errText(e) });
+			}
+		});
+
+		/** 选课用的课程列表（比 course.list 多一层「浏览器必须已启动」的前置校验） */
+		app.post('/api/plan/courses', auth, csrfGuard, async (req, res) => {
+			if (!this.commandLimiter.take()) {
+				res.status(429).json({ ok: false, error: '操作过于频繁，请稍后再试' });
+				return;
+			}
+			const body = req.body || {};
+			try {
+				const data = await this.ctx.listCourses({
+					uid: String(body.uid || ''),
+					refresh: body.refresh !== false
+				});
+				res.json({ ok: true, ...data });
 			} catch (e) {
 				res.status(500).json({ ok: false, error: errText(e) });
 			}

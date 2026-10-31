@@ -64,6 +64,10 @@
 			<div class="mt-2">
 				<AutomationScripts v-model:automation-scripts="instance.automationScripts"></AutomationScripts>
 			</div>
+
+			<div class="mt-2 pe-2">
+				<AutomationPlan :browser="instance" />
+			</div>
 		</div>
 
 		<a-divider> </a-divider>
@@ -249,10 +253,12 @@ import { currentBrowser } from '../../fs/index';
 import { reactive, onMounted, nextTick } from 'vue';
 import AutomationScriptSelector from '../automation-scripts/AutomationScriptSelector.vue';
 import AutomationScripts from '../automation-scripts/AutomationScriptList.vue';
+import AutomationPlan from '../automation-scripts/AutomationPlan.vue';
 import XTerm from '../XTerm.vue';
 import { electron } from '../../utils/node';
 import { remote } from '../../utils/remote';
 import UsageAlertCollapse from '../UsageAlertCollapse.vue';
+import { normalizeBrowserScripts } from '../../utils/automationScripts';
 
 const props = defineProps<{
 	browser: BrowserOptions;
@@ -301,6 +307,14 @@ function clearHistory() {
 
 /** 渲染侧边toc跳转栏 */
 onMounted(() => {
+	/**
+	 * 脚本按当前声明归一化后再渲染。
+	 *
+	 * 旧存档、远程台保存、批量创建留下的 configs 可能缺 type/options，
+	 * 直接渲染会让密码框退化成明文输入框。归一化走的是和远程台同一套转换。
+	 */
+	if (instance) instance.automationScripts = normalizeBrowserScripts(instance.automationScripts);
+
 	nextTick(async () => {
 		state.cachePathExists = await remote.fs.call('existsSync', props.browser.cachePath);
 	});

@@ -240,6 +240,7 @@ import { Browser } from '../fs/browser';
 import AutomationScriptSelector from './automation-scripts/AutomationScriptSelector.vue';
 import AutomationScriptList from './automation-scripts/AutomationScriptList.vue';
 import type { RawAutomationScript } from './automation-scripts';
+import { normalizeBrowserScripts } from '../utils/automationScripts';
 
 type Step = {
 	title: string;
@@ -411,7 +412,7 @@ const _preset_steps = {
 			setupState.configScripts = JSON.parse(JSON.stringify(selected));
 			const configured = await openScriptConfig();
 			if (configured && configured.length && setupState.newBrowserInstance) {
-				setupState.newBrowserInstance.automationScripts = configured;
+				setupState.newBrowserInstance.automationScripts = normalizeBrowserScripts(configured);
 				step.description = `已为浏览器「${setupState.newBrowserInstance.name}」添加 ${configured.length} 个自动化程序。`;
 			} else {
 				step.description = '未保存自动化程序配置，已跳过。';

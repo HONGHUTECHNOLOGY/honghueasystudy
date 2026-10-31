@@ -20,6 +20,14 @@
 			>
 				{{ statusMeta.label }}
 			</span>
+			<!-- 方案角标：一眼能看出这台机器配了自动刷课/定时，不用进详情翻 -->
+			<span
+				v-if="planBadge"
+				class="chip chip--plan"
+				:title="planTitle"
+			>
+				{{ planBadge }}
+			</span>
 			<span class="chev">
 				<Icon
 					name="chevron"
@@ -288,6 +296,23 @@ const STATUS_META: Record<string, { label: string; dot: string; tone: string }> 
 };
 
 const statusMeta = computed(() => STATUS_META[props.browser.status] || STATUS_META.closed);
+
+/** 卡片角标：定时 > 自动刷课（两者都开时只显示更能说明「会自己动」的那个） */
+const planBadge = computed(() => {
+	const plan = props.browser.automation;
+	if (!plan) return '';
+	if (plan.schedule.enabled) return '定时';
+	if (plan.study.enabled && plan.study.courseName) return '自动刷课';
+	return '';
+});
+
+const planTitle = computed(() => {
+	const plan = props.browser.automation;
+	if (!plan) return '';
+	if (plan.schedule.enabled) return plan.schedule.summary;
+	if (plan.study.courseName) return `自动进入：${plan.study.courseName}`;
+	return '';
+});
 
 /** 用户手动选中的标签页索引；undefined 表示自动跟随浏览器当前前台页 */
 const selectedPage = ref<number | undefined>(undefined);
@@ -641,6 +666,12 @@ html[data-theme='light'] .browser-card.launched {
 	color: var(--warn);
 	border-color: rgba(255, 182, 72, 0.28);
 	background: var(--warn-soft);
+}
+
+.chip--plan {
+	color: var(--brand-text);
+	border-color: var(--line-brand);
+	background: var(--brand-soft);
 }
 
 .chev {
