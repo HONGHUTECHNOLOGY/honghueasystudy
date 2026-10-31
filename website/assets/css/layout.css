@@ -1428,6 +1428,14 @@ html.menu-open {
 }
 
 /* ================= 下载 ================= */
+/* 内联 SVG 图标库（目前只有 Linux 的 Tux，重复图标用 <use> 复用） */
+.svg-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
 .download-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1521,11 +1529,45 @@ html.menu-open {
   outline-offset: 2px;
 }
 
-.dl-source-note {
-  flex-basis: 100%;
-  text-align: center;
-  font-size: 0.78rem;
+/* ---------- 页面底部：两个仓库的 Release 入口 ---------- */
+.dl-releases {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+  max-width: 940px;
+  margin: 28px auto 0;
+  font-size: 0.84rem;
   color: var(--text-tertiary);
+}
+
+.dl-releases-label {
+  margin-right: 2px;
+}
+
+.dl-release-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 0 0 1px rgba(15, 30, 70, 0.1), 0 10px 24px -20px rgba(15, 30, 70, 0.5);
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  font-weight: 600;
+  transition: color 0.3s, box-shadow 0.3s, transform 0.3s var(--ease-apple);
+}
+
+.dl-release-link span {
+  font-weight: 400;
+}
+
+.dl-release-link:hover {
+  color: var(--brand);
+  box-shadow: inset 0 0 0 1px rgba(30, 111, 255, 0.32), 0 12px 26px -20px rgba(30, 111, 255, 0.6);
+  transform: translateY(-1px);
 }
 
 /* ---------- 桌面端各系统直链 ---------- */
@@ -2261,6 +2303,11 @@ html.menu-open {
 
   .dl-os-grid {
     grid-template-columns: 1fr;
+  }
+
+  .dl-releases-label {
+    flex-basis: 100%;
+    text-align: center;
   }
 }
 

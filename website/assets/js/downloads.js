@@ -11,12 +11,10 @@
   'use strict';
 
   var STORAGE_KEY = 'hhe-download-source';
-  var SOURCE_LABEL = { gitcode: 'GitCode', github: 'GitHub' };
   var links = Array.prototype.slice.call(document.querySelectorAll('a[data-dl]'));
   if (!links.length) return;
 
   var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-dl-source]'));
-  var note = document.querySelector('[data-dl-source-note]');
 
   /* 把初始 href（GitCode）与 data-github 收进内存，后面来回切换都靠它们 */
   links.forEach(function (link) {
@@ -45,10 +43,6 @@
     }
   }
 
-  function setNote(text) {
-    if (note) note.textContent = text;
-  }
-
   function apply(source) {
     links.forEach(function (link) {
       var url = source === 'github' ? link.__github : link.__gitcode;
@@ -63,15 +57,11 @@
 
   function choose(source, persist) {
     apply(source);
-    if (persist) {
-      save(source);
-      setNote('当前下载源：' + SOURCE_LABEL[source]);
-    }
+    if (persist) save(source);
   }
 
   var saved = readSaved();
   apply(saved || 'gitcode');
-  if (saved) setNote('当前下载源：' + SOURCE_LABEL[saved]);
 
   buttons.forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -119,8 +109,8 @@
   if (!saved) {
     probeGitCode(function (reachable) {
       if (reachable) return;
+      /* 静默兜底：按钮状态与链接一起切到 GitHub，不再额外提示 */
       apply('github');
-      setNote('GitCode 暂时访问不畅，已自动切换 GitHub');
     });
   }
 
