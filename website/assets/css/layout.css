@@ -1532,18 +1532,27 @@ html.menu-open {
 /* ---------- 页面底部：两个仓库的 Release 入口 ---------- */
 .dl-releases {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 10px 14px;
+  gap: 16px;
   max-width: 940px;
-  margin: 28px auto 0;
+  margin: 52px auto 0;
+  padding-top: 32px;
+  border-top: 1px solid rgba(15, 30, 70, 0.08);
+  text-align: center;
   font-size: 0.84rem;
   color: var(--text-tertiary);
 }
 
 .dl-releases-label {
-  margin-right: 2px;
+  letter-spacing: 0.01em;
+}
+
+.dl-releases-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 14px;
 }
 
 .dl-release-link {
@@ -2305,9 +2314,9 @@ html.menu-open {
     grid-template-columns: 1fr;
   }
 
-  .dl-releases-label {
-    flex-basis: 100%;
-    text-align: center;
+  .dl-releases {
+    margin-top: 40px;
+    padding-top: 26px;
   }
 }
 
