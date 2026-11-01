@@ -115,6 +115,15 @@
                 ]
             },
             "installers": {
+                "win32": {
+                    "urls": [
+                        "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-win-x64.exe",
+                        "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-win-x64.exe"
+                    ],
+                    "sha256": "fe4ee3fd366f1539d30c92c2b1f625cc9f7222705c04c386233d592d84498ac1",
+                    "size": 340465451,
+                    "name": "honghueasystudy-5.3.0-setup-win-x64.exe"
+                },
                 "darwin": [
                     {
                         "arch": "arm64",
@@ -150,6 +159,39 @@
                         ],
                         "sha256": "bcae348a72d96db22da2f2b39c5052a391a89fd3e514280a4277d8deda2eeb42",
                         "size": 215181278
+                    },
+                    {
+                        "arch": "x64",
+                        "ext": "AppImage",
+                        "name": "honghueasystudy-5.3.0-setup-linux-x86_64.AppImage",
+                        "urls": [
+                            "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-linux-x86_64.AppImage",
+                            "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-linux-x86_64.AppImage"
+                        ],
+                        "sha256": "01e38e912aa60ce90140cc60ce9920b3921764d1e63bc23fac666df569435488",
+                        "size": 403464735
+                    },
+                    {
+                        "arch": "x64",
+                        "ext": "deb",
+                        "name": "honghueasystudy-5.3.0-setup-linux-amd64.deb",
+                        "urls": [
+                            "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-linux-amd64.deb",
+                            "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-linux-amd64.deb"
+                        ],
+                        "sha256": "c63bd608cb3225bb00d4b4d19381ca64a5b6a9fb8bd78f4ce9bc8f0e1c1b5672",
+                        "size": 323249636
+                    },
+                    {
+                        "arch": "x64",
+                        "ext": "rpm",
+                        "name": "honghueasystudy-5.3.0-setup-linux-x86_64.rpm",
+                        "urls": [
+                            "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-linux-x86_64.rpm",
+                            "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-linux-x86_64.rpm"
+                        ],
+                        "sha256": "60e1506dd0ecd66342e889d30e49d515eaf0ce123a627c63d11a1a0c02a68551",
+                        "size": 324028225
                     }
                 ]
             },
@@ -161,7 +203,7 @@
             "sha256": "b36e79c454f7dbcbbdf33e6554d1bf75bc5de30e56570994da8f3264e5e51ccd",
             "size": 18732700,
             "app_downloads": {
-                "win32": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.3.0/%E9%B8%BF%E9%B9%84%E6%98%93%E5%AD%A6-5.3.0-setup-win-x64.exe",
+                "win32": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-win-x64.exe",
                 "darwin": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/tag/v5.3.0",
                 "linux": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/tag/v5.3.0"
             }
