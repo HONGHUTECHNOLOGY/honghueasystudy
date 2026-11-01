@@ -1,6 +1,9 @@
 name: Publish to GitCode
 
 # GitCode 镜像发布：把 GitHub Release 的安装包同步到 GitCode（客户端清单 urls[0]）。
+# 上传动作在 GitHub runner 上执行（scripts/publish-to-gitcode.js + GITCODE_TOKEN）；
+# 早前用过的 GitCode 原生 Action（.gitcode/workflows/release-publish.yml）已删除，
+# 因为 GitCode 托管 runner 缺 node、跨岸直传又卡死，才改为由 GitHub CI 硬传。
 #
 # 为什么是独立 workflow、为什么这么慢也要做：
 #   - GitHub CI（海外）→ GitCode OBS（国内）单连接 ~100KB/s，只能靠多路并发把
@@ -8,8 +11,8 @@ name: Publish to GitCode
 #   - 与 desktop-build 拆开：打包失败不会连带镜像发布；镜像失败也只需重跑本
 #     workflow（脚本幂等：已上传且校验过的附件自动跳过）。
 #
-# 触发方式：手动 dispatch。发版全流程 = desktop-build（打包+发 GitHub Release）
-# → 跑完后来这里填 tag 点一下 → 完成后自动派发 update-manifest 回写清单。
+# 触发方式：手动 dispatch。发版全流程 = desktop-build（打包 + 发 GitHub Release）
+# → 跑完来这里填 tag 点一下 → 本 workflow 传完 GitCode 后自动派发 update-manifest 回写清单。
 #
 # 前置：仓库 Secrets 需配置 GITCODE_TOKEN（GitCode 个人访问令牌）。
 

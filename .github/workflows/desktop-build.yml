@@ -2,12 +2,13 @@ name: Desktop Build (win/mac/linux)
 
 on:
   workflow_dispatch:
-    # 发布链（上传 GitHub Release / GitCode 镜像 / 回写清单）仅在 tag 触发时执行；
+    # 发布链（上传 GitHub Release / 回写更新清单）仅在 tag 触发时执行；
     # 若发布步骤失败，修复后可从 main 手动 dispatch 并在 tag 里填版本号重跑发布链，
     # 不必重新构建（build 矩阵照常跑，产物一致）。
-    # GitCode 镜像与清单回写已拆到独立链路：
-    #   - GitCode 发布：.gitcode/workflows/release-publish.yml（GitCode 原生 Action，国内 runner）
-    #   - 清单回写：update-manifest.yml（由 GitCode 发布完成后自动派发，或手动触发）
+    # GitCode 镜像走独立链路，但同样跑在 GitHub Actions 上：
+    #   - GitCode 上传：publish-gitcode.yml（本 job 跑完后手动 dispatch，传完它自动派发 update-manifest）
+    #   - 清单回写：update-manifest.yml（探链 fail-closed，GitHub / GitCode 任一附件缺失
+    #     都拒绝写清单 —— 正好保证「两边都能下载」才让用户看到更新提示）
     inputs:
       tag:
         description: "发布目标 tag（如 v5.2.0），留空则只在 tag 触发时发布"
@@ -246,8 +247,8 @@ jobs:
   # 自动派发，或手动 dispatch 时填 tag）。把桌面端全部平台产物与 extension.zip
   # 上传到该 tag 对应的 GitHub Release，并追加「桌面端与扩展下载」说明段落。
   # 同时上传 assets-manifest.json（附件清单+sha256）与 release-notes.md：
-  # GitCode 原生工作流（release-publish.yml）不访问 api.github.com，靠这两个
-  # 固定文件名的附件完成「下载清单 + 复用 Release 说明」。
+  # publish-gitcode.yml 用后者作为 GitCode Release 的正文（gh release download）；
+  # 前者供 scripts/fetch-release-assets.js、sync-release-to-gitcode.js 人工核对待传附件。
   upload-release:
     needs: [build, build-extension]
     # always()：skip_build 时 build/build-extension 被跳过，默认语义会把本 job 一起跳过
@@ -419,13 +420,12 @@ jobs:
             }, null, 2));
             console.log("清单包含", files.length, "个附件");
           ' "$TAG_NAME"
-          # 清单与说明正文一并上 Release：GitCode 侧靠固定文件名拉取
+          # 清单与说明正文一并上 Release：publish-gitcode.yml 靠固定文件名拉取 release-notes.md
           gh release upload "$TAG_NAME" assets-manifest.json release-notes.md --clobber
           ls -lh
 
   # 更新清单回写已拆分到 update-manifest.yml：
-  # GitCode 附件由 .gitcode/workflows/release-publish.yml（国内 runner）上传，
-  # 完成后自动派发 update-manifest.yml —— 此时 GitCode 链接可达，
+  # 正常链路 = publish-gitcode.yml（GitHub Actions，手动 dispatch）把附件传到 GitCode，
+  # 它末步自动派发 update-manifest.yml —— 此时 GitCode 链接可达，
   # write-update-manifest 的 Range GET 探链（fail-closed）才能全绿通过。
-  # GitCode 工作流未配置 GITHUB_PAT 时，需在 GitHub Actions 手动触发
-  # update-manifest.yml 并填 tag。
+  # 也可在两边都确认齐后手动 dispatch update-manifest；缺包则探链拒绝写清单（预期行为）。
