@@ -475,6 +475,17 @@ async function main() {
 	const tag = resolved.tag;
 	const releasePage = `https://github.com/${args.repo}/releases/tag/${tag}`;
 	const zipFileName = meta.file || `app-${version}.zip`;
+	/*
+	 * 没有 zip 指纹 = 本次发版没生成就地更新包（pack-app-update 默认只写 meta）。
+	 * 清单就不写 url/urls/sha256/size 这几个字段，新客户端本来也只读 installers；
+	 * 代价是 <=3.2.0 的旧客户端拿不到升级路径，这一点在发版日志里必须可见。
+	 */
+	if (!meta.sha256) {
+		console.log(
+			'[update-manifest] 本次 meta 不含就地更新包（app-*.zip）：清单不写 url/urls 字段，' +
+				'<=3.2.0 的旧客户端不会收到本版更新'
+		);
+	}
 	const githubZipUrl = `https://github.com/${args.repo}/releases/download/${tag}/${zipFileName}`;
 	const gitcodeZipUrl = args.gitcode
 		? `https://gitcode.com/${args.gitcode}/releases/download/${tag}/${zipFileName}`

@@ -45,8 +45,9 @@ jobs:
         with:
           node-version: "22.14"
 
-      # 从 GitHub Release 下载全部附件（update-meta.json 供版本/哈希，
-      # 安装包供 findPlatformInstallers 扫描；GH 内网下载很快）。
+      # 从 GitHub Release 下载全部附件（update-meta.json 供版本号与 tag 推导，
+      # 打就地更新包时还带 zip 的 sha256/size；安装包供 findPlatformInstallers 扫描，
+      # GH 内网下载很快）。
       # 附件已在 upload-release 拍平改名（honghueasystudy- 前缀），直接可用。
       - name: Download release assets
         env:

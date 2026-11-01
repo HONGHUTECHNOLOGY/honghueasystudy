@@ -222,11 +222,11 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           ARCH: ${{ matrix.arch }}
 
-      # 旧版兼容包：resources/app 的全量 zip。
-      # 新版客户端（>=3.2.1）已改为下载安装包（dist/*.exe）静默覆盖安装 —— 只换 app 目录
-      # 无法更新 Electron 运行时、内置扩展 resources/extension、bin/chrome 等 app 之外的内容。
-      # 这个 zip 仅用于让 <=3.2.0 的已装用户还能升级上来，等其淘汰后可删。
-      - name: Pack legacy in-place update bundle (Windows only)
+      # 更新元数据：只写 update-meta.json（版本号 / tag 推导），不打就地更新包。
+      # 客户端自 3.3 起走「下载 setup.exe → 静默覆盖安装」，清单只读 installers；
+      # 旧的就地更新 zip（app-*.zip）只服务 <=3.2.0，那批用户已停止覆盖，
+      # 真要救时本地跑 `node scripts/pack-app-update.js --with-zip` 手动补传即可。
+      - name: Generate update metadata (Windows only)
         if: matrix.platform == 'win'
         run: node scripts/pack-app-update.js
 
@@ -240,8 +240,6 @@ jobs:
             honghueasystudy_desktop/packages/app/dist/*.AppImage
             honghueasystudy_desktop/packages/app/dist/*.deb
             honghueasystudy_desktop/packages/app/dist/*.rpm
-            honghueasystudy_desktop/packages/app/dist/update/app-*.zip
-            honghueasystudy_desktop/packages/app/dist/update/app-*.zip.sha256
             honghueasystudy_desktop/packages/app/dist/update/update-meta.json
           if-no-files-found: error
           retention-days: 7
@@ -285,8 +283,8 @@ jobs:
           run-id: ${{ inputs.artifact_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # upload-artifact 保留 dist/ 目录结构：安装包在根、更新包与 update-meta.json
-      # 在 update/ 子目录。统一拍平，后面的 gh release upload / 下载链接生成 /
+      # upload-artifact 保留 dist/ 目录结构：安装包在根、update-meta.json 在 update/ 子目录。
+      # 统一拍平，后面的 gh release upload / 下载链接生成 /
       # GitCode 同步 / 清单脚本的全局匹配才能命中，也避免目录被当成附件上传。
       - name: Flatten artifact directories
         run: |
@@ -329,8 +327,8 @@ jobs:
           find artifacts -type f -print0 | xargs -0 gh release upload "$TAG_NAME" --clobber
 
       # Release 说明 = 更新日志 + 使用方法 + 下载链接。方法排序：桌面端（最推荐）
-      # → Edge 商店 → 手动加载扩展；下载表格从 artifacts 动态生成（排除 app-*.zip
-      # 更新包与校验/清单文件），每行同时给 GitCode（国内快）与 GitHub 两个链接。
+      # → Edge 商店 → 手动加载扩展；下载表格从 artifacts 动态生成（排除校验/清单文件），
+      # 每行同时给 GitCode（国内快）与 GitHub 两个链接。
       - name: Append usage notes to release body
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -355,7 +353,7 @@ jobs:
           **方法三**：解压 `extension.zip` 后，在 Chrome/Edge 浏览器中打开扩展页面，开启开发者模式，点击加载已解压缩的扩展，选择解压后文件所在的文件夹即可添加扩展。
           NOTES
 
-          # 下载表格：从产物目录动态生成（安装包 + extension.zip；排除更新包/校验/清单）
+          # 下载表格：从产物目录动态生成（安装包 + extension.zip；排除校验/清单）
           LINKS_FILE=/tmp/download-links.md
           {
             echo ''
@@ -378,7 +376,7 @@ jobs:
               fi
             done
             echo ''
-            echo '> 国内网络推荐 GitCode 链接；`app-*.zip` 为桌面端在线更新包，手动安装无需下载。'
+            echo '> 国内网络推荐 GitCode 链接；桌面端会自动下载对应的安装包完成更新。'
           } >> "$NOTES_FILE"
 
           EXISTING_BODY=$(gh release view "$TAG_NAME" --json body -q .body 2>/dev/null || echo "")

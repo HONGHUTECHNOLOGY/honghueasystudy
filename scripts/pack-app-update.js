@@ -2,22 +2,28 @@
 // @ts-check
 
 /**
- * 打「就地更新包」（仅 Windows）
+ * 生成桌面端更新元数据（默认不再打就地更新包）
  * ---------------------------------------------------------------
- * 桌面端的更新方式是把 resources/app 整目录替换掉，所以更新包必须满足：
- *   zip 根目录 = resources/app 里的内容（不是外面再套一层目录）
- * 这与 electron-builder 产出的安装包不同，安装包是给全新安装用的。
+ * **默认只写 dist/update/update-meta.json**：桌面端从 3.3 起走「下载 setup.exe →
+ * 静默覆盖安装」，清单只读 installers 字段，就地更新包（app-<version>.zip）仅
+ * 供 <=3.2.0 的旧客户端使用。旧客户端已停止覆盖，发版不再生成它。
  *
- * 输入：honghueasystudy_desktop/packages/app/dist/win-unpacked/resources/app
- * 输出：dist/update/app-<version>.zip
- *       dist/update/app-<version>.zip.sha256
- *       dist/update/update-meta.json   （供 write-update-manifest.js 使用）
+ * 生成的 meta 供 write-update-manifest.js 使用：版本号、tag 推导（rootVersion/tagHint）、
+ * 以及（打 zip 时的）zip 文件名/sha256/size。没有 sha256 时清单会省略老客户端字段，
+ * 见 write-update-manifest.js 里的守卫。
+ *
+ * 需要给旧客户端补一个就地更新包时，显式加 --with-zip：
+ *   输入：honghueasystudy_desktop/packages/app/dist/win-unpacked/resources/app
+ *   输出：dist/update/app-<version>.zip（根目录 = resources/app 内容，不带外层目录）
+ *         dist/update/app-<version>.zip.sha256
+ * 这与 electron-builder 的安装包不同：安装包是给全新安装用的。
  *
  * 用法：
- *   node scripts/pack-app-update.js
- *   node scripts/pack-app-update.js --dir <appDir> --out <outDir> --version 3.2.0
+ *   node scripts/pack-app-update.js                     # 只写 update-meta.json
+ *   node scripts/pack-app-update.js --with-zip          # 额外打就地更新包
+ *   node scripts/pack-app-update.js --dir <appDir> --out <outDir> --version 3.2.0 --with-zip
  *
- * 注意：更新包约 18MB / 解压约 58MB，超过 Cloudflare Pages 单文件 25MB 限制，
+ * 注意：zip 约 18MB / 解压约 58MB，超过 Cloudflare Pages 单文件 25MB 限制，
  * 只能放 GitHub Release 或对象存储；官网只放指向它的 JSON 清单。
  */
 
@@ -26,9 +32,12 @@ const path = require('path');
 const crypto = require('crypto');
 const { createRequire } = require('module');
 
-// yazl 由 gulp-zip 间接依赖，用 createRequire 稳定解析（与 pack-extension.js 一致）
-const gulpZipRequire = createRequire(require.resolve('gulp-zip'));
-const yazl = gulpZipRequire('yazl');
+// yazl 由 gulp-zip 间接依赖，用 createRequire 稳定解析（与 pack-extension.js 一致）。
+// 惰性加载：默认只写 meta 的路径不该因为压缩库缺失而失败。
+function loadYazl() {
+	const gulpZipRequire = createRequire(require.resolve('gulp-zip'));
+	return gulpZipRequire('yazl');
+}
 
 const ROOT = path.resolve(__dirname, '..');
 const APP_PKG = path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app', 'package.json');
@@ -38,12 +47,15 @@ const DEFAULT_DIR = path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app'
 const DEFAULT_OUT = path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app', 'dist', 'update');
 
 function parseArgs(argv) {
-	const out = { dir: DEFAULT_DIR, out: DEFAULT_OUT, version: null };
+	// 默认只写更新元数据；--with-zip 才额外打就地更新包（仅旧客户端需要）
+	const out = { dir: DEFAULT_DIR, out: DEFAULT_OUT, version: null, withZip: false };
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
 		if (a === '--dir') out.dir = path.resolve(argv[++i]);
 		else if (a === '--out') out.out = path.resolve(argv[++i]);
 		else if (a === '--version') out.version = argv[++i];
+		else if (a === '--with-zip') out.withZip = true;
+		else if (a === '--no-zip') out.withZip = false;
 		else if (a === '-h' || a === '--help') out.help = true;
 	}
 	return out;
@@ -121,6 +133,37 @@ async function main() {
 		return;
 	}
 
+	const version = args.version || readVersion();
+	const rootVersion = readRootVersion();
+	/**
+	 * Release tag 用插件版本（根 package.json），不用桌面版本。
+	 * 扩展和桌面安装包是一起发到同一个 Release 的，tag 一直是 v5.x.x 这条线；
+	 * 桌面版本（3.x）只作为清单里参与 semver 比较的 tag 字段。
+	 * 若桌面端要脱离插件单独发版，打包/写清单时显式传 --tag desktop-v<x.y.z>。
+	 */
+	const tagHint = rootVersion ? `v${rootVersion}` : `desktop-v${version}`;
+	const metaPath = path.join(args.out, 'update-meta.json');
+	fs.mkdirSync(args.out, { recursive: true });
+
+	// 默认路径：只写元数据。安装包已经覆盖了更新所需的一切，
+	// 不再生成只为 <=3.2.0 旧客户端服务的 zip（省一次 18MB 的打包与上传）
+	if (!args.withZip) {
+		const meta = {
+			version,
+			rootVersion: rootVersion || null,
+			tagHint,
+			builtAt: new Date().toISOString()
+		};
+		fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n');
+		console.log('[pack-app-update] 已生成更新元数据（未打就地更新包）');
+		console.log(`  桌面版本  ${version}`);
+		console.log(`  插件版本  ${rootVersion || '（未读到根 package.json）'}`);
+		console.log(`  文件      ${path.relative(ROOT, metaPath)}`);
+		console.log('  说明      客户端走 installers.win32（setup.exe 覆盖安装），');
+		console.log('            app-*.zip 只服务 <=3.2.0 旧客户端，已停止生成（需要时加 --with-zip）');
+		return;
+	}
+
 	if (!fs.existsSync(args.dir)) {
 		fail(
 			`找不到 app 目录：${args.dir}\n` +
@@ -131,17 +174,14 @@ async function main() {
 	if (!fs.existsSync(path.join(args.dir, 'package.json'))) fail('app 目录缺少 package.json');
 	if (!fs.existsSync(path.join(args.dir, 'lib', 'index.js'))) fail('app 目录缺少 lib/index.js（未编译？）');
 
-	const version = args.version || readVersion();
 	const skipped = { count: 0 };
 	const files = collect(args.dir, '', skipped).sort((a, b) => a.relPath.localeCompare(b.relPath));
 	if (files.length === 0) fail('app 目录为空，打包中止');
 	if (skipped.count) console.log(`[pack-app-update] 跳过 ${skipped.count} 个历史打包残留（lib/dist-*）`);
-
-	fs.mkdirSync(args.out, { recursive: true });
 	const outFile = path.join(args.out, `app-${version}.zip`);
 	const tmpFile = outFile + '.tmp';
 
-	const zip = new yazl.ZipFile();
+	const zip = new (loadYazl().ZipFile)();
 	for (const f of files) {
 		zip.addFile(f.abs, f.relPath, { mtime: new Date() });
 	}
@@ -160,15 +200,6 @@ async function main() {
 	const sha256 = await sha256File(outFile);
 	fs.writeFileSync(outFile + '.sha256', `${sha256}  app-${version}.zip\n`);
 
-	const rootVersion = readRootVersion();
-	/**
-	 * Release tag 用插件版本（根 package.json），不用桌面版本。
-	 * 扩展和桌面安装包是一起发到同一个 Release 的，tag 一直是 v5.x.x 这条线；
-	 * 桌面版本（3.x）只作为清单里参与 semver 比较的 tag 字段。
-	 * 若桌面端要脱离插件单独发版，打包/写清单时显式传 --tag desktop-v<x.y.z>。
-	 */
-	const tagHint = rootVersion ? `v${rootVersion}` : `desktop-v${version}`;
-
 	const meta = {
 		version,
 		rootVersion: rootVersion || null,
@@ -180,7 +211,7 @@ async function main() {
 		tagHint,
 		builtAt: new Date().toISOString()
 	};
-	fs.writeFileSync(path.join(args.out, 'update-meta.json'), JSON.stringify(meta, null, 2) + '\n');
+	fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2) + '\n');
 
 	console.log(`[pack-app-update] 打包完成`);
 	console.log(`  桌面版本  ${version}`);
@@ -188,9 +219,9 @@ async function main() {
 	console.log(`  文件      ${path.relative(ROOT, outFile)}  (${(size / 1024 / 1024).toFixed(2)} MB)`);
 	console.log(`  条目      ${files.length} 个`);
 	console.log(`  SHA256    ${sha256}`);
-	console.log(`\n注意：新版客户端已改为「下载安装包 → 静默覆盖安装」，本 zip 仅用于让 <=3.2.0 的旧客户端还能升级上来。`);
+	console.log(`\n注意：新版客户端走「下载安装包 → 静默覆盖安装」，本 zip 只用于让 <=3.2.0 的旧客户端还能升级上来。`);
 	console.log(`下一步：与安装包一起上传到同一个 Release（tag: ${tagHint}），然后执行`);
-	console.log(`  node scripts/write-update-manifest.js --meta ${path.relative(ROOT, path.join(args.out, 'update-meta.json'))}`);
+	console.log(`  node scripts/write-update-manifest.js --meta ${path.relative(ROOT, metaPath)}`);
 }
 
 main().catch((e) => {

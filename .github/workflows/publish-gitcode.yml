@@ -59,7 +59,8 @@ jobs:
             scripts
           sparse-checkout-cone-mode: false
 
-      # GitHub Release 是唯一事实源：安装包、更新包、校验文件、扩展、说明正文都在这里。
+      # GitHub Release 是唯一事实源：安装包、校验文件、扩展、说明正文都在这里
+      # （历史发版还会带 app-*.zip 就地更新包，现在默认不再生成）。
       # 附件名与清单里的文件名一致（honghueasystudy-<ver>-setup-<os>-<arch>.<ext>），
       # 所以直接把附件名当 GitCode 附件名即可，客户端 URL 无需改写。
       # 下载全部附件（含 assets-manifest.json 等小文件），后面用白名单筛掉不该镜像的。
@@ -86,7 +87,7 @@ jobs:
             if [ -f "$f" ]; then FILES+=(--file "$f"); fi
           done
           if [ ${#FILES[@]} -eq 0 ]; then
-            echo "没有可同步的附件（安装包 / 更新包 / 扩展均缺失）"
+            echo "没有可同步的附件（安装包 / 扩展均缺失）"
             exit 1
           fi
           # 说明正文由 desktop-build 生成并传上 Release；老版本没这个附件时退回自动正文
