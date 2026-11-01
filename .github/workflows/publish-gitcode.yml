@@ -73,7 +73,9 @@ jobs:
           ls -lh artifacts/
 
       # 安装包排最前：它们才是客户端真正下载的文件，失败要尽早暴露。
-      # --concurrency 8：单连接 ~100KB/s，8 路把 2.7GB 压到 1~2 小时。
+      # --concurrency 8：单连接跨境 ~100KB/s，8 路把 2.6GB 压到 1~2 小时。
+      # --upload-ips 4：对 OBS 端点解析出的多条 A 记录做 TCP 握手计时，取最快 4 个
+      #   分给并发任务（DNS 只给一条时自动跳过）——线路绕路时能明显改善。
       # 脚本幂等：Release 已存在的同名附件自动跳过，重跑只补缺的。
       - name: Upload to GitCode Release
         run: |
@@ -100,6 +102,7 @@ jobs:
             --name "$TAG_NAME" \
             "${NOTES_ARGS[@]}" \
             --concurrency 8 \
+            --upload-ips 4 \
             --purge-stale \
             --require-token \
             "${FILES[@]}"

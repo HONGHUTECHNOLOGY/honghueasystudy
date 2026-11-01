@@ -21,6 +21,8 @@
  */
 const fs = require('fs');
 const path = require('path');
+const dns = require('dns');
+const net = require('net');
 const { createHash } = require('crypto');
 
 const DEFAULT_REPO = 'honghutech/honghueasystudy';
@@ -43,7 +45,11 @@ function parseArgs(argv) {
 		purgeStale: false,
 		force: false,
 		requireToken: false,
-		skipDownloadCheck: false
+		skipDownloadCheck: false,
+		/** 上传端点 IP 择优数量（0 = 关闭，走系统 DNS 单地址）；可用 --upload-ips 覆盖 */
+		uploadIps: Number(process.env.GITCODE_UPLOAD_IPS || 4),
+		/** 强制使用某个 IP（排查线路问题时用） */
+		uploadIp: process.env.GITCODE_UPLOAD_IP || null
 	};
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
@@ -63,6 +69,9 @@ function parseArgs(argv) {
 		else if (a === '--concurrency') out.concurrency = Number(argv[++i]) || 4;
 		else if (a === '--require-token') out.requireToken = true;
 		else if (a === '--no-download-check') out.skipDownloadCheck = true;
+		else if (a === '--upload-ips') out.uploadIps = Number(argv[++i]) || 0;
+		else if (a === '--upload-ip') out.uploadIp = argv[++i];
+		else if (a === '--no-ip-pick') out.uploadIps = 0;
 		else if (a === '-h' || a === '--help') out.help = true;
 	}
 	return out;
@@ -84,6 +93,8 @@ function usage() {
   --force                附件已存在时仍然重传
   --require-token        缺少 token 时报错退出（默认跳过）
   --no-download-check    跳过上传后的下载校验
+  --upload-ips <n>       上传端点按握手延迟取前 n 个 IP 并发使用（默认 4，0=关闭）
+  --upload-ip <ip>       强制所有上传连接走指定 IP（排查线路用）
   --api-base <url>       便于测试，默认 ${API_BASE}
   --download-base <url>  便于测试，默认 ${DOWNLOAD_BASE}`);
 }
@@ -223,6 +234,180 @@ async function getUploadUrl({ apiBase, repo, tag, token, fileName }) {
 	return json;
 }
 
+/*
+ * 上传端点 IP 择优
+ * ---------------------------------------------------------------
+ * CI（Azure 海外出口）→ 华为 OBS（国内）的瓶颈不只在带宽，也在「落到哪个节点」：
+ * upload_url 返回的域名往往有多条 A 记录（不同可用区/线路），系统解析器只用第一条，
+ * 那条一旦绕路，8 路并发就全挤在同一个慢节点上。
+ *
+ * 做法：解析出全部 A 记录 → 逐条做一次 TCP 握手计时 → 取最快的几个并用 round-robin
+ * 分给各并发任务；连接用 https.request 的 lookup 钩子钉到指定 IP。lookup 只改解析
+ * 结果，Host 头与 TLS SNI（servername）仍是原域名，OBS 预签名校验不受影响。
+ * 某条线路传挂了就拉黑它，剩下的任务自动改走其他 IP。
+ */
+const ipPool = {
+	host: null,
+	port: 443,
+	ips: [],
+	cursor: 0,
+	/** 本次运行判死的线路（网络类错误），不再分配 */
+	bad: new Set(),
+	/** 探测中的 promise：8 个 worker 同时起跑时只探一轮 */
+	pending: null,
+	/** 这个 host 已经探过（哪怕结论是「不可用」），避免每个 worker 重复探测 3 秒 */
+	probed: false
+};
+
+/** 命令行覆盖项，在 main 里从 args 填充 */
+let uploadOpts = { want: 4, force: null };
+
+/*
+ * 上传进度统计：跨境上传动辄一小时，日志里必须能看出「是卡住了还是单纯慢」。
+ * 按文件记账而不是全局累加 —— 重试会重发同一段字节，全局累加会让进度虚高到 100%+。
+ */
+const progress = {
+	total: 0,
+	/** 已完成的文件字节 */
+	done: 0,
+	/** 正在传的文件 → 本次尝试已发送字节 */
+	active: new Map(),
+	startedAt: 0,
+	timer: null
+};
+
+function progressSent() {
+	let sum = progress.done;
+	for (const v of progress.active.values()) sum += v;
+	return sum;
+}
+
+function startProgressTicker() {
+	progress.startedAt = Date.now();
+	const tick = () => {
+		const sent = progressSent();
+		const sec = Math.max(1, (Date.now() - progress.startedAt) / 1000);
+		const rate = sent / sec;
+		const pct = progress.total ? ((sent / progress.total) * 100).toFixed(1) : '0.0';
+		const etaMin = rate > 0 ? Math.round((progress.total - sent) / rate / 60) : 0;
+		console.log(
+			`[gitcode] 进度 ${pct}%  ${human(sent)} / ${human(progress.total)}  ` +
+				`平均 ${(rate / 1024).toFixed(0)} KB/s  预计剩余 ${etaMin} 分钟`
+		);
+	};
+	progress.timer = setInterval(tick, 60000);
+	// 不让定时器把进程吊着：上传结束就该退出
+	if (progress.timer.unref) progress.timer.unref();
+}
+
+function stopProgressTicker() {
+	if (progress.timer) clearInterval(progress.timer);
+	progress.timer = null;
+}
+
+/** TCP 握手耗时（毫秒）；连不上返回 Infinity */
+function tcpHandshakeMs(ip, port, timeoutMs) {
+	return new Promise((resolve) => {
+		const started = process.hrtime.bigint();
+		let settled = false;
+		const sock = net.connect({ host: ip, port });
+		const finish = (ms) => {
+			if (settled) return;
+			settled = true;
+			sock.destroy();
+			resolve(ms);
+		};
+		sock.setTimeout(timeoutMs, () => finish(Infinity));
+		sock.once('connect', () => finish(Number(process.hrtime.bigint() - started) / 1e6));
+		sock.once('error', () => finish(Infinity));
+	});
+}
+
+/** 域名 → 全部 IPv4：resolve4 拿完整 A 记录，失败退回系统解析（可能只有一条） */
+async function resolveHostIps(host) {
+	const out = [];
+	try {
+		out.push(...(await dns.promises.resolve4(host)));
+	} catch {
+		// CNAME 或解析器不支持：走下面的兜底
+	}
+	if (!out.length) {
+		try {
+			const all = await dns.promises.lookup(host, { all: true, family: 4, verbatim: true });
+			out.push(...all.map((x) => x.address));
+		} catch {
+			// 完全解析不了：不阻断上传，交给系统默认行为
+		}
+	}
+	return [...new Set(out)];
+}
+
+/** 首次上传前对目标域名做一次择优（同一 host 只探一次，结果复用） */
+async function ensureIpPool(host, port) {
+	if (ipPool.host === host && ipPool.probed) return ipPool;
+	if (ipPool.pending) return ipPool.pending;
+	ipPool.pending = (async () => {
+		ipPool.host = host;
+		ipPool.port = port;
+		ipPool.ips = [];
+		ipPool.cursor = 0;
+		ipPool.bad.clear();
+		ipPool.probed = true;
+
+		if (uploadOpts.force) {
+			ipPool.ips = [uploadOpts.force];
+			console.log(`[gitcode] 上传端点 ${host} 强制走 IP ${uploadOpts.force}（--upload-ip）`);
+			return ipPool;
+		}
+		if (!(uploadOpts.want > 0)) return ipPool;
+
+		const all = await resolveHostIps(host);
+		if (all.length < 2) {
+			if (all.length === 1) console.log(`[gitcode] 上传端点 ${host} 只解析到 1 个 IP（${all[0]}），不做择优`);
+			return ipPool;
+		}
+		const scored = await Promise.all(all.map(async (ip) => ({ ip, ms: await tcpHandshakeMs(ip, port, 3000) })));
+		const ordered = scored.slice().sort((a, b) => a.ms - b.ms);
+		console.log(`[gitcode] 上传端点 ${host} 解析到 ${all.length} 个 IP，按 TCP 握手延迟择优：`);
+		for (const s of ordered) {
+			console.log(`           ${s.ip.padEnd(16)} ${Number.isFinite(s.ms) ? `${Math.round(s.ms)} ms` : '不可用'}`);
+		}
+		ipPool.ips = ordered
+			.filter((s) => Number.isFinite(s.ms))
+			.slice(0, Math.max(1, uploadOpts.want))
+			.map((s) => s.ip);
+		if (ipPool.ips.length) console.log(`[gitcode] 采用 ${ipPool.ips.join(' / ')} 并发上传`);
+		else console.warn('[gitcode] 所有候选 IP 都握手失败，退回系统解析');
+		return ipPool;
+	})().finally(() => {
+		ipPool.pending = null;
+	});
+	return ipPool.pending;
+}
+
+/** round-robin 取一条可用线路；没开择优时返回 null（走系统解析） */
+function nextUploadIp() {
+	if (!ipPool.ips.length) return null;
+	const usable = ipPool.ips.filter((ip) => !ipPool.bad.has(ip));
+	if (!usable.length) return null;
+	return usable[ipPool.cursor++ % usable.length];
+}
+
+/**
+ * 某条线路传挂了：拉黑它。
+ * 5xx 是网关整体抖动（2026-10-28 实测持续约 10 分钟），换 IP 也没用，不罚。
+ */
+function penalizeIp(ip, e) {
+	if (!ip || !ipPool.ips.includes(ip) || ipPool.bad.has(ip)) return;
+	if (e instanceof ApiError && e.status >= 500) return;
+	ipPool.bad.add(ip);
+	const left = ipPool.ips.filter((x) => !ipPool.bad.has(x));
+	console.warn(
+		`[gitcode] 线路 ${ip} 上传异常（${e && e.message ? e.message : e}），本次不再使用；` +
+			(left.length ? `剩余 ${left.join(' / ')}` : '已无可用线路，改走系统解析')
+	);
+}
+
 /** 上传是 PUT 到预签名地址，返回的 headers 必须原样透传（OBS 用它校验策略） */
 /*
  * 为什么不用 fetch：Node 内置 fetch（undici）有 headersTimeout=300s 的硬限制，
@@ -236,13 +421,28 @@ async function getUploadUrl({ apiBase, repo, tag, token, fileName }) {
  * 轻松吃掉 4GB+ 内存，托管 runner 直接 OOM 卡死）。Content-Length 用 stat
  * 预先算好，文件内容经 ReadStream 边读边发。
  */
-function putOnce(uploadUrl, headers, filePath, size) {
+function putOnce(uploadUrl, headers, filePath, size, ip, onChunk) {
 	return new Promise((resolve, reject) => {
 		const u = new URL(uploadUrl);
 		const mod = u.protocol === 'http:' ? require('http') : require('https');
+		const options = { method: 'PUT', headers: { ...headers, 'Content-Length': size } };
+		/*
+		 * 钉住出口 IP：lookup 钩子只替换 DNS 解析结果，Host 头与 TLS SNI 仍是原域名，
+		 * 所以 OBS 的预签名校验（含 host 签名字段）依然有效。
+		 *
+		 * 必须兼容 options.all：Node 20+ 的 autoSelectFamily 会以 all=true 调用 lookup，
+		 * 此时回调要回数组；只回 (err, ip, family) 会被 net 判成
+		 * 「Invalid IP address: undefined」。
+		 */
+		if (ip) {
+			options.lookup = (_hostname, opts, cb) => {
+				if (opts && opts.all) cb(null, [{ address: ip, family: 4 }]);
+				else cb(null, ip, 4);
+			};
+		}
 		const req = mod.request(
 			u,
-			{ method: 'PUT', headers: { ...headers, 'Content-Length': size } },
+			options,
 			(res) => {
 				const chunks = [];
 				res.on('data', (c) => chunks.push(c));
@@ -262,14 +462,16 @@ function putOnce(uploadUrl, headers, filePath, size) {
 		req.on('error', reject);
 		// 读流出错（磁盘/权限等）要传导给请求，否则请求会挂着等数据直到空闲超时
 		const stream = fs.createReadStream(filePath);
+		// 旁路计数：pipe 已经让流进入 flowing 模式，额外挂着 data 监听不影响转发
+		if (onChunk) stream.on('data', onChunk);
 		stream.on('error', (e) => req.destroy(e));
 		stream.pipe(req);
 	});
 }
 
 /** 单次 PUT。重试逻辑在调用方：每次重试都要重新获取预签名 URL（有过期时间） */
-async function putToStorage({ uploadUrl, headers, filePath, size, fileName }) {
-	const res = await putOnce(uploadUrl, headers, filePath, size);
+async function putToStorage({ uploadUrl, headers, filePath, size, fileName, ip, onChunk }) {
+	const res = await putOnce(uploadUrl, headers, filePath, size, ip, onChunk);
 	if (res.status >= 200 && res.status < 300) return;
 	throw new ApiError(res.status, res.body, `上传 ${fileName}`);
 }
@@ -329,9 +531,26 @@ async function main() {
 
 	const files = args.files.map((f) => ({ path: f, name: path.basename(f), size: fs.statSync(f).size }));
 
+	/*
+	 * 大文件先开工：并发 8 路时最慢的往往是 582MB 的 mac dmg，
+	 * 让它一开始就占一路，否则最后只剩它单跑，尾延迟等于它整段时长。
+	 */
+	files.sort((a, b) => b.size - a.size);
+
+	uploadOpts = { want: Math.max(0, Number(args.uploadIps) || 0), force: args.uploadIp || null };
+
 	console.log(`[gitcode] 仓库   ${args.repo}`);
 	console.log(`[gitcode] tag    ${args.tag}`);
 	for (const f of files) console.log(`[gitcode] 附件   ${f.name}  ${human(f.size)}`);
+	console.log(
+		`[gitcode] 线路   ${
+			uploadOpts.force
+				? `强制 IP ${uploadOpts.force}`
+				: uploadOpts.want > 0
+					? `按握手延迟择优取前 ${uploadOpts.want} 个 IP`
+					: '系统 DNS（已关闭择优）'
+		}`
+	);
 
 	if (args.dryRun) {
 		console.log('[gitcode] --dry-run：不做任何请求');
@@ -436,6 +655,8 @@ async function main() {
 			 * 3 次封顶。
 			 */
 			let lastPutErr = null;
+			/** 本次尝试实际使用的出口 IP，失败时据此判断要不要拉黑这条线路 */
+			let usedIp = null;
 			for (let attempt = 1; attempt <= 5; attempt++) {
 				try {
 					const { url, headers } = await getUploadUrl({
@@ -446,11 +667,29 @@ async function main() {
 						fileName: f.name
 					});
 					const size = fs.statSync(f.path).size;
-					await putToStorage({ uploadUrl: url, headers: headers || {}, filePath: f.path, size, fileName: f.name });
+					// 首次上传前对 OBS 端点做一次 IP 择优（同一 host 只探一次，多 worker 共享）
+					const target = new URL(url);
+					await ensureIpPool(target.hostname, Number(target.port) || (target.protocol === 'http:' ? 80 : 443));
+					usedIp = nextUploadIp();
+					// 本次尝试从 0 记账：重试会重发同一段字节，不能接着上一次累加
+					progress.active.set(f.name, 0);
+					await putToStorage({
+						uploadUrl: url,
+						headers: headers || {},
+						filePath: f.path,
+						size,
+						fileName: f.name,
+						ip: usedIp,
+						onChunk: (chunk) => progress.active.set(f.name, (progress.active.get(f.name) || 0) + chunk.length)
+					});
 					lastPutErr = null;
+					progress.active.delete(f.name);
+					progress.done += size;
 					break;
 				} catch (e) {
 					lastPutErr = e;
+					progress.active.delete(f.name);
+					penalizeIp(usedIp, e);
 					const is5xx = e instanceof ApiError && e.status >= 500;
 					if (attempt < (is5xx ? 5 : 3)) {
 						const base = Number(process.env.GITCODE_RETRY_DELAY_MS) || 60000;
@@ -482,6 +721,10 @@ async function main() {
 		}
 	}
 
+	// 跨境上传经常一小时起，进度行让日志能区分「慢」和「卡死」
+	progress.total = files.reduce((sum, f) => sum + f.size, 0);
+	startProgressTicker();
+
 	await Promise.all(
 		Array.from({ length: CONCURRENCY }, async function worker() {
 			while (cursor < files.length) {
@@ -490,6 +733,11 @@ async function main() {
 			}
 		})
 	);
+
+	stopProgressTicker();
+	const elapsedMin = (Date.now() - progress.startedAt) / 60000;
+	const avgRate = elapsedMin > 0 ? progress.done / 1024 / (elapsedMin * 60) : 0;
+	console.log(`[gitcode] 上传耗时 ${elapsedMin.toFixed(0)} 分钟，平均 ${avgRate.toFixed(0)} KB/s`);
 
 	console.log(`\n[gitcode] 结果：上传 ${uploaded} / 跳过 ${skipped} / 失败 ${failures.length}`);
 	if (failures.length) {
