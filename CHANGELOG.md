@@ -9,6 +9,120 @@
 
 
 
+## [5.4.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.3.0...v5.4.0) (2026-11-01)
+
+
+### ✨ 新功能
+
+* **app:** 后台托盘运行与开机自启默认开启 ([6905941](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/6905941b2022520eee46ee12a916c636694cf25b))
+* **ci:** 一键发版 —— CI 自动回写更新清单，桌面版本随插件版本统一 bump ([b7b61f4](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/b7b61f41f68de96a555db4477c641f2511762659))
+* **desktop:** Linux OCR 纯内置分发适配与远程控制台，CI 支持全平台打包 ([01040ca](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/01040cad43eabfdb82410a64ce0f0365deb73803))
+* **desktop:** mac/linux 更新改为按平台架构给直链 ([d95b928](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/d95b92867ad01f8b36c87e14c11be8ac9301fe3c))
+* **desktop:** 打通更新检测链路并加固就地更新 ([6546dfd](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/6546dfd025d0e51b019c569f2e45dac475ae4265))
+* **desktop:** 提示更新前先探测下载源，全部不可达就不弹窗 ([58055a3](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/58055a364ac7619c743f0b9cda4dc9e727e18af0))
+* **desktop:** 更新包支持 GitCode 镜像与多源回退 ([2be2714](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/2be2714333dc667ec1673ed8717e588f97a20344))
+* **desktop:** 更新改为下载安装包静默覆盖安装 ([b250957](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/b2509571244f35b14eed823a9e90f8538ec7ae0e))
+* **desktop:** 桌面版构建自动同步最新扩展，修复内置扩展过期 ([49c56cc](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/49c56ccf1eb53832139254eaccfe7cb0707d56d6))
+* **desktop:** 自动化脚本两端统一，刷课方案与课程目录接入远程台 ([1bfd6c3](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/1bfd6c33b63e929d936f6688d3420738bb3e107a))
+* **desktop:** 远程控制台前端重构、图标补齐与多网卡地址排序 ([b41e480](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/b41e480a16c4b40386166d12a9391967de36edbc))
+* **quiz:** 视频弹题支持 AI 题库答题 ([#2](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/issues/2)) ([fd01e63](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/fd01e6353580892ddcc50d70de157199c0048269))
+* **release:** CI 自动把发布产物同步到 GitCode ([1a236e8](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/1a236e8f0a37b4f05c2bb384b055377509cb1acc))
+* **release:** GitCode 发布改走原生 Action（国内 runner），修复跨岸上传死局 ([446a7a9](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/446a7a96a06dcb56ba879825babd08f198e5099e))
+* **release:** GitCode 镜像发布改为独立 workflow 硬传，放弃 GitCode 原生 Action ([e489b34](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/e489b345146459eb1f4b1d6f9f4ca27551d9b469))
+* **release:** Release 说明改版——桌面端方法提前 + 动态生成下载链接表 ([fd200d5](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/fd200d59ac18f419d03c5dcd7835cdf82d65c4b7))
+* **release:** 发布鸿鹄易学 5.2.0 与桌面端 3.1.0 ([ce2cf50](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/ce2cf501866b442f76df3d2215c43dac80b522b9))
+* **release:** 新增本地一键同步 GitHub Release → GitCode → 清单回写 ([2fb4798](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/2fb479833bba189eef776cb092d6c48f7fd2d862))
+* **release:** 清单写入默认探链，另加每日健康检查防「检测到更新却下不了包」 ([8445501](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/84455014de2a96a16771c7c85ad4bff31259d299))
+* **remote:** 开发者调试端口与一键导出页面，课程抽取按真实 DOM 校准 ([45bead7](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/45bead7398316704ddc83fee09e320a4ec586460))
+* **remote:** 截图支持选择标签页，默认跟随浏览器当前前台页 ([a1869e3](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/a1869e3b9163413c542b0dac66afe03f715915e9))
+* **remote:** 视频播放中不再误报「长时间无输出」，改为展示播放进度 ([d596b1b](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/d596b1b116adaeecb2dbaf35ebe13ea82a876e5e))
+* **remote:** 远程运行登录脚本 + 手机端选课，进入课程后由刷课脚本接管 ([992de0c](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/992de0c7d25dfe50c8f1f9823b8b3757b53cf043))
+* **remote:** 适配超星（课程列表在 iframe 里），进入课程改用课程名提示 ([47a3fea](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/47a3fea3a0a1dec93625295b72fcd64d223eb4eb))
+* **remote:** 页面列表实时同步 + 任务进度展示 ([2a1dd27](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/2a1dd27ba9554a1db4edeb5465e491c25ee9bc34))
+* **unipus:** 修复确认弹窗常驻轮询并新增量表题自动作答，版本升级至 5.1.5 ([e466e63](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/e466e630d8bca27db63f23cf0a880d595be1f487))
+* 新增 Unipus 普通版课程学习与 Labsafe 平台支持，版本升级至 5.1.0 ([05ed580](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/05ed5800b1c23661bf8f2b1c6766bdc93946c8ae))
+* 桌面端安装器支持自定义安装目录 ([85ef2a6](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/85ef2a6ec328407ae52543e0510796860d13caa9))
+
+
+### 🐛 问题修复
+
+* **automation:** 课程目录就绪门控，登录后不再漏掉自动选课 ([484d042](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/484d0421c76ced4dd1d117e2a37e3e19978f30ef))
+* **browser:** 修复浏览器已启动但远程仍显示启动中/实例未运行/无截图 ([fea31d7](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/fea31d73cb782871e0ebe8095a0045463777e54b))
+* **build:** 构建前检查输出目录是否被运行中的实例占用 ([e76f178](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/e76f178f0fdbc1c526c97ead1fa0db85f7e1afb8))
+* **ci:** fsevents 改用 pnpm11 allowBuilds 语法，CI 构建绕过既有 lint 债 ([d4a5b98](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/d4a5b981bb7086e75833a0ae57d25af4324ed5ae))
+* **ci:** GitCode Release 已存在时也同步说明文案 ([4a3f2cb](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/4a3f2cb11c0b865b639704e23bdc8835a3301eaf))
+* **ci:** GitCode 同步缺工作区文件 + 支持复用产物只重跑发布链 ([4c85ac8](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/4c85ac8be874fdb41eccaa7992cc774ade3b2503))
+* **ci:** GitCode 大附件上传超时 —— 绕开 undici headersTimeout 300s 硬限制 ([4491bf5](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/4491bf58a64cfd8ce45d7646647cfd1e1e0d3da5))
+* **ci:** GitCode 建 Release 时 target 回退到 main/master ([cb00e31](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/cb00e3127a10a214520d1eea4aaee3fb2902b461))
+* **ci:** GitCode 托管 runner 无 node —— tar.gz 装到 HOME 免 root/xz，各步显式 PATH ([151211c](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/151211cab8316dea7322cf44fbfb0273839664a4))
+* **ci:** GitCode 更新说明/删附件改走 tag 寻址，GitHub 删旧附件按 id ([70b0fef](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/70b0fefcc71126cd2daefba0ba9b223da20a1756))
+* **ci:** GitCode 镜像补齐安装包同步，不再只传 zip 和扩展 ([64de373](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/64de373f11dcfc561ad3fb9081e9f6e36fa05a92))
+* **ci:** mac DMG 打包失败可自愈 —— 关 Spotlight 索引 + 清理挂载卷重试 3 次 ([0d3943d](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/0d3943dbeb3b13b5b559c08ffa7aaecf2455ed8b))
+* **ci:** publish-gitcode 补 actions:write 权限——gh workflow run 派发 update-manifest 403 ([a8f76cc](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/a8f76cc8ee13ef1f6b6b737f1b14f48028e75814))
+* **ci:** PyInstaller 确认参数改为 --noconfirm（--yes 非合法参数） ([63a800d](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/63a800d57d69aa7c0928ba71abd0bfb5ecb2dc20))
+* **ci:** 修复 build.py venv 路径拼接的运算符优先级 TypeError ([b8c992c](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/b8c992cdbe7ec76ac6bb11fb4629ade3991d21b7))
+* **ci:** 修复 Release 附件上传 —— update/ 子目录被当成附件导致中断 ([41a41e3](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/41a41e335bc06309bbc0670ca11ca5891f0ad725))
+* **ci:** 修复一键发版链路断裂 —— GITHUB_TOKEN 的 merge 事件不触发下游 workflow ([c1dd7b6](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/c1dd7b62d203e9c39ac7a1a29e64ba21bf30a849))
+* **ci:** 冒烟滑块图改为 RGBA 透明底真实结构，修复 det 契约崩溃 ([42a671b](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/42a671b4fe65cafa78ed18bcb5319c123bfe41c4))
+* **ci:** 声明忽略 fsevents 构建脚本，修复 mac CI 因 pnpm 供应链策略失败 ([30ab5b6](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/30ab5b645d4d071a4433f9d1979fb9155f098c02))
+* **desktop:** arm64 AppImage 目标覆盖改走专用 npm script 修复 pnpm 参数转发失效 ([93950f7](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/93950f77c0f8aceb9a4921be6f820143810a6624))
+* **desktop:** mac-x64 交叉构建失效修复，全平台 arch 参数改走专用 npm script ([6f5bba8](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/6f5bba8c0e05ea6516de821b875c9e0d9ed8f3e9))
+* **desktop:** 安装目录优先取注册表记录，exe 目录仅作兜底 ([294613e](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/294613ebc5452616ff00b78671910940a2e5cb7c))
+* **desktop:** 远程控制状态上报在页面节流/冻结后停更的修复 ([84fea91](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/84fea91c6601462b92b588f74fe1b375a2459092))
+* **linux:** linux 块补 packageName=ASCII，修复 rpm 打包 rpmbuild 失败 ([450c808](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/450c808a55fa8a0b891ca10c36f5eb8c9be41615))
+* **linux:** packageName 移至顶层 deb/rpm 目标块，过 schema 校验 ([f5a10db](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/f5a10db62ceb07551022ac0814d7e743de21f2ef))
+* **quiz:** 弹题作答可靠性修复：点击回读选中态、判断题关键词兜底与 AI 提示词重写 ([67518ae](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/67518ae337066d2a747557265973c3ba3b308b5f))
+* **release:** Release tag 默认跟随插件版本线 ([47211c7](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/47211c721955c4cbcb3f476042dee58059b3e973))
+* **release:** 上传重试对 5xx 指数退避（1→2→4→8 分钟） ([0ce6500](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/0ce6500941421407622752764cfb8aedf76bd165))
+* **release:** 下载器流生命周期加固——断连后 res 补发 data 写已销毁流导致进程崩溃 ([9a6cae1](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/9a6cae1bf0d6a4a8794d5cf8c359d3c6d18b33f3))
+* **release:** 安装包统一 honghueasystudy- 前缀，清理旧命名残留附件 ([104ac87](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/104ac87c0565e1d8f10718dcdd4499bf9dc20767))
+* **remote:** 「当前」标签只保留一个，大图改为冻结帧并补加载态 ([9dbd348](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/9dbd348a6f823b7d01f07336f3459fb67c7fb136))
+* **remote:** 修复 saveStore 整份覆盖导致隧道开关被回滚（启动浏览器必现） ([560551e](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/560551ef78a96fd00c11bc94fbd3b694c337615b))
+* **remote:** 共享课要滚到底才渲染，读取课程前自动滚动列表 ([3dbcdf9](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/3dbcdf9095c2191c430e8091a6c5a4e26c8c8a49))
+* **remote:** 切标签页后不再短暂显示上一页截图 ([cb7af7d](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/cb7af7de6066248ac181fd2dcd19ff4c9e1278fe))
+* **remote:** 启动完成后状态立即上报，不再闪回启动中 ([539b704](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/539b704a2a9dee30725fe10a2622ae0226e73083))
+* **remote:** 当前标签页判定失效，永远显示第一页 ([c7c42de](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/c7c42de56a182b59d8f61125962af7a70c9126bb))
+* **remote:** 快照含响应式代理导致 IPC 序列化失败，状态彻底停更 ([662bab7](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/662bab72420e4e9be23916afd25e6f87ab8a726c))
+* **remote:** 新开标签页不被识别为当前页——采样失败不再直接排除 + 新页加成 ([f6982f7](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/f6982f7ad796857678f005ef8e193ac291046267))
+* **remote:** 浏览器状态死锁、隧道自动重连、远程台品牌图与截图反馈 ([d49fc89](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/d49fc89d1da2bf00f885556c5204a3cb3e946180))
+* **remote:** 点击启动/关闭立即显示过渡态，不再依赖手动刷新 ([d680fd6](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/d680fd63bef7f8c0f790a3645550a9a45490feec))
+* **remote:** 状态上报改由主进程催报，修复浏览器已启动却一直显示启动中 ([ab0c9f6](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/ab0c9f67d32850729280d1a77ad3da5e10546455))
+* **remote:** 登录成功后手机端读不到课程、电脑莫名多出 about:blank ([2898aab](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/2898aabde0909d840e76f7fce57d57281702049f))
+* **remote:** 统一图标几何与描边，补齐 PWA 图标，manifest 禁缓存 ([d31609f](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/d31609f28468905e3c82fa1ef23add6d62d0a237))
+* **remote:** 远程控制健壮性修复（3.2.0 收尾） ([1a71780](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/1a71780b6bdcc607a410a516a31b3ae70cabaf04))
+* **remote:** 隧道静默失效自愈（健康检查 + 连通性探测），开关状态以后端为准 ([fa41fd4](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/fa41fd4189af6bde720595f35af1df887efbd2d9))
+* **web:** Release 入口居中并与下载卡片拉开间距 ([3cbffb3](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/3cbffb3d5446e620b23bde33592040e9d7d32a2c))
+* **web:** 书签页平台卡片搜索配色跳变与过渡异常 ([e1f39cd](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/e1f39cdd911e0f641e34a23e7cbd69f5e6295b76))
+* **web:** 官网版本号跟随桌面端，下载区直链 Release 资产 ([922bf74](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/922bf74b788df371d7200c6f8ed5a9fca8d54c60))
+* **web:** 精简下载区文案，Release 入口下移，Linux 改用 Tux 图标 ([1007a78](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/1007a784aeb6b462ed3651b7d9e7298cc8775f0a))
+* **worker:** 登录完成后页面被清成一行「浏览器初始化完成。」、导航页消失 ([5a44879](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/5a44879c4e681d4161ad127fd392d5aeee57a72e))
+* 更新参考资料多模态模型名称 ([96c0fff](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/96c0fff4777b34e5a0dbbec800d75024ba87a182))
+* 清理配置界面残留旧品牌字样 ([59aa9a1](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/59aa9a1065f5bb52f3ef9bba03d8e816b477a48a))
+* 配置界面改用本地固定资源 ([291cc36](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/291cc3613ddc8b8f2bd8ca5b1e64889a0f2571b9))
+
+
+### ⚡ 性能优化
+
+* **ci:** GitCode 附件 4 路并发上传，附耗时日志 ([f7ad544](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/f7ad544c35d959dff4e4f9a4893e39f0874770de))
+
+
+### 📝 文档
+
+* **ci:** 修正 GitCode 镜像上传链路注释 ([245a722](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/245a7222637f436e6c74e4a6643a4ef7cd60cd58))
+* **ci:** 更正兼容包步骤说明 ([e1d0544](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/e1d05442092ddd02b36f9426234ef5a75a6ea4b0))
+* **desktop:** 修正探测超时的注释，说明它不影响启动速度 ([57d01e8](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/57d01e8b28148dd05ed21f7f076eb06c98723e94))
+* README 支持平台补充 U校园 ([f66128f](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/f66128fcd823aad6b19ebcd6bb12707705bfa5ff))
+* **release:** Release 说明改为「更新日志 + 使用方法」 ([28dbe7a](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/28dbe7a3e900970e56e35e8af85742c77bc1be16))
+* 添加鸿鹄易学官网页面 ([e59fa86](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/e59fa869cd34d32c6e22934e0496491b9c34392a))
+* 补充 GitHub 仓库链接 ([e3a9a1a](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/e3a9a1a46d1b62ea5f6be67146bad889901a475c))
+* 补充鸿鹄易学桌面端介绍 ([fba1f50](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/fba1f501bd36eafb83c6151889996f5380e4464d))
+* 调整 README 桌面端顺序与扩展包名称 ([fef03e0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/fef03e02181b0f249133e1e722d6b95898777d84))
+
+
+### ♻️ 代码重构
+
+* **ocr:** 交付通道改为 GitHub Release 资产 + 模型对齐 win 包 + 产物瘦身 ([9ccaca9](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/9ccaca979bbb259531525d5d6f43578c2ca83e95))
+
 ## [5.2.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.1.5...v5.2.0) (2026-10-28)
 
 
