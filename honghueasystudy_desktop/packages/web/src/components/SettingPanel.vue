@@ -132,8 +132,20 @@
 		<RemoteControl />
 
 		<a-card title="基本设置">
+			<Description label="后台托盘运行">
+				<a-tooltip
+					content="开启后，点击关闭按钮只会把软件收进系统托盘（窗口右下角的小图标），已启动的浏览器与定时自动化任务继续在后台执行。右键托盘图标可显示主界面或彻底退出。"
+				>
+					<a-switch v-model="store.window.tray" />
+				</a-tooltip>
+			</Description>
+
 			<Description label="开机自启">
-				<a-switch v-model="store.window.autoLaunch" />
+				<a-tooltip
+					content="开机后自动启动软件（默认开启），到点由定时任务自动拉起浏览器执行脚本。关闭后需要手动打开软件，定时任务才会执行。"
+				>
+					<a-switch v-model="store.window.autoLaunch" />
+				</a-tooltip>
 			</Description>
 
 			<Description label="窗口置顶">

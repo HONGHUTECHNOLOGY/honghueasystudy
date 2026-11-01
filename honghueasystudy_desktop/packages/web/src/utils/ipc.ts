@@ -92,6 +92,11 @@ export function activeIpcRenderListener() {
 		'update-downloaded',
 		(e, info: { tag?: string; size?: number; installDir?: string; runDir?: string; restored?: boolean }) => {
 			Notification.remove('updater');
+			/**
+			 * 后台托盘运行时窗口可能是隐藏的：下面的「立即安装」确认框必须可见，
+			 * 否则安装包一直等着，用户完全不知道。
+			 */
+			remote.methods.call('showMainWindow').catch(() => undefined);
 			if (!info || !info.tag) return;
 
 			// 当前跑的不是安装目录里那份（解压副本 / win-unpacked / 旧目录）时要说清楚，

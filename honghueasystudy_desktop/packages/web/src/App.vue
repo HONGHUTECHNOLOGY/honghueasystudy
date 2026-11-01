@@ -64,7 +64,7 @@ import { remote } from './utils/remote';
 import { root } from './fs/folder';
 import { electron } from './utils/node';
 import { closeAllBrowser, showClearBrowserCachesModal } from './utils/browser';
-import { changeTheme, fetchRemoteLangs, setAlwaysOnTop, setAutoLaunch } from './utils';
+import { changeTheme, fetchRemoteLangs, setAlwaysOnTop, setAutoLaunch, setTrayEnabled } from './utils';
 import { activeIpcRenderListener } from './utils/ipc';
 import { activeRemoteControlBridge } from './utils/remoteControl';
 import { startAutomationScheduler } from './utils/automationPlan';
@@ -136,7 +136,7 @@ onMounted(async () => {
 
 	/** 初始化 store */
 	remote.logger.call('info', 'render store init');
-	setAutoLaunch();
+	/** 开机自启由主进程启动时按存档注册，这里只跟随设置面板的开关变化 */
 	setAlwaysOnTop();
 	changeTheme().catch(console.error);
 
@@ -166,9 +166,10 @@ onMounted(async () => {
 		}
 	);
 
-	/** 监听自动启动/置顶变化 */
+	/** 监听自动启动/置顶/托盘变化 */
 	watch(() => store.window.autoLaunch, setAutoLaunch);
 	watch(() => store.window.alwaysOnTop, setAlwaysOnTop);
+	watch(() => store.window.tray, setTrayEnabled);
 
 	/** 监听窗口高度 */
 	window.onresize = () => {

@@ -112,6 +112,12 @@ export type WebStore = {
  * > undefined，模板里一读 `dev.enabled` 就抛 TypeError，整块设置面板渲染失败白屏。
  */
 const APP_DEFAULTS = {
+	/** 托盘/开机启动默认开启：主进程 initStore 只对旧存档补一次，这里兜底渲染端读到的空值 */
+	window: {
+		alwaysOnTop: false,
+		autoLaunch: true,
+		tray: true
+	},
 	remoteControl: {
 		enabled: false,
 		port: 15320,

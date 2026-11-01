@@ -15,6 +15,24 @@ const logger = Logger('store-init');
  * 初始化配置
  */
 export function initStore() {
+	/**
+	 * 旧存档迁移：补齐「后台托盘运行 / 开机启动」的默认值
+	 *
+	 * 老版本没有 `window.tray` 字段，且 `window.autoLaunch` 旧默认是关闭。
+	 * 新版本两项默认开启（用于开机后按定时任务自动执行脚本），这里一次性补写；
+	 * 必须在下面的 defaultsDeep 之前判断，否则 tray 会被提前补齐、识别不出旧存档。
+	 * 迁移只做一次（补完后 tray 就是 boolean），之后完全尊重用户在设置里的开关。
+	 */
+	try {
+		const windowStore = store.store.window as (Record<string, unknown> & { tray?: unknown }) | undefined;
+		if (windowStore && typeof windowStore.tray !== 'boolean') {
+			store.set('window', { ...windowStore, tray: true, autoLaunch: true });
+			logger.log('旧存档已启用默认：后台托盘运行、开机启动');
+		}
+	} catch (e) {
+		logger.error('迁移托盘/开机启动默认值失败', e);
+	}
+
 	const version = store.store.version;
 	logger.log('version', version);
 

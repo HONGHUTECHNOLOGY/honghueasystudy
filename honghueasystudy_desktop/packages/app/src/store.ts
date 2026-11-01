@@ -28,9 +28,12 @@ export const OriginalAppStore = {
 	},
 	/** 窗口设置 */
 	window: {
-		/** 开机自启 */
+		/** 窗口置顶 */
 		alwaysOnTop: false,
-		autoLaunch: false
+		/** 开机自启（默认开启，用于开机后按定时任务自动执行脚本） */
+		autoLaunch: true,
+		/** 后台托盘运行（默认开启：关闭窗口时收进托盘，定时任务继续执行） */
+		tray: true
 	},
 	/** 本地服务器数据 */
 	server: {

@@ -1,6 +1,7 @@
 import { ipcMain, app, dialog, BrowserWindow, desktopCapturer, safeStorage, shell } from 'electron';
 import { Logger } from '../logger';
-import { autoLaunch } from './auto.launch';
+import { autoLaunch, setAutoLaunch } from './auto.launch';
+import { setTrayEnabled, showMainWindow } from './tray';
 import axios, { AxiosRequestConfig } from 'axios';
 import { downloadFile, moveWindowToTop, unzip, zip } from '../utils';
 import fs from 'fs';
@@ -135,6 +136,12 @@ async function unzipResource(input: string, output: string) {
 /** 需远程共享的方法 */
 const methods = {
 	autoLaunch,
+	/** 设置面板：开机自启开关（落盘并立即应用） */
+	setAutoLaunch,
+	/** 设置面板：后台托盘运行开关（返回 false 表示当前系统托盘不可用） */
+	setTrayEnabled,
+	/** 把主窗口带回前台（托盘模式下需要弹确认/更新提示时用） */
+	showMainWindow,
 	get: (url: string, config?: AxiosRequestConfig<any> | undefined) => axios.get(url, config).then((res) => res.data),
 	getWithStatus: (url: string, config?: AxiosRequestConfig<any> | undefined) =>
 		axios.get(url, { ...config, validateStatus: () => true }).then((res) => ({ status: res.status, data: res.data })),

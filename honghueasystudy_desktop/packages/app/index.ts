@@ -14,6 +14,15 @@ import { initOcr } from './src/tasks/init.ocr';
 import { store } from './src/store';
 import { initAesKey } from './src/crypto';
 import { initRemoteControl, remoteControl } from './src/tasks/remote-control';
+import { hideToTray, initTray } from './src/tasks/tray';
+
+/**
+ * 是否已经进入「真正退出」流程（app.quit / 安装更新 / 系统退出）
+ *
+ * 这种情况下窗口关闭不能再收进托盘：更新安装器要替换被占用的程序文件，
+ * 收进托盘会让 app.quit 被取消，安装器却已经在改文件。
+ */
+let quitRequested = false;
 
 app.setName('鸿鹄易学');
 
@@ -44,13 +53,14 @@ function bootstrap() {
 			task('初始化加密密钥', () => initAesKey()).then(() =>
 				task('初始化本地设置', async () => {
 					initStore();
+					// 开机自启按存档注册，必须在 initStore 之后（全新安装时此时才有 window 默认值）
+					await task('初始化自动启动', () => autoLaunch());
 					await task('初始化内置扩展', () => initExtension());
 					await task('启动接口服务', () => startupServer());
 					// OCR 是滑块验证码的必需依赖：缺失时后台下载，不阻塞软件启动
 					task('初始化OCR模块', () => initOcr()).catch((e) => console.error('OCR 初始化失败', e));
 				})
 			),
-			task('初始化自动启动', () => autoLaunch()),
 			task('启动渲染进程', async () => {
 				// 设置 webrtc 的影像帧率比例，最高100，太高会造成卡顿，参数默认50
 				app.commandLine.appendSwitch(
@@ -65,6 +75,14 @@ function bootstrap() {
 					return;
 				}
 
+				/** 托盘（默认开启）：后台运行定时任务，关闭窗口只收进托盘、不退出 */
+				initTray(window);
+
+				/** app.quit()（安装更新 / 内置浏览器初始化后重启 / 系统退出）时，关闭窗口不再收进托盘 */
+				app.on('before-quit', () => {
+					quitRequested = true;
+				});
+
 				app.on('quit', (e) => {
 					e.preventDefault();
 					// 交给渲染层去关闭浏览器
@@ -75,6 +93,13 @@ function bootstrap() {
 
 				window.on('close', (e) => {
 					e.preventDefault();
+					/**
+					 * 用户点关闭（非 app.quit 触发）时，若后台托盘运行开启就收进托盘：
+					 * 浏览器与自动化调度继续在后台执行，定时任务不会因为关窗中断。
+					 */
+					if (!quitRequested && hideToTray()) {
+						return;
+					}
 					if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
 						window.webContents.send('close');
 					}

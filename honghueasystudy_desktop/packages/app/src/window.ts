@@ -28,7 +28,12 @@ export function createWindow() {
 			webSecurity: true,
 			// 开启node
 			nodeIntegration: true,
-			contextIsolation: false
+			contextIsolation: false,
+			/**
+			 * 关闭后台节流：收进托盘后窗口处于隐藏状态，Chromium 默认会把定时器压到每分钟一次，
+			 * 自动化调度（20 秒一个节拍）会因此错过定时启动/收尾的时间点。
+			 */
+			backgroundThrottling: false
 		}
 	});
 

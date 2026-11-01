@@ -181,8 +181,30 @@ export async function changeTheme() {
 	}
 }
 
+/** 开机自启开关：落盘并立即注册/取消系统登录启动项 */
 export function setAutoLaunch() {
-	remote.methods.call('autoLaunch');
+	/** 失败（系统拒绝写入启动项）时保留用户选择，下次启动主进程还会按存档重试一次 */
+	remote.methods.call('setAutoLaunch', store.window.autoLaunch !== false).catch((e) => console.error('设置开机自启失败', e));
+}
+
+/**
+ * 后台托盘运行开关：主进程会立即创建/销毁托盘图标
+ *
+ * 系统托盘不可用时（部分 Linux 桌面没有状态栏服务）主进程返回 false，
+ * 这里把开关退回关闭，否则关窗后既没有托盘图标、窗口也找不回来。
+ */
+export async function setTrayEnabled() {
+	const enabled = store.window.tray !== false;
+	try {
+		const ok = await remote.methods.call('setTrayEnabled', enabled);
+		if (enabled && ok === false) {
+			store.window.tray = false;
+			Message.error('当前系统不支持系统托盘，已关闭「后台托盘运行」');
+		}
+	} catch (e) {
+		if (enabled) store.window.tray = false;
+		Message.error('设置后台托盘运行失败：' + e);
+	}
 }
 
 export function setAlwaysOnTop() {
