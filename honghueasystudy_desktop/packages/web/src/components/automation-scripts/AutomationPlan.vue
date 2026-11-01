@@ -347,7 +347,7 @@
 			<a-spin
 				v-if="picking"
 				style="width: 100%"
-				tip="正在读取课程列表…"
+				tip="正在读取课程列表（若登录脚本还在跑，会等它跑完）…"
 			/>
 			<template v-else>
 				<p
@@ -696,10 +696,11 @@ async function loadCourses(): Promise<void> {
 			await props.browser.launch();
 			busyState.launching = false;
 			await waitLaunched(2 * 60 * 1000);
-			/** 启动会自动跑登录脚本，等它跑完再读，否则列表是空的 */
-			await sleep(3000);
 		}
-
+		/**
+		 * 不再靠 sleep 猜登录脚本跑完没有：子进程会先等启动时的登录脚本结束，
+		 * 才真正读课程列表，这里直接调用即可。
+		 */
 		const result = await fetchCourseList(props.browser.uid, { refresh: true });
 		courses.splice(0, courses.length, ...(result.courses || []));
 		/** 记下这批课程来自哪个平台：选课时要写进方案，决定要不要显示三栏目录 */

@@ -160,7 +160,7 @@ export class AutomationRunner {
 		const id = String((opts && opts.id) || '');
 		if (!uid || !id) throw new Error('缺少参数');
 
-		const result: { url: string; title: string } = await this.dispatch('course.enter', {
+		const result: { url: string; title: string; moved?: boolean } = await this.dispatch('course.enter', {
 			uid,
 			id,
 			name: (opts && opts.name) || ''
@@ -169,7 +169,17 @@ export class AutomationRunner {
 		const job = this.jobs.get(uid);
 		if (job) {
 			job.pageUrl = (result && result.url) || job.pageUrl;
-			job.message = `已进入课程：${(result && (result.title || result.url)) || ''}`;
+			/**
+			 * 只有页面真的动了才能说「已进入课程」。
+			 *
+			 * 站点改了入口时点击卡片不会跳转，手机端会同时收到成功文案和失败 toast，
+			 * 面板上那句「已进入」会让人以为已经进去了，而实际还停在列表页。
+			 */
+			const moved = !(result && result.moved === false);
+			job.message = moved
+				? `已进入课程：${(result && (result.title || result.url)) || ''}`
+				: '没有进入课程：页面没有跳转';
+			job.hint = moved ? '' : '点开了课程卡片但页面没有跳转，可能是站点改了入口；请在电脑上手动进入一次。';
 			job.updatedAt = Date.now();
 			this.notify(job);
 		}

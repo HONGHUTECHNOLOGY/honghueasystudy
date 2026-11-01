@@ -14,12 +14,14 @@ const COMMAND_TIMEOUT = 15000;
  */
 const TIMEOUT_BY_ACTION: { [action: string]: number } = {
 	'script.run': 6 * 60 * 1000,
-	'course.list': 2 * 60 * 1000,
+	/** 读课程列表会先等启动时的登录脚本跑完（渲染端 RPC 7 分钟），这里再留一分钟差额 */
+	'course.list': 8 * 60 * 1000,
 	'course.enter': 2 * 60 * 1000,
 	/** 读方案要遍历配置树，很快；但浏览器卡住时别把请求挂死 */
 	'automation.get': 30 * 1000,
 	'automation.save': 30 * 1000,
-	'automation.courses': 2 * 60 * 1000,
+	/** 同 course.list：选课前要等登录脚本 */
+	'automation.courses': 8 * 60 * 1000,
 	'automation.run': 30 * 1000,
 	'automation.stop': 2 * 60 * 1000,
 	/** 读目录要点菜单 + 等 iframe，最快也要几秒；考试列表偶发慢一档 */

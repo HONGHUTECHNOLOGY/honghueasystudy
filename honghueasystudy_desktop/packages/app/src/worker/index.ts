@@ -9,8 +9,23 @@ import { Config } from '../scripts/interface';
 import _get from 'lodash/get';
 import child_process from 'child_process';
 import { getBrowserMajorVersion, getBuiltinExtensionPaths } from '../utils/browser';
+import {
+	autoStopOverride,
+	migrateSpanToDuration,
+	normalizeBrowserAutomation,
+	type AutoStopOverride,
+	type BrowserAutomation
+} from '../scripts/plan';
 
 const { bgRedBright, bgBlueBright, bgYellowBright, bgGray } = new Chalk({ level: 2 });
+
+/**
+ * 读课程列表前最多等启动时的登录脚本多久
+ *
+ * 登录脚本要处理滑块 / 短信验证码，慢的时候确实要几分钟。
+ * 超时后也不能硬读：那时平台还停在首页，抽到的全是推荐卡片。
+ */
+const AUTOMATION_READY_TIMEOUT = 5 * 60 * 1000;
 
 type AS = { name: string; configs: Record<string, Config> };
 
@@ -119,6 +134,17 @@ export class ScriptWorker {
 	extensionPaths: string[] = [];
 	/** 执行的自动化程序列表 */
 	automationScripts: AS[] = [];
+	/**
+	 * 启动时的定时方案快照
+	 *
+	 * 渲染进程在 init 里带过来，用于「还没有收到实时下发」时给扩展算一份覆盖：
+	 * 定时任务期间扩展的定时停止要按桌面方案的时间走，不能按它自己记忆的 stopTimeMinutes。
+	 */
+	private automationPlan: BrowserAutomation | null = null;
+	/** 渲染进程实时下发的覆盖；null 表示明确「当前没有定时任务」 */
+	private autoStopOverrideValue: AutoStopOverride | null = null;
+	/** 是否收到过实时下发（收到之后不再使用启动快照兜底） */
+	private autoStopPushed = false;
 	/** 可关闭的浏览器拓展主页 */
 	store?: AppStore;
 	/** 浏览器中软件设置的名字 */
@@ -157,6 +183,16 @@ export class ScriptWorker {
 	 * 记住上一次的平台，`course.list` 才仍然知道该打开哪个课程列表页。
 	 */
 	private automationPlatformId = '';
+	/**
+	 * 启动时那批自动化脚本（登录脚本）是否已全部结束
+	 *
+	 * `launched` 是在登录脚本**之前**上报的：这时平台还停在首页，页面上是推荐卡片。
+	 * 拿着这个时刻去读课程列表，读到的就是与课程无关的首页内容，
+	 * 还会把登录流程正在用的页面导航走，所以读课程前必须先等这里置位。
+	 */
+	private automationReady = false;
+	/** 正在等「登录脚本跑完」的调用方；超时的会自行移除 */
+	private automationReadyWaiters = new Set<(ok: boolean) => void>();
 	static langs?: Langs;
 	static lang: (key: keyof Langs, def?: string, replace?: Record<string, string>) => string = (key, def, replace) => {
 		const result = _get(ScriptWorker.langs, key, def);
@@ -179,6 +215,7 @@ export class ScriptWorker {
 		uid,
 		cachePath,
 		automationScripts,
+		automation,
 		browserInfo,
 		config,
 		langs
@@ -187,6 +224,8 @@ export class ScriptWorker {
 		uid: string;
 		cachePath: string;
 		automationScripts: AS[];
+		/** 定时方案快照（旧存档可能没有该字段） */
+		automation?: BrowserAutomation | null;
 		browserInfo: BrowserInfo;
 		config: BrowserConfig;
 		langs: Langs;
@@ -203,6 +242,9 @@ export class ScriptWorker {
 		// 自动化程序
 		this.automationScripts = automationScripts;
 
+		/** 定时方案：旧存档缺字段 / 旧版「起止时间段」都统一折算成当前语义 */
+		this.automationPlan = automation ? migrateSpanToDuration(normalizeBrowserAutomation(automation)) : null;
+
 		// 初始化日志
 		this.logger = new LoggerCore(store.paths['logs-path'], false, 'script', path.basename(cachePath));
 
@@ -211,6 +253,87 @@ export class ScriptWorker {
 		this.config = config;
 
 		this.debug('初始化成功');
+	}
+
+	/**
+	 * 同步定时任务对扩展「定时停止」的覆盖
+	 *
+	 * 渲染进程每个调度节拍都会调用：定时任务开始 / 方案被修改 / 任务结束时各下发一次。
+	 * 扩展进入学习页时请求 `/hh-autostop`，拿到这里的值；为 null 时回退到它自己保存的
+	 * `stopTimeMinutes`。
+	 */
+	setAutoStop(override?: AutoStopOverride | null): void {
+		const next: AutoStopOverride | null =
+			override && override.active
+				? {
+						active: true,
+						pause: !!override.pause,
+						endAt: override.pause ? Number(override.endAt) || 0 : 0
+					}
+				: null;
+
+		/**
+		 * 调度器每个节拍都会下发一次，值没变就不要落日志 ——
+		 * 渲染端只保留最近 300 行，每 20 秒一行会把真正有用的日志挤掉。
+		 */
+		const prev = this.autoStopOverrideValue;
+		const changed =
+			prev && next
+				? prev.active !== next.active || prev.pause !== next.pause || prev.endAt !== next.endAt
+				: prev !== next;
+
+		/** 不论值有没有变，收到过一次实时下发后就不再使用启动快照兜底 */
+		this.autoStopPushed = true;
+		if (!changed) return;
+
+		this.autoStopOverrideValue = next;
+		this.debug(`[定时停止] 覆盖已更新：${JSON.stringify(next)}`);
+	}
+
+	/** 当前应下发给扩展的覆盖：实时下发优先，没有下发过则用启动快照现算 */
+	private currentAutoStopOverride(): AutoStopOverride | null {
+		if (this.autoStopPushed) return this.autoStopOverrideValue;
+		if (!this.automationPlan) return null;
+		return autoStopOverride(this.automationPlan.schedule, new Date());
+	}
+
+	/**
+	 * 启动时的登录脚本已全部结束（成功、失败、异常都会走到这里）
+	 *
+	 * 幂等：启动链路里成功分支和兜底 catch 都会通知，重复调用不能出问题。
+	 */
+	private markAutomationReady(): void {
+		if (this.automationReady) return;
+		this.automationReady = true;
+		this.debug('[启动] 登录脚本执行结束，可以读取课程列表');
+		const waiters = Array.from(this.automationReadyWaiters);
+		this.automationReadyWaiters.clear();
+		for (const waiter of waiters) waiter(true);
+	}
+
+	/**
+	 * 等启动时的登录脚本跑完
+	 *
+	 * 返回 false 表示等待超时（脚本可能卡在滑块 / 短信）。
+	 * 调用方此时不能硬读：平台还停在首页，抽到的是推荐卡片之类不相干的内容。
+	 */
+	private waitAutomationReady(timeout: number): Promise<boolean> {
+		if (this.automationReady) return Promise.resolve(true);
+		return new Promise<boolean>((resolve) => {
+			let settled = false;
+			const finish = (ok: boolean) => {
+				if (settled) return;
+				settled = true;
+				this.automationReadyWaiters.delete(finish);
+				resolve(ok);
+			};
+			/**
+			 * 定时器不用单独清理：先结束时 `settled` 已置位，
+			 * 到点后的回调会立刻返回，不会再触碰任何状态。
+			 */
+			setTimeout(() => finish(false), timeout);
+			this.automationReadyWaiters.add(finish);
+		});
 	}
 
 	async launch(
@@ -312,6 +435,12 @@ export class ScriptWorker {
 		try {
 			await launchBrowser({
 				/**
+				 * 启动时的自动化脚本（登录）全部结束后，才允许读课程列表。
+				 *
+				 * 注意不能用 onAutomationDone 当信号：没配脚本、或脚本名对不上时它不会被调用。
+				 */
+				onAutomationFinish: () => this.markAutomationReady(),
+				/**
 				 * 启动时自动跑的登录脚本跑完后，把「登录后落在哪一页 / 哪个平台」记住。
 				 *
 				 * 不接这一步的话，远程端来读课程时 worker 对登录结果一无所知：
@@ -363,6 +492,11 @@ export class ScriptWorker {
 				},
 
 				automationScripts: this.automationScripts,
+				/**
+				 * 扩展进入学习页时会请求 `/hh-autostop`，用这里的值决定定时停止时刻。
+				 * 定时任务期间按桌面方案走，其余时候返回 null，扩展回退到自己的配置。
+				 */
+				getAutoStop: () => this.currentAutoStopOverride(),
 				bookmarksPageUrl: this.store
 					? `http://localhost:${this.store?.server.port || 15319}/index.html#/bookmarks?uid=${this.uid}`
 					: undefined,
@@ -1141,6 +1275,23 @@ export class ScriptWorker {
 	}> {
 		if (!this.browser) throw new Error('浏览器尚未启动');
 
+		/**
+		 * 必须先等启动时的登录脚本跑完再读。
+		 *
+		 * `launched` 是在登录脚本之前上报的：这时浏览器停在平台首页，页面上是一堆推荐卡片。
+		 * 现在抽取会把这些不相干的首页内容当成课程列表展示，还会在登录流程没走完时
+		 * 导航课程页，把脚本正在用的页面顶掉 —— 手机远程控制走的是同一个入口，同样需要等。
+		 */
+		if (!(await this.waitAutomationReady(AUTOMATION_READY_TIMEOUT))) {
+			return {
+				platform: '',
+				pageUrl: '',
+				pageTitle: '',
+				courses: [],
+				hint: '登录脚本还没有执行完，暂时不能读取课程列表。请等它跑完（页面上登录成功）后再读取。'
+			};
+		}
+
 		const browser = this.browser;
 		const wantRefresh = !options || options.refresh !== false;
 
@@ -1316,11 +1467,23 @@ export class ScriptWorker {
 	}
 
 	/** 进入指定课程（列表项由 listCourses 打标记，这里按标记点击或直接跳转） */
-	async enterCourse(options: { id: string; name?: string }): Promise<{ url: string; title: string }> {
+	async enterCourse(options: { id: string; name?: string }): Promise<{ url: string; title: string; moved: boolean }> {
 		if (!this.browser) throw new Error('浏览器尚未启动');
 
 		const id = String((options && options.id) || '').trim();
 		if (!id) throw new Error('缺少课程标识');
+
+		/**
+		 * 和读课程列表同一个门槛：启动时的登录脚本没跑完之前不能进课。
+		 *
+		 * 手机端可能还拿着上一轮的课程列表来点，这时页面停在首页或登录页，
+		 * 直接抽取点击会抢走登录脚本正在用的标签，还会把用户送进不相干的页面。
+		 * 这里不做长等待：远程进课只给了 90 秒，等 5 分钟只会先超时。
+		 * 立刻返回明确原因，用户等登录完成后再点一次即可。
+		 */
+		if (!this.automationReady) {
+			throw new Error('登录脚本还没有执行完，暂时不能进入课程。请等它跑完（页面上登录成功）后再进入。');
+		}
 
 		const wantName = String((options && options.name) || '').trim();
 
@@ -1426,11 +1589,15 @@ export class ScriptWorker {
 		}
 
 		const before = this.browser.pages().length;
+		/** 点击前的地址：点完要拿它比一次，确认页面真的动了 */
+		const urlBefore = page.url();
 		/**
 		 * 进入后的课程页单独记，**不覆盖 `automationPage`**：
 		 * 那个字段是「课程列表页」，被课程页顶掉的话，下次读列表会去课程页里找课，一门都找不到。
 		 */
 		let enteredPage: Page | null = null;
+		/** 页面到底有没有动过；false 表示「点了但什么都没发生」，调用方不能当成功 */
+		let moved = false;
 
 		/** 有直链就按 URL 进入（超星），没有才能靠点击（智慧树） */
 		let linkTarget = directUrl;
@@ -1457,6 +1624,7 @@ export class ScriptWorker {
 				await page.goto(linkTarget, { waitUntil: 'domcontentloaded', timeout: 45000 });
 				enteredPage = page;
 			}
+			moved = true;
 		} else {
 			/** 没有 href 的卡片（Vue/React 站点靠 click 跳转）只能点 */
 			this.info('[远程] 课程卡片无直链，改为点击进入');
@@ -1483,14 +1651,53 @@ export class ScriptWorker {
 			}
 			await page.waitForTimeout(3000);
 
-			const pages = this.browser.pages();
-			if (pages.length > before) {
-				const popup = pages[pages.length - 1];
-				enteredPage = popup;
-				await popup.waitForLoadState('domcontentloaded').catch(() => {});
-			} else {
-				enteredPage = page;
+			/** 只有「新开了标签」或「当前页地址变了」才算真的进去了 */
+			moved = this.browser.pages().length > before || page.url() !== urlBefore;
+			if (moved) enteredPage = await this.pickEnteredPage(page, before);
+
+			/**
+			 * 卡片本身不跳转的站点（智慧树共享课）：
+			 * 真正的入口是卡片里的「继续学习」按钮，再点一次。
+			 */
+			if (!moved) {
+				this.warn('[远程] 点击课程卡片后页面没有变化，改点卡片内的入口按钮');
+				const entry = await handle!
+					.evaluate(findCourseEntryInPage)
+					.catch(() => null as { href: string; text: string } | null);
+
+				if (entry && entry.href) {
+					const href = new URL(entry.href, page.url()).href;
+					this.info(`[远程] 使用卡片内链接进入：${href}`);
+					const tab = await page.context().newPage().catch(() => null);
+					if (tab) {
+						let opened = true;
+						try {
+							await tab.goto(href, { waitUntil: 'domcontentloaded', timeout: 45000 });
+						} catch (e: any) {
+							opened = false;
+							this.warn('[远程] 打开课程页失败：', String(e && e.message ? e.message : e));
+						}
+						if (opened) {
+							enteredPage = tab;
+							moved = true;
+						} else {
+							/** 打不开就关掉空白标签，别把「假成功」和一张空网页一起留给用户 */
+							await tab.close().catch(() => {});
+						}
+					} else {
+						await page.goto(href, { waitUntil: 'domcontentloaded', timeout: 45000 });
+						enteredPage = page;
+						moved = true;
+					}
+				} else if (entry) {
+					this.info(`[远程] 已点「${entry.text || '进入'}」，等待跳转…`);
+					await page.waitForTimeout(3500);
+					moved = this.browser.pages().length > before || page.url() !== urlBefore;
+					if (moved) enteredPage = await this.pickEnteredPage(page, before);
+				}
 			}
+
+			if (!moved) this.warn('[远程] 卡片内也没有可点的入口，页面仍未跳转（站点可能改了入口）');
 		}
 
 		const active = enteredPage && !enteredPage.isClosed() ? enteredPage : page;
@@ -1506,7 +1713,22 @@ export class ScriptWorker {
 		/** 记住这个课程页：读章节 / 作业 / 考试都要在它上面点菜单 */
 		if (active && !active.isClosed() && isCoursePageUrl(active.url())) this.coursePage = active;
 
-		return { url: active.url(), title };
+		return { url: active.url(), title, moved };
+	}
+
+	/**
+	 * 点击进入后「落在哪一页」
+	 *
+	 * 新开了标签就用新标签（有些站点把课程开在 popup 里），否则就是当前页。
+	 */
+	private async pickEnteredPage(page: Page, beforeCount: number): Promise<Page> {
+		const pages = this.browser ? this.browser.pages() : [];
+		if (pages.length > beforeCount) {
+			const popup = pages[pages.length - 1];
+			await popup.waitForLoadState('domcontentloaded').catch(() => {});
+			return popup;
+		}
+		return page;
 	}
 
 	/**
@@ -2165,6 +2387,92 @@ export async function autoScrollForCourses(target: Page | Frame, maxRounds = 10)
 	}
 }
 
+/**
+ * 在课程卡片里找「真正的入口」
+ *
+ * 智慧树这类站点的卡片只是一个容器：卡片本身没绑定跳转，点下去页面纹丝不动，
+ * 真正能进课的是卡片里的「继续学习」按钮或内部链接。旧代码点完不校验，
+ * 于是会把「什么都没发生」当成「已进入课程」，用户看到的就是「登录完成了却没进课」。
+ *
+ * 返回候选入口；调用方决定是走直链还是派发点击。
+ * 这个函数会被 `evaluate` 序列化到页面里执行，**不能引用外部作用域**。
+ */
+export function findCourseEntryInPage(card: HTMLElement): { href: string; text: string } | null {
+	if (!card) return null;
+	const clean = (value: any) => String(value || '').replace(/\s+/g, ' ').trim();
+
+	/**
+	 * 标记有可能打在内层节点上（标题/封面），入口在它的父级里。
+	 * 往上找两级即可：再往上就会跑到整页的其它卡片上。
+	 */
+	const scopes: HTMLElement[] = [card];
+	let up = card.parentElement;
+	for (let i = 0; i < 2 && up; i++) {
+		scopes.push(up);
+		up = up.parentElement;
+	}
+
+	/** 1) 卡片内部的 http(s) 直链最可靠：有就交给调用方按 URL 打开 */
+	for (const scope of scopes) {
+		const anchors = Array.prototype.slice.call(scope.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+		for (const anchor of anchors) {
+			const raw = clean(anchor.getAttribute('href'));
+			if (!raw || /^(javascript:|#)/i.test(raw)) continue;
+			if (!/^https?:/i.test(raw)) continue;
+			return { href: raw, text: clean(anchor.textContent).slice(0, 20) };
+		}
+	}
+
+	/**
+	 * 2) 没有直链就找入口按钮
+	 *
+	 * 范围按「卡片 → 父级 → 祖父级」由近到远：祖先里常包含相邻卡片，
+	 * 先点远处会进错课。同一个范围内先只认完整短语，再退回裸「学习」——
+	 * 同一张卡里常同时有「学习进度」「学习记录」和「继续学习」，
+	 * 让裸词按文档顺序先匹配就会把用户带到学习记录页。
+	 */
+	const CTA_STRICT = /继续学习|进入课程|开始学习|去学习|进入学习|查看课程|去上课/;
+	const CTA_LOOSE = /学习/;
+	/** 「学习记录 / 学习进度 / 学习中心」这类是导航，不是进课入口 */
+	const CTA_NAV = /学习\s*(记录|进度|中心|统计|排行|计划|报告|档案|空间|小组|工具)/;
+
+	for (const scope of scopes) {
+		const nodes = Array.prototype.slice.call(scope.querySelectorAll('button,a,div,span,li')) as HTMLElement[];
+		for (const cta of [CTA_STRICT, CTA_LOOSE]) {
+			for (const node of nodes) {
+				const text = clean(node.textContent);
+				if (!text || text.length > 12) continue;
+				if (!cta.test(text)) continue;
+				if (cta === CTA_LOOSE && CTA_NAV.test(text)) continue;
+				/** 只点最内层的那个（外层的容器 textContent 会拼上整张卡片） */
+				if (node.children.length > 1) continue;
+				const rect = node.getBoundingClientRect();
+				if (rect.width < 4 || rect.height < 4) continue;
+
+				/** 这类站点常监听 mousedown/mouseup，光 dispatch('click') 未必触发路由 */
+				try {
+					const box = {
+						bubbles: true,
+						cancelable: true,
+						clientX: rect.left + rect.width / 2,
+						clientY: rect.top + rect.height / 2
+					};
+					node.dispatchEvent(new MouseEvent('mouseover', box));
+					node.dispatchEvent(new MouseEvent('mousedown', box));
+					node.dispatchEvent(new MouseEvent('mouseup', box));
+					/** 只派发这一个 click：再调 node.click() 会把同一入口点两次（window.open 会开两个标签） */
+					node.dispatchEvent(new MouseEvent('click', box));
+				} catch {
+					return { href: '', text };
+				}
+				return { href: '', text };
+			}
+		}
+	}
+
+	return null;
+}
+
 export function extractCoursesInPage(arg: { platform: string }): {
 	items: { id: string; name: string; url: string; label?: string }[];
 	pageTitle: string;
@@ -2818,8 +3126,10 @@ export async function launchBrowser({
 	browserInfo,
 	uid,
 	config,
+	getAutoStop,
 	onLaunch,
-	onAutomationDone
+	onAutomationDone,
+	onAutomationFinish
 }: Required<Pick<LaunchOptions, 'executablePath' | 'headless' | 'args'>> & {
 	/** 用户数据目录 */
 	userDataDir: string;
@@ -2827,6 +3137,8 @@ export async function launchBrowser({
 	closeableExtensionHomepages: string[];
 	/** 自动化程序 */
 	automationScripts: AS[];
+	/** 当前定时任务给扩展「定时停止」的覆盖（null=没有定时任务） */
+	getAutoStop?: () => AutoStopOverride | null;
 	/** 初始导航页地址 */
 	bookmarksPageUrl?: string;
 	/** 鸿鹄易学服务器端口 */
@@ -2845,6 +3157,13 @@ export async function launchBrowser({
 	 * 远程端随后要点「选课」时，就不用猜去哪儿读课程了。
 	 */
 	onAutomationDone?: (result: { page?: Page; platformId?: string }) => void;
+	/**
+	 * 启动时自动跑的自动化程序**全部结束**后的回调（成功、失败、没有脚本都会调用）
+	 *
+	 * 与 onAutomationDone 的区别：那个只在脚本真正落地时调用，没配脚本时根本不来，
+	 * 不能当作「登录已经跑完」的信号。读课程列表必须等这里。
+	 */
+	onAutomationFinish?: () => void;
 }) {
 	return new Promise<void>((resolve, reject) => {
 		/** 握手耗时参考：全新 profile 约 0.5~2 秒；已有大量会话/扩展的 profile 可达 10~15 秒 */
@@ -2952,7 +3271,7 @@ export async function launchBrowser({
 
 					// 鸿鹄易学扩展随浏览器启动自动加载，不再安装任何用户脚本
 					// 监听网络请求
-					browserNetworkRoute(authToken, browser);
+					browserNetworkRoute(authToken, browser, getAutoStop);
 
 					// 运行自动化程序（导航页不参与，脚本自己新开标签）
 					await runAutomationScripts({
@@ -2970,7 +3289,11 @@ export async function launchBrowser({
 					 * 必须显式通知渲染进程：自动刷课要等登录脚本跑完才能读课程列表，
 					 * 之前只能靠「猜一个延时」，登录慢一点（滑块、短信）就会读到空列表，
 					 * 登录快一点又白等半分钟。
+					 *
+					 * 先置 worker 侧的「可以读了」，再发消息：渲染端收到消息就会立刻来读，
+					 * 反过来写会让那次读取又撞上还没解除的门槛。
 					 */
+					onAutomationFinish?.();
 					send('automation-done');
 
 					await step('浏览器初始化完成。', { loading: false });
@@ -2978,6 +3301,7 @@ export async function launchBrowser({
 				} catch (err) {
 					console.error('浏览器初始化步骤失败（不影响使用）：', err instanceof Error ? err.message : String(err));
 					/** 初始化中途失败也要给个「自动化阶段结束」的信号，否则自动刷课会白等 5 分钟超时 */
+					onAutomationFinish?.();
 					send('automation-done');
 				}
 			})
@@ -3124,12 +3448,36 @@ async function waitAndCloseExtensionHomepage(opts: { browser: BrowserContext; cl
 	});
 }
 
-function browserNetworkRoute(authToken: string, browser: BrowserContext) {
+function browserNetworkRoute(
+	authToken: string,
+	browser: BrowserContext,
+	getAutoStop?: () => AutoStopOverride | null
+) {
 	browser.route(/hh-environment/, async (route) => {
 		await route.fulfill({
 			status: 200,
 			body: JSON.stringify({
 				environment: 'playwright'
+			})
+		});
+	});
+	/**
+	 * 定时任务期间扩展「定时停止」的时间来源
+	 *
+	 * 扩展每次进入学习页（以及运行中定期）请求这里：有定时任务时按桌面方案的截止时间
+	 * 倒计时；`autoStop` 为 null 时扩展回退到自己保存的 `stopTimeMinutes`。
+	 * 路由注册在浏览器实例上，所以每台浏览器拿到的是它自己的方案。
+	 */
+	browser.route(/hh-autostop/, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			/** 扩展每 20 秒来问一次，任何缓存都会让它按旧时间倒计时 */
+			headers: { 'Cache-Control': 'no-store' },
+			body: JSON.stringify({
+				environment: 'playwright',
+				autoStop: getAutoStop ? getAutoStop() : null,
+				now: Date.now()
 			})
 		});
 	});

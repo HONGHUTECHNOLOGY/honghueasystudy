@@ -302,7 +302,7 @@ export const api = {
 
 	/** 进入课程（之后由桌面端刷课脚本接管） */
 	enterCourse: (uid: string, id: string, name: string) =>
-		request<{ ok: boolean; data: { url: string; title: string } }>('/api/automation/enter', {
+		request<{ ok: boolean; data: { url: string; title: string; moved?: boolean } }>('/api/automation/enter', {
 			method: 'POST',
 			body: JSON.stringify({ uid, id, name })
 		}),

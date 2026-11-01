@@ -8,6 +8,7 @@ import type { AutomationTarget } from '@honghu-desktop/app/src/scripts/plan';
 import {
 	automationSummary,
 	catalogSupport,
+	COURSE_LIST_TIMEOUT,
 	enterNextChapter,
 	fetchCourseList,
 	getStatus,
@@ -397,7 +398,8 @@ async function executeCommand(action: string, payload: any): Promise<any> {
 			if (running.status !== 'launched') throw new Error('浏览器尚未就绪，请稍后再试');
 
 			const refresh = !(payload && payload.refresh === false);
-			return running.callWorkerTimeout('listCourses', [{ refresh }], 90 * 1000);
+			/** 子进程会先等启动时的登录脚本跑完（手机在登录没完成时也可能来读），超时要覆盖这段等待 */
+			return running.callWorkerTimeout('listCourses', [{ refresh }], COURSE_LIST_TIMEOUT);
 		}
 
 		case 'course.enter': {
@@ -415,10 +417,14 @@ async function executeCommand(action: string, payload: any): Promise<any> {
 			 * 顺手判定这套课程页有没有「章节 / 作业 / 考试」三栏
 			 *
 			 * 只有超星有。判定结果随快照上报，手机端据此决定显示不显示那三个目录。
+			 * 没跳转时不要判定、也不要放开目录：页面还停在列表页或首页，
+			 * 提前点亮只会让用户点出一串「还没有进入课程页」。
 			 */
-			catalogSupport[uid] = isChaoxingCourseUrl((result && result.url) || '');
-			/** 刚进课，课程页就开着：三个目录可以放开了 */
-			markCourseReady(uid, true);
+			if (result && result.moved !== false) {
+				catalogSupport[uid] = isChaoxingCourseUrl((result && result.url) || '');
+				/** 刚进课，课程页就开着：三个目录可以放开了 */
+				markCourseReady(uid, true);
+			}
 			return plain(result);
 		}
 

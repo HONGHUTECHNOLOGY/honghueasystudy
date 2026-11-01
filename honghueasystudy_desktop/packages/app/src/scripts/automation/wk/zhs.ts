@@ -128,10 +128,9 @@ async function selectSchool(page: Page, schoolname: string) {
 
 /** 勾选隐私协议并点击登录 */
 async function agreeAndSubmit(page: Page) {
-	const isChecked = () =>
-		page.evaluate(
-			() => !!(document.querySelector('input.el-checkbox__original') as HTMLInputElement | null)?.checked
-		);
+	const isChecked = () => evaluateSafe(page, () =>
+		page.evaluate(() => !!(document.querySelector('input.el-checkbox__original') as HTMLInputElement | null)?.checked)
+	);
 
 	if (!(await isChecked())) {
 		// 只点复选框本身，不能点整个 label：label 内的《用户协议》等文字会打开协议页
@@ -139,8 +138,8 @@ async function agreeAndSubmit(page: Page) {
 		if (await checkbox.count().catch(() => 0)) {
 			await checkbox.click({ force: true }).catch(() => {});
 		} else {
-			await page.evaluate(() =>
-				(document.querySelector('input.el-checkbox__original') as HTMLInputElement | null)?.click()
+			await evaluateSafe(page, () =>
+				page.evaluate(() => (document.querySelector('input.el-checkbox__original') as HTMLInputElement | null)?.click())
 			);
 		}
 		await page.waitForTimeout(300);
@@ -148,8 +147,8 @@ async function agreeAndSubmit(page: Page) {
 
 	// 兜底：某些版本复选框被遮挡时，直接用 DOM 触发 input
 	if (!(await isChecked())) {
-		await page.evaluate(() =>
-			(document.querySelector('input.el-checkbox__original') as HTMLInputElement | null)?.click()
+		await evaluateSafe(page, () =>
+			page.evaluate(() => (document.querySelector('input.el-checkbox__original') as HTMLInputElement | null)?.click())
 		);
 		await page.waitForTimeout(300);
 	}
@@ -187,11 +186,57 @@ async function solveCaptcha(page: Page, options?: ZHSCaptchaOptions) {
 
 /** 登录页可能停留在新登录中心，等待跳转；超时则给出明确错误 */
 async function waitForLogin(page: Page) {
-	for (let i = 0; i < 10; i++) {
-		if (!page.url().includes('login.zhihuishu.com')) return;
+	/**
+	 * 登录成功后智慧树不是一步到位：login 中心 → passport → www → 学习页，
+	 * 会连续跳转好几轮。这里必须等**地址稳定**再返回，否则后面的读课流程
+	 * 会在跳转途中被顶掉（表现为读到空列表或执行上下文被销毁）。
+	 */
+	const deadline = Date.now() + 40 * 1000;
+	let lastUrl = '';
+	let stable = 0;
+	while (Date.now() < deadline) {
+		const url = page.url();
+		if (url.includes('login.zhihuishu.com')) {
+			lastUrl = url;
+			stable = 0;
+		} else {
+			stable = url === lastUrl ? stable + 1 : 0;
+			lastUrl = url;
+			/** 连续 3 秒地址不变，认为多轮跳转已经结束 */
+			if (stable >= 3) {
+				await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
+				return;
+			}
+		}
 		await page.waitForTimeout(1000);
 	}
 	throw new Error('登录未完成，请检查账号密码，或手动完成安全验证。');
+}
+
+/**
+ * 跳转瞬间的 evaluate
+ *
+ * 页面每发生一次跳转，旧的执行上下文就会被销毁，此时 `page.evaluate` 抛出
+ * `Execution context was destroyed, most likely because of a navigation`。
+ * 这不是登录失败，等页面落定后重试即可 —— 直接冒泡会让用户看到莫名其妙的
+ * 「自动化程序错误」，也会把已经成功的登录误判成失败。
+ */
+function isNavigationRace(err: unknown) {
+	const message = err instanceof Error ? err.message : String(err);
+	return /Execution context was destroyed|Cannot find context with specified id/i.test(message);
+}
+
+async function evaluateSafe<T>(page: Page, fn: () => Promise<T>, attempts = 6): Promise<T> {
+	for (let i = 0; i < attempts; i++) {
+		try {
+			return await fn();
+		} catch (err) {
+			if (i === attempts - 1 || !isNavigationRace(err)) throw err;
+			await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
+			await page.waitForTimeout(500);
+		}
+	}
+	throw new Error('页面跳转过于频繁，读取页面状态失败');
 }
 
 /**
@@ -228,10 +273,12 @@ async function verify(page: Page, opts: { ocrApiUrl: string; detTargetKey: strin
 async function isNotVerified(page: Page) {
 	await page.waitForTimeout(1000);
 
-	const errors = await page.evaluate(() =>
-		Array.from(document.querySelectorAll('.el-form-item__error, .form-ipt-error.is-visible'))
-			.map((e) => (e.textContent || '').trim())
-			.filter(Boolean)
+	const errors = await evaluateSafe(page, () =>
+		page.evaluate(() =>
+			Array.from(document.querySelectorAll('.el-form-item__error, .form-ipt-error.is-visible'))
+				.map((e) => (e.textContent || '').trim())
+				.filter(Boolean)
+		)
 	);
 
 	if (errors.length) {
@@ -244,12 +291,15 @@ async function isNotVerified(page: Page) {
 /** 智慧树已改为 login.zhihuishu.com 登录中心 */
 async function isNotLogin(page: Page) {
 	await page.goto('https://www.zhihuishu.com/');
+	await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
 	await page.waitForTimeout(2000);
 
-	const loggedIn = await page.evaluate(() => {
-		const el = document.querySelector('#login') as HTMLElement | null;
-		return !!el && getComputedStyle(el).display !== 'none';
-	});
+	const loggedIn = await evaluateSafe(page, () =>
+		page.evaluate(() => {
+			const el = document.querySelector('#login') as HTMLElement | null;
+			return !!el && getComputedStyle(el).display !== 'none';
+		})
+	);
 	if (loggedIn) return false;
 
 	const href = await page.getAttribute('#notLogin a', 'href').catch(() => null);

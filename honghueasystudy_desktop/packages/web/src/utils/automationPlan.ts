@@ -14,13 +14,14 @@
 import { reactive } from 'vue';
 import {
 	activeSession,
+	autoStopOverride,
 	dateKey,
 	lastFinishedSession,
 	migrateSpanToDuration,
 	nextRunAt,
 	normalizeBrowserAutomation,
+	pickCourse,
 	scheduleSummary,
-	type AutomationCourseRef,
 	type AutomationSchedule,
 	type AutomationTarget,
 	type BrowserAutomation
@@ -30,6 +31,7 @@ import { Browser } from '../fs/browser';
 import { Folder } from '../fs/folder';
 import { Process, processEvents } from './process';
 import { notify } from './notify';
+import { remote } from './remote';
 
 /** 自动刷课的执行状态 */
 export interface StudyStatus {
@@ -147,6 +149,14 @@ const MAX_STUDY_ATTEMPTS = 3;
 const LAUNCH_TIMEOUT = 3 * 60 * 1000;
 /** 等登录脚本跑完的上限（滑块/短信登录慢的时候确实要几分钟） */
 const AUTOMATION_TIMEOUT = 5 * 60 * 1000;
+/**
+ * 读课程列表的 RPC 超时
+ *
+ * 子进程会先等启动时的登录脚本跑完（最长 AUTOMATION_TIMEOUT）再导航 + 抽取，
+ * 沿用原来的 120 秒会在这个等待还没结束时就报「操作超时」，而且子进程其实还在正常等待。
+ * 末尾再留两分钟给导航课程页与 iframe 抽取。
+ */
+export const COURSE_LIST_TIMEOUT = AUTOMATION_TIMEOUT + 2 * 60 * 1000;
 /** 定时器节拍 */
 const TICK_INTERVAL = 20 * 1000;
 
@@ -192,7 +202,30 @@ export function writePlan(browser: Browser, plan: any): BrowserAutomation {
 	next.schedule.lastRunDate = current.schedule.lastRunDate;
 	next.schedule.lastStopDate = current.schedule.lastStopDate;
 	next.schedule.runStartedAt = current.schedule.runStartedAt;
-	return applyPlan(browser, next);
+
+	/** 这一次保存有没有动到「自动刷课」 */
+	const studyChanged =
+		current.study.enabled !== next.study.enabled ||
+		current.study.target !== next.study.target ||
+		String((current.study.course && current.study.course.name) || '') !==
+			String((next.study.course && next.study.course.name) || '') ||
+		String((current.study.course && current.study.course.label) || '') !==
+			String((next.study.course && next.study.course.label) || '');
+
+	const saved = applyPlan(browser, next);
+
+	/**
+	 * 刚把课选好 / 刚打开开关：浏览器若已经开着，立刻补一次进课。
+	 *
+	 * 定时任务经常在「手机还在配置」的同一分钟里把浏览器拉起来，那一下方案里可能
+	 * 还没有课程，触发被「还没有选择要刷的课程」挡掉了，用户就得等到下一次定时才生效。
+	 * 保存这一刻是最可靠的重试时机，顺手补一次比让用户干等 20 秒 tick 更符合直觉。
+	 */
+	if (studyChanged && next.study.enabled && next.study.course) {
+		queueMicrotask(() => triggerStudy(browser.uid, '保存方案'));
+	}
+
+	return saved;
 }
 
 /**
@@ -244,6 +277,40 @@ export function getStatus(uid: string): StudyStatus {
 	return studyStatus[uid] || { state: 'idle', message: '', courseName: '', updatedAt: 0, enteredAt: 0 };
 }
 
+/**
+ * 触发一次自动刷课（幂等）
+ *
+ * 三个入口共用：浏览器就绪（`status` 事件）、调度 tick、保存方案。
+ * 每台实例一次启动只触发一次（`studyTriggered`），失败按次数放开重试，
+ * 避免在「课程已过期」这类硬错误上把页面刷成一片空白。
+ */
+function triggerStudy(uid: string, why: string): void {
+	const browser = findBrowser(uid);
+	if (!browser) return;
+
+	const plan = readPlan(browser);
+	if (!plan.study.enabled || !plan.study.course) return;
+
+	const proc = Process.from(uid);
+	if (!proc || proc.status !== 'launched') return;
+
+	if (studyTriggered[uid] || studyLocks[uid]) return;
+
+	studyTriggered[uid] = true;
+	studyAttempts[uid] = (studyAttempts[uid] || 0) + 1;
+	planLog(uid, `触发自动刷课（${why}，第 ${studyAttempts[uid]} 次）`);
+
+	runStudy(uid, { silent: studyAttempts[uid] > 1 }).catch((e) => {
+		console.warn('自动刷课失败', errorText(e));
+		/** 失败后放开重试额度，下一次定时/启动还能再试 */
+		if ((studyAttempts[uid] || 0) < MAX_STUDY_ATTEMPTS) {
+			setTimeout(() => {
+				studyTriggered[uid] = false;
+			}, 60 * 1000);
+		}
+	});
+}
+
 /** 方案摘要：随快照上报给远程台 */
 export function automationSummary(browser: Browser): AutomationSummary {
 	const plan = readPlan(browser);
@@ -290,6 +357,23 @@ function sleep(ms: number): Promise<void> {
 function errorText(e: any): string {
 	if (!e) return '未知错误';
 	return String(e && e.message ? e.message : e);
+}
+
+/**
+ * 自动刷课链路写日志
+ *
+ * 这条链路九成时间在「等」：等登录脚本、等课程列表、等卡片跳转。界面只有一句话，
+ * 出问题时（比如「登录完成了却没进课」）光看界面判断不了卡在哪一步。
+ * 统一按 `[自动刷课]` 前缀落盘，随后在 `logs/<日期>/render.log` 里就能按顺序看到全过程。
+ */
+function planLog(uid: string, text: string): void {
+	const line = `[自动刷课][${String(uid || '').slice(0, 8)}] ${text}`;
+	console.log(line);
+	try {
+		remote.logger.call('info', line);
+	} catch {
+		// 日志写不进去不影响刷课
+	}
 }
 
 /** 等一个条件成立，超时返回 false */
@@ -348,6 +432,19 @@ async function waitAutomationDone(uid: string, timeout: number): Promise<void> {
 	if (!proc) return;
 	if (proc.status !== 'launched') return;
 
+	/**
+	 * 脚本已经跑完了就直接放行。
+	 *
+	 * 只挂监听会有竞态：已经登录过的用户，`runAutomationScripts` 几秒就结束，
+	 * `automation-done` 可能比监听注册更早到达，事件错过之后就再也不会来，
+	 * 于是白等满超时（5 分钟）才去读课程 —— 用户看到的就是「登录早就完成了，就是不动」。
+	 */
+	if (proc.automationDoneAt) {
+		planLog(uid, '登录脚本早已执行完成，直接读课程列表');
+		return;
+	}
+
+	planLog(uid, '等待登录脚本执行完成…');
 	await new Promise<void>((resolve) => {
 		let done = false;
 		const finish = () => {
@@ -360,41 +457,30 @@ async function waitAutomationDone(uid: string, timeout: number): Promise<void> {
 		const timer = setTimeout(finish, timeout);
 		proc.once('automation-done', finish);
 	});
+	planLog(uid, '登录脚本执行完成');
 }
 
 /** 读课程列表（带重试：登录后页面渲染有延迟，第一次经常是空列表） */
 async function listCoursesWithRetry(
+	uid: string,
 	proc: Process,
 	attempts = 3
 ): Promise<{ courses: { id: string; name: string; url: string; label?: string }[]; platform: string; hint: string }> {
 	let last: any = { courses: [], platform: '', hint: '' };
 
 	for (let index = 0; index < attempts; index++) {
-		last = await proc.callWorkerTimeout('listCourses', [{ refresh: index === 0 }], 120 * 1000);
-		if (last && Array.isArray(last.courses) && last.courses.length > 0) return last;
+		setStatus(uid, {
+			state: 'running',
+			message: index === 0 ? '正在读取课程列表…' : `正在读取课程列表（第 ${index + 1}/${attempts} 次）…`
+		});
+		last = await proc.callWorkerTimeout('listCourses', [{ refresh: index === 0 }], COURSE_LIST_TIMEOUT);
+		const count = last && Array.isArray(last.courses) ? last.courses.length : 0;
+		planLog(uid, `第 ${index + 1} 次读课程列表：${count} 门${last && last.platform ? '（' + last.platform + '）' : ''}`);
+		if (count > 0) return last;
 		if (index < attempts - 1) await sleep(8000);
 	}
 
 	return last || { courses: [], platform: '', hint: '' };
-}
-
-/** 从课程列表里挑出记住的那门（先按名字，再按编号兜底） */
-function pickCourse(
-	courses: { id: string; name: string; url: string; label?: string }[],
-	course: AutomationCourseRef
-): { id: string; name: string; url: string; label?: string } | undefined {
-	if (!courses.length) return undefined;
-
-	/** 同名课（AI智课 + 共享课）靠类型角标区分，有记住的角标就必须一起比 */
-	const sameName = courses.filter((item) => item.name === course.name);
-	if (sameName.length === 0) {
-		/** 名字对不上时按编号试一次：课程改名的情况很少，但确实存在 */
-		return courses.find((item) => course.id && item.id === course.id);
-	}
-	if (sameName.length === 1) return sameName[0];
-
-	const withLabel = sameName.find((item) => (item.label || '') === (course.label || ''));
-	return withLabel || sameName[0];
 }
 
 // ---------------------------------------------------------------- 自动刷课
@@ -416,6 +502,7 @@ export async function runStudy(uid: string, opts?: { silent?: boolean }): Promis
 	studyLocks[uid] = true;
 
 	setStatus(uid, { state: 'waiting', message: '等待浏览器就绪…', courseName: course.name });
+	planLog(uid, `开始：目标课程「${course.name}」${course.label ? '（' + course.label + '）' : ''}，进课后 ${plan.study.target}`);
 
 	try {
 		const proc = await ensureLaunched(browser);
@@ -423,17 +510,30 @@ export async function runStudy(uid: string, opts?: { silent?: boolean }): Promis
 		setStatus(uid, { state: 'waiting', message: '等待登录脚本执行完成…' });
 		await waitAutomationDone(uid, AUTOMATION_TIMEOUT);
 
-		setStatus(uid, { state: 'running', message: '正在读取课程列表…' });
-		const list = await listCoursesWithRetry(proc);
+		const list = await listCoursesWithRetry(uid, proc);
 
 		const hit = pickCourse(list.courses || [], course);
 		if (!hit) {
 			const detail = list.courses && list.courses.length ? `（列表里没有同名课程）` : list.hint ? `：${list.hint}` : '';
 			throw new Error(`没有找到课程「${course.name}」${detail}`);
 		}
+		planLog(uid, `选中「${hit.name}」（${hit.id}${hit.label ? '·' + hit.label : ''}）`);
 
 		setStatus(uid, { state: 'running', message: `正在进入课程：${hit.name}`, courseName: hit.name });
 		const result = await proc.callWorkerTimeout('enterCourse', [{ id: hit.id, name: hit.name }], 120 * 1000);
+		planLog(uid, `进入课程返回：${(result && result.url) || '（无地址）'}`);
+
+		/**
+		 * 点了卡片但页面没动，不能当成功。
+		 *
+		 * 智慧树这类站点的卡片只是容器，真正的入口在卡片里的「继续学习」按钮；
+		 * 点错元素时页面一动不动，但旧代码会照样回一句「已进入课程」，
+		 * 用户看到的就是「登录完成了，却压根没进课」。宁可报错，让人能一眼看出卡在哪。
+		 */
+		if (result && result.moved === false) {
+			throw new Error(`点开了课程卡片，但页面没有跳转（当前仍是：${result.url || '课程列表页'}）。` +
+				'可能是站点改了入口，请在浏览器里手动进入一次，或点面板里的「执行一次」重试。');
+		}
 
 		/** 记住这门课属于哪套体系：只有超星有「章节 / 作业 / 考试」三栏，其它平台不该显示那套菜单 */
 		catalogSupport[uid] = isChaoxingCourseUrl((result && result.url) || hit.url || '');
@@ -475,6 +575,7 @@ export async function runStudy(uid: string, opts?: { silent?: boolean }): Promis
 
 		const message = `已进入课程：${hit.name}${chapterNote}`;
 		setStatus(uid, { state: 'done', message, courseName: hit.name, enteredAt: Date.now() });
+		planLog(uid, '完成：' + message);
 		if (!opts || !opts.silent) {
 			notify('自动刷课', message, `auto-study-${uid}`, { type: 'success' });
 		}
@@ -482,6 +583,7 @@ export async function runStudy(uid: string, opts?: { silent?: boolean }): Promis
 	} catch (e) {
 		const message = errorText(e);
 		setStatus(uid, { state: 'error', message, courseName: course.name });
+		planLog(uid, '失败：' + message);
 		if (!opts || !opts.silent) {
 			notify('自动刷课失败', message, `auto-study-${uid}`, { type: 'error', duration: 8000 });
 		}
@@ -523,7 +625,7 @@ export async function fetchCourseList(
 	if (proc.status !== 'launched') throw new Error('浏览器正在启动，请稍候');
 
 	const refresh = !opts || opts.refresh !== false;
-	return proc.callWorkerTimeout('listCourses', [{ refresh }], 120 * 1000);
+	return proc.callWorkerTimeout('listCourses', [{ refresh }], COURSE_LIST_TIMEOUT);
 }
 
 // ---------------------------------------------------------------- 课程内容（章节 / 作业 / 考试）
@@ -684,7 +786,16 @@ async function tick(): Promise<void> {
 			const uid = browser.uid;
 
 			/**
-			 * ⓪ 课程页还在不在：三个目录能不能点，全看这一句
+			 * ⓪ 扩展的「定时停止」跟随桌面方案
+			 *
+			 * 扩展自己有一套 stopTimeMinutes，桌面定时任务期间必须以桌面时间为准，
+			 * 否则扩展可能提前几分钟/几小时暂停。每个节拍都下发一次：任务开始、方案被修改、
+			 * 任务结束（下发 null 回退到扩展自己的设置）都能在 20 秒内生效。
+			 */
+			syncAutoStop(browser);
+
+			/**
+			 * ① 课程页还在不在：三个目录能不能点，全看这一句
 			 *
 			 * 只让子进程比一次 URL，很轻；不 await 是为了别让一台慢实例卡住整个 tick
 			 * （后面还有定时判断，卡住会连带别的浏览器不启动）。
@@ -694,24 +805,10 @@ async function tick(): Promise<void> {
 			/**
 			 * ① 自动刷课：浏览器一起来就进课。
 			 *
-			 * 只做一次（`studyTriggered`），失败最多重试 3 次：
-			 * 无限重试会在「课程已过期」这类硬错误上把页面刷成一片空白。
+			 * 触发收敛在 `triggerStudy` 里（浏览器就绪事件 / 本 tick / 保存方案三处共用），
+			 * 它内部带幂等与重试上限，这里只负责「到点了就试一次」。
 			 */
-			if (plan.study.enabled && plan.study.course && !studyTriggered[uid]) {
-				const proc = Process.from(uid);
-				if (proc && proc.status === 'launched') {
-					studyTriggered[uid] = true;
-					studyAttempts[uid] = (studyAttempts[uid] || 0) + 1;
-					runStudy(uid, { silent: studyAttempts[uid] > 1 }).catch(() => {
-						/** 失败后放开重试额度，下一次定时/启动还能再试 */
-						if ((studyAttempts[uid] || 0) < MAX_STUDY_ATTEMPTS) {
-							setTimeout(() => {
-								studyTriggered[uid] = false;
-							}, 60 * 1000);
-						}
-					});
-				}
-			}
+			triggerStudy(uid, '调度');
 
 			/** ② 定时：到点启动 / 到点收尾 */
 			if (!plan.schedule.enabled) continue;
@@ -737,15 +834,36 @@ async function handleSchedule(browser: Browser, schedule: AutomationSchedule): P
 
 			/** 记下「这一场已经处理过」，先写再启动：启动失败也不该每 20 秒重试一次 */
 			patchSchedule(browser, { lastRunDate: session.id, runStartedAt: Date.now() });
+			/**
+			 * 记账字段刚变化，立刻重算一次覆盖。
+			 *
+			 * 浏览器是本轮才拉起的会从 init 快照里拿到正确时间，但「浏览器早就开着
+			 * （手动启动 / 上一场没收尾）」的情况只能靠实时下发；不补这一下就要等
+			 * 下一个 20 秒节拍，那段时间扩展还在按自己的 stopTimeMinutes 计时。
+			 */
+			syncAutoStop(browser);
 
 			if (!alive) {
 				console.log(`[自动化] 定时启动浏览器：${browser.name}（${session.id} ${schedule.startTime}）`);
-				/** 还没选课就没人替用户进课了，必须提示一次，否则课白开一上午 */
-				if (!readPlan(browser).study.course) {
+				/**
+				 * 没课可进就得说清楚是哪一种「没配好」：没选课 / 选了但开关没开。
+				 * 否则课白开一上午，用户只看到「启动了却什么都没干」。
+				 */
+				const study = readPlan(browser).study;
+				if (!study.course) {
+					planLog(uid, '定时启动：方案里还没有课程，无法自动进课');
 					notify(
 						'定时任务已启动浏览器',
 						'这台浏览器还没有选择要学习的课程，请在「自动刷课」里选一门。',
 						`auto-nocourse-${uid}`,
+						{ type: 'info', duration: 10000 }
+					);
+				} else if (!study.enabled) {
+					planLog(uid, '定时启动：已选课但「自动刷课」开关是关的');
+					notify(
+						'定时任务已启动浏览器',
+						`已选课程「${study.course.name}」，但「自动刷课」开关没打开，所以不会自动进课。`,
+						`auto-nostudy-${uid}`,
 						{ type: 'info', duration: 10000 }
 					);
 				}
@@ -776,6 +894,20 @@ async function handleSchedule(browser: Browser, schedule: AutomationSchedule): P
 	if (finished && schedule.lastRunDate === finished.id && schedule.lastStopDate !== finished.id) {
 		await applyEndAction(browser, schedule, 'schedule-end', finished.id);
 	}
+}
+
+/**
+ * 把「扩展定时停止」的覆盖下发给浏览器进程
+ *
+ * 只对运行中的实例有用：没启动的浏览器下次启动时 worker 的 init 载荷里已经带了方案快照，
+ * 页面一加载就能拿到正确的时间；这里负责的是「运行期间方案被改动 / 任务结束」的实时同步。
+ */
+function syncAutoStop(browser: Browser): void {
+	const proc = Process.from(browser.uid);
+	if (!proc || proc.status !== 'launched' || !proc.worker) return;
+
+	const plan = readPlan(browser);
+	proc.worker('setAutoStop', autoStopOverride(plan.schedule, new Date()));
 }
 
 /** 改方案的定时字段（合并当前值，避免覆盖用户在界面上的其它改动） */
@@ -827,6 +959,11 @@ async function applyEndAction(
 			runStartedAt: 0
 		};
 		applyPlan(browser, plan);
+		/**
+		 * 收尾后立刻告诉扩展「定时任务已结束」，让还在页面上（例如 keepTab 只暂停）
+		 * 的实例回退到它自己保存的 stopTimeMinutes；不必等下一个 20 秒节拍。
+		 */
+		syncAutoStop(browser);
 		setStatus(uid, {
 			state: 'idle',
 			message: reason === 'max-minutes' ? '已达到单次学习时长上限，已暂停' : '定时结束，已收尾'
@@ -881,20 +1018,7 @@ function handleProcessStatus(uid: string): void {
 		/** 启动/导航之后重新问一次：用户可能自己点进了某门课 */
 		refreshCourseReady(uid).catch(() => {});
 
-		const plan = readPlan(browser);
-		if (!plan.study.enabled || !plan.study.course) return;
-		if (studyTriggered[uid] || studyLocks[uid]) return;
-
-		studyTriggered[uid] = true;
-		studyAttempts[uid] = (studyAttempts[uid] || 0) + 1;
-		runStudy(uid, { silent: studyAttempts[uid] > 1 }).catch((e) => {
-			console.warn('自动刷课失败', errorText(e));
-			if ((studyAttempts[uid] || 0) < MAX_STUDY_ATTEMPTS) {
-				setTimeout(() => {
-					studyTriggered[uid] = false;
-				}, 60 * 1000);
-			}
-		});
+		triggerStudy(uid, '浏览器就绪');
 	}
 }
 

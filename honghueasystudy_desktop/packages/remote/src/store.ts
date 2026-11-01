@@ -846,6 +846,11 @@ export async function enterCourseById(uid: string, id: string, name: string) {
 	state.automationBusy[uid] = 'enter';
 	try {
 		const res = await api.enterCourse(uid, id, name);
+		/** 页面没动就不能说「已进入」：站点改了入口时最常见，用户得知道要手动点一下 */
+		if (res.data && res.data.moved === false) {
+			toast('点了课程卡片但没有跳转，请手动点一次「继续学习」', 'error');
+			return res.data;
+		}
 		/** 提示只用课程名：页面 title 在 SPA 课程页上常是站点名（「智慧树」/「超星」） */
 		toast(`已进入课程：${name}`, 'success');
 		/** 刚进课：课程页开着，三个目录可以放开了（不等快照） */

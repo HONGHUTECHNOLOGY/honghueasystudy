@@ -46,6 +46,15 @@ export class Process extends EventEmitter {
 	/** 任务进度（由脚本日志推断，远程台据此展示「进度」） */
 	progress: TaskProgress = createProgress();
 	/**
+	 * 启动时那批自动化脚本跑完的时刻；0 表示「本次启动还没跑完」
+	 *
+	 * 自动刷课必须等这一刻才能读课程列表。只靠 `once('automation-done')` 监听会有竞态：
+	 * 脚本短（已登录）时 `automation-done` 可能比监听注册更早到，事件就永远错过了，
+	 * 表现为「状态停在等待登录脚本，一停就是五分钟」。这里留一个时间戳，谁后到都能判断。
+	 * 每次 `launch()` 清零，保证是「本次启动」的结论。
+	 */
+	automationDoneAt = 0;
+	/**
 	 * 页面内视频的播放状态
 	 *
 	 * 网课一个视频几十分钟且播放期间没有日志，远程台只靠「日志静止」判断会误报卡住，
@@ -128,9 +137,11 @@ export class Process extends EventEmitter {
 
 			/**
 			 * 启动阶段全量落盘（这段时间的输出才有诊断价值）；
-			 * 运行阶段只落错误，否则脚本每道题的 console.log 会把日志文件刷爆。
+			 * 运行阶段只落错误 + 带「[远程] / [自动刷课]」标记的行
+			 * （worker 的输出前面还有 `[鸿鹄易学] 时间`，所以不能只锚定行首），
+			 * 否则脚本每道题的 console.log 会把日志文件刷爆。
 			 */
-			if (!isError && this.status === 'launched') return;
+			if (!isError && this.status === 'launched' && !/\[(远程|自动刷课)\]/.test(line)) return;
 			try {
 				const text = `[${this.browser.name}] ${line.slice(0, 2000)}`;
 				if (isError) {
@@ -215,6 +226,8 @@ export class Process extends EventEmitter {
 			 * 所以既在实例上广播（等待方直接 await），也发到全局总线上（调度器用）。
 			 */
 			'automation-done': () => {
+				/** 先记时间：等待方可能比这条消息更晚才注册监听（脚本很快跑完时很常见） */
+				this.automationDoneAt = Date.now();
 				processEvents.emit('automation-done', this.uid);
 			}
 		};
@@ -234,6 +247,13 @@ export class Process extends EventEmitter {
 			uid: this.uid,
 			/** 按当前脚本声明补全 configs：旧存档里缺字段的脚本也要能正常执行 */
 			automationScripts: normalizeBrowserScripts(this.browser.automationScripts),
+			/**
+			 * 定时方案快照
+			 *
+			 * worker 拿它给扩展下发「定时停止」覆盖：定时任务期间扩展必须按桌面方案的时间
+			 * 暂停，而不是它自己记忆的 stopTimeMinutes。快照之后由调度器每个节拍实时修正。
+			 */
+			automation: this.browser.automation || null,
 			browserInfo: {
 				name: this.browser.name,
 				notes: this.browser.notes,
@@ -455,6 +475,8 @@ export class Process extends EventEmitter {
 	launch() {
 		return new Promise<void | number | null>((resolve, reject) => {
 			this.status = 'launching';
+			/** 新一轮启动：上一次的「脚本已跑完」结论作废，否则自动刷课会读到一个没登录的浏览器 */
+			this.automationDoneAt = 0;
 			/** 启动中也要立刻让远程端看到，不能等心跳 */
 			processEvents.emit('status', this.uid);
 

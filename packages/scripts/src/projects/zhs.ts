@@ -1,5 +1,5 @@
 import { $ui, Project, Script, $el, h, $$el, $message, $, $modal, MessageElement, $store, $gm } from 'easy-us';
-import { RemotePage, SimplifyWorkResult, HonghuWorker, defaultAnswerWrapperHandler } from '@honghu/core';
+import { RemotePage, SimplifyWorkResult, HonghuWorker, defaultAnswerWrapperHandler, request } from '@honghu/core';
 import { CommonProject } from './common';
 import { workNotes, definition, volume, restudy } from '../utils/configs';
 import {
@@ -33,7 +33,9 @@ const state = {
 		stop: false,
 		currentMedia: undefined as HTMLMediaElement | undefined,
 		stopInterval: 0 as any,
-		stopMessage: undefined as MessageElement | undefined
+		stopMessage: undefined as MessageElement | undefined,
+		/** 定期向桌面端确认定时任务的计时器（页面级） */
+		stopRefreshTimer: 0 as any
 	}
 };
 
@@ -1330,9 +1332,9 @@ export const ZHSProject = Project.create({
 					const value = parseFloat(String(minutes));
 					if (!isFinite(value) || value <= 0) {
 						$message.info({ content: '定时停止已关闭' });
-						autoStop(0);
+						applyAutoStop(0);
 					} else {
-						autoStop(value);
+						applyAutoStop(value);
 					}
 				});
 
@@ -1364,8 +1366,15 @@ export const ZHSProject = Project.create({
 				closeDialogRead();
 				// 循环记录学习时间
 				recordStudyTimeLoop();
-				// 自动暂停任务
-				autoStop(this.cfg.stopTimeMinutes);
+				// 自动暂停任务：桌面定时任务期间以桌面方案的时间为准，其余时候用自己的配置
+				applyAutoStop(this.cfg.stopTimeMinutes);
+				clearInterval(state.study.stopRefreshTimer);
+				state.study.stopRefreshTimer = setInterval(() => {
+					/** 已经暂停过就不再折腾（否则任务结束后会按自己的设置再暂停一次） */
+					if (state.study.stop) return;
+					/** 与桌面调度节拍一致：方案改动 / 任务开始结束都在 20 秒内跟上 */
+					applyAutoStop(this.cfg.stopTimeMinutes);
+				}, 20 * 1000);
 				// 自动隐藏弹窗
 				processor.hideDialog();
 				// 自动过弹窗测验
@@ -4392,7 +4401,100 @@ function formatStopDuration(minutes: number) {
 	return `${s}秒`;
 }
 
-function autoStop(stopTime: string | number) {
+/** 桌面端定时任务下发的「定时停止」覆盖 */
+type DesktopStopOverride = { active: boolean; pause: boolean; endAt: number };
+
+/** 上一次已生效的设定，避免每分钟的确认把计时器/提示反复重建 */
+let appliedStopKey = '';
+
+/**
+ * 连续探测失败次数
+ *
+ * 扩展也会在普通浏览器里单独使用（没有桌面端），那种环境下 `/hh-autostop` 只会被
+ * 站点当作不存在的路径。失败几次之后就不再问，免得每个学习页每分钟发一次无效请求。
+ * 桌面端自己启动的浏览器上路由一直在，探测会一直成功，计数保持 0。
+ */
+let desktopProbeFailures = 0;
+
+const DESKTOP_PROBE_MAX_FAILURES = 3;
+
+/**
+ * 向桌面端询问：本浏览器此刻有没有正在执行的定时任务
+ *
+ * 桌面端用 Playwright 路由拦截 `/hh-autostop`，返回的正是这台浏览器的方案；
+ * 不是桌面端启动的浏览器、没有定时任务、或请求失败都返回 null，
+ * 此时继续用扩展自己保存的 `stopTimeMinutes`。
+ */
+async function fetchDesktopStopOverride(): Promise<DesktopStopOverride | null> {
+	if (desktopProbeFailures >= DESKTOP_PROBE_MAX_FAILURES) return null;
+	try {
+		const res = await request('/hh-autostop', { type: 'fetch', method: 'get' });
+		/** 桌面端的应答一定带 environment 标记；不是它的应答就当作没有桌面端 */
+		if (!res || res.environment !== 'playwright') {
+			desktopProbeFailures = DESKTOP_PROBE_MAX_FAILURES;
+			return null;
+		}
+		desktopProbeFailures = 0;
+		if (!res.autoStop || !res.autoStop.active) return null;
+
+		/** 桌面方案「到点不处理」：任务期间连扩展自己的定时停止也不要用 */
+		if (!res.autoStop.pause) return { active: true, pause: false, endAt: 0 };
+
+		const endAt = Number(res.autoStop.endAt) || 0;
+		if (endAt <= 0) return null;
+		return { active: true, pause: true, endAt };
+	} catch {
+		/** 普通脚本环境（没有桌面端）请求会失败；下次再试，连续失败就停手 */
+		desktopProbeFailures++;
+		return null;
+	}
+}
+
+/**
+ * 应用「定时停止」
+ *
+ * - 桌面定时任务期间：按桌面方案的截止时间倒计时（方案要求「到点不处理」时完全不计时）；
+ * - 其余时候：按扩展自己保存的 `stopTimeMinutes`。
+ *
+ * 每 20 秒重新确认一次（与桌面调度节拍一致）：任务开始、方案在运行中被加长/缩短/关闭
+ * 都能在同样的时间内跟上，不会出现「桌面已经改成不处理、扩展还按旧时间暂停」。
+ */
+async function applyAutoStop(configMinutes: number): Promise<void> {
+	try {
+		const minutes = parseFloat(String(configMinutes));
+		const override = await fetchDesktopStopOverride();
+
+		const key =
+			override && override.active
+				? override.pause
+					? `desktop:${override.endAt}`
+					: 'desktop:none'
+				: `config:${isFinite(minutes) && minutes > 0 ? minutes : 0}`;
+		if (key === appliedStopKey) return;
+
+		if (!override || !override.active) {
+			/** 回到扩展自己的设置；0 会清掉正在走的计时 */
+			autoStop(minutes);
+		} else if (!override.pause) {
+			autoStop(0);
+			state.study.stopMessage = $message.info({
+				duration: 0,
+				content: '桌面定时任务进行中：方案设置了到点不处理，本页的定时停止已关闭'
+			});
+		} else {
+			/** 用剩余的分钟数交给原来的倒计时：到点与桌面方案一致，不会提前暂停 */
+			const remainMinutes = (override.endAt - Date.now()) / 60000;
+			autoStop(remainMinutes > 0 ? remainMinutes : 0, { desktop: true });
+		}
+
+		/** 真正生效之后才记账：中途出错下次还能重试 */
+		appliedStopKey = key;
+	} catch {
+		/** 定时停止只是辅助，出错不能影响刷课主流程 */
+	}
+}
+
+function autoStop(stopTime: string | number, opts?: { desktop?: boolean }) {
 	clearInterval(state.study.stopInterval);
 	state.study.stopMessage?.remove();
 	const minutes = parseFloat(String(stopTime));
@@ -4417,7 +4519,9 @@ function autoStop(stopTime: string | number) {
 	date.setSeconds(date.getSeconds() + Math.round(minutes * 60));
 	state.study.stopMessage = $message.info({
 		duration: 0,
-		content: `在 ${date.toLocaleTimeString()} 脚本将自动暂停（${formatStopDuration(minutes)}后）`
+		content: opts?.desktop
+			? `桌面定时任务将在 ${date.toLocaleTimeString()} 暂停（${formatStopDuration(minutes)}后）`
+			: `在 ${date.toLocaleTimeString()} 脚本将自动暂停（${formatStopDuration(minutes)}后）`
 	});
 }
 /** 固定视频进度 */

@@ -216,6 +216,94 @@ function clampNumber(value: any, min: number, max: number, fallback: number): nu
 	return Math.min(Math.max(Math.round(num), min), max);
 }
 
+/** 课程列表项（`listCourses` 的返回结构子集） */
+export interface CourseCandidate {
+	id: string;
+	name: string;
+	url: string;
+	label?: string;
+}
+
+/**
+ * 课程名归一化：只用于比对，不改变展示
+ *
+ * 平台偶尔会给课程名加后缀（「（2026级）」「(2026秋)」）或夹着全角空格，
+ * 用户记住的是当初那一份，严格 `===` 会直接判成「列表里没有同名课程」。
+ */
+export function normalizeCourseName(value: any): string {
+	return String(value || '')
+		.replace(/[\s\u3000]+/g, '')
+		.replace(/（/g, '(')
+		.replace(/）/g, ')')
+		.toLowerCase();
+}
+
+/**
+ * 从课程列表里挑出记住的那门课
+ *
+ * 顺序：同名同角标 → 同名 → 归一化同名 → 同编号 → 唯一包含（需角标一致）。
+ * 每放宽一步都必须更保守：宁可报「没找到」让用户重选，也不要把人送进另一门课。
+ */
+export function pickCourse(
+	courses: CourseCandidate[],
+	course: AutomationCourseRef | null | undefined
+): CourseCandidate | undefined {
+	if (!Array.isArray(courses) || !courses.length || !course) return undefined;
+
+	/** 同名课（AI智课 + 共享课）靠类型角标区分，有记住的角标就必须一起比 */
+	const wantLabel = String(course.label || '');
+	const sameName = courses.filter((item) => item.name === course.name);
+	if (sameName.length === 1) return sameName[0];
+	if (sameName.length > 1) {
+		const withLabel = sameName.find((item) => (item.label || '') === wantLabel);
+		if (withLabel) return withLabel;
+	}
+
+	const want = normalizeCourseName(course.name);
+
+	/** 名字被加了后缀 / 换了空白：归一化后再严格比一次 */
+	const sameNormalized = courses.filter((item) => normalizeCourseName(item.name) === want);
+	if (sameNormalized.length === 1) return sameNormalized[0];
+	if (sameNormalized.length > 1) {
+		const withLabel = sameNormalized.find((item) => (item.label || '') === wantLabel);
+		if (withLabel) return withLabel;
+	}
+
+	/**
+	 * 名字对不上时按编号试一次：课程改名的情况很少，但确实存在。
+	 *
+	 * 编号只是列表里的顺序，课程增删后会指到别的课上，所以要求名字也对得上。
+	 */
+	if (course.id) {
+		const byId = courses.find((item) => item.id === course.id && normalizeCourseName(item.name) === want);
+		if (byId) return byId;
+	}
+
+	/**
+	 * 最后试一次「唯一包含」：平台常把学期/班号拼在名字里
+	 * （记住的是「C语言程序设计」，列表里是「C语言程序设计 (2026秋)」）。
+	 * 必须唯一、且角标一致才认。
+	 */
+	if (want.length >= 4) {
+		const loose = courses.filter((item) => {
+			const name = normalizeCourseName(item.name);
+			if (!name) return false;
+			if (wantLabel && (item.label || '') !== wantLabel) return false;
+			return name.indexOf(want) !== -1 || want.indexOf(name) !== -1;
+		});
+		if (loose.length === 1) return loose[0];
+	}
+
+	/**
+	 * 名字完全一致、只是角标对不上（旧存档里 label 可能是空的）
+	 *
+	 * 宁可进同名课（进错了还能在面板里换），也不要报「没有同名课程」把整次刷课判失败。
+	 */
+	if (sameName.length) return sameName[0];
+
+	return undefined;
+}
+
 /**
  * 'HH:mm' → 分钟数；非法返回 null
  *
@@ -310,6 +398,61 @@ export function activeSession(schedule: AutomationSchedule, now: Date): Schedule
 		}
 	}
 	return null;
+}
+
+/**
+ * 定时任务期间给扩展下发的「定时停止」覆盖
+ *
+ * 扩展自己有一套 `stopTimeMinutes`（进入学习页后倒计时），桌面端又有一套定时方案。
+ * 两套时间互不相干时，扩展可能按自己的 30 分钟提前暂停，桌面方案却还打算再学两小时。
+ * 这里把「本次定时任务真正该在什么时刻暂停」算出来交给扩展，扩展在任务期间只认它；
+ * 任务之外（返回 null）扩展继续用自己记忆的 `stopTimeMinutes`。
+ */
+export interface AutoStopOverride {
+	/** 是否处于桌面定时任务期间 */
+	active: boolean;
+	/** 到点是否暂停；方案里「到点不处理」时为 false（扩展也不要按自己的设置暂停） */
+	pause: boolean;
+	/** 暂停时刻（本地时间戳，毫秒）；pause=false 时为 0 */
+	endAt: number;
+}
+
+/**
+ * 此刻桌面定时任务对扩展「定时停止」的覆盖
+ *
+ * 只有「由桌面调度器启动的这一场会话」才算定时任务：`lastRunDate` 是调度器在会话
+ * 首次处理的节拍里写下的，`runStartedAt` 是同一次写入的时间。两者对不上时说明
+ * 浏览器是用户手动开的、或者这一场早就收尾过（收尾会把 `runStartedAt` 清零），
+ * 都不能让扩展按桌面时间走 —— 那些都是「其余时候」。
+ */
+export function autoStopOverride(schedule: AutomationSchedule, now: Date): AutoStopOverride | null {
+	if (!schedule || !schedule.enabled) return null;
+
+	const session = activeSession(schedule, now);
+	if (!session) return null;
+	if (schedule.lastRunDate !== session.id || schedule.runStartedAt <= 0) return null;
+
+	/** 「到点不处理」：任务期间扩展也不要用自己的定时停止，否则等于替桌面收尾 */
+	if (schedule.endAction === 'none') return { active: true, pause: false, endAt: 0 };
+
+	/**
+	 * 桌面端的收尾时刻 = min(单次时长到点, 本场会话结束)
+	 *
+	 * 新模型里 `endTime` 与 `startTime` 相同（全天窗口），收尾由 `maxMinutes` 或
+	 * `maxMinutes=0` 时的不限时长决定；旧存档的窗口长度已在 `migrateSpanToDuration` 折算过。
+	 */
+	let endAt = session.end;
+	if (schedule.maxMinutes > 0) {
+		endAt = Math.min(endAt, schedule.runStartedAt + schedule.maxMinutes * 60 * 1000);
+	}
+
+	/**
+	 * 已经越过收尾时刻也要继续算「任务期间」：桌面端最多还要等一个节拍（20 秒）才收尾，
+	 * 这段时间里如果返回 null，扩展会退回自己的 `stopTimeMinutes` 重新计时，
+	 * 「提前暂停」就又从这道缝里钻回来了。下发一个已到期的截止时刻，扩展据此
+	 * 停掉自己的倒计时（剩余 ≤ 0 时不启动），把真正暂停留给桌面收尾动作。
+	 */
+	return { active: true, pause: true, endAt };
 }
 
 /** 最近一场已经结束的会话（用于「到点收尾」在窗口外也能补做一次） */
