@@ -5,14 +5,21 @@ name: Publish to GitCode
 # 早前用过的 GitCode 原生 Action（.gitcode/workflows/release-publish.yml）已删除，
 # 因为 GitCode 托管 runner 缺 node、跨岸直传又卡死，才改为由 GitHub CI 硬传。
 #
-# 为什么是独立 workflow、为什么这么慢也要做：
-#   - GitHub CI（海外）→ GitCode OBS（国内）单连接 ~100KB/s，只能靠多路并发把
-#     2.7GB 压到 1~2 小时（GitCode 预签名 PUT 不支持分片，没法更快）。
-#   - 与 desktop-build 拆开：打包失败不会连带镜像发布；镜像失败也只需重跑本
-#     workflow（脚本幂等：已上传且校验过的附件自动跳过）。
+# 触发方式：
+#   - **自动（正常发版路径）**：desktop-build 的 upload-release 跑完后，
+#     其 dispatch-gitcode job 立刻派发本 workflow（只带 tag），无需人工介入。
+#   - 手动：仅在需要补传/重传镜像时用（脚本幂等，已上传且校验通过的附件自动跳过）。
 #
-# 触发方式：手动 dispatch。发版全流程 = desktop-build（打包 + 发 GitHub Release）
-# → 跑完来这里填 tag 点一下 → 本 workflow 传完 GitCode 后自动派发 update-manifest 回写清单。
+# 附件来源 = GitHub Release（gh release download 白名单），不再依赖 artifact run id，
+# 所以补传时只要知道 tag。GitHub Release 是唯一事实源，GitCode 是它的镜像。
+#
+# 本 workflow 末步自动派发 update-manifest 回写清单 —— 「GitCode 传完了才放用户
+# 看到更新」这道门禁的落点就在这：本 workflow 失败，清单就不会被写。
+#
+# 为什么这么慢也要做：GitHub CI（海外）→ GitCode OBS（国内）单连接 ~100KB/s，
+# 只能靠多路并发把 2.7GB 压到 1~2 小时（GitCode 预签名 PUT 不支持分片，没法更快）。
+# 与 desktop-build 拆成独立 workflow：打包失败不会连带镜像发布；镜像失败也只需
+# 重跑本 workflow。
 #
 # 前置：仓库 Secrets 需配置 GITCODE_TOKEN（GitCode 个人访问令牌）。
 
@@ -20,22 +27,20 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag（如 v5.2.0），GitHub 与 GitCode 一致"
+        description: "Release tag（如 v5.3.0），GitHub 与 GitCode 一致"
         required: true
-        type: string
-      artifact_run_id:
-        description: "可选：复用该 run 的构建产物（跳过重新打包）"
-        required: false
         type: string
 
 permissions:
-  contents: write
-  # 末步 gh workflow run update-manifest.yml 需要 actions: write（GITHUB_TOKEN
-  # 默认无此权限，缺失时 dispatch 步骤 403）
+  # 下载 GitHub Release 附件（gh release download）
+  contents: read
+  # 末步 gh workflow run update-manifest.yml 需要 actions: write
+  # （GITHUB_TOKEN 默认无此权限，缺失时 dispatch 步骤 403）
   actions: write
 
 concurrency:
   group: publish-gitcode
+  # 不同 tag 的发布不该互相取消；同一时刻只跑一个，后来的排队
   cancel-in-progress: false
 
 jobs:
@@ -54,41 +59,18 @@ jobs:
             scripts
           sparse-checkout-cone-mode: false
 
-      - name: Download build artifacts
-        if: ${{ !inputs.artifact_run_id }}
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: Download artifacts from previous run
-        if: ${{ inputs.artifact_run_id }}
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-          run-id: ${{ inputs.artifact_run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      # 产物按 artifact 名分了目录，拍平到根；安装包统一 honghueasystudy- 前缀
-      # （与 GitHub Release 附件命名一致，客户端清单里的 URL 用实际文件名）
-      - name: Flatten artifact directories
-        run: |
-          find artifacts -mindepth 2 -type f -exec mv {} artifacts/ \;
-          find artifacts -mindepth 1 -type d -empty -delete
-          for f in artifacts/鸿鹄易学-*; do
-            [ -f "$f" ] || continue
-            base=$(basename "$f")
-            mv "$f" "artifacts/honghueasystudy-${base#鸿鹄易学-}"
-          done
-          ls -lh artifacts/
-
-      - name: Fetch release notes
+      # GitHub Release 是唯一事实源：安装包、更新包、校验文件、扩展、说明正文都在这里。
+      # 附件名与清单里的文件名一致（honghueasystudy-<ver>-setup-<os>-<arch>.<ext>），
+      # 所以直接把附件名当 GitCode 附件名即可，客户端 URL 无需改写。
+      # 下载全部附件（含 assets-manifest.json 等小文件），后面用白名单筛掉不该镜像的。
+      - name: Download release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ inputs.tag }}
-        run: gh release download "$TAG_NAME" --dir /tmp --pattern 'release-notes.md' --clobber
+        run: |
+          gh release download "$TAG_NAME" --dir artifacts --clobber
+          ls -lh artifacts/
 
       # 安装包排最前：它们才是客户端真正下载的文件，失败要尽早暴露。
       # --concurrency 8：单连接 ~100KB/s，8 路把 2.7GB 压到 1~2 小时。
@@ -105,18 +87,26 @@ jobs:
             echo "没有可同步的附件（安装包 / 更新包 / 扩展均缺失）"
             exit 1
           fi
+          # 说明正文由 desktop-build 生成并传上 Release；老版本没这个附件时退回自动正文
+          NOTES_ARGS=()
+          if [ -f artifacts/release-notes.md ]; then
+            NOTES_ARGS=(--notes-file artifacts/release-notes.md)
+          else
+            echo "::warning::该 Release 没有 release-notes.md，GitCode 侧将使用默认正文"
+          fi
           ls -lh artifacts/
           node scripts/publish-to-gitcode.js \
             --tag "$TAG_NAME" \
             --name "$TAG_NAME" \
-            --notes-file /tmp/release-notes.md \
+            "${NOTES_ARGS[@]}" \
             --concurrency 8 \
             --purge-stale \
             --require-token \
             "${FILES[@]}"
 
       # workflow_dispatch 是 GITHUB_TOKEN 防递归规则的豁免事件，可以直接派发。
-      # 此时 GitCode 附件已就位，update-manifest 的探链才能全绿。
+      # 此时 GitCode 附件已就位，update-manifest 的探链才能全绿 —— 任一源缺包就拒绝
+      # 写清单（fail-closed 是刻意门禁：清单发出去等于承诺这个版本可下载）。
       - name: Dispatch update manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

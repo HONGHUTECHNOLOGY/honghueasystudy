@@ -5,10 +5,12 @@ on:
     # 发布链（上传 GitHub Release / 回写更新清单）仅在 tag 触发时执行；
     # 若发布步骤失败，修复后可从 main 手动 dispatch 并在 tag 里填版本号重跑发布链，
     # 不必重新构建（build 矩阵照常跑，产物一致）。
-    # GitCode 镜像走独立链路，但同样跑在 GitHub Actions 上：
-    #   - GitCode 上传：publish-gitcode.yml（本 job 跑完后手动 dispatch，传完它自动派发 update-manifest）
-    #   - 清单回写：update-manifest.yml（探链 fail-closed，GitHub / GitCode 任一附件缺失
-    #     都拒绝写清单 —— 正好保证「两边都能下载」才让用户看到更新提示）
+    # GitCode 镜像走独立 workflow，但同样跑在 GitHub Actions 上，且**全自动**：
+    #   - GitCode 上传：本 job 的 upload-release 成功收尾后，dispatch-gitcode job
+    #     自动派发 publish-gitcode.yml（附件从 GitHub Release 下载，无需 run id）
+    #   - 清单回写：publish-gitcode 传完自动派发 update-manifest.yml（探链 fail-closed，
+    #     GitHub / GitCode 任一附件缺失都拒绝写清单 —— 正好保证「两边都能下载」
+    #     才让用户看到更新提示）
     inputs:
       tag:
         description: "发布目标 tag（如 v5.2.0），留空则只在 tag 触发时发布"
@@ -25,8 +27,9 @@ on:
 
 permissions:
   contents: write
-  # skip_build 时要用 download-artifact 的 run-id 跨 run 取产物，需要读 Actions
-  actions: read
+  # write 同时覆盖 read：skip_build 要跨 run 读产物（download-artifact run-id），
+  # 末尾 dispatch-gitcode 要 gh workflow run 派发 GitCode 上传
+  actions: write
 
 concurrency:
   group: desktop-build-${{ github.ref }}
@@ -424,8 +427,50 @@ jobs:
           gh release upload "$TAG_NAME" assets-manifest.json release-notes.md --clobber
           ls -lh
 
-  # 更新清单回写已拆分到 update-manifest.yml：
-  # 正常链路 = publish-gitcode.yml（GitHub Actions，手动 dispatch）把附件传到 GitCode，
-  # 它末步自动派发 update-manifest.yml —— 此时 GitCode 链接可达，
-  # write-update-manifest 的 Range GET 探链（fail-closed）才能全绿通过。
-  # 也可在两边都确认齐后手动 dispatch update-manifest；缺包则探链拒绝写清单（预期行为）。
+  # GitCode 镜像上传：GitHub Release 的附件全部上传完毕后自动派发 publish-gitcode.yml。
+  # 以前这一步靠人工 dispatch，漏点一次就是「GitHub 有包、GitCode 空」，而
+  # update-manifest 的探链是 fail-closed —— 缺一个源就一直拒绝写清单，用户永远
+  # 收不到更新提示（5.3.0 之前就踩过）。现在链上是全自动：
+  #   desktop-build(upload-release) → publish-gitcode → update-manifest → CF 重建
+  # 只有需要补传/重传时才去手动跑 publish-gitcode（脚本幂等，只补缺的附件）。
+  #
+  # needs 指向 upload-release：非 tag 场景该 job 被跳过，本 job 随之跳过，
+  # 不会对不存在的 Release 派发。
+  dispatch-gitcode:
+    needs: upload-release
+    if: ${{ needs.upload-release.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      # 草稿 Release 的附件对外不可下载：publish-gitcode 还能传（有 token），
+      # 但 update-manifest 的 Range GET 探链必然失败，等于白跑 1~2 小时镜像上传。
+      # 在这里提前拦一次，报错信息直接给出修复命令。
+      - name: Ensure release is published
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_RAW: ${{ inputs.tag || github.ref_name }}
+        run: |
+          TAG="${TAG_RAW#refs/tags/}"
+          IS_DRAFT=$(gh release view "$TAG" --json isDraft -q .isDraft)
+          if [ "$IS_DRAFT" = "true" ]; then
+            echo "::error::Release $TAG 是草稿，附件对外不可下载，清单探链必然失败。先发布它再重跑：gh release edit $TAG --draft=false"
+            exit 1
+          fi
+          echo "Release $TAG 已发布，可以镜像到 GitCode"
+
+      - name: Dispatch publish-gitcode
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG_RAW: ${{ inputs.tag || github.ref_name }}
+        run: |
+          TAG="${TAG_RAW#refs/tags/}"
+          if [ -z "$TAG" ]; then
+            echo "::error::拿不到 tag，无法派发 GitCode 镜像上传"
+            exit 1
+          fi
+          # workflow_dispatch 是防递归豁免事件，GITHUB_TOKEN 可直接派发。
+          # publish-gitcode 会自己从 GitHub Release 取附件（不需要 run id），
+          # 传完再派发 update-manifest 回写清单。
+          gh workflow run publish-gitcode.yml --ref main -f tag="$TAG"
+          echo "已派发 publish-gitcode（tag=$TAG）→ GitCode 传完自动回写更新清单"

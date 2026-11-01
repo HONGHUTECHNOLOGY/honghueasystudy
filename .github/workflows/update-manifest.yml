@@ -5,7 +5,9 @@ name: Update Manifest
 #
 # 触发方：
 #   1) publish-gitcode.yml 在 GitCode 附件上传完成后自动派发 ——
-#      此时 GitCode 链接可达，探链才能全绿；
+#      此时 GitCode 链接可达，探链才能全绿
+#      （publish-gitcode 本身又由 desktop-build 的 dispatch-gitcode 自动派发，
+#        所以正常发版全程无人工：打包 → 镜像 → 清单 → CF 重建）；
 #   2) 手动触发（GitHub / GitCode 两边都确认齐了、或探链失败重跑）。
 #
 # 探链是 fail-closed：GitCode / GitHub 任一附件 Range GET 不通过就拒绝写清单。
