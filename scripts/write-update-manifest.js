@@ -354,21 +354,30 @@ function sha256File(file) {
  * 文件名按 electron.builder.json 的 artifactName 生成：
  *   `${productName}-${version}-setup-${os}-${arch}.${ext}`，例如 鸿鹄易学-3.2.1-setup-win-x64.exe
  */
-function findWinInstaller(productName, version) {
+function findWinInstaller(productName, version, extraDirs = []) {
 	const distDir = path.join(ROOT, 'honghueasystudy_desktop', 'packages', 'app', 'dist');
-	if (!fs.existsSync(distDir)) return null;
+	// CI 里没有本地 dist（update-manifest 跑在 Linux runner，产物在 artifacts/），
+	// 只扫 dist 会让清单丢掉 installers.win32 —— Windows 正是主力平台
+	const dirs = [distDir, ...extraDirs].filter((d) => d && fs.existsSync(d));
+	if (!dirs.length) return null;
 
-	const expected = `${productName}-${version}-setup-win-x64.exe`;
-	const exact = path.join(distDir, expected);
-	if (fs.existsSync(exact)) return { file: exact, name: expected };
+	for (const dir of dirs) {
+		const exact = path.join(dir, `${productName}-${version}-setup-win-x64.exe`);
+		if (fs.existsSync(exact)) return { file: exact, name: path.basename(exact) };
+	}
 
-	// artifactName 改过名字时兜底：同版本、win、setup、exe
-	const candidates = fs
-		.readdirSync(distDir)
-		.filter((f) => /-setup-win-.*\.exe$/i.test(f) && f.includes(version));
-	if (candidates.length === 1) return { file: path.join(distDir, candidates[0]), name: candidates[0] };
-	if (candidates.length > 1) {
-		console.warn(`[update-manifest] ⚠ 找到多个候选安装包，请用 --installer 指定：${candidates.join(', ')}`);
+	// artifactName 改过名字时兜底：同版本、win、setup、exe（含 amd64 别名）
+	const candidates = new Map();
+	for (const dir of dirs) {
+		for (const f of fs.readdirSync(dir)) {
+			if (!/-setup-win-(x64|amd64)\.exe$/i.test(f) || !f.includes(version)) continue;
+			if (!candidates.has(f)) candidates.set(f, { file: path.join(dir, f), name: f });
+		}
+	}
+	const list = [...candidates.values()];
+	if (list.length === 1) return list[0];
+	if (list.length > 1) {
+		console.warn(`[update-manifest] ⚠ 找到多个候选安装包，请用 --installer 指定：${list.map((i) => i.name).join(', ')}`);
 	}
 	return null;
 }
@@ -393,13 +402,19 @@ function findWinInstaller(productName, version) {
  * 例：鸿鹄易学-3.2.1-setup-mac-arm64.dmg → darwin / arm64 / dmg
  */
 function parseArtifactName(name, version) {
-	const m = /-setup-(mac|linux|win)-(x64|arm64)\.([A-Za-z0-9]+)$/i.exec(String(name || ''));
+	/*
+	 * 架构别名要认全：electron-builder 在 linux 上按 Debian 习惯产出 amd64 / x86_64，
+	 * 只认 x64 会把 deb / rpm / AppImage 全漏掉（清单里 linux 只剩 arm64）。
+	 */
+	const m = /-setup-(mac|linux|win)-(x64|arm64|amd64|x86_64|aarch64)\.([A-Za-z0-9]+)$/i.exec(String(name || ''));
 	if (!m) return null;
 	if (version && !String(name).includes(version)) return null;
 	const os = m[1].toLowerCase();
+	const rawArch = m[2].toLowerCase();
+	const arch = rawArch === 'amd64' || rawArch === 'x86_64' ? 'x64' : rawArch === 'aarch64' ? 'arm64' : rawArch;
 	return {
 		platform: os === 'mac' ? 'darwin' : os,
-		arch: m[2].toLowerCase(),
+		arch,
 		ext: m[3]
 	};
 }
@@ -524,7 +539,7 @@ async function main() {
 	const winName = installerName('win', 'x64', 'exe');
 	const foundInstaller = args.installer
 		? { file: args.installer, name: path.basename(args.installer) }
-		: findWinInstaller(productName, version);
+		: findWinInstaller(productName, version, args.artifacts);
 
 	/** @type {{urls: string[], sha256: string, size: number, name: string} | null} */
 	let winInstaller = null;
