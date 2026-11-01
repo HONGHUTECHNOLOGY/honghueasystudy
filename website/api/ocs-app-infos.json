@@ -106,6 +106,67 @@
     ],
     "versions": [
         {
+            "tag": "5.3.0",
+            "description": {
+                "feat": [],
+                "fix": [],
+                "other": [
+                    "桌面端与扩展同步更新，详见发布页"
+                ]
+            },
+            "installers": {
+                "darwin": [
+                    {
+                        "arch": "arm64",
+                        "ext": "dmg",
+                        "name": "honghueasystudy-5.3.0-setup-mac-arm64.dmg",
+                        "urls": [
+                            "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-mac-arm64.dmg",
+                            "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-mac-arm64.dmg"
+                        ],
+                        "sha256": "9dc5c1097638c6331c947d6f58d13e2ab041ae472e4b09d2b1c0df5ac5e03f2a",
+                        "size": 582480176
+                    },
+                    {
+                        "arch": "x64",
+                        "ext": "dmg",
+                        "name": "honghueasystudy-5.3.0-setup-mac-x64.dmg",
+                        "urls": [
+                            "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-mac-x64.dmg",
+                            "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-mac-x64.dmg"
+                        ],
+                        "sha256": "d881071dce1eeda49d8dc562f04c897e0c21ce053545053ed74b05060dc13093",
+                        "size": 609599091
+                    }
+                ],
+                "linux": [
+                    {
+                        "arch": "arm64",
+                        "ext": "AppImage",
+                        "name": "honghueasystudy-5.3.0-setup-linux-arm64.AppImage",
+                        "urls": [
+                            "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-linux-arm64.AppImage",
+                            "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.3.0/honghueasystudy-5.3.0-setup-linux-arm64.AppImage"
+                        ],
+                        "sha256": "bcae348a72d96db22da2f2b39c5052a391a89fd3e514280a4277d8deda2eeb42",
+                        "size": 215181278
+                    }
+                ]
+            },
+            "url": "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.3.0/app-5.3.0.zip",
+            "urls": [
+                "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.3.0/app-5.3.0.zip",
+                "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.3.0/app-5.3.0.zip"
+            ],
+            "sha256": "b36e79c454f7dbcbbdf33e6554d1bf75bc5de30e56570994da8f3264e5e51ccd",
+            "size": 18732700,
+            "app_downloads": {
+                "win32": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.3.0/%E9%B8%BF%E9%B9%84%E6%98%93%E5%AD%A6-5.3.0-setup-win-x64.exe",
+                "darwin": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/tag/v5.3.0",
+                "linux": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/tag/v5.3.0"
+            }
+        },
+        {
             "tag": "5.2.0",
             "description": {
                 "feat": [],
