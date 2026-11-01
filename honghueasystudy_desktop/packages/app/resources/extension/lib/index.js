@@ -8958,7 +8958,8 @@
       stop: false,
       currentMedia: void 0,
       stopInterval: 0,
-      stopMessage: void 0
+      stopMessage: void 0,
+      stopRefreshTimer: 0
     }
   };
   const remote_not_required_pages = [
@@ -9933,9 +9934,9 @@
             const value = parseFloat(String(minutes));
             if (!isFinite(value) || value <= 0) {
               lib.$message.info({ content: "定时停止已关闭" });
-              autoStop(0);
+              applyAutoStop(0);
             } else {
-              autoStop(value);
+              applyAutoStop(value);
             }
           });
           this.onConfigChange("volume", (curr) => {
@@ -9956,7 +9957,13 @@
           };
           closeDialogRead();
           recordStudyTimeLoop();
-          autoStop(this.cfg.stopTimeMinutes);
+          applyAutoStop(this.cfg.stopTimeMinutes);
+          clearInterval(state$7.study.stopRefreshTimer);
+          state$7.study.stopRefreshTimer = setInterval(() => {
+            if (state$7.study.stop)
+              return;
+            applyAutoStop(this.cfg.stopTimeMinutes);
+          }, 20 * 1e3);
           processor.hideDialog();
           processor.handleTestDialog(processor.remotePage);
           setInterval(async () => {
@@ -12463,7 +12470,56 @@
       return `${m}分钟`;
     return `${s}秒`;
   }
-  function autoStop(stopTime) {
+  let appliedStopKey = "";
+  let desktopProbeFailures = 0;
+  const DESKTOP_PROBE_MAX_FAILURES = 3;
+  async function fetchDesktopStopOverride() {
+    if (desktopProbeFailures >= DESKTOP_PROBE_MAX_FAILURES)
+      return null;
+    try {
+      const res = await request("/hh-autostop", { type: "fetch", method: "get" });
+      if (!res || res.environment !== "playwright") {
+        desktopProbeFailures = DESKTOP_PROBE_MAX_FAILURES;
+        return null;
+      }
+      desktopProbeFailures = 0;
+      if (!res.autoStop || !res.autoStop.active)
+        return null;
+      if (!res.autoStop.pause)
+        return { active: true, pause: false, endAt: 0 };
+      const endAt = Number(res.autoStop.endAt) || 0;
+      if (endAt <= 0)
+        return null;
+      return { active: true, pause: true, endAt };
+    } catch {
+      desktopProbeFailures++;
+      return null;
+    }
+  }
+  async function applyAutoStop(configMinutes) {
+    try {
+      const minutes = parseFloat(String(configMinutes));
+      const override = await fetchDesktopStopOverride();
+      const key = override && override.active ? override.pause ? `desktop:${override.endAt}` : "desktop:none" : `config:${isFinite(minutes) && minutes > 0 ? minutes : 0}`;
+      if (key === appliedStopKey)
+        return;
+      if (!override || !override.active) {
+        autoStop(minutes);
+      } else if (!override.pause) {
+        autoStop(0);
+        state$7.study.stopMessage = lib.$message.info({
+          duration: 0,
+          content: "桌面定时任务进行中：方案设置了到点不处理，本页的定时停止已关闭"
+        });
+      } else {
+        const remainMinutes = (override.endAt - Date.now()) / 6e4;
+        autoStop(remainMinutes > 0 ? remainMinutes : 0, { desktop: true });
+      }
+      appliedStopKey = key;
+    } catch {
+    }
+  }
+  function autoStop(stopTime, opts) {
     var _a;
     clearInterval(state$7.study.stopInterval);
     (_a = state$7.study.stopMessage) == null ? void 0 : _a.remove();
@@ -12488,7 +12544,7 @@
     date.setSeconds(date.getSeconds() + Math.round(minutes * 60));
     state$7.study.stopMessage = lib.$message.info({
       duration: 0,
-      content: `在 ${date.toLocaleTimeString()} 脚本将自动暂停（${formatStopDuration(minutes)}后）`
+      content: (opts == null ? void 0 : opts.desktop) ? `桌面定时任务将在 ${date.toLocaleTimeString()} 暂停（${formatStopDuration(minutes)}后）` : `在 ${date.toLocaleTimeString()} 脚本将自动暂停（${formatStopDuration(minutes)}后）`
     });
   }
   function fixProcessBar() {
