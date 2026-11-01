@@ -55,21 +55,33 @@ jobs:
           done
 
           # 轮询等待合并（每 15s 一次，最多 10 分钟），合并后显式派发 Release Tag
+          #
+          # 坑：`gh pr view --json` 的字段表里**没有 merged（布尔）**，只有 mergedAt/mergedBy。
+          # 早期写成 `--json state,merged`，命令每次都报 Unknown JSON field，被 2>/dev/null
+          # 和 `|| echo unknown` 吞掉 → state 永远 unknown → 循环跑满 10 分钟走「超时」分支
+          # → 从不派发，但步骤本身仍是 success（run 显示绿色，实际发版链断了）。
+          # 现改为判 state + mergedAt，并在超时后再补查一次。
           for pr in $PRS; do
             merged=0
             state=""
             for i in $(seq 1 40); do
-              state=$(gh pr view "$pr" --json state,merged -q '.state + "/" + (.merged|tostring)' 2>/dev/null || echo unknown)
+              state=$(gh pr view "$pr" --json state,mergedAt -q '.state + "/" + (if .mergedAt then "true" else "false" end)' 2>/dev/null || echo unknown)
               if [ "$state" = "MERGED/true" ]; then merged=1; break; fi
               if [ "$state" = "CLOSED/false" ]; then break; fi
               sleep 15
             done
+            # 循环退出后再确认一次：最后一次 sleep 期间完成的合并不该被漏掉
+            if [ "$merged" != "1" ]; then
+              state=$(gh pr view "$pr" --json state,mergedAt -q '.state + "/" + (if .mergedAt then "true" else "false" end)' 2>/dev/null || echo unknown)
+              if [ "$state" = "MERGED/true" ]; then merged=1; fi
+            fi
             if [ "$merged" = "1" ]; then
               echo "PR #$pr 已合并，派发 Release Tag workflow"
+              # 不加 || true：派发失败就让整个 run 失败，别让「绿色但没派发」再发生
               gh workflow run release-tag.yml --ref main --repo "$GH_REPO"
             elif [ "$state" = "CLOSED/false" ]; then
-              echo "::warning::PR #$pr 被关闭且未合并，跳过派发"
+              echo "::warning::PR #$pr 被关闭且未合并，跳过派发（state=$state）"
             else
-              echo "::warning::等待 PR #$pr 合并超时（10 分钟）。人工合并后 pull_request 事件会自动触发 Release Tag，无需重跑本 workflow"
+              echo "::warning::等待 PR #$pr 合并超时（10 分钟，state=$state）。注意：若 PR 是 auto-merge 合掉的，merge 事件由 GITHUB_TOKEN 产生，会被防递归规则拦住、不会自动触发 Release Tag —— 需要到 Actions 手动 dispatch release-tag.yml"
             fi
           done
