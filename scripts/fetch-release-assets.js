@@ -38,8 +38,11 @@ const MANIFEST_NAME = 'assets-manifest.json';
 
 /*
  * 镜像候选池：只代理 github.com 直链（不代理 api.github.com）。
- * 顺序不再代表优先级 —— 实际用哪个由开跑前的探速决定，这里只是候选集。
- * 所以可以放心列长一点：死掉的源在探速阶段就被淘汰，不浪费一次下载的时间。
+ * 大文件实际用哪个由开跑前的探速决定，这里只是候选集，所以可以放心列长一点：
+ * 死掉的源在探速阶段就被淘汰，不浪费一次下载的时间。
+ *
+ * 但顺序并非完全无意义 —— 清单抓取是「按顺序试，第一个成功即止」，
+ * 且 --no-probe 应急模式下整个顺序就是全部依据。所以直连排在最前（见 mirrorList）。
  * GH_MIRROR 可指定首选镜像（换线路排查时用），仍会参与探速。
  */
 const DEFAULT_MIRRORS = [
@@ -56,7 +59,12 @@ const DEFAULT_MIRRORS = [
 	'https://gh.6yit.com/',
 	'https://cdn.moran233.xyz/'
 ];
-// 直连放最后参与探速：境内多数网络到 github.com:443 不通，但通了往往最快
+/*
+ * 直连（空字符串 = 不加代理前缀）。
+ * 排第一：探速通过就直接用，它是最短路径 —— 不经第三方中转、没有镜像的 429 限流，
+ * 也不存在「镜像回了一份被改写/截断的字节」这类中间环节风险。
+ * 不通时只多花一次超时（清单 20s / 探速 6s），比「明明直连最快却排在 13 个源后面」便宜得多。
+ */
 const DIRECT = '';
 
 function parseArgs(argv) {
@@ -104,8 +112,8 @@ function mirrorList() {
 	const head = process.env.GH_MIRROR
 		? [process.env.GH_MIRROR.endsWith('/') ? process.env.GH_MIRROR : `${process.env.GH_MIRROR}/`]
 		: [];
-	const list = [...new Set([...head, ...DEFAULT_MIRRORS])];
-	return [...list, DIRECT];
+	// 直连永远第一：清单按顺序试、应急模式按顺序下，两处都以它为首选
+	return [...new Set([DIRECT, ...head, ...DEFAULT_MIRRORS])];
 }
 
 function label(mirror) {
