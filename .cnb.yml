@@ -22,8 +22,10 @@
 #   GITCODE_TOKEN      GitCode 个人访问令牌，上传附件用
 # 可选：
 #   GH_REPO            默认 HONGHUTECHNOLOGY/honghueasystudy
-#   GH_MIRROR          覆盖下载镜像前缀，默认 https://ghfast.top/
-#   FETCH_CONCURRENCY  下载并发，默认 4
+#   GH_MIRROR          追加一个首选镜像前缀（仍会参与探速），默认只用内置候选池
+#   FETCH_PARALLEL     下载连接数，默认 6（开到 12 会触发镜像 429，反而更慢）
+#   FETCH_CHUNK_MB     分片大小，默认 8
+#   FETCH_MIN_BPS      速率阈值 KB/s，低于即熔断换源，默认 200
 #   UPLOAD_CONCURRENCY 上传并发，默认 6
 #
 # 清单回写由调用方（GitHub 的 dispatch-cnb job）在本流水线成功后派发，
@@ -62,9 +64,11 @@ main:
               exit 1
             fi
 
-        # 从 GitHub Release 拉全部附件。境内直连 github.com 基本不通，
-        # 脚本按「镜像优先、直连兜底」逐源回退，并用 assets-manifest.json 里的
-        # size + sha256 双重校验（镜像常对 404 返回 200 + HTML 错误页）。
+        # 从 GitHub Release 拉全部附件。境内直连 github.com 时通时不通，
+        # 所以脚本先对每个候选镜像做 4MB 探速，只用测出来真的快的那几个；
+        # 大文件再按 8MB 切片、多连接并发下载（分数个源），把带宽叠起来。
+        # 实测单源单流 0.07~1.7 MB/s，6 连接并发能到 3~6 MB/s；并发开到 12 反而
+        # 掉速（镜像会回 429），所以别盲目调大 FETCH_PARALLEL。
         - name: 拉取 GitHub Release 附件
           timeout: 60m
           script: |
@@ -74,7 +78,9 @@ main:
               --tag "$TAG" \
               --repo "$REPO" \
               --out artifacts \
-              --concurrency "${FETCH_CONCURRENCY:-4}"
+              --parallel "${FETCH_PARALLEL:-6}" \
+              --chunk-size "${FETCH_CHUNK_MB:-8}" \
+              --min-bps "${FETCH_MIN_BPS:-200}"
             echo "--- 下载完成 ---"
             ls -lh artifacts/ | tail -20
 
