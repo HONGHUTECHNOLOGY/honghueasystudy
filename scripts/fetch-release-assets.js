@@ -24,8 +24,21 @@ const http = require('http');
 const { createHash } = require('crypto');
 
 const MANIFEST_NAME = 'assets-manifest.json';
-// 镜像只代理 github.com 直链（不代理 api.github.com）；速度不稳，逐个回退
-const MIRRORS = ['', 'https://ghfast.top/', 'https://gh-proxy.com/', 'https://ghproxy.net/'];
+/*
+ * 下载源顺序：镜像优先，直连放最后。
+ * 境内（CNB / Gitee runner）直连 github.com:443 基本不通，放第一位会让每个文件
+ * 先空等 120s 空闲超时才回退 —— 十个文件就是二十分钟白等。
+ * 镜像只代理 github.com 直链（不代理 api.github.com）；各家速度不稳，逐个回退。
+ * GH_MIRROR 可覆盖首选镜像（换线路排查时用）。
+ */
+const DEFAULT_MIRRORS = ['https://ghfast.top/', 'https://gh-proxy.com/', 'https://ghproxy.net/'];
+const MIRRORS = [
+	...(process.env.GH_MIRROR
+		? [process.env.GH_MIRROR.endsWith('/') ? process.env.GH_MIRROR : `${process.env.GH_MIRROR}/`]
+		: []),
+	...DEFAULT_MIRRORS,
+	''
+];
 
 function parseArgs(argv) {
 	const out = { tag: null, repo: null, out: 'artifacts', concurrency: 3 };

@@ -5,12 +5,13 @@ on:
     # 发布链（上传 GitHub Release / 回写更新清单）仅在 tag 触发时执行；
     # 若发布步骤失败，修复后可从 main 手动 dispatch 并在 tag 里填版本号重跑发布链，
     # 不必重新构建（build 矩阵照常跑，产物一致）。
-    # GitCode 镜像走独立 workflow，但同样跑在 GitHub Actions 上，且**全自动**：
-    #   - GitCode 上传：本 job 的 upload-release 成功收尾后，dispatch-gitcode job
-    #     自动派发 publish-gitcode.yml（附件从 GitHub Release 下载，无需 run id）
-    #   - 清单回写：publish-gitcode 传完自动派发 update-manifest.yml（探链 fail-closed，
-    #     GitHub / GitCode 任一附件缺失都拒绝写清单 —— 正好保证「两边都能下载」
-    #     才让用户看到更新提示）
+    # GitCode 镜像不在 GitHub runner 上做（跨境直传实测 14 KB/s，2.6 GB 要 53 小时），
+    # 改为派发给腾讯云原生构建（CNB，境内 runner），配置见仓库根 .cnb.yml。全链仍是自动：
+    #   - upload-release 成功收尾后，dispatch-cnb job 同步 main 到 CNB 并调
+    #     POST /-/build/start（api_trigger_publish），本 workflow 几十秒内结束
+    #   - CNB 上：镜像下载 GitHub Release → 上传 GitCode OBS → 派发 update-manifest.yml
+    #     回写清单（探链 fail-closed，GitHub / GitCode 任一附件缺失都拒绝写清单，
+    #     正好保证「两边都能下载」才让用户看到更新提示）
     inputs:
       tag:
         description: "发布目标 tag（如 v5.2.0），留空则只在 tag 触发时发布"
@@ -28,7 +29,7 @@ on:
 permissions:
   contents: write
   # write 同时覆盖 read：skip_build 要跨 run 读产物（download-artifact run-id），
-  # 末尾 dispatch-gitcode 要 gh workflow run 派发 GitCode 上传
+  # dispatch 链路里 update-manifest 也要靠它（见各 workflow 的 permissions）
   actions: write
 
 concurrency:
@@ -425,28 +426,43 @@ jobs:
           gh release upload "$TAG_NAME" assets-manifest.json release-notes.md --clobber
           ls -lh
 
-  # GitCode 镜像上传：GitHub Release 的附件全部上传完毕后自动派发 publish-gitcode.yml。
-  # 以前这一步靠人工 dispatch，漏点一次就是「GitHub 有包、GitCode 空」，而
-  # update-manifest 的探链是 fail-closed —— 缺一个源就一直拒绝写清单，用户永远
-  # 收不到更新提示（5.3.0 之前就踩过）。现在链上是全自动：
-  #   desktop-build(upload-release) → publish-gitcode → update-manifest → CF 重建
-  # 只有需要补传/重传时才去手动跑 publish-gitcode（脚本幂等，只补缺的附件）。
+  # GitCode 镜像：Release 附件传完后，把「拉 GitHub → 推 GitCode」这一步派发给
+  # 腾讯云原生构建（CNB，境内 runner），见仓库根的 .cnb.yml。
   #
-  # needs 指向 upload-release：非 tag 场景该 job 被跳过，本 job 随之跳过，
-  # 不会对不存在的 Release 派发。
-  dispatch-gitcode:
+  # 为什么不在 GitHub runner 上直接传（2026-11-03 实测结论，别再回退）：
+  #   Azure 美西 → file.gitcode.com 单流 14 KB/s，2.6 GB 要 53 小时；8 路并发
+  #   反而更慢（并发即拥塞，实测总吞吐 3.4 KB/s）；Cloudflare WARP 之类的海外
+  #   代理出口会被 GitCode CloudWAF 判风险 IP 直接 418。唯一可行的是境内出口。
+  #   CNB 在国内：拉 GitHub 走公共镜像、推 GitCode 走国内段，全程十几分钟。
+  #
+  # 本 job 只做三件事：同步 main 到 CNB（保证它拿到最新 .cnb.yml 和 scripts）、
+  # 调一次 build/start、把流水线链接打到日志里。几十秒结束，不再占 330 分钟。
+  #
+  # 未配置 CNB_TOKEN 时跳过（发版不受影响，只是不会镜像到 GitCode）。
+  # needs 指向 upload-release：非 tag 场景该 job 被跳过，本 job 随之跳过。
+  dispatch-cnb:
     needs: upload-release
     if: ${{ needs.upload-release.result == 'success' }}
     runs-on: ubuntu-latest
+    env:
+      CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+      # 仓库变量，形如 honghutech/honghueasystudy（CNB 上的同名镜像仓）
+      CNB_REPO: ${{ vars.CNB_REPO || 'honghutech/honghueasystudy' }}
+      TAG_RAW: ${{ inputs.tag || github.ref_name }}
     steps:
-      # 草稿 Release 的附件对外不可下载：publish-gitcode 还能传（有 token），
-      # 但 update-manifest 的 Range GET 探链必然失败，等于白跑 1~2 小时镜像上传。
-      # 在这里提前拦一次，报错信息直接给出修复命令。
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          # 仓库只有 5 MB，全量拉取最省事：浅克隆推分支容易被拒
+          fetch-depth: 0
+
+      # 草稿 Release 的附件对外不可下载：镜像照样能传（有 token），但
+      # update-manifest 的 Range GET 探链必然失败，等于白传 2.6 GB。
       - name: Ensure release is published
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          TAG_RAW: ${{ inputs.tag || github.ref_name }}
         run: |
           TAG="${TAG_RAW#refs/tags/}"
           IS_DRAFT=$(gh release view "$TAG" --json isDraft -q .isDraft)
@@ -456,19 +472,43 @@ jobs:
           fi
           echo "Release $TAG 已发布，可以镜像到 GitCode"
 
-      - name: Dispatch publish-gitcode
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          TAG_RAW: ${{ inputs.tag || github.ref_name }}
+      - name: Check CNB config
+        run: |
+          if [ -z "$CNB_TOKEN" ]; then
+            echo "::warning::未配置 CNB_TOKEN（仓库 Secrets），跳过 GitCode 镜像；配好后手动重跑本 job 即可"
+            echo "SKIP_CNB=1" >> "$GITHUB_ENV"
+          else
+            echo "CNB 仓库：$CNB_REPO"
+          fi
+
+      # CNB 的 api_trigger 从指定分支读 .cnb.yml，镜像仓必须是最新的 main。
+      # --force：GitHub 是唯一事实源，CNB 侧不需要保留独立历史。
+      - name: Sync main to CNB
+        if: ${{ env.SKIP_CNB != '1' }}
+        run: |
+          git remote add cnb "https://cnb:${CNB_TOKEN}@cnb.cool/${CNB_REPO}.git"
+          git push cnb HEAD:refs/heads/main --force
+          echo "已同步 main → CNB（${CNB_REPO}）"
+
+      - name: Dispatch CNB mirror build
+        if: ${{ env.SKIP_CNB != '1' }}
         run: |
           TAG="${TAG_RAW#refs/tags/}"
           if [ -z "$TAG" ]; then
-            echo "::error::拿不到 tag，无法派发 GitCode 镜像上传"
+            echo "::error::拿不到 tag，无法派发 GitCode 镜像"
             exit 1
           fi
-          # workflow_dispatch 是防递归豁免事件，GITHUB_TOKEN 可直接派发。
-          # publish-gitcode 会自己从 GitHub Release 取附件（不需要 run id），
-          # 传完再派发 update-manifest 回写清单。
-          gh workflow run publish-gitcode.yml --ref main -f tag="$TAG"
-          echo "已派发 publish-gitcode（tag=$TAG）→ GitCode 传完自动回写更新清单"
+          BODY=$(printf '{"event":"api_trigger_publish","branch":"main","title":"GitCode mirror %s","env":{"TAG":"%s"}}' "$TAG" "$TAG")
+          HTTP=$(curl -sS -o cnb-dispatch.json -w '%{http_code}' \
+            -X POST "https://api.cnb.cool/${CNB_REPO}/-/build/start" \
+            -H "Authorization: Bearer ${CNB_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$BODY")
+          echo "build/start => HTTP $HTTP"
+          cat cnb-dispatch.json
+          if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then
+            echo "::error::派发 CNB 构建失败，检查 CNB_TOKEN 是否具备 repo-cnb-trigger:rw"
+            exit 1
+          fi
+          SN=$(sed -n 's/.*"sn"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' cnb-dispatch.json)
+          echo "已派发 CNB 构建（tag=$TAG, sn=$SN）→ 传完 GitCode 自动派发 update-manifest 回写清单"

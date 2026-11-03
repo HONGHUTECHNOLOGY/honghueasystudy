@@ -1,0 +1,131 @@
+# 鸿鹄易学 · GitCode 镜像发布流水线（腾讯云原生构建 CNB）
+#
+# 为什么由 CNB 执行，而不是 GitHub Actions 直接传：
+#   跨境直传已实测死路 —— GitHub runner（Azure 美西）→ file.gitcode.com 单流仅
+#   14 KB/s，2.6 GB 需 53 小时；8 路并发反而更慢（链路上并发即拥塞）。
+#   Cloudflare WARP 之类的海外代理出口会被 GitCode 的 CloudWAF 直接 418 拦截。
+#   唯一可行的是「境内出口」：CNB 托管 runner 在国内，拉 GitHub（走公共镜像）
+#   和推 GitCode OBS（同城或近网）都是国内段，整条链路几分钟到十几分钟。
+#
+# 触发方式（只允许 API 触发，不挂 push —— 平时改代码不该跑发布）：
+#   POST https://api.cnb.cool/<CNB_REPO>/-/build/start
+#        Authorization: Bearer <CNB_TOKEN>          （权限 repo-cnb-trigger:rw）
+#        {"event":"api_trigger_publish","branch":"main",
+#         "env":{"TAG":"v5.4.0"},"title":"GitCode mirror v5.4.0"}
+#   调用方 = GitHub Actions 的 desktop-build / dispatch-cnb job（见该 workflow）。
+#
+# 必需的环境变量（在 CNB 仓库 设置 → 环境变量 里加，加密存储）：
+#   GITCODE_TOKEN      GitCode 个人访问令牌，上传附件用
+#   GH_DISPATCH_TOKEN  GitHub 细粒度 PAT，只需 actions:write + contents:read，
+#                      用于在附件传完后派发 update-manifest.yml 回写清单
+# 可选：
+#   GH_REPO            默认 HONGHUTECHNOLOGY/honghueasystudy
+#   GH_MIRROR          覆盖下载镜像前缀，默认 https://ghfast.top/
+#
+# 顺序即安全边界：附件全部上传并逐字节校验通过后，才派发清单回写。
+# update-manifest 的探链是 fail-closed —— 任一源缺包就拒绝写清单，所以
+# 「用户看到更新」等价于「GitHub 与 GitCode 两边都能下载」。
+main:
+  api_trigger_publish:
+    - name: mirror-gitcode
+      runner:
+        tags: cnb:arch:amd64
+        # 4 核：上传是网络瓶颈，不需要更多核；4 核 × 15 分钟 ≈ 1 核时，
+        # 每月 160 核时免费额度够跑上百次发版
+        cpus: 4
+      docker:
+        image: node:20
+      stages:
+        - name: 环境检查
+          timeout: 5m
+          script: |
+            set -eu
+            REPO="${GH_REPO:-HONGHUTECHNOLOGY/honghueasystudy}"
+            if [ -z "${TAG:-}" ]; then
+              echo "缺少 TAG 环境变量（应为 Release tag，如 v5.4.0）"
+              exit 1
+            fi
+            echo "tag=$TAG  repo=$REPO"
+            echo "CNB 构建号：${CNB_BUILD_ID:-unknown}"
+            node -v
+            git --version
+            curl --version | head -1
+            if [ -z "${GITCODE_TOKEN:-}" ]; then
+              echo "缺少 GITCODE_TOKEN（CNB 仓库 设置 → 环境变量）"
+              exit 1
+            fi
+            if [ -z "${GH_DISPATCH_TOKEN:-}" ]; then
+              echo "缺少 GH_DISPATCH_TOKEN（用于派发 update-manifest，缺了清单不会回写）"
+              exit 1
+            fi
+
+        # 从 GitHub Release 拉全部附件。境内直连 github.com 基本不通，
+        # 脚本按「镜像优先、直连兜底」逐源回退，并用 assets-manifest.json 里的
+        # size + sha256 双重校验（镜像常对 404 返回 200 + HTML 错误页）。
+        - name: 拉取 GitHub Release 附件
+          timeout: 60m
+          script: |
+            set -eu
+            REPO="${GH_REPO:-HONGHUTECHNOLOGY/honghueasystudy}"
+            node scripts/fetch-release-assets.js \
+              --tag "$TAG" \
+              --repo "$REPO" \
+              --out artifacts \
+              --concurrency "${FETCH_CONCURRENCY:-4}"
+            echo "--- 下载完成 ---"
+            ls -lh artifacts/ | tail -20
+
+        # 上传到 GitCode Release。脚本幂等：GitCode 上已存在且大小一致的附件自动跳过，
+        # 所以重跑只补缺的，不会重复传 2.6 GB。
+        # --upload-ips 4：对 OBS 端点解析出的多条 A 记录做握手计时取最快的几条，
+        #   线路绕路时能明显改善；DNS 只给一条时自动跳过。
+        - name: 上传到 GitCode Release
+          timeout: 90m
+          script: |
+            set -eu
+            FILES=()
+            for f in artifacts/*.exe artifacts/*.dmg artifacts/*.AppImage artifacts/*.deb artifacts/*.rpm \
+                     artifacts/app-*.zip artifacts/*.zip.sha256 artifacts/extension.zip; do
+              [ -f "$f" ] && FILES+=(--file "$f")
+            done
+            if [ ${#FILES[@]} -eq 0 ]; then
+              echo "没有可同步的附件（安装包 / 扩展均缺失）"
+              exit 1
+            fi
+            # 说明正文由 desktop-build 生成并传上 Release；老版本没有则退回自动正文
+            NOTES_ARGS=()
+            if [ -f artifacts/release-notes.md ]; then
+              NOTES_ARGS=(--notes-file artifacts/release-notes.md)
+            else
+              echo "该 Release 没有 release-notes.md，GitCode 侧使用默认正文"
+            fi
+            node scripts/publish-to-gitcode.js \
+              --tag "$TAG" \
+              --name "$TAG" \
+              "${NOTES_ARGS[@]}" \
+              --concurrency "${UPLOAD_CONCURRENCY:-6}" \
+              --upload-ips 4 \
+              --purge-stale \
+              --require-token \
+              "${FILES[@]}"
+
+        # 附件就位后才派发清单回写：update-manifest 会用 Range GET 逐条探链，
+        # GitCode 缺包时它自己会拒绝写清单（fail-closed），这里只需要把 tag 传下去。
+        - name: 派发 GitHub 清单回写
+          timeout: 10m
+          script: |
+            set -eu
+            REPO="${GH_REPO:-HONGHUTECHNOLOGY/honghueasystudy}"
+            HTTP=$(curl -sS -o /tmp/dispatch.json -w '%{http_code}' \
+              -X POST "https://api.github.com/repos/$REPO/actions/workflows/update-manifest.yml/dispatches" \
+              -H "Authorization: Bearer $GH_DISPATCH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -d "{\"ref\":\"main\",\"inputs\":{\"tag\":\"$TAG\"}}")
+            echo "dispatch update-manifest => HTTP $HTTP"
+            case "$HTTP" in
+              200|201|204) echo "已派发 update-manifest（$TAG）→ 探链通过后写清单 → CF 重建" ;;
+              *) cat /tmp/dispatch.json 2>/dev/null || true
+                 echo "派发失败：检查 GH_DISPATCH_TOKEN 是否具备 actions:write"
+                 exit 1 ;;
+            esac

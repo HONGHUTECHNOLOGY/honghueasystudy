@@ -1,25 +1,20 @@
 name: Publish to GitCode
 
-# GitCode 镜像发布：把 GitHub Release 的安装包同步到 GitCode（客户端清单 urls[0]）。
-# 上传动作在 GitHub runner 上执行（scripts/publish-to-gitcode.js + GITCODE_TOKEN）；
-# 早前用过的 GitCode 原生 Action（.gitcode/workflows/release-publish.yml）已删除，
-# 因为 GitCode 托管 runner 缺 node、跨岸直传又卡死，才改为由 GitHub CI 硬传。
+# GitCode 镜像发布（备用通道：在 GitHub runner 上直接上传）。
 #
-# 触发方式：
-#   - **自动（正常发版路径）**：desktop-build 的 upload-release 跑完后，
-#     其 dispatch-gitcode job 立刻派发本 workflow（只带 tag），无需人工介入。
-#   - 手动：仅在需要补传/重传镜像时用（脚本幂等，已上传且校验通过的附件自动跳过）。
+# **正常发版不走这里。** 主路径是腾讯云原生构建（CNB，境内 runner）：
+#   desktop-build → dispatch-cnb → CNB 上跑 .cnb.yml → 传 GitCode → 派发 update-manifest
+# 原因是跨境直传实测不可用：Azure 美西 → file.gitcode.com 单流 14 KB/s，
+# 2.6 GB 需 53 小时；8 路并发反而更慢（并发即拥塞）；WARP 之类海外代理出口被
+# GitCode CloudWAF 判风险 IP，直接 418。本 workflow 保留仅用于：
+#   - CNB 侧故障时的应急（跑得完，只是要几小时到一天）
+#   - 只补传少量小文件（脚本幂等，已存在且大小一致的附件自动跳过）
 #
-# 附件来源 = GitHub Release（gh release download 白名单），不再依赖 artifact run id，
+# 附件来源 = GitHub Release（gh release download 白名单），不依赖 artifact run id，
 # 所以补传时只要知道 tag。GitHub Release 是唯一事实源，GitCode 是它的镜像。
 #
-# 本 workflow 末步自动派发 update-manifest 回写清单 —— 「GitCode 传完了才放用户
-# 看到更新」这道门禁的落点就在这：本 workflow 失败，清单就不会被写。
-#
-# 为什么这么慢也要做：GitHub CI（海外）→ GitCode OBS（国内）单连接 ~100KB/s，
-# 只能靠多路并发把 2.7GB 压到 1~2 小时（GitCode 预签名 PUT 不支持分片，没法更快）。
-# 与 desktop-build 拆成独立 workflow：打包失败不会连带镜像发布；镜像失败也只需
-# 重跑本 workflow。
+# 末步会派发 update-manifest 回写清单 —— 但请注意：如果只是补传了部分文件，
+# 探链会因缺包拒绝写清单（fail-closed），这是预期行为。
 #
 # 前置：仓库 Secrets 需配置 GITCODE_TOKEN（GitCode 个人访问令牌）。
 
@@ -74,7 +69,7 @@ jobs:
           ls -lh artifacts/
 
       # 安装包排最前：它们才是客户端真正下载的文件，失败要尽早暴露。
-      # --concurrency 8：单连接跨境 ~100KB/s，8 路把 2.6GB 压到 1~2 小时。
+      # 跨境单连接 ~14KB/s，2.6GB 基本跑不完 —— 这就是主路径搬到 CNB 的原因。
       # --upload-ips 4：对 OBS 端点解析出的多条 A 记录做 TCP 握手计时，取最快 4 个
       #   分给并发任务（DNS 只给一条时自动跳过）——线路绕路时能明显改善。
       # 脚本幂等：Release 已存在的同名附件自动跳过，重跑只补缺的。

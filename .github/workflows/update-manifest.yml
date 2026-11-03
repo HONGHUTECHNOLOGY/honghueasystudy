@@ -4,11 +4,11 @@ name: Update Manifest
 # 并直接提交推回 main —— CF Pages 检测到 push 自动重建，客户端随即检测到更新。
 #
 # 触发方：
-#   1) publish-gitcode.yml 在 GitCode 附件上传完成后自动派发 ——
-#      此时 GitCode 链接可达，探链才能全绿
-#      （publish-gitcode 本身又由 desktop-build 的 dispatch-gitcode 自动派发，
-#        所以正常发版全程无人工：打包 → 镜像 → 清单 → CF 重建）；
-#   2) 手动触发（GitHub / GitCode 两边都确认齐了、或探链失败重跑）。
+#   1) 正常发版：CNB（境内 runner）上的 .cnb.yml 在 GitCode 附件全部传完后
+#      调本 workflow 的 workflow_dispatch（需要 CNB 仓库环境变量 GH_DISPATCH_TOKEN）
+#      —— 此时 GitCode 链接可达，探链才能全绿；
+#   2) 手动触发（GitHub / GitCode 两边都确认齐了、或探链失败重跑）；
+#   3) 应急：GitHub 侧的 publish-gitcode.yml（备用直传通道）末步也会派发本 workflow。
 #
 # 探链是 fail-closed：GitCode / GitHub 任一附件 Range GET 不通过就拒绝写清单。
 # 这是刻意的门禁，不是缺陷 —— 清单一旦写出去就等于对用户承诺「这个版本可下载」，
