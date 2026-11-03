@@ -88,33 +88,40 @@ main:
         # 所以重跑只补缺的，不会重复传 2.6 GB。
         # --upload-ips 4：对 OBS 端点解析出的多条 A 记录做握手计时取最快的几条，
         #   线路绕路时能明显改善；DNS 只给一条时自动跳过。
+        #
+        # 注意：CNB 的 script 由 sh（dash）执行 —— 没有数组、没有 [[ ]]，也**不会**
+        # 因为文件来自 node:20 镜像就变成 bash。最早这行写的是 FILES=() + ${FILES[@]}，
+        # 直接报 `Syntax error: "(" unexpected`，上传阶段 0.1 秒就死。
+        # 所以参数一律用位置参数累积（set -- "$@" ...），既 POSIX 又能保住路径引用。
         - name: 上传到 GitCode Release
           timeout: 90m
           script: |
             set -eu
-            FILES=()
-            for f in artifacts/*.exe artifacts/*.dmg artifacts/*.AppImage artifacts/*.deb artifacts/*.rpm \
-                     artifacts/app-*.zip artifacts/*.zip.sha256 artifacts/extension.zip; do
-              [ -f "$f" ] && FILES+=(--file "$f")
-            done
-            if [ ${#FILES[@]} -eq 0 ]; then
-              echo "没有可同步的附件（安装包 / 扩展均缺失）"
-              exit 1
-            fi
-            # 说明正文由 desktop-build 生成并传上 Release；老版本没有则退回自动正文
-            NOTES_ARGS=()
-            if [ -f artifacts/release-notes.md ]; then
-              NOTES_ARGS=(--notes-file artifacts/release-notes.md)
-            else
-              echo "该 Release 没有 release-notes.md，GitCode 侧使用默认正文"
-            fi
-            node scripts/publish-to-gitcode.js \
+            set -- \
               --tag "$TAG" \
               --name "$TAG" \
-              "${NOTES_ARGS[@]}" \
               --concurrency "${UPLOAD_CONCURRENCY:-6}" \
               --upload-ips 4 \
               --purge-stale \
-              --require-token \
-              "${FILES[@]}"
+              --require-token
+            # 说明正文由 desktop-build 生成并传上 Release；老版本没有则退回自动正文
+            if [ -f artifacts/release-notes.md ]; then
+              set -- "$@" --notes-file artifacts/release-notes.md
+            else
+              echo "该 Release 没有 release-notes.md，GitCode 侧使用默认正文"
+            fi
+            COUNT=0
+            for f in artifacts/*.exe artifacts/*.dmg artifacts/*.AppImage artifacts/*.deb \
+                     artifacts/*.rpm artifacts/app-*.zip artifacts/*.zip.sha256 artifacts/extension.zip; do
+              if [ -f "$f" ]; then
+                set -- "$@" --file "$f"
+                COUNT=$((COUNT + 1))
+              fi
+            done
+            if [ "$COUNT" -eq 0 ]; then
+              echo "没有可同步的附件（安装包 / 扩展均缺失）"
+              exit 1
+            fi
+            echo "待同步 $COUNT 个附件 → GitCode $TAG"
+            node scripts/publish-to-gitcode.js "$@"
             echo "GitCode 附件已就位，等调用方派发 update-manifest 回写清单"
