@@ -448,6 +448,10 @@ jobs:
       CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
       # 仓库变量，形如 honghutech/honghueasystudy（CNB 上的同名镜像仓）
       CNB_REPO: ${{ vars.CNB_REPO || 'honghutech/honghueasystudy' }}
+      # 这两个不落 CNB：CNB 的 OpenAPI 没有环境变量接口，只能手工在页面填，
+      # 每次派发时随 env 带过去，GitHub Secrets 保持唯一事实源。
+      GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+      GH_DISPATCH_TOKEN: ${{ secrets.GH_DISPATCH_TOKEN }}
       TAG_RAW: ${{ inputs.tag || github.ref_name }}
     steps:
       - name: Check out main
@@ -474,12 +478,24 @@ jobs:
 
       - name: Check CNB config
         run: |
-          if [ -z "$CNB_TOKEN" ]; then
-            echo "::warning::未配置 CNB_TOKEN（仓库 Secrets），跳过 GitCode 镜像；配好后手动重跑本 job 即可"
+          MISSING=""
+          [ -z "$CNB_TOKEN" ] && MISSING="$MISSING CNB_TOKEN"
+          [ -z "$GITCODE_TOKEN" ] && MISSING="$MISSING GITCODE_TOKEN"
+          [ -z "$GH_DISPATCH_TOKEN" ] && MISSING="$MISSING GH_DISPATCH_TOKEN"
+          if [ -n "$MISSING" ]; then
+            echo "::warning::缺少 Secrets:$MISSING —— 跳过 GitCode 镜像（GitHub Release 不受影响）；补齐后手动重跑本 job 即可"
             echo "SKIP_CNB=1" >> "$GITHUB_ENV"
           else
             echo "CNB 仓库：$CNB_REPO"
           fi
+
+      # 用 ::add-mask:: 兜一层：万一后续命令被 shell 回显，令牌不会出现在日志里
+      - name: Mask tokens
+        if: ${{ env.SKIP_CNB != '1' }}
+        run: |
+          echo "::add-mask::$CNB_TOKEN"
+          echo "::add-mask::$GITCODE_TOKEN"
+          echo "::add-mask::$GH_DISPATCH_TOKEN"
 
       # CNB 的 api_trigger 从指定分支读 .cnb.yml，镜像仓必须是最新的 main。
       # --force：GitHub 是唯一事实源，CNB 侧不需要保留独立历史。
@@ -498,7 +514,14 @@ jobs:
             echo "::error::拿不到 tag，无法派发 GitCode 镜像"
             exit 1
           fi
-          BODY=$(printf '{"event":"api_trigger_publish","branch":"main","title":"GitCode mirror %s","env":{"TAG":"%s"}}' "$TAG" "$TAG")
+          # jq --arg 负责转义：正文里有令牌，绝不能手工拼字符串
+          BODY=$(jq -n \
+            --arg tag "$TAG" \
+            --arg gt "$GITCODE_TOKEN" \
+            --arg gh "$GH_DISPATCH_TOKEN" \
+            '{event:"api_trigger_publish",branch:"main",
+              title:("GitCode mirror " + $tag),
+              env:{TAG:$tag,GITCODE_TOKEN:$gt,GH_DISPATCH_TOKEN:$gh}}')
           HTTP=$(curl -sS -o cnb-dispatch.json -w '%{http_code}' \
             -X POST "https://api.cnb.cool/${CNB_REPO}/-/build/start" \
             -H "Authorization: Bearer ${CNB_TOKEN}" \
@@ -510,5 +533,5 @@ jobs:
             echo "::error::派发 CNB 构建失败，检查 CNB_TOKEN 是否具备 repo-cnb-trigger:rw"
             exit 1
           fi
-          SN=$(sed -n 's/.*"sn"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' cnb-dispatch.json)
+          SN=$(jq -r '.sn // empty' cnb-dispatch.json)
           echo "已派发 CNB 构建（tag=$TAG, sn=$SN）→ 传完 GitCode 自动派发 update-manifest 回写清单"

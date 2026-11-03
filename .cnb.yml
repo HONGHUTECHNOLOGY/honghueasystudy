@@ -14,13 +14,19 @@
 #         "env":{"TAG":"v5.4.0"},"title":"GitCode mirror v5.4.0"}
 #   调用方 = GitHub Actions 的 desktop-build / dispatch-cnb job（见该 workflow）。
 #
-# 必需的环境变量（在 CNB 仓库 设置 → 环境变量 里加，加密存储）：
+# 必需的环境变量（两种来源，二选一即可，脚本只读 $VAR 不关心来路）：
+#   a) GitHub 触发时随 env 一起下发 —— desktop-build / dispatch-cnb job 从仓库
+#      Secrets 取 GITCODE_TOKEN、GH_DISPATCH_TOKEN 放进 build/start 的 env 字段；
+#   b) 或在 CNB 仓库 设置 → 环境变量 里加密存一份（CNB 的 OpenAPI 没有环境变量
+#      接口，只能手填）。
 #   GITCODE_TOKEN      GitCode 个人访问令牌，上传附件用
-#   GH_DISPATCH_TOKEN  GitHub 细粒度 PAT，只需 actions:write + contents:read，
+#   GH_DISPATCH_TOKEN  GitHub 细粒度 PAT，只需 Actions:write（+ Contents:read），
 #                      用于在附件传完后派发 update-manifest.yml 回写清单
 # 可选：
 #   GH_REPO            默认 HONGHUTECHNOLOGY/honghueasystudy
 #   GH_MIRROR          覆盖下载镜像前缀，默认 https://ghfast.top/
+#   FETCH_CONCURRENCY  下载并发，默认 4
+#   UPLOAD_CONCURRENCY 上传并发，默认 6
 #
 # 顺序即安全边界：附件全部上传并逐字节校验通过后，才派发清单回写。
 # update-manifest 的探链是 fail-closed —— 任一源缺包就拒绝写清单，所以
