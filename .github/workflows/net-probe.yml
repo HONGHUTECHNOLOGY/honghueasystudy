@@ -95,6 +95,7 @@ jobs:
           node scripts/publish-to-gitcode.js \
             --tag "net-probe-${{ matrix.mode }}" \
             --name "Net Probe ${{ matrix.mode }}" \
+            --notes "网络探测用，非正式发布。可随时删除。" \
             --target main \
             --file "probe-${{ matrix.mode }}.bin" \
             --force \
