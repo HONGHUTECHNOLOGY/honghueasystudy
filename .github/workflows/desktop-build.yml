@@ -435,23 +435,31 @@ jobs:
   #   代理出口会被 GitCode CloudWAF 判风险 IP 直接 418。唯一可行的是境内出口。
   #   CNB 在国内：拉 GitHub 走公共镜像、推 GitCode 走国内段，全程十几分钟。
   #
-  # 本 job 只做三件事：同步 main 到 CNB（保证它拿到最新 .cnb.yml 和 scripts）、
-  # 调一次 build/start、把流水线链接打到日志里。几十秒结束，不再占 330 分钟。
+  # 本 job 做四件事：同步 main 到 CNB（拿到最新 .cnb.yml 和 scripts）、调一次
+  # build/start、轮询 CNB 构建状态、成功后派发 update-manifest 回写清单。
   #
-  # 未配置 CNB_TOKEN 时跳过（发版不受影响，只是不会镜像到 GitCode）。
+  # 为什么轮询而不是让 CNB 反过来派发 GitHub：那需要 CNB 长期持有一个 GitHub PAT，
+  # 多一个长期凭据就多一处泄露面。轮询只是让本 job 多待十几分钟 —— 免费额度内
+  # 的代价，换来「GitHub 侧只有一处凭据（GITHUB_TOKEN）」。workflow_dispatch 是
+  # 防递归豁免事件，GITHUB_TOKEN 就能派发。
+  #
+  # 未配置 CNB_TOKEN / GITCODE_TOKEN 时跳过（Release 已发，只是不镜像到 GitCode）。
   # needs 指向 upload-release：非 tag 场景该 job 被跳过，本 job 随之跳过。
   dispatch-cnb:
     needs: upload-release
     if: ${{ needs.upload-release.result == 'success' }}
     runs-on: ubuntu-latest
+    # 等 CNB 跑完：镜像下载 + 上传在国内通常 10~20 分钟，留足余量
+    timeout-minutes: 120
     env:
       CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
       # 仓库变量，形如 honghutech/honghueasystudy（CNB 上的同名镜像仓）
       CNB_REPO: ${{ vars.CNB_REPO || 'honghutech/honghueasystudy' }}
-      # 这两个不落 CNB：CNB 的 OpenAPI 没有环境变量接口，只能手工在页面填，
-      # 每次派发时随 env 带过去，GitHub Secrets 保持唯一事实源。
+      # GITCODE_TOKEN 不落 CNB：CNB 的 OpenAPI 没有环境变量接口，只能页面手填，
+      # 所以每次派发时随 env 带过去，GitHub Secrets 保持唯一事实源。
       GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
-      GH_DISPATCH_TOKEN: ${{ secrets.GH_DISPATCH_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
       TAG_RAW: ${{ inputs.tag || github.ref_name }}
     steps:
       - name: Check out main
@@ -481,7 +489,6 @@ jobs:
           MISSING=""
           [ -z "$CNB_TOKEN" ] && MISSING="$MISSING CNB_TOKEN"
           [ -z "$GITCODE_TOKEN" ] && MISSING="$MISSING GITCODE_TOKEN"
-          [ -z "$GH_DISPATCH_TOKEN" ] && MISSING="$MISSING GH_DISPATCH_TOKEN"
           if [ -n "$MISSING" ]; then
             echo "::warning::缺少 Secrets:$MISSING —— 跳过 GitCode 镜像（GitHub Release 不受影响）；补齐后手动重跑本 job 即可"
             echo "SKIP_CNB=1" >> "$GITHUB_ENV"
@@ -495,7 +502,6 @@ jobs:
         run: |
           echo "::add-mask::$CNB_TOKEN"
           echo "::add-mask::$GITCODE_TOKEN"
-          echo "::add-mask::$GH_DISPATCH_TOKEN"
 
       # CNB 的 api_trigger 从指定分支读 .cnb.yml，镜像仓必须是最新的 main。
       # --force：GitHub 是唯一事实源，CNB 侧不需要保留独立历史。
@@ -518,10 +524,9 @@ jobs:
           BODY=$(jq -n \
             --arg tag "$TAG" \
             --arg gt "$GITCODE_TOKEN" \
-            --arg gh "$GH_DISPATCH_TOKEN" \
             '{event:"api_trigger_publish",branch:"main",
               title:("GitCode mirror " + $tag),
-              env:{TAG:$tag,GITCODE_TOKEN:$gt,GH_DISPATCH_TOKEN:$gh}}')
+              env:{TAG:$tag,GITCODE_TOKEN:$gt}}')
           HTTP=$(curl -sS -o cnb-dispatch.json -w '%{http_code}' \
             -X POST "https://api.cnb.cool/${CNB_REPO}/-/build/start" \
             -H "Authorization: Bearer ${CNB_TOKEN}" \
@@ -534,4 +539,42 @@ jobs:
             exit 1
           fi
           SN=$(jq -r '.sn // empty' cnb-dispatch.json)
-          echo "已派发 CNB 构建（tag=$TAG, sn=$SN）→ 传完 GitCode 自动派发 update-manifest 回写清单"
+          if [ -z "$SN" ]; then
+            echo "::error::build/start 没有返回 sn，无法跟踪构建状态"
+            exit 1
+          fi
+          echo "SN=$SN" >> "$GITHUB_ENV"
+          echo "已派发 CNB 构建（tag=$TAG, sn=$SN）"
+
+      # 轮询 CNB 构建状态。附件的完整性已经在 CNB 侧按 sha256 校验过，
+      # 这里只关心成与不成：成了才让清单走出去（探链是最后一道门）。
+      - name: Wait for CNB build
+        if: ${{ env.SKIP_CNB != '1' }}
+        run: |
+          DEADLINE=$(( $(date +%s) + 6000 ))
+          while :; do
+            sleep 30
+            STATUS=$(curl -sS -H "Authorization: Bearer $CNB_TOKEN" \
+              "https://api.cnb.cool/${CNB_REPO}/-/build/status/${SN}" | jq -r '.status // empty' 2>/dev/null || true)
+            echo "[$(date +%H:%M:%S)] CNB 构建状态：${STATUS:-<无响应>}"
+            case "$STATUS" in
+              success) echo "CNB 构建成功"; break ;;
+              failed|failure|error|canceled|cancelled|timeout|terminated|killed)
+                echo "::error::CNB 构建失败（$STATUS），查看 https://cnb.cool/${CNB_REPO}/-/build/logs/${SN}"
+                exit 1 ;;
+            esac
+            if [ "$(date +%s)" -gt "$DEADLINE" ]; then
+              echo "::error::等待 CNB 构建超时（100 分钟），构建仍在跑时可稍后手动派发 update-manifest"
+              exit 1
+            fi
+          done
+
+      # 附件就位后才派发清单回写：update-manifest 会用 Range GET 逐条探链，
+      # GitCode 缺包时它自己拒绝写清单（fail-closed）—— 正好保证「两边都能下载」
+      # 才让用户看到更新提示。workflow_dispatch 是防递归豁免事件，GITHUB_TOKEN 可用。
+      - name: Dispatch update manifest
+        if: ${{ env.SKIP_CNB != '1' }}
+        run: |
+          TAG="${TAG_RAW#refs/tags/}"
+          gh workflow run update-manifest.yml --ref main -f tag="$TAG"
+          echo "已派发 update-manifest（tag=$TAG）→ 探链通过后写清单 → CF 重建"

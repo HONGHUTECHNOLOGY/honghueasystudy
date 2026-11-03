@@ -16,20 +16,21 @@
 #
 # 必需的环境变量（两种来源，二选一即可，脚本只读 $VAR 不关心来路）：
 #   a) GitHub 触发时随 env 一起下发 —— desktop-build / dispatch-cnb job 从仓库
-#      Secrets 取 GITCODE_TOKEN、GH_DISPATCH_TOKEN 放进 build/start 的 env 字段；
+#      Secrets 取 GITCODE_TOKEN 放进 build/start 的 env 字段；
 #   b) 或在 CNB 仓库 设置 → 环境变量 里加密存一份（CNB 的 OpenAPI 没有环境变量
 #      接口，只能手填）。
 #   GITCODE_TOKEN      GitCode 个人访问令牌，上传附件用
-#   GH_DISPATCH_TOKEN  GitHub 细粒度 PAT，只需 Actions:write（+ Contents:read），
-#                      用于在附件传完后派发 update-manifest.yml 回写清单
 # 可选：
 #   GH_REPO            默认 HONGHUTECHNOLOGY/honghueasystudy
 #   GH_MIRROR          覆盖下载镜像前缀，默认 https://ghfast.top/
 #   FETCH_CONCURRENCY  下载并发，默认 4
 #   UPLOAD_CONCURRENCY 上传并发，默认 6
 #
-# 顺序即安全边界：附件全部上传并逐字节校验通过后，才派发清单回写。
-# update-manifest 的探链是 fail-closed —— 任一源缺包就拒绝写清单，所以
+# 清单回写由调用方（GitHub 的 dispatch-cnb job）在本流水线成功后派发，
+# 这样 CNB 侧不需要持有 GitHub 令牌 —— 少一个长期凭据，少一处泄露面。
+#
+# 顺序即安全边界：本流水线全部成功（附件逐字节校验通过）后，调用方才派发
+# update-manifest。它的探链是 fail-closed —— 任一源缺包就拒绝写清单，所以
 # 「用户看到更新」等价于「GitHub 与 GitCode 两边都能下载」。
 main:
   api_trigger_publish:
@@ -57,11 +58,7 @@ main:
             git --version
             curl --version | head -1
             if [ -z "${GITCODE_TOKEN:-}" ]; then
-              echo "缺少 GITCODE_TOKEN（CNB 仓库 设置 → 环境变量）"
-              exit 1
-            fi
-            if [ -z "${GH_DISPATCH_TOKEN:-}" ]; then
-              echo "缺少 GH_DISPATCH_TOKEN（用于派发 update-manifest，缺了清单不会回写）"
+              echo "缺少 GITCODE_TOKEN（CNB 仓库 设置 → 环境变量，或触发时由 env 下发）"
               exit 1
             fi
 
@@ -114,24 +111,4 @@ main:
               --purge-stale \
               --require-token \
               "${FILES[@]}"
-
-        # 附件就位后才派发清单回写：update-manifest 会用 Range GET 逐条探链，
-        # GitCode 缺包时它自己会拒绝写清单（fail-closed），这里只需要把 tag 传下去。
-        - name: 派发 GitHub 清单回写
-          timeout: 10m
-          script: |
-            set -eu
-            REPO="${GH_REPO:-HONGHUTECHNOLOGY/honghueasystudy}"
-            HTTP=$(curl -sS -o /tmp/dispatch.json -w '%{http_code}' \
-              -X POST "https://api.github.com/repos/$REPO/actions/workflows/update-manifest.yml/dispatches" \
-              -H "Authorization: Bearer $GH_DISPATCH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              -d "{\"ref\":\"main\",\"inputs\":{\"tag\":\"$TAG\"}}")
-            echo "dispatch update-manifest => HTTP $HTTP"
-            case "$HTTP" in
-              200|201|204) echo "已派发 update-manifest（$TAG）→ 探链通过后写清单 → CF 重建" ;;
-              *) cat /tmp/dispatch.json 2>/dev/null || true
-                 echo "派发失败：检查 GH_DISPATCH_TOKEN 是否具备 actions:write"
-                 exit 1 ;;
-            esac
+            echo "GitCode 附件已就位，等调用方派发 update-manifest 回写清单"
