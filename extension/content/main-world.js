@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-var __HH_BRIDGE_KEY__="456383dc-1574-4f59-9060-beca6b2843a0";
+var __HH_BRIDGE_KEY__="0a878a49-e20f-44b0-9bf1-29d85f906945";
 /* 鸿鹄易学 · MAIN world 运行时（ScriptCat 风格）
  *
  * 本文件由 background.js 通过 chrome.userScripts.register({ world: "MAIN" })
@@ -5211,9 +5211,12 @@ try {
     }
     return false;
   }
+  const OFFICIAL_SITE = "https://easystudy.honghutech.eu.org";
+  const GITHUB_REPO = "https://github.com/HONGHUTECHNOLOGY/honghueasystudy";
+  const GITCODE_REPO = "https://gitcode.com/honghutech/honghueasystudy";
   const $playwright = {
     showError: () => {
-      const downloadUrl = "https://easystudy.honghutech.eu.org";
+      const downloadUrl = OFFICIAL_SITE;
       const errorEl = lib.h("div", [
         lib.h("div", "当前页面需要下载鸿鹄易学桌面端，并在桌面端中新建浏览器，在新建的浏览器中才能进行正常刷课。"),
         lib.h("div", { style: { marginTop: "8px" } }, [
@@ -6602,6 +6605,7 @@ try {
       })
     }
   });
+  const CONSOLE_BRIDGE_PREFIX = "[鸿鹄]";
   const $console = new Proxy({}, {
     get(target, key) {
       return (...msg2) => {
@@ -6622,6 +6626,13 @@ try {
           stack: JSON.stringify([stack_str.split("\n")[0], ...stacks || []])
         });
         BackgroundProject.scripts.console.cfg.logs = logs;
+        try {
+          const nativeLog = console[key];
+          if (typeof nativeLog === "function") {
+            nativeLog.call(console, `${CONSOLE_BRIDGE_PREFIX}${msg2.join(" ")}`);
+          }
+        } catch {
+        }
       };
     }
   });
@@ -9172,6 +9183,39 @@ try {
       padding: "8px",
       paddingTop: "4px"
     };
+    const linkChip = (label, url) => lib.h(
+      "a",
+      {
+        href: url,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        className: "base-style-button-secondary",
+        style: {
+          margin: "4px",
+          padding: "2px 8px",
+          fontSize: "12px",
+          lineHeight: "18px",
+          textDecoration: "none",
+          display: "inline-block"
+        }
+      },
+      label
+    );
+    const aboutCard = lib.h("div", { style: { ...cardStyle, marginTop: "8px" } }, [
+      lib.h("div", { style: { marginBottom: "4px", fontWeight: "bold" } }, [
+        "官网与源码仓库：",
+        lib.h(
+          "span",
+          { className: "secondary", style: { fontWeight: "normal" } },
+          "（桌面端下载、更新日志、问题反馈与平台适配建议）"
+        )
+      ]),
+      lib.h("div", [
+        linkChip("官方网站", OFFICIAL_SITE),
+        linkChip("GitHub 仓库", GITHUB_REPO),
+        linkChip("GitCode 镜像", GITCODE_REPO)
+      ])
+    ]);
     const aiCfg = CommonProject.scripts.aiSettings.cfg;
     const aiConfigured = !!(aiCfg.aiEndpoint && aiCfg.aiApiKey && aiCfg.aiModel);
     const aiGuideCard = !aiConfigured ? lib.h(
@@ -9232,7 +9276,8 @@ try {
             return btn;
           })
         ])
-      ])
+      ]),
+      aboutCard
     ]);
   };
   function createSearchResultAlertElement(result) {
