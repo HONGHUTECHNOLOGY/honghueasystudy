@@ -938,6 +938,15 @@ export const BackgroundProject = Project.create({
 
 type Console = Record<LogType, (...msg: any[]) => void>;
 
+/**
+ * 脚本日志的桌面端转发前缀
+ *
+ * 桌面端 worker 用 Playwright 的 `page.on('console')` 抓页面输出，
+ * 只认这个前缀的行再转给远程台。改这里必须同步 `worker/index.ts` 的
+ * `SCRIPT_LOG_PREFIX`，否则日志会被静默丢弃。
+ */
+export const CONSOLE_BRIDGE_PREFIX = '[鸿鹄]';
+
 /** 日志对象，存储日志并显示在日志面板 */
 export const $console: Console = new Proxy({} as Console, {
 	get(target, key) {
@@ -966,6 +975,26 @@ export const $console: Console = new Proxy({} as Console, {
 			});
 
 			BackgroundProject.scripts.console.cfg.logs = logs;
+
+			/**
+			 * 同时打到页面控制台（带固定前缀）。
+			 *
+			 * 桌面端读不到扩展内部的 `cfg.logs`，只能靠 Playwright 的
+			 * `page.on('console')` 读页面输出。不转发这一句，远程控制就只剩
+			 * worker 自己的启动/进课日志，「正在学习 / 作答成功 / 已完成」
+			 * 这些节点全部缺席 —— 表现就是日志不完整、进度里的
+			 * 已作答/已完成恒为 0（进度由这些日志文本推断）。
+			 *
+			 * 个别站点会重写 console，转发失败不能影响脚本本身，故 try 包住。
+			 */
+			try {
+				const nativeLog = (console as any)[key];
+				if (typeof nativeLog === 'function') {
+					nativeLog.call(console, `${CONSOLE_BRIDGE_PREFIX}${msg.join(' ')}`);
+				}
+			} catch {
+				// 忽略：转发失败不影响脚本运行
+			}
 		};
 	}
 });
