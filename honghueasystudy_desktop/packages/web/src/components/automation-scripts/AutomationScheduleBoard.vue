@@ -48,11 +48,13 @@
 			>
 				<div class="row__head">
 					<!-- 开关直接落盘：定时是「到点自动拉起」的总闸，不该还要再点一次保存 -->
-					<a-switch
-						size="small"
-						:model-value="planOf(browser).schedule.enabled"
-						@change="(value) => commit(browser, (plan) => (plan.schedule.enabled = !!value))"
-					/>
+					<a-tooltip content="开启后到点自动启动浏览器并按方案刷课；这里是总闸，改完立即生效">
+						<a-switch
+							size="small"
+							:model-value="planOf(browser).schedule.enabled"
+							@change="(value) => commit(browser, (plan) => (plan.schedule.enabled = !!value))"
+						/>
+					</a-tooltip>
 					<span
 						class="dot"
 						:class="statusOf(browser)"

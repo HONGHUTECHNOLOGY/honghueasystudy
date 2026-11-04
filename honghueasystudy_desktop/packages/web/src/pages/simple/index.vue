@@ -5,7 +5,10 @@
 		position="bl"
 		:style="{ display: 'block' }"
 	>
-		<div class="simple-mode-container">
+		<div
+			ref="scroller"
+			class="simple-mode-container"
+		>
 			<div class="p-2 d-flex justify-content-center tabs">
 				<a-tabs
 					v-model:active-key="state.activeTab"
@@ -156,16 +159,12 @@
 					</div>
 				</div>
 
-				<!-- 脚本面板：先定时脚本（按实例），再用户脚本 -->
+				<!-- 脚本面板：定时脚本 / 用户脚本 两类，用分段按钮切换 -->
 				<div
 					v-show="state.activeTab === 'scripts'"
 					class="overflow-auto p-2"
 				>
-					<AutomationScheduleBoard />
-
-					<a-divider style="margin: 6px 0 14px">用户脚本</a-divider>
-
-					<UserScriptListPage />
+					<ScriptsPage />
 				</div>
 
 				<!-- 软件设置面板 -->
@@ -195,13 +194,29 @@ import EmptyBrowserCard from '../../components/EmptyBrowserCard.vue';
 import SettingPanel from '../../components/SettingPanel.vue';
 import { lang } from '../../store/index';
 import UsageAlertCollapse from '../../components/UsageAlertCollapse.vue';
-import UserScriptListPage from '../../components/UserScriptListPage.vue';
-import AutomationScheduleBoard from '../../components/automation-scripts/AutomationScheduleBoard.vue';
+import ScriptsPage from '../../components/ScriptsPage.vue';
 import EnvironmentAlert from '../../components/EnvironmentAlert.vue';
 
 const state = reactive({
 	activeTab: 'browsers'
 });
+
+/** 滚动容器（.simple-mode-container 自己滚，不是里面那个 div） */
+const scroller = ref<HTMLElement>();
+
+/**
+ * 切换页签后回到顶部
+ *
+ * 三个面板共用一个滚动位置：从滚到底的浏览器列表切到「脚本」，
+ * 页面会停在半截，顶部的「定时脚本 / 用户脚本」分段按钮直接被顶出视野——
+ * 看起来就像没有这个切换入口。
+ */
+watch(
+	() => state.activeTab,
+	() => {
+		scroller.value?.scrollTo({ top: 0 });
+	}
+);
 
 /** 获取所有浏览器（递归） */
 const allBrowsers = computed(() => {
@@ -412,6 +427,12 @@ body[arco-theme='dark'] & {
 	position: sticky;
 	top: 0px;
 	z-index: 99;
+	/**
+	 * 必须有实底：页签是粘顶的，容器透明时下面的卡片会从页签缝隙里穿过去，
+	 * 看起来就像页签被内容盖住、点不准（顺带把滚出视野的内容挡住）。
+	 */
+	background-color: #f8faff;
+	padding-bottom: 4px;
 
 	:deep(.arco-tabs-tab) {
 		border: 1px solid rgb(235, 235, 235);
