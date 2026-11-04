@@ -1,5 +1,35 @@
 # Changelog
 
+## [5.4.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.3.0...v5.4.0) (2026-11-04)
+
+
+### ✨ 新功能
+
+* **ci:** CNB 派发时随 env 下发令牌，免去 CNB 页面手工配置 ([168d39e](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/168d39e91057b7edae64d198af4205acf1b1e654))
+* **ci:** GitCode 镜像改由 CNB 境内 runner 执行 ([d6db660](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/d6db6601d92ab24059fb2df028a2852ed5e15db3))
+* **desktop:** 脚本页拆成「定时脚本 / 用户脚本」两段，切页签回到顶部 ([e17f32b](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/e17f32b91ad8e889d1aa2fdca4096b5cac183daa))
+* **desktop:** 远程台增加「自动执行」页，定时方案支持错过不补 ([d246ca8](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/d246ca8b1e8eed6a7cfa2190d1bfa41faa3f83fa))
+* **links:** 扩展首页与桌面端工具菜单增加官网、仓库入口 ([28fdb7b](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/28fdb7b257cfd7b87d032ddb2295bae47997cba4))
+* **log:** 脚本日志加固定前缀转发到页面控制台 ([9a26bde](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/9a26bdeff2bc9d809ec9dec61f4f45b2df30c128))
+
+
+### 🐛 问题修复
+
+* **ci:** CNB 上传阶段改用 POSIX sh 语法 ([4aa4408](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/4aa4408239e00d06341ff20a3a19625078477355))
+* **manifest:** 清单补齐 win32 与 linux 的 deb/rpm/AppImage ([e487aac](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/e487aac8b1a437b1aaa69fd45fdf109210b214a2))
+* **mirror:** 直连排到候选源第一位 ([7a11cff](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/7a11cff8eca52ca3e25abbbb2c27def8dddea030))
+
+
+### ⚡ 性能优化
+
+* **ci:** GitCode 上传增加线路择优与进度留痕 ([5a3f770](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/5a3f77059b94b106fa7517d003480d969b73defa))
+* **mirror:** 下载改为探速选源 + 分片并发 + 按速度熔断 ([b7336b7](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/b7336b7c4c7d32e93b57ff559da2683cb59b51cb))
+
+
+### ♻️ 代码重构
+
+* **ci:** 清单回写改由 GitHub 侧轮询后派发，CNB 不再持有 GitHub 令牌 ([e41d189](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/e41d18971bdd254a73b09a60fbf49e8d8a4963b8))
+
 ## [5.3.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.2.0...v5.3.0) (2026-11-01)
 
 
