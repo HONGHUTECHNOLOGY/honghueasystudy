@@ -141,12 +141,13 @@
 									<span class="field__label">
 										{{ field.label }}
 										<em v-if="field.required">*</em>
-										<span
-											v-if="field.type === 'password'"
-											class="faint"
-										>
-											（留空=不修改已保存的密码）
-										</span>
+									</span>
+									<!-- 说明文字单独一行：和标签并排时会挤成一串，读起来像标签的一部分 -->
+									<span
+										v-if="field.type === 'password'"
+										class="field__hint faint"
+									>
+										留空表示继续使用已保存的密码
 									</span>
 
 									<textarea
@@ -247,7 +248,7 @@
 								class="course__label"
 								>{{ formStudy.course.label }}</span
 							>
-							<span class="ellipsis">{{ formStudy.course.name }}</span>
+							<span class="course-chip__name">{{ formStudy.course.name }}</span>
 							<button
 								type="button"
 								class="remove"
@@ -434,57 +435,41 @@
 							</div>
 						</div>
 
+						<!-- 说明放在开关下面单独一行：塞进 .line__actions 会换行并右对齐，
+						     开关跑到标签上方、说明悬在右侧，整行三截错位 -->
 						<div class="line">
 							<span class="line__label">错过补执行</span>
-							<div class="line__actions">
-								<button
-									type="button"
-									class="switch"
-									:class="{ on: formSchedule.catchUp }"
-									@click="formSchedule.catchUp = !formSchedule.catchUp"
-								>
-									<span></span>
-									{{ formSchedule.catchUp ? '补执行' : '不补' }}
-								</button>
-								<span class="faint">关闭时只在开始后 10 分钟内启动，再晚跳过当天</span>
-							</div>
+							<button
+								type="button"
+								class="switch"
+								:class="{ on: formSchedule.catchUp }"
+								@click="formSchedule.catchUp = !formSchedule.catchUp"
+							>
+								<span></span>
+								{{ formSchedule.catchUp ? '补执行' : '不补' }}
+							</button>
 						</div>
-
-						<p class="faint schedule-tip">
-							{{ scheduleHead }}
-							<template v-if="scheduleTail">
-								<br />{{ scheduleTail }}
-							</template>
-							<template v-if="formSchedule.enabled && summary && summary.schedule.nextRunAt">
-								<br />下次自动启动：{{ formatNext(summary.schedule.nextRunAt) }}
-							</template>
+						<p class="line-note faint">
+							关闭时只在开始后 10 分钟内启动，再晚跳过当天
 						</p>
-					</section>
 
-					<div class="save-bar">
-						<span
-							v-if="dirty"
-							class="faint"
-							>有未保存的修改</span
-						>
-						<span
-							v-else
-							class="faint"
-							>配置已保存</span
-						>
-						<button
-							type="button"
-							class="btn btn-primary"
-							:disabled="!dirty || planBusy"
-							@click="save"
-						>
-							<span
-								v-if="busyState.save"
-								class="spinner"
-							></span>
-							{{ busyState.save ? '保存中…' : '保存方案' }}
-						</button>
-					</div>
+						<!-- 三句摘要分行、各有各的语气：挤在一个 <p> 里用 <br> 断，读起来像一坨灰字 -->
+						<div class="schedule-tip">
+							<p class="schedule-tip__line">{{ scheduleHead }}</p>
+							<p
+								v-if="scheduleTail"
+								class="schedule-tip__line"
+							>
+								{{ scheduleTail }}
+							</p>
+							<p
+								v-if="formSchedule.enabled && summary && summary.schedule.nextRunAt"
+								class="schedule-tip__line next"
+							>
+								下次自动启动：{{ formatNext(summary.schedule.nextRunAt) }}
+							</p>
+						</div>
+					</section>
 				</template>
 
 				<!-- ============================ 临时操作（不保存） ============================ -->
@@ -853,6 +838,36 @@
 					</p>
 				</template>
 			</div>
+
+			<!-- 保存条是面板的固定页脚，不参与滚动：留在 .body 里做 sticky 时会「提前」
+			     贴底，把下方「启动时间」那几行压住，滚到底也永远差一截 -->
+			<div
+				v-if="tab === 'auto'"
+				class="save-bar"
+			>
+				<span
+					v-if="dirty"
+					class="save-state dirty"
+					>有未保存的修改</span
+				>
+				<span
+					v-else
+					class="save-state faint"
+					>配置已保存</span
+				>
+				<button
+					type="button"
+					class="btn btn-primary"
+					:disabled="!dirty || planBusy"
+					@click="save"
+				>
+					<span
+						v-if="busyState.save"
+						class="spinner"
+					></span>
+					{{ busyState.save ? '保存中…' : '保存方案' }}
+				</button>
+			</div>
 		</section>
 	</div>
 </template>
@@ -924,8 +939,9 @@ const browser = computed(() => state.browsers.find((item) => item.uid === props.
 const subtitle = computed(() => {
 	const item = browser.value;
 	if (!item) return '实例已不存在 · 请刷新后重试';
-	if (item.status === 'launched') return `${item.name} · 临时点一次 或 自动执行`;
-	return `${item.name} · 浏览器未运行，也能配置定时与脚本`;
+	/** 只说「这个实例现在什么状态」；「临时一次 / 长期生效」的区分交给下面的页签，别在副标题里念一遍 */
+	if (item.status === 'launched') return item.name;
+	return `${item.name} · 浏览器未运行`;
 });
 const scripts = computed<RemoteScript[]>(() => state.scripts);
 const job = computed(() => state.automation[uid.value]);
@@ -1729,12 +1745,23 @@ onBeforeUnmount(() => {
 	width: 100%;
 	max-width: 660px;
 	max-height: 92vh;
-	overflow-y: auto;
+	/**
+	 * 三段式：头部与标签固定、内容区自己滚、保存条常驻底部。
+	 *
+	 * 早先整张面板一起滚、保存条用 `position: sticky; bottom: 0`，结果是它
+	 * 在内容还很长时就被「顶」到视口底部，压住「启动时间」那几行；滚到底
+	 * 也永远差一条的高度。改成 flex 列布局后，保存按钮随时可点且不遮内容。
+	 */
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	/** 行内控件的统一高度（输入框 / 开关 / 次要按钮共用） */
+	--ctrl-h: 38px;
 	background: var(--sheet-bg);
 	border: 1px solid var(--line);
 	border-bottom: none;
 	border-radius: 22px 22px 0 0;
-	padding: 8px 16px calc(var(--safe-bottom) + 18px);
+	padding: 8px 16px calc(var(--safe-bottom) + 12px);
 	animation: slide-up 0.3s var(--ease);
 	-webkit-overflow-scrolling: touch;
 	overscroll-behavior: contain;
@@ -1847,9 +1874,25 @@ onBeforeUnmount(() => {
 }
 
 .body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
+	/* 内容区自己滚，两侧留出滚动余量，避免最后一行贴着保存条 */
+	padding-bottom: 4px;
+	margin-right: -4px;
+	padding-right: 4px;
+}
+
+/**
+ * 容器一旦是 flex 列 + 可滚动，子项默认会被压扁去适应高度（flex-shrink:1），
+ * 区块里的内容直接被 overflow:hidden 裁掉。滚动容器里的子项必须定高不缩。
+ */
+.body > * {
+	flex: 0 0 auto;
 }
 
 .note {
@@ -1860,6 +1903,9 @@ onBeforeUnmount(() => {
 	color: var(--text-2);
 	font-size: 11.5px;
 	line-height: 1.6;
+	/* 中文按字断行，整段一行写完差两三个字时会甩出孤字（「刷 / 新。」），
+	   pretty 让浏览器把行尾凑匀 */
+	text-wrap: pretty;
 }
 
 .note--warn {
@@ -1883,7 +1929,9 @@ onBeforeUnmount(() => {
 
 .start-hint .btn {
 	flex: none;
-	min-height: 34px;
+	min-height: 0;
+	height: 34px;
+	padding: 0 13px;
 	font-size: 12px;
 }
 
@@ -1912,7 +1960,8 @@ onBeforeUnmount(() => {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
-	padding: 3px 8px;
+	height: 24px;
+	padding: 0 8px;
 	border-radius: 999px;
 	background: var(--surface-2);
 	color: var(--text-2);
@@ -1922,6 +1971,33 @@ onBeforeUnmount(() => {
 
 .mini:disabled {
 	opacity: 0.6;
+}
+
+/**
+ * 标题行里的开关比行内控件矮一档
+ *
+ * 用 38px 那个尺寸会把标题行撑到 56px 高，一个 11.5px 的小标题配一颗大开关，
+ * 视觉重心全跑到右边去了。
+ */
+.block__title .switch {
+	height: 28px;
+	padding: 0 9px;
+	gap: 6px;
+	font-size: 11px;
+}
+
+.block__title .switch span {
+	width: 24px;
+	height: 14px;
+}
+
+.block__title .switch span::after {
+	width: 10px;
+	height: 10px;
+}
+
+.block__title .switch.on span::after {
+	transform: translateX(10px);
 }
 
 .line {
@@ -1946,13 +2022,28 @@ onBeforeUnmount(() => {
 	justify-content: flex-end;
 }
 
+/** 星期排要参与分配宽度，才能铺满整行 */
+.line--days .line__actions {
+	flex: 1;
+	min-width: 0;
+}
+
+/** 行的补充说明：单独一行、与标签左对齐，别塞进右侧控件区 */
+.line-note {
+	margin: 0 12px 2px;
+	font-size: 10.5px;
+	line-height: 1.5;
+	color: var(--text-3);
+}
+
 /* ---------------------------------------------------------------- 脚本 */
 
 .scripts {
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	padding: 0 8px;
+	/* 与 .line / .block__title 的内边距对齐，卡片不要比上下文字更靠外 */
+	padding: 0 12px;
 	max-height: 320px;
 	overflow-y: auto;
 }
@@ -2115,14 +2206,31 @@ onBeforeUnmount(() => {
 	flex-wrap: wrap;
 }
 
+/** 字段说明（如密码「留空」）：单独占一行、紧贴标签，别当成输入框的占位提示 */
+.field__hint {
+	margin: -1px 0 1px;
+	font-size: 10.5px;
+	line-height: 1.45;
+	color: var(--text-3);
+	opacity: 0.75;
+}
+
 .field__label em {
 	color: var(--danger);
 	font-style: normal;
 }
 
+/**
+ * 行内控件统一高度
+ *
+ * 之前输入框 39、时间框 35、开关 32、星期 27、按钮 42，同一列里五六种高度，
+ * 行与行之间基线全错开，看着就是「没对齐」。统一到 38 之后只剩按钮（42）
+ * 这一档例外。
+ */
 .input {
 	width: 100%;
-	padding: 9px 11px;
+	height: var(--ctrl-h);
+	padding: 0 11px;
 	border-radius: 10px;
 	border: 1px solid var(--line);
 	background: var(--inset);
@@ -2140,14 +2248,14 @@ onBeforeUnmount(() => {
 }
 
 .input--time {
-	width: 104px;
-	padding: 7px 9px;
+	width: 108px;
+	padding: 0 10px;
 	font-size: 12.5px;
 }
 
 .input--num {
-	width: 82px;
-	padding: 7px 9px;
+	width: 84px;
+	padding: 0 10px;
 	font-size: 12.5px;
 }
 
@@ -2167,6 +2275,8 @@ onBeforeUnmount(() => {
 }
 
 textarea.input {
+	height: auto;
+	padding: 9px 11px;
 	resize: vertical;
 	min-height: 56px;
 }
@@ -2175,7 +2285,8 @@ textarea.input {
 	display: inline-flex;
 	align-items: center;
 	gap: 7px;
-	padding: 7px 11px;
+	height: var(--ctrl-h);
+	padding: 0 11px;
 	border-radius: 10px;
 	border: 1px solid var(--line);
 	background: var(--inset);
@@ -2225,22 +2336,28 @@ textarea.input {
 /**
  * 星期按钮
  *
- * 必须显式居中：`<button>` 默认按行盒居中，30px 方块里只有一个汉字时，
+ * 必须显式居中：`<button>` 默认按行盒居中，方块里只有一个汉字时，
  * 字体基线一变（不同机型、不同缩放）文字就往左上飘，看起来像「错位」。
+ *
+ * 七个按钮平铺满可用宽度：定宽 + 右对齐时，「星期」标签与第一个按钮之间
+ * 会空出一大截，七个方块挤在最右边，像两组不相干的东西。
  */
 .day-group {
-	gap: 4px;
+	flex: 1;
+	gap: 5px;
+	justify-content: space-between;
 }
 
 .day {
-	width: 27px;
-	height: 27px;
+	flex: 1;
+	max-width: 40px;
+	height: 32px;
 	padding: 0;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	line-height: 1;
-	border-radius: 8px;
+	border-radius: 9px;
 	border: 1px solid var(--line);
 	background: var(--inset);
 	color: var(--text-3);
@@ -2254,9 +2371,23 @@ textarea.input {
 }
 
 .schedule-tip {
-	margin: 8px 12px 0;
-	font-size: 11px;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	margin: 10px 12px 0;
+	padding-top: 8px;
+	border-top: 1px dashed var(--line);
+}
+
+.schedule-tip__line {
+	margin: 0;
+	font-size: 10.5px;
 	line-height: 1.6;
+	color: var(--text-3);
+}
+
+.schedule-tip__line.next {
+	color: var(--brand-text);
 }
 
 /* ---------------------------------------------------------------- 按钮 */
@@ -2266,7 +2397,8 @@ textarea.input {
 	align-items: center;
 	justify-content: center;
 	gap: 5px;
-	padding: 9px 14px;
+	height: 42px;
+	padding: 0 16px;
 	border-radius: 11px;
 	border: 1px solid transparent;
 	font-size: 13px;
@@ -2284,11 +2416,20 @@ textarea.input {
 }
 
 .btn-ghost {
+	/**
+	 * 必须显式清掉 min-height
+	 *
+	 * global.css 的 `.btn` 带 `min-height: 42px`，面板里的次要按钮想矮一档
+	 * （和 38 高的输入框、开关齐平）时，光写 height 没用 —— min-height 会
+	 * 把它顶回 42，于是「执行一次」「暂停」比同一行的开关高出 4px。
+	 */
+	min-height: 0;
+	height: var(--ctrl-h);
+	padding: 0 12px;
 	background: var(--surface-2);
 	color: var(--text-2);
 	font-size: 12px;
-	padding: 7px 11px;
-	border-radius: 9px;
+	border-radius: 10px;
 }
 
 .run {
@@ -2297,17 +2438,36 @@ textarea.input {
 }
 
 .save-bar {
-	position: sticky;
-	bottom: 0;
+	flex: none;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: 10px;
-	padding: 10px 12px;
+	margin-top: 10px;
+	padding: 9px 10px 9px 13px;
 	border-radius: 13px;
 	border: 1px solid var(--line);
-	background: var(--sheet-bg);
-	box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.06);
+	background: var(--surface-solid-2);
+	box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.22);
+}
+
+.save-state {
+	font-size: 11.5px;
+	line-height: 1.4;
+}
+
+.save-state.dirty {
+	color: var(--warn);
+}
+
+/* 深色下需要一点阴影把页脚从内容里托起来；浅色下同样的阴影会显脏 */
+html[data-theme='light'] .save-bar {
+	box-shadow: 0 -8px 18px rgba(20, 24, 32, 0.07);
+}
+
+.save-bar .btn {
+	flex: none;
+	min-width: 116px;
 }
 
 /* ---------------------------------------------------------------- 状态与列表 */
@@ -2409,11 +2569,30 @@ textarea.input {
 	margin-left: auto;
 }
 
+/**
+ * 记住的课程名放两行
+ *
+ * 课程全名往往二十多个字，「共享课」角标再占一格，单行只能显示到
+ * 「习近平新时代中国特色社会主…」——同一平台好几门课开头都一样，等于没显示。
+ */
+.course-chip__name {
+	flex: 1;
+	min-width: 0;
+	font-size: 12.5px;
+	line-height: 1.4;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	word-break: break-word;
+}
+
 .empty {
 	margin: 4px 12px;
 	font-size: 11.5px;
 	line-height: 1.6;
 	color: var(--text-3);
+	text-wrap: pretty;
 }
 
 /* ---------------------------------------------------- 课程内容（章节 / 作业 / 考试） */
@@ -2440,12 +2619,24 @@ textarea.input {
 	color: #fff;
 }
 
-/* 没进课程页：整排置灰，点了也不理（cursor 也收掉，别给「能点」的错觉） */
-.kind.off,
-.kind:disabled {
-	opacity: 0.45;
+/**
+ * 没进课程页：整排置灰，点了也不理（cursor 也收掉，别给「能点」的错觉）
+ *
+ * 必须排除 .on：当前选中的那一个同时带 on 和 off（/disabled），
+ * 否则实心紫底会被虚线边框打断，看着像「选中项坏了」。
+ */
+.kind.off:not(.on),
+.kind:disabled:not(.on) {
+	opacity: 0.62;
 	cursor: default;
 	border-style: dashed;
+	/* 虚线在深色底上几乎看不见，补一点底色把「一整排」的轮廓托出来 */
+	background: color-mix(in srgb, var(--inset) 60%, transparent);
+}
+
+/* 选中项即使在未就绪状态也要看得清 */
+.kind.on:disabled {
+	opacity: 0.85;
 }
 
 /* 章节的主操作：整行宽的实心按钮，和下面「跳转」那种小按钮拉开层级 */

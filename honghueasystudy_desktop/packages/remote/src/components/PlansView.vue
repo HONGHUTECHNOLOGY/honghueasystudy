@@ -43,27 +43,55 @@
 						:class="item.status === 'launched' ? 'ok' : item.status === 'closed' ? 'off' : 'warn'"
 					></span>
 					<h3 class="plan__name ellipsis">{{ item.name }}</h3>
+					<!-- 状态和定时都进标题行：原先挤在标签行，课程名一占满整行，
+					     「运行中」就被顶到第二行，孤零零一个小方块 -->
 					<span
 						class="chip"
 						:class="{ on: !!item.automation?.schedule.enabled }"
 					>
 						{{ item.automation?.schedule.enabled ? '定时中' : '未定时' }}
 					</span>
+					<span
+						class="chip chip--state"
+						:class="'is-' + item.status"
+					>
+						{{ statusText(item.status) }}
+					</span>
 				</header>
 
-				<!-- 方案原文由桌面端拼接，两端只认同一份 scheduleSummary，避免各写一遍文案 -->
-				<p class="plan__sum">{{ scheduleText(item) }}</p>
-				<p class="plan__next faint">{{ nextText(item) }}</p>
-
-				<div class="tags">
-					<span class="tag">课程：{{ courseName(item) || '未选择' }}</span>
-					<span class="tag">{{ statusText(item.status) }}</span>
+				<!-- 方案原文由桌面端拼接，两端只认同一份 scheduleSummary，避免各写一遍文案。
+				     这里只做「按 · 分段」的排版处理：整句一行时中文会断在词中间
+				     （「关闭浏 / 览器」），拆成「时间」+「其余」两行后每行都短，不会劈词。 -->
+				<p class="plan__sum">
 					<span
-						v-if="item.automation && item.automation.study.enabled && !item.automation.study.courseName"
-						class="tag warn"
-						>刷课已开但没选课</span
+						v-for="(line, index) in scheduleLines(item)"
+						:key="index"
+						>{{ line }}</span
 					>
-				</div>
+				</p>
+				<p
+					v-if="nextText(item)"
+					class="plan__next faint"
+				>
+					{{ nextText(item) }}
+				</p>
+
+				<!-- 课程名单独一行并允许两行：课名动辄二十多字，塞进小标签里只剩开头 -->
+				<p class="plan__course">
+					<span class="plan__course-label">课程</span>
+					<span
+						class="plan__course-name"
+						:class="{ muted: !courseName(item) }"
+						>{{ courseName(item) || '未选择' }}</span
+					>
+				</p>
+
+				<p
+					v-if="item.automation && item.automation.study.enabled && !courseName(item)"
+					class="plan__warn"
+				>
+					刷课已开启，但还没选要刷的课程
+				</p>
 
 				<p
 					v-if="item.automation && item.automation.message"
@@ -174,6 +202,21 @@ function scheduleText(item: BrowserSnapshot): string {
 	const plan = item.automation;
 	if (!plan) return '桌面端没上报方案（版本较旧），升级电脑端后这里才会显示';
 	return plan.schedule.enabled ? plan.schedule.summary : '没开定时：只在你手动启动浏览器时自动刷课';
+}
+
+/**
+ * 把一句方案摘要拆成两行
+ *
+ * 桌面端给的格式是「什么时候 · 做什么 · 补不补」。整句一行时宽约 420px，
+ * 在 390 屏上必然折行，而中文按字断行，很容易断成「…暂停并关闭浏 / 览器」。
+ * 拆法：第一段（启动时间）独占一行，其余用 · 连回一行 —— 不是重写文案，
+ * 只是换个断行位置。
+ */
+function scheduleLines(item: BrowserSnapshot): string[] {
+	const text = scheduleText(item);
+	const parts = text.split(/\s*·\s*/).filter(Boolean);
+	if (parts.length <= 1) return parts;
+	return [parts[0], parts.slice(1).join(' · ')];
 }
 
 function courseName(item: BrowserSnapshot): string {
@@ -343,7 +386,7 @@ onMounted(() => {
 	padding: 14px 15px 13px;
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 7px;
 }
 
 .plan__head {
@@ -382,11 +425,39 @@ onMounted(() => {
 	color: var(--brand-text);
 }
 
+/* 运行状态：颜色跟着实例状态走，和「定时中」区分开 */
+.chip--state {
+	font-variant-numeric: tabular-nums;
+}
+
+.chip--state.is-launched {
+	border-color: rgba(53, 211, 154, 0.32);
+	background: var(--ok-soft);
+	color: var(--ok);
+}
+
+.chip--state.is-launching,
+.chip--state.is-closing {
+	border-color: rgba(255, 182, 72, 0.3);
+	background: var(--warn-soft);
+	color: var(--warn);
+}
+
 .plan__sum {
 	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
 	font-size: 12.5px;
-	line-height: 1.5;
+	line-height: 1.55;
 	color: var(--text-2);
+	text-wrap: pretty;
+}
+
+/* 第二段（做什么 / 补不补）比启动时间弱一档，一眼先看到「几点」 */
+.plan__sum span + span {
+	color: var(--text-3);
+	font-size: 12px;
 }
 
 .plan__next {
@@ -394,27 +465,44 @@ onMounted(() => {
 	font-size: 11px;
 }
 
-.tags {
+/* ------------------------------------------------------------------ 课程 */
+
+.plan__course {
 	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
+	align-items: baseline;
+	gap: 7px;
+	margin: 1px 0 0;
+	min-width: 0;
 }
 
-.tag {
-	max-width: 100%;
-	padding: 2px 7px;
-	border-radius: 6px;
-	border: 1px solid var(--line);
-	background: var(--surface-2);
+.plan__course-label {
+	flex: none;
 	font-size: 10.5px;
-	color: var(--text-2);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	letter-spacing: 0.02em;
+	color: var(--text-3);
 }
 
-.tag.warn {
-	border-color: rgba(255, 182, 72, 0.4);
+.plan__course-name {
+	flex: 1;
+	min-width: 0;
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--text-2);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	word-break: break-word;
+}
+
+.plan__course-name.muted {
+	color: var(--text-3);
+}
+
+.plan__warn {
+	margin: -2px 0 0;
+	font-size: 11px;
+	line-height: 1.5;
 	color: var(--warn);
 }
 
@@ -443,7 +531,10 @@ onMounted(() => {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
-	margin-top: 2px;
+	/* 同一排的卡片高度由 grid 拉平，按钮靠这一句贴到底部对齐；
+	   否则内容少的卡片按钮浮在半空，一左一右参差不齐 */
+	margin-top: auto;
+	padding-top: 3px;
 }
 
 .plan__actions .btn {
@@ -517,6 +608,35 @@ onMounted(() => {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 14px;
+	}
+
+	/* 宽屏下概览卡右边本来是空的：把两个指标挪过去竖排，别让整张卡左重右空 */
+	.lead__main {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		column-gap: 40px;
+	}
+
+	.lead__eyebrow,
+	.lead__value,
+	.lead__desc {
+		grid-column: 1;
+	}
+
+	.lead__metrics {
+		grid-column: 2;
+		grid-row: 1 / span 3;
+		flex-direction: column;
+		gap: 12px;
+		margin-top: 0;
+		padding-left: 28px;
+		border-left: 1px solid var(--line);
+		min-width: 132px;
+	}
+
+	.metric strong {
+		font-size: 14px;
 	}
 }
 
