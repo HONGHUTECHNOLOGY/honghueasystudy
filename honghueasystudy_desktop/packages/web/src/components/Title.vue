@@ -37,7 +37,15 @@
 				</a-doption>
 				<a-doption @click="relaunch"> <Icon type="sync">重启软件</Icon> </a-doption>
 				<a-doption @click="openLog"> <Icon type="folder">日志目录</Icon> </a-doption>
-				<a-doption @click="openDevTools"> <Icon type="code">开发者工具</Icon> </a-doption>
+				<a-doption
+					class="border-bottom"
+					@click="openDevTools"
+				>
+					<Icon type="code">开发者工具</Icon>
+				</a-doption>
+				<a-doption @click="shell.openExternal(OFFICIAL_SITE)"> <Icon type="public">官方网站</Icon> </a-doption>
+				<a-doption @click="shell.openExternal(GITHUB_REPO)"> <Icon type="code">GitHub 仓库</Icon> </a-doption>
+				<a-doption @click="shell.openExternal(GITCODE_REPO)"> <Icon type="code">GitCode 镜像</Icon> </a-doption>
 			</template>
 		</a-dropdown>
 
@@ -73,6 +81,11 @@ import Icon from './Icon.vue';
 import StatusBar from './StatusBar.vue';
 
 const { shell } = electron;
+
+/** 官网与源码仓库：与扩展首页、关于页保持一致 */
+const OFFICIAL_SITE = 'https://easystudy.honghutech.eu.org';
+const GITHUB_REPO = 'https://github.com/HONGHUTECHNOLOGY/honghueasystudy';
+const GITCODE_REPO = 'https://gitcode.com/honghutech/honghueasystudy';
 
 const isSimpleMode = computed(() => router.currentRoute.value.path === '/simple');
 

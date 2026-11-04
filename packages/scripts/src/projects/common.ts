@@ -18,6 +18,7 @@ import { SearchInfosElement } from '../elements/search.infos';
 import { RenderScript } from '../render';
 import { dropdownStyle } from '../utils/configs';
 import { trustedClick } from '../utils/safe-click';
+import { OFFICIAL_SITE, GITHUB_REPO, GITCODE_REPO } from '../utils/links';
 
 const TAB_WORK_RESULTS_KEY = 'common.work-results.results';
 
@@ -2479,6 +2480,43 @@ const createGuide = () => {
 		paddingTop: '4px'
 	};
 
+	/** 首页底部的官网 / 仓库入口，沿用面板里次级按钮的描边样式 */
+	const linkChip = (label: string, url: string) =>
+		h(
+			'a',
+			{
+				href: url,
+				target: '_blank',
+				rel: 'noopener noreferrer',
+				className: 'base-style-button-secondary',
+				style: {
+					margin: '4px',
+					padding: '2px 8px',
+					fontSize: '12px',
+					lineHeight: '18px',
+					textDecoration: 'none',
+					display: 'inline-block'
+				}
+			},
+			label
+		);
+
+	const aboutCard = h('div', { style: { ...cardStyle, marginTop: '8px' } }, [
+		h('div', { style: { marginBottom: '4px', fontWeight: 'bold' } }, [
+			'官网与源码仓库：',
+			h(
+				'span',
+				{ className: 'secondary', style: { fontWeight: 'normal' } },
+				'（桌面端下载、更新日志、问题反馈与平台适配建议）'
+			)
+		]),
+		h('div', [
+			linkChip('官方网站', OFFICIAL_SITE),
+			linkChip('GitHub 仓库', GITHUB_REPO),
+			linkChip('GitCode 镜像', GITCODE_REPO)
+		])
+	]);
+
 	const aiCfg = CommonProject.scripts.aiSettings.cfg;
 	const aiConfigured = !!(aiCfg.aiEndpoint && aiCfg.aiApiKey && aiCfg.aiModel);
 	const aiGuideCard = !aiConfigured
@@ -2543,7 +2581,8 @@ const createGuide = () => {
 					return btn;
 				})
 			])
-		])
+		]),
+		aboutCard
 	]);
 };
 

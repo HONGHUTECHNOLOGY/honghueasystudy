@@ -1,11 +1,12 @@
 import type { RemotePage } from '@honghu/core';
 import { $message, $modal, h, $ } from 'easy-us';
 import { safeClick, trustedDispatch, hidePanel, OrigMouseEvent, OrigKeyboardEvent, OrigEvent, OrigInputEvent } from './safe-click';
+import { OFFICIAL_SITE } from './links';
 
 
 export const $playwright = {
 	showError: () => {
-		const downloadUrl = 'https://easystudy.honghutech.eu.org';
+		const downloadUrl = OFFICIAL_SITE;
 		const errorEl = h('div', [
 			h('div', '当前页面需要下载鸿鹄易学桌面端，并在桌面端中新建浏览器，在新建的浏览器中才能进行正常刷课。'),
 			h('div', { style: { marginTop: '8px' } }, [
