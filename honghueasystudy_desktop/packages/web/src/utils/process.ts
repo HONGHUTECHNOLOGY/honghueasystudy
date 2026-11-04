@@ -116,8 +116,14 @@ export class Process extends EventEmitter {
 			if (!line) return;
 
 			this.logs.push(isError ? `[${this.browser.name}] ${line}` : line);
-			/** 防止长时间刷课把内存里的日志数组撑爆 */
-			if (this.logs.length > 300) this.logs.splice(0, this.logs.length - 300);
+			/**
+			 * 防止长时间刷课把内存里的日志数组撑爆。
+			 *
+			 * 脚本日志现在会经 `page.on('console')` 一起进来，量比原来大得多，
+			 * 上限相应放宽——远程控制每次取最近 600 条，留出富余才不会把
+			 * 刚发生的上下文挤掉。
+			 */
+			if (this.logs.length > 1200) this.logs.splice(0, this.logs.length - 1200);
 
 			/**
 			 * 顺带推进任务进度。

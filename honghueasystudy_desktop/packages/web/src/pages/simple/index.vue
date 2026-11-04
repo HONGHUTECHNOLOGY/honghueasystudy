@@ -20,9 +20,8 @@
 					</a-tab-pane>
 					<a-tab-pane key="scripts">
 						<template #title>
-							<Icon type="code">
-								{{ store.render.scripts.length > 0 ? `用户脚本 - ${store.render.scripts.length}` : '脚本' }}
-							</Icon>
+							<!-- 这一页现在是「定时脚本 + 用户脚本」，标签固定叫「脚本」，不再只写用户脚本数量 -->
+							<Icon type="code"> 脚本 </Icon>
 						</template>
 					</a-tab-pane>
 					<a-tab-pane key="setting">
@@ -157,11 +156,15 @@
 					</div>
 				</div>
 
-				<!-- 脚本面板 -->
+				<!-- 脚本面板：先定时脚本（按实例），再用户脚本 -->
 				<div
 					v-show="state.activeTab === 'scripts'"
 					class="overflow-auto p-2"
 				>
+					<AutomationScheduleBoard />
+
+					<a-divider style="margin: 6px 0 14px">用户脚本</a-divider>
+
 					<UserScriptListPage />
 				</div>
 
@@ -193,6 +196,7 @@ import SettingPanel from '../../components/SettingPanel.vue';
 import { lang } from '../../store/index';
 import UsageAlertCollapse from '../../components/UsageAlertCollapse.vue';
 import UserScriptListPage from '../../components/UserScriptListPage.vue';
+import AutomationScheduleBoard from '../../components/automation-scripts/AutomationScheduleBoard.vue';
 import EnvironmentAlert from '../../components/EnvironmentAlert.vue';
 
 const state = reactive({

@@ -123,10 +123,16 @@ export const state = reactive<State>({
 
 /** 界面态（与业务数据分开） */
 export const ui = reactive({
-	tab: 'home' as 'home' | 'logs' | 'about',
+	tab: 'home' as 'home' | 'plans' | 'logs' | 'about',
 	detailUid: '',
-	/** 是否打开了「自动登录 / 选课」面板（挂在当前详情实例上） */
-	automationOpen: false,
+	/**
+	 * 正在编辑方案的实例 uid（空串 = 面板关着）
+	 *
+	 * 早期这里是布尔值、依附于 `detailUid`，导致「不打开详情就进不去方案面板」，
+	 * 于是浏览器没启动时手机上完全看不到定时任务。现在独立成 uid：
+	 * 从总览、详情、「自动执行」页都能直接打开，不要求实例正在运行。
+	 */
+	automationUid: '',
 	theme: 'auto' as ThemeMode
 });
 

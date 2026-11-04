@@ -197,6 +197,26 @@
 					<span class="text-secondary">分钟（0=不限）</span>
 				</div>
 
+				<!-- 错过了开始时间还跑不跑：默认不跑，避免中午打开软件时突然开始刷课 -->
+				<div class="d-flex align-items-center gap-1 mt-2">
+					<a-checkbox
+						v-model="plan.schedule.catchUp"
+						size="small"
+					>
+						错过开始时间也补执行
+					</a-checkbox>
+					<a-tooltip
+						:content="`关闭（默认）：只在开始时间后 ${SCHEDULE_GRACE_MINUTES} 分钟内启动；再晚就跳过当天，等下一次定时。开启：只要还在当天窗口内，任何时候打开软件都会补执行。`"
+						position="top"
+					>
+						<Icon
+							type="help"
+							class="text-secondary"
+							:size="13"
+						/>
+					</a-tooltip>
+				</div>
+
 				<div
 					class="text-secondary mt-2"
 					style="font-size: 11px; line-height: 1.6"
@@ -417,7 +437,7 @@ import {
 	type CatalogKind,
 	type CourseCatalog
 } from '../../utils/automationPlan';
-import { WEEK_LABELS, nextRunAt, scheduleSummary } from '@honghu-desktop/app/src/scripts/plan';
+import { WEEK_LABELS, SCHEDULE_GRACE_MINUTES, nextRunAt, scheduleSummary } from '@honghu-desktop/app/src/scripts/plan';
 
 const props = defineProps<{
 	browser: Browser;

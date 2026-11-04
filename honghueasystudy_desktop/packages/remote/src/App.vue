@@ -113,6 +113,7 @@
 
 				<main class="main">
 					<OverviewView v-if="ui.tab === 'home'" />
+					<PlansView v-else-if="ui.tab === 'plans'" />
 					<LogsView v-else-if="ui.tab === 'logs'" />
 					<AboutView v-else />
 				</main>
@@ -127,12 +128,14 @@
 		<DetailSheet
 			v-if="ui.detailUid"
 			@close="closeDetail"
-			@automate="ui.automationOpen = true"
+			@automate="ui.automationUid = ui.detailUid"
 		/>
 
+		<!-- 方案面板独立成 uid：不依赖详情，未启动的实例也能配置定时与脚本 -->
 		<AutomationSheet
-			v-if="ui.detailUid && ui.automationOpen"
-			@close="ui.automationOpen = false"
+			v-if="ui.automationUid"
+			:uid="ui.automationUid"
+			@close="ui.automationUid = ''"
 		/>
 	</div>
 </template>
@@ -147,6 +150,7 @@ import TabBar from './components/TabBar.vue';
 import ToastStack from './components/ToastStack.vue';
 import DetailSheet from './components/DetailSheet.vue';
 import AutomationSheet from './components/AutomationSheet.vue';
+import PlansView from './components/PlansView.vue';
 import Icon from './components/Icon.vue';
 import { NAV_ITEMS, findNav } from './nav';
 import { bootstrap, refreshManually, state, ui } from './store';
@@ -168,7 +172,7 @@ const refreshing = ref(false);
 
 /** 关闭详情时连带收起自动化面板，避免下次点开别的实例时残留 */
 function closeDetail() {
-	ui.automationOpen = false;
+	if (ui.automationUid === ui.detailUid) ui.automationUid = '';
 	ui.detailUid = '';
 }
 

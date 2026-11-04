@@ -42,6 +42,8 @@ export interface AutomationSummary {
 		days: number[];
 		endAction: string;
 		maxMinutes: number;
+		/** 错过开始时间是否补执行；旧版桌面端不上报（undefined 按 false 处理） */
+		catchUp?: boolean;
 		nextRunAt: number;
 		summary: string;
 	};
@@ -156,6 +158,8 @@ export interface AutomationSchedule {
 	days: number[];
 	endAction: 'pause' | 'pause-close' | 'close' | 'none';
 	maxMinutes: number;
+	/** 错过开始时间是否补执行（可选：旧版桌面端没有这个字段，按 false 处理） */
+	catchUp?: boolean;
 	lastRunDate?: string;
 	lastStopDate?: string;
 	runStartedAt?: number;

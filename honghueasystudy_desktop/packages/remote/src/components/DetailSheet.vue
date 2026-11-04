@@ -157,8 +157,8 @@
 					</div>
 
 					<!-- 远程自动化入口：临时遥控（点一次跑一次）+ 登录/选课脚本（每次启动都跑）+ 定时刷课 -->
+					<!-- 未启动也保留：方案是落盘配置，读写的都是桌面端的存档，不需要浏览器在跑 -->
 					<button
-						v-if="browser.status === 'launched'"
 						type="button"
 						class="automate"
 						@click="emit('automate')"
@@ -170,8 +170,12 @@
 							/>
 						</span>
 						<span class="automate__text">
-							<b>登录/选课脚本 · 定时刷课 · 临时控制</b>
-							<small class="faint">手机遥控电脑：临时点一次，或按方案自动跑</small>
+							<b>{{ browser.status === 'launched' ? '登录/选课脚本 · 定时刷课 · 临时控制' : '定时刷课 · 启动时脚本' }}</b>
+							<small class="faint">{{
+								browser.status === 'launched'
+									? '手机遥控电脑：临时点一次，或按方案自动跑'
+									: '浏览器没运行也能配置，保存后到点或下次启动生效'
+							}}</small>
 						</span>
 						<Icon
 							name="chevron"

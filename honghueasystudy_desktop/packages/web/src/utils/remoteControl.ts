@@ -3,6 +3,7 @@ import { electron } from './node';
 import { processEvents, Process, processes } from './process';
 import { Folder } from '../fs/folder';
 import { Browser } from '../fs/browser';
+import type { TaskProgress } from './task-progress';
 import { store } from '../store';
 import type { AutomationTarget } from '@honghu-desktop/app/src/scripts/plan';
 import {
@@ -50,8 +51,8 @@ const PUSH_INTERVAL = 800;
 const HEARTBEAT_INTERVAL = 3000;
 /** 单轮页面列表采集的最长等待（避免个别卡死页面拖住上报） */
 const REFRESH_TIMEOUT = 2500;
-/** 每实例保留的日志行数 */
-const MAX_LOGS = 200;
+/** 每实例推给远程端的日志行数 */
+const MAX_LOGS = 600;
 
 interface BrowserSnapshotItem {
 	uid: string;
@@ -91,6 +92,8 @@ interface BrowserSnapshotItem {
 			days: number[];
 			endAction: string;
 			maxMinutes: number;
+			/** 错过开始时间是否补执行 */
+			catchUp: boolean;
 			nextRunAt: number;
 			summary: string;
 		};
@@ -140,6 +143,23 @@ function toPlainPages(pages: any): { url: string; title: string; active: boolean
 }
 
 /**
+ * 进度转快照视图
+ *
+ * `doneTasks` 只在渲染进程内部用于去重，没必要每 3 秒往手机端推上百条字符串。
+ */
+function progressView(progress: TaskProgress) {
+	return {
+		startedAt: progress.startedAt,
+		lastActivityAt: progress.lastActivityAt,
+		currentTask: progress.currentTask,
+		completed: progress.completed,
+		answered: progress.answered,
+		errors: progress.errors,
+		finished: progress.finished
+	};
+}
+
+/**
  * 采集完整快照
  *
  * 浏览器实例来自配置树（包含未启动的），运行状态来自 processes。
@@ -164,7 +184,7 @@ function buildSnapshot(): RemoteSnapshotPayload {
 				pages: toPlainPages(running && running.pages),
 				/** 浅拷贝：快照会经过 IPC 与 JSON 序列化，直接传引用没有意义 */
 				progress: running
-					? { ...running.progress }
+					? progressView(running.progress)
 					: {
 							startedAt: 0,
 							lastActivityAt: 0,

@@ -39,6 +39,17 @@ export interface AutomationSchedule {
 	endAction: AutomationEndAction;
 	/** 单次最长学习时长（分钟），0=不限 */
 	maxMinutes: number;
+	/**
+	 * 错过开始时间后是否补执行
+	 *
+	 * 默认 `false`：到点没赶上（电脑关机、应用没开、刚装完还没登录）就跳过当天，
+	 * 不在用户中午打开软件时突然把浏览器拉起来刷课。
+	 * `true` 时沿用旧的「只要还在窗口内就启动」行为。
+	 *
+	 * 无论哪种，开始后的 {@link SCHEDULE_GRACE_MINUTES} 分钟内都算「按时」——
+	 * 开机自启本身就要几十秒，不留这点余量的话定时任务几乎永远赶不上。
+	 */
+	catchUp: boolean;
 	/** 最近一次自动启动的会话日期 YYYY-MM-DD（防同一天重复拉起） */
 	lastRunDate: string;
 	/** 最近一次自动收尾的会话日期 YYYY-MM-DD（防重复关闭） */
@@ -111,6 +122,7 @@ export function defaultBrowserAutomation(): BrowserAutomation {
 			days: [],
 			endAction: 'pause-close',
 			maxMinutes: 0,
+			catchUp: false,
 			lastRunDate: '',
 			lastStopDate: '',
 			runStartedAt: 0
@@ -140,6 +152,8 @@ export function normalizeBrowserAutomation(input: any): BrowserAutomation {
 			days: normalizeDays(schedule.days),
 			endAction: normalizeEndAction(schedule.endAction),
 			maxMinutes: clampNumber(schedule.maxMinutes, 0, 24 * 60, 0),
+			/** 旧存档没有这个字段：按「不补执行」处理，正是这次要的默认行为 */
+			catchUp: schedule.catchUp === true,
 			lastRunDate: typeof schedule.lastRunDate === 'string' ? schedule.lastRunDate : '',
 			lastStopDate: typeof schedule.lastStopDate === 'string' ? schedule.lastStopDate : '',
 			runStartedAt: clampNumber(schedule.runStartedAt, 0, Number.MAX_SAFE_INTEGER, 0)
@@ -401,6 +415,30 @@ export function activeSession(schedule: AutomationSchedule, now: Date): Schedule
 }
 
 /**
+ * 错过开始时间后仍算「按时」的宽限（分钟）
+ *
+ * 开机自启本身就要几十秒（登录、加载配置、等 app ready），调度器还要等第一次
+ * tick。宽限给 0 会让定时任务在「一切正常」的情况下也经常赶不上；给太长又会
+ * 变成用户下午打开电脑时突然开始刷课 —— 10 分钟足够覆盖开机延迟。
+ */
+export const SCHEDULE_GRACE_MINUTES = 10;
+
+/**
+ * 这一场还来不来得及「按点」启动
+ *
+ * - `catchUp=true`：只要还在窗口内就算来得及（旧行为）；
+ * - `catchUp=false`：只在开始后的宽限内算来得及，超过就跳过当天。
+ */
+export function canStartSession(
+	schedule: AutomationSchedule,
+	session: ScheduleSession,
+	now: Date = new Date()
+): boolean {
+	if (schedule.catchUp) return true;
+	return now.getTime() - session.start <= SCHEDULE_GRACE_MINUTES * 60 * 1000;
+}
+
+/**
  * 定时任务期间给扩展下发的「定时停止」覆盖
  *
  * 扩展自己有一套 `stopTimeMinutes`（进入学习页后倒计时），桌面端又有一套定时方案。
@@ -519,11 +557,12 @@ export function scheduleSummary(schedule: AutomationSchedule): string {
 	 * 起止不同 = 升级前的「时间段」存档，保留原样描述；
 	 * 起止相同 = 新模型（一个启动时间点 + 单次时长）。
 	 */
+	const missed = schedule.catchUp ? '' : ' · 错过不补';
 	if (schedule.endTime !== schedule.startTime) {
 		const extra = schedule.maxMinutes > 0 ? ` · 单次最多 ${schedule.maxMinutes} 分钟` : '';
-		return `${days} ${schedule.startTime}–${schedule.endTime} · 到点${action}${extra}`;
+		return `${days} ${schedule.startTime}–${schedule.endTime} · 到点${action}${extra}${missed}`;
 	}
 
 	const tail = schedule.maxMinutes > 0 ? `${schedule.maxMinutes} 分钟后${action}` : '不限时长';
-	return `${days} ${schedule.startTime} 启动 · ${tail}`;
+	return `${days} ${schedule.startTime} 启动 · ${tail}${missed}`;
 }

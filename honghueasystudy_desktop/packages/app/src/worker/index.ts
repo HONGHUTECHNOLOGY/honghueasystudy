@@ -27,6 +27,45 @@ const { bgRedBright, bgBlueBright, bgYellowBright, bgGray } = new Chalk({ level:
  */
 const AUTOMATION_READY_TIMEOUT = 5 * 60 * 1000;
 
+/**
+ * 脚本日志前缀
+ *
+ * 必须与 `packages/scripts/src/projects/background.ts` 的
+ * `CONSOLE_BRIDGE_PREFIX` 完全一致：脚本的 `$console` 只写扩展内部数组，
+ * 桌面端读不到，所以它额外用这个前缀打一遍页面 console，这里再捞出来。
+ */
+const SCRIPT_LOG_PREFIX = '[鸿鹄]';
+
+/** 已挂过 console 监听的页面（重复挂会重复输出同一行） */
+const consoleWatchedPages = new WeakSet<Page>();
+
+/**
+ * 把脚本日志从页面 console 转到 worker 的 stdout
+ *
+ * 目的：远程控制要看得到「正在学习 / 已提交答案 / 章节测试已完成」这些节点。
+ * 这些文本同时也是渲染进程推断任务进度（已作答 / 已完成）的唯一素材，
+ * 缺了它们进度数字永远是 0。
+ *
+ * 只转发带前缀的行：网课页面的第三方 console 输出量极大，全量转发会把
+ * 日志数组冲爆，也会让远程端看不清真正有用的信息。
+ */
+function watchScriptConsole(page: Page) {
+	if (consoleWatchedPages.has(page)) return;
+	consoleWatchedPages.add(page);
+
+	page.on('console', (message) => {
+		try {
+			const text = message.text();
+			if (!text.startsWith(SCRIPT_LOG_PREFIX)) return;
+			const line = text.slice(SCRIPT_LOG_PREFIX.length).trim();
+			if (line) console.log(line);
+		} catch {
+			// 页面已销毁时 text() 可能抛错，忽略这一行即可
+		}
+	});
+}
+
+
 type AS = { name: string; configs: Record<string, Config> };
 
 type BrowserInfo = { name: string; notes: string; tags: { color: string; name: string }[] };
@@ -484,8 +523,12 @@ export class ScriptWorker {
 					this.browser?.on('page', (page) => {
 						page.on('framenavigated', notifyPageChange);
 						page.on('close', notifyPageChange);
+						/** 脚本日志：新开的标签也要接上，否则登录后新页里的学习日志全部丢失 */
+						watchScriptConsole(page);
 						notifyPageChange();
 					});
+					/** 启动时就存在的页面不会再触发 page 事件，必须补挂 */
+					this.browser?.pages().forEach((page) => watchScriptConsole(page));
 
 					// 浏览器启动完成
 					send('launched');

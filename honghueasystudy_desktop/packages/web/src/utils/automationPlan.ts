@@ -15,12 +15,14 @@ import { reactive } from 'vue';
 import {
 	activeSession,
 	autoStopOverride,
+	canStartSession,
 	dateKey,
 	lastFinishedSession,
 	migrateSpanToDuration,
 	nextRunAt,
 	normalizeBrowserAutomation,
 	pickCourse,
+	SCHEDULE_GRACE_MINUTES,
 	scheduleSummary,
 	type AutomationSchedule,
 	type AutomationTarget,
@@ -69,6 +71,8 @@ export interface AutomationSummary {
 		days: number[];
 		endAction: string;
 		maxMinutes: number;
+		/** 错过开始时间是否补执行（远程台据此显示「错过不补」） */
+		catchUp: boolean;
 		/** 下一次自动启动时间戳（0 表示算不出来） */
 		nextRunAt: number;
 		summary: string;
@@ -338,6 +342,7 @@ export function automationSummary(browser: Browser): AutomationSummary {
 			days: plan.schedule.days,
 			endAction: plan.schedule.endAction,
 			maxMinutes: plan.schedule.maxMinutes,
+			catchUp: plan.schedule.catchUp,
 			nextRunAt: plan.schedule.enabled ? nextRunAt(plan.schedule, new Date()) || 0 : 0,
 			summary: scheduleSummary(plan.schedule)
 		},
@@ -829,6 +834,25 @@ async function handleSchedule(browser: Browser, schedule: AutomationSchedule): P
 
 	if (session) {
 		if (schedule.lastRunDate !== session.id) {
+			/**
+			 * 已经错过开始时间，而用户没有勾「补执行」（默认）：
+			 *
+			 * 把这一场记成「今天已处理」然后等明天。不记的话每个 20 秒节拍都会
+			 * 重新判断一次，用户上午九点打开软件、十一点又被拉起来刷课 ——
+			 * 正是「过了时间点还会自动运行」的成因。
+			 *
+			 * `runStartedAt` 保持 0，收尾逻辑据此认定「这一场没有真正启动过」，
+			 * 不会在用户手动用着浏览器时把窗口关掉。
+			 */
+			if (!canStartSession(schedule, session, now)) {
+				patchSchedule(browser, { lastRunDate: session.id, runStartedAt: 0 });
+				syncAutoStop(browser);
+				const message = `已错过 ${schedule.startTime} 的定时启动（超过 ${SCHEDULE_GRACE_MINUTES} 分钟），今天不再执行；需要时点「立即执行一次」`;
+				planLog(uid, message);
+				setStatus(uid, { state: 'idle', message });
+				return;
+			}
+
 			const proc = Process.from(uid);
 			const alive = !!proc && (proc.status === 'launched' || proc.status === 'launching');
 
@@ -889,9 +913,19 @@ async function handleSchedule(browser: Browser, schedule: AutomationSchedule): P
 		return;
 	}
 
-	/** 已经过了窗口：补做一次收尾（应用关掉再打开也能补上） */
+	/**
+	 * 已经过了窗口：补做一次收尾（应用关掉再打开也能补上）
+	 *
+	 * 只对「真正启动过」的场次收尾（`runStartedAt > 0`）：错过时间被跳过的那一场
+	 * 也写了 `lastRunDate`，但浏览器可能是用户自己开的，不能替他关掉。
+	 */
 	const finished = lastFinishedSession(schedule, now);
-	if (finished && schedule.lastRunDate === finished.id && schedule.lastStopDate !== finished.id) {
+	if (
+		finished &&
+		schedule.lastRunDate === finished.id &&
+		schedule.lastStopDate !== finished.id &&
+		schedule.runStartedAt > 0
+	) {
 		await applyEndAction(browser, schedule, 'schedule-end', finished.id);
 	}
 }

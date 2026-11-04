@@ -1,4 +1,6 @@
-import { app } from 'electron';
+import { app, shell } from 'electron';
+import { existsSync, mkdirSync, rmSync } from 'fs';
+import path from 'path';
 import { Logger } from '../logger';
 import { store } from '../store';
 
@@ -7,6 +9,79 @@ const logger = Logger('auto-launch');
 /** 开机自启是否开启（默认开启；旧存档没有该字段时按开启处理） */
 function isAutoLaunchEnabled(): boolean {
 	return store.store.window?.autoLaunch !== false;
+}
+
+/**
+ * Windows「启动」文件夹里的快捷方式
+ *
+ * 只写注册表 `Run` 项不够可靠：安全软件、装机工具和「系统优化」经常把那条
+ * 条目清掉或标成禁用，而应用每次启动又会原样写回去 —— 于是注册表看起来永远
+ * 是对的，开机却从来不启动，日志里也全是「已开启」。
+ *
+ * 启动文件夹是 Windows 官方支持的第二种自启方式，两条路任意一条生效就够。
+ * 都生效时会拉起两个进程，但第二个会被单实例锁挡掉，不会出现两套界面。
+ */
+function startupShortcut(): string {
+	return path.join(
+		app.getPath('appData'),
+		'Microsoft',
+		'Windows',
+		'Start Menu',
+		'Programs',
+		'Startup',
+		'鸿鹄易学.lnk'
+	);
+}
+
+/**
+ * 同步启动文件夹快捷方式
+ *
+ * 用 `replace` 而不是 `create`：用户换过安装目录后，旧快捷方式必须被覆盖，
+ * 否则它指向的旧 exe 已经被卸载，开机时只会闪一下「找不到文件」。
+ *
+ * @returns 快捷方式当前是否存在
+ */
+function syncStartupShortcut(enabled: boolean): boolean {
+	if (process.platform !== 'win32') return false;
+
+	const link = startupShortcut();
+	try {
+		if (!enabled) {
+			if (existsSync(link)) rmSync(link, { force: true });
+			return false;
+		}
+
+		const folder = path.dirname(link);
+		if (!existsSync(folder)) mkdirSync(folder, { recursive: true });
+
+		const created = shell.writeShortcutLink(link, 'replace', {
+			target: process.execPath,
+			cwd: path.dirname(process.execPath),
+			description: '鸿鹄易学（开机自启）'
+		});
+		if (!created) logger.error('写入启动文件夹快捷方式失败：' + link);
+		return created;
+	} catch (e) {
+		logger.error('同步启动文件夹快捷方式失败', e);
+		return false;
+	}
+}
+
+/**
+ * 读回系统里的真实登记状态
+ *
+ * `setLoginItemSettings` 不报错不等于系统真的会启动它（权限、安全软件都可能
+ * 让写入「成功」但被忽略）。把读回的结果写进日志，下次用户说「开了却没自启」
+ * 时，日志能直接区分是「没登记」还是「登记了但系统不执行」。
+ */
+function readLoginItemStatus(): { registered: boolean; willLaunch: boolean } {
+	try {
+		const status = app.getLoginItemSettings({ path: process.execPath });
+		return { registered: !!status.openAtLogin, willLaunch: !!status.executableWillLaunchAtLogin };
+	} catch (e) {
+		logger.error('读取开机自启状态失败', e);
+		return { registered: false, willLaunch: false };
+	}
 }
 
 /**
@@ -21,12 +96,24 @@ export function autoLaunch() {
 	if (process.platform === 'linux') return;
 
 	const apply = () => {
+		const enabled = isAutoLaunchEnabled();
+
 		try {
-			app.setLoginItemSettings({ openAtLogin: isAutoLaunchEnabled() });
-			logger.info('开机自启：' + (isAutoLaunchEnabled() ? '已开启' : '已关闭'));
+			/**
+			 * 显式传 `path`：默认值就是 `process.execPath`，但写出来能避免
+			 * 「静默更新换了安装目录，注册表还指着旧 exe」这类静默失效。
+			 */
+			app.setLoginItemSettings({ openAtLogin: enabled, path: process.execPath });
 		} catch (e) {
 			logger.error('设置开机自启失败', e);
 		}
+
+		const inStartupFolder = syncStartupShortcut(enabled);
+		const status = readLoginItemStatus();
+		logger.info(
+			`开机自启：${enabled ? '已开启' : '已关闭'}` +
+				`（注册表登记=${status.registered} 系统将启动=${status.willLaunch} 启动文件夹=${inStartupFolder}）`
+		);
 	};
 
 	/**

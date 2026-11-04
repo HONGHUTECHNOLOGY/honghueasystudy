@@ -20,7 +20,7 @@
 				</span>
 				<div class="head__text">
 					<h2>登录/选课 · 刷课 · 定时</h2>
-					<p class="faint ellipsis">{{ browser?.name }} · 临时点一次 或 自动执行</p>
+					<p class="faint ellipsis">{{ subtitle }}</p>
 				</div>
 				<button
 					type="button"
@@ -61,6 +61,12 @@
 				<template v-if="tab === 'auto'">
 					<p class="note">
 						这里的配置会保存到桌面端，<b>每次启动浏览器都会自动执行</b>；关掉应用也仍然有效。
+					</p>
+					<p
+						v-if="!browserReady"
+						class="note note--warn"
+					>
+						浏览器现在没运行：照样可以先配好定时与脚本，到点或下次启动时生效。
 					</p>
 
 					<!-- ① 自动化脚本：登录等 -->
@@ -428,6 +434,22 @@
 							</div>
 						</div>
 
+						<div class="line">
+							<span class="line__label">错过补执行</span>
+							<div class="line__actions">
+								<button
+									type="button"
+									class="switch"
+									:class="{ on: formSchedule.catchUp }"
+									@click="formSchedule.catchUp = !formSchedule.catchUp"
+								>
+									<span></span>
+									{{ formSchedule.catchUp ? '补执行' : '不补' }}
+								</button>
+								<span class="faint">关闭时只在开始后 10 分钟内启动，再晚跳过当天</span>
+							</div>
+						</div>
+
 						<p class="faint schedule-tip">
 							{{ scheduleHead }}
 							<template v-if="scheduleTail">
@@ -470,6 +492,31 @@
 					<p class="note note--warn">
 						这里的操作<b>只执行这一次</b>，不会保存、以后开机也不会自动跑。要长期生效请用「自动执行」。
 					</p>
+
+					<!-- 临时操作全都要真页面：没运行时给出「启动」而不是让用户点了才收到一句报错 -->
+					<div
+						v-if="!browserReady"
+						class="start-hint"
+					>
+						<span class="faint">浏览器未运行，登录需要真实页面。</span>
+						<button
+							type="button"
+							class="btn btn-sm btn-primary"
+							:disabled="!!state.pending[uid]"
+							@click="launchNow"
+						>
+							<span
+								v-if="state.pending[uid]"
+								class="spinner"
+							></span>
+							<Icon
+								v-else
+								name="power"
+								:size="13"
+							/>
+							启动浏览器
+						</button>
+					</div>
 
 					<section class="block">
 						<p class="block__title">
@@ -581,7 +628,7 @@
 								name="key"
 								:size="15"
 							/>
-							{{ running ? '正在登录，请稍候…' : '运行登录脚本' }}
+							{{ running ? '正在登录，请稍候…' : browserReady ? '运行登录脚本' : '浏览器未运行' }}
 						</button>
 
 						<p
@@ -833,11 +880,18 @@ import {
 	savePlan,
 	state,
 	stopPlanNow,
-	toast,
-	ui
+	toast
 } from '../store';
 
 const emit = defineEmits<{ (e: 'close'): void }>();
+
+/**
+ * 要配置的实例
+ *
+ * 由调用方传入而不是读 `ui.detailUid`：浏览器没启动、甚至不经过详情面板时
+ * 也要能打开这里改定时（「自动执行」页就是直接传 uid）。
+ */
+const props = defineProps<{ uid: string }>();
 
 const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -858,14 +912,33 @@ function minutesBetween(start: string, end: string): number {
 	return to > from ? to - from : to + 24 * 60 - from;
 }
 
-const uid = computed(() => ui.detailUid);
-const browser = computed(() => state.browsers.find((item) => item.uid === ui.detailUid));
+const uid = computed(() => props.uid);
+const browser = computed(() => state.browsers.find((item) => item.uid === props.uid));
+
+/**
+ * 标题副文案
+ *
+ * 未启动时明确告诉用户「仍然能配」，否则打开面板看到一排置灰按钮，
+ * 很容易以为这里非得起浏览器才能用（旧版干脆连入口都不给）。
+ */
+const subtitle = computed(() => {
+	const item = browser.value;
+	if (!item) return '实例已不存在 · 请刷新后重试';
+	if (item.status === 'launched') return `${item.name} · 临时点一次 或 自动执行`;
+	return `${item.name} · 浏览器未运行，也能配置定时与脚本`;
+});
 const scripts = computed<RemoteScript[]>(() => state.scripts);
 const job = computed(() => state.automation[uid.value]);
 /** 快照里的方案摘要（定时是否开启、正在刷哪门课） */
 const summary = computed(() => browser.value && browser.value.automation);
 
-const tab = ref<'auto' | 'now'>('now');
+/**
+ * 默认页签
+ *
+ * 浏览器没起来时「临时操作」几乎什么都做不了（登录、选课都要真页面），
+ * 这种情况下直接把用户送到「自动执行」，省得点进去看到一片置灰。
+ */
+const tab = ref<'auto' | 'now'>(browser.value && browser.value.status === 'launched' ? 'now' : 'auto');
 const showAdd = ref(false);
 const scriptsError = ref('');
 const courseHint = ref('');
@@ -1101,7 +1174,8 @@ const emptyPlan = (): AutomationPlan => ({
 		endTime: '11:30',
 		days: [],
 		endAction: 'pause-close',
-		maxMinutes: 0
+		maxMinutes: 0,
+		catchUp: false
 	}
 });
 
@@ -1142,7 +1216,9 @@ function canonical(plan: AutomationPlan, scripts: { name: string; values: Record
 			start: schedule.startTime,
 			days: (schedule.days || []).slice().sort((a, b) => a - b),
 			action: schedule.endAction,
-			max: Number(schedule.maxMinutes) || 0
+			max: Number(schedule.maxMinutes) || 0,
+			/** 不带上它的话，改了「补执行」也不会变成未保存，保存按钮一直是灰的 */
+			catchUp: !!schedule.catchUp
 		},
 		scripts: scripts.map((item) => {
 			const values: Record<string, any> = {};
@@ -1166,7 +1242,9 @@ const browserReady = computed(() => {
 /** 正在执行登录脚本（临时操作页） */
 const running = computed(() => state.automationBusy[uid.value] === 'run' || !!(job.value && job.value.state === 'running'));
 
-const canRun = computed(() => !!current.value && !running.value && !state.automationBusy[uid.value]);
+const canRun = computed(
+	() => !!current.value && !running.value && !state.automationBusy[uid.value] && browserReady.value
+);
 const refreshing = computed(() => state.automationBusy[uid.value] === 'courses');
 const courses = computed<RemoteCourse[]>(() => (job.value ? job.value.courses : []));
 const courseList = computed<RemoteCourse[]>(() => {
@@ -1258,6 +1336,8 @@ function normalizePlan(plan: AutomationPlan): AutomationPlan {
 			days: Array.isArray(plan.schedule?.days) ? plan.schedule!.days.slice() : [],
 			endAction: plan.schedule?.endAction || 'pause-close',
 			maxMinutes,
+			/** 旧版桌面端没有这个字段：按「不补执行」处理，与桌面端 normalize 一致 */
+			catchUp: plan.schedule?.catchUp === true,
 			lastRunDate: plan.schedule?.lastRunDate || '',
 			lastStopDate: plan.schedule?.lastStopDate || '',
 			runStartedAt: Number(plan.schedule?.runStartedAt) || 0
@@ -1482,13 +1562,28 @@ function pickScript(script: RemoteScript): void {
 }
 
 const emptyText = computed(() => {
-	if (!browser.value || browser.value.status !== 'launched') return '浏览器未运行，请先在详情里启动浏览器';
+	if (!browser.value || browser.value.status !== 'launched') return '浏览器未运行。先点上面的「启动浏览器」，就绪后这里会显示课程列表。';
 	if (running.value) return '登录完成后会自动读取课程列表…';
 	if (probing.value) return '正在读取课程列表…';
 	if (job.value && job.value.state === 'error') return '登录未完成，课程列表暂不可用';
 	if (job.value && job.value.hint) return job.value.hint;
 	return '还没有课程列表。登录完成后会自动读取，也可以点右上角「刷新」。';
 });
+
+/**
+ * 启动浏览器（临时操作页用）
+ *
+ * 只是把命令发下去，真实的启动进度靠快照推过来；用户看到的是顶部状态
+ * 从「未启动」变成「启动中」，运行完就能点登录脚本了。
+ */
+async function launchNow(): Promise<void> {
+	try {
+		await launchBrowser(uid.value);
+		toast('已开始启动浏览器，就绪后再运行脚本', 'success');
+	} catch {
+		/* 提示已在 store 里统一处理 */
+	}
+}
 
 async function doRun(): Promise<void> {
 	const script = current.value;
@@ -1566,8 +1661,8 @@ onMounted(async () => {
 	await loadAll();
 	await fetchAutomation(uid.value);
 
-	/** 进去先问一次：现在是不是停在课程页上（决定三个目录灰不灰） */
-	await refreshCatalogReady(uid.value);
+	/** 进去先问一次：现在是不是停在课程页上（决定三个目录灰不灰）；没运行就不必白跑一趟 */
+	if (browserReady.value) await refreshCatalogReady(uid.value);
 
 	/**
 	 * 浏览器开着「启动后自动运行自动程序」时，课程页通常早就打开了：
@@ -1769,6 +1864,27 @@ onBeforeUnmount(() => {
 
 .note--warn {
 	background: rgba(255, 184, 76, 0.14);
+}
+
+/** 「临时操作」在浏览器未运行时给出的启动入口 */
+.start-hint {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	flex-wrap: wrap;
+	padding: 9px 11px;
+	border-radius: 10px;
+	border: 1px dashed var(--line);
+	background: var(--surface-2);
+	font-size: 11.5px;
+	line-height: 1.5;
+}
+
+.start-hint .btn {
+	flex: none;
+	min-height: 34px;
+	font-size: 12px;
 }
 
 .block {
