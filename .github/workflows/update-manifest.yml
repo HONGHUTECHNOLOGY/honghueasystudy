@@ -74,6 +74,11 @@ jobs:
             --notes "other: 桌面端与扩展同步更新，详见发布页" \
             --verify
 
+      # 更新日志也一起落盘：弹窗里的「更新了什么」读的是 website/api/changelog.json。
+      # 这一步必须在提交前，否则新版本发布了、日志还停在上一个版本。
+      - name: Generate user-facing changelog
+        run: node scripts/gen-changelog-json.js
+
       - name: Commit manifest to main
         env:
           RELEASE_TAG: ${{ inputs.tag }}

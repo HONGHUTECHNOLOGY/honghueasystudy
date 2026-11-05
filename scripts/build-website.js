@@ -206,6 +206,23 @@ function main() {
   const copied = copyTree(SRC_DIR, outDir);
   const stats = inject(outDir, vars);
 
+  /*
+   * 更新日志：从 CHANGELOG.md 重新生成一份「面向用户」的结构化 JSON 到产物里。
+   *
+   * 不直接复制 website/api/changelog.json，是因为那份文件靠 CI 提交、可能落后于
+   * 仓库里的 CHANGELOG.md；构建时按需生成，官网与客户端拿到的永远是同一次构建的口径。
+   * 生成失败只告警不中断 —— 日志缺失不该让整站构建挂掉。
+   */
+  let changelogInfo = '';
+  try {
+    const { writeChangelog } = require(path.join(__dirname, 'gen-changelog-json.js'));
+    const data = writeChangelog(path.join(outDir, 'api', 'changelog.json'));
+    const items = data.versions.reduce((n, v) => n + v.sections.reduce((m, s) => m + s.items.length, 0), 0);
+    changelogInfo = `${data.versions.length} 个版本 / ${items} 条，最新 ${data.latest || '（空）'}`;
+  } catch (e) {
+    console.warn(`[web] ⚠ 更新日志生成失败（站点仍可发布）: ${e.message}`);
+  }
+
   const manifest = {
     version: vars.VERSION,
     desktopVersion: vars.DESKTOP_VERSION,
@@ -219,6 +236,7 @@ function main() {
   console.log(`[web] 输出目录    ${path.relative(ROOT, outDir)}  (${copied} 个文件)`);
   console.log(`[web] 版本        v${vars.VERSION}  桌面版 v${vars.DESKTOP_VERSION}  tag ${vars.TAG}  commit ${vars.COMMIT}`);
   console.log(`[web] 扫描文本    ${stats.scanned} 个，改写 ${stats.changed} 个，替换 ${stats.hits} 处`);
+  if (changelogInfo) console.log(`[web] 更新日志    api/changelog.json（${changelogInfo}）`);
 
   if (stats.unknown.size) {
     const list = [...stats.unknown.entries()].map(([k, n]) => `{{${k}}}×${n}`).join(', ');

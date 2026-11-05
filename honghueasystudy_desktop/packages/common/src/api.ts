@@ -64,10 +64,36 @@ export interface UpdateInstaller {
 	ext?: string;
 }
 
+/** 更新日志：一个版本对应若干组「面向用户」的条目 */
+export interface ChangelogVersion {
+	version: string;
+	/** YYYY-MM-DD，可能为空（旧版本段落没记日期） */
+	date?: string;
+	sections: {
+		/** 已归一化的小节名：新功能 / 问题修复 / 性能优化 */
+		title: string;
+		items: string[];
+	}[];
+}
+
+/** 官网 /api/changelog.json 的形状（由 scripts/gen-changelog-json.js 生成，已过滤掉工程条目） */
+export interface ChangelogFile {
+	generatedAt?: string;
+	latest?: string;
+	versions: ChangelogVersion[];
+}
+
 /** 版本更新信息 */
 export interface UpdateInformationResource {
 	tag: string;
 	description: Record<'feat' | 'fix' | 'other', string[]>;
+	/**
+	 * 本次更新涉及的更新日志（新 → 旧，只包含比当前版本新的那些）。
+	 *
+	 * 主进程在推送「发现新版本」前拉好塞进来：渲染端拿不到更新日志时也要能弹窗，
+	 * 所以它是可选的，缺了就不显示日志区域。
+	 */
+	notes?: ChangelogVersion[];
 	/**
 	 * 各平台安装包的下载信息。
 	 *
@@ -127,6 +153,8 @@ export interface Infos {
 export const APP_INFOS_URL = 'https://easystudy.honghutech.eu.org/api/honghu-app-infos.json';
 /** 旧文件名（内容与新文件一致）：官网尚未部署新文件名或旧版客户端在线时的回退 */
 export const LEGACY_APP_INFOS_URL = 'https://easystudy.honghutech.eu.org/api/ocs-app-infos.json';
+/** 面向用户的更新日志（已过滤工程条目），与清单同源同站 */
+export const CHANGELOG_URL = 'https://easystudy.honghutech.eu.org/api/changelog.json';
 
 export class HonghuApi {
 	/**
@@ -154,5 +182,23 @@ export class HonghuApi {
 			(await HonghuApi.getInfosSafe()) ||
 			({ userjs: {}, resourceGroups: [], bookmark: [], notify: [], banners: [], versions: [] } as unknown as Infos)
 		);
+	}
+
+	/**
+	 * 拉取面向用户的更新日志（已过滤掉工程条目）。
+	 *
+	 * 失败返回 null 而不是抛错：更新日志只是弹窗里的「顺带看看」，取不到不该
+	 * 影响更新本身；调用方按「没有日志区域」处理即可。
+	 */
+	static async getChangelogSafe(): Promise<ChangelogFile | null> {
+		try {
+			// 超时给短一点：它挡在更新弹窗前面，网络不好时不该让用户干等
+			const { data } = await axios.get(CHANGELOG_URL + '?t=' + Date.now(), { timeout: 5000 });
+			// 站点对未知路径会回退 index.html（200），形状不对即视为没拿到
+			if (data && typeof data === 'object' && Array.isArray((data as ChangelogFile).versions)) {
+				return data as ChangelogFile;
+			}
+		} catch {}
+		return null;
 	}
 }

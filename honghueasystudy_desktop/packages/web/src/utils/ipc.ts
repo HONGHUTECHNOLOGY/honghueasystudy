@@ -7,6 +7,7 @@ import { defineComponent, h, reactive } from 'vue';
 import { remote } from './remote';
 import { processes } from './process';
 import { sleep } from './index';
+import UpdateNotes from '../components/UpdateNotes.vue';
 const { ipcRenderer } = electron;
 
 const CLOSING_NOTIFY_KEY = 'updater-close-browsers';
@@ -291,39 +292,21 @@ export function activeIpcRenderListener() {
 					}
 				})();
 			},
+			/*
+			 * 内容只显示「面向用户」的更新日志（官网 api/changelog.json，已过滤工程条目）。
+			 *
+			 * 早先这里渲染的是清单里的 description，但那份字段一直只有
+			 * 「桌面端与扩展同步更新，详见发布页」一句占位——对用户零信息量，
+			 * 现在改成按版本分组、可滚动的真实更新内容。
+			 */
 			content: () =>
 				h('div', [
-					h('div', '新版本 : ✨' + new_version.tag),
-					h('div', '版本更新内容如下: '),
-					h('div', [
-						...(new_version.description.feat?.length
-							? [
-									h('div', '新增：'),
-									h(
-										'ul',
-										new_version.description.feat.map((feature) => h('li', feature))
-									)
-							  ]
-							: []),
-						...(new_version.description.fix?.length
-							? [
-									h('div', '修复：'),
-									h(
-										'ul',
-										new_version.description.fix.map((feature) => h('li', feature))
-									)
-							  ]
-							: []),
-						...(new_version.description.other?.length
-							? [
-									h('div', '其他：'),
-									h(
-										'ul',
-										new_version.description.other.map((feature) => h('li', feature))
-									)
-							  ]
-							: [])
-					])
+					h(
+						'div',
+						{ style: 'font-size:12px;color:var(--color-text-3);margin:-4px 0 8px' },
+						`新版本 v${new_version.tag}`
+					),
+					h(UpdateNotes, { notes: new_version.notes })
 				])
 		});
 	});

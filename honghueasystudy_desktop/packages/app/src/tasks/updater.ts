@@ -9,7 +9,7 @@ import { downloadFromMirrors, hostOf, normalizeUrls } from '../utils/download-so
 import { resolveInstallDir, spawnSilentInstaller } from '../utils/installer';
 import { spawnProgressWindow } from '../utils/update-window';
 import { detectLinuxDistro, pickPlatformInstaller } from '../utils/platform-installer';
-import { HonghuApi, UpdateInformationResource } from '@honghu-desktop/common';
+import { HonghuApi, ChangelogVersion, UpdateInformationResource } from '@honghu-desktop/common';
 
 const logger = Logger('updater');
 
@@ -94,6 +94,66 @@ function pickNewest(current: string, versions: UpdateInformationResource[]): Upd
 		}
 	});
 	return newer[0];
+}
+
+/**
+ * 更新弹窗里最多列出几个版本的日志。
+ *
+ * 跨大版本的用户（比如 5.0 → 5.4）会同时命中好几段，全列出来就变成长文；
+ * 截断后仍保留最新的这些，旧的自然会被用户忽略。
+ */
+const NOTES_MAX_VERSIONS = 6;
+/** 单个小节里的条目上限，防止某次版本刷出几十条把弹窗撑爆 */
+const NOTES_MAX_ITEMS = 12;
+
+/**
+ * 从官网更新日志里截取「当前版本之后、最新版本之前」的段落。
+ *
+ * 只挑比 current 新的：已经装过的版本再列一遍没有意义。
+ * 版本号解析失败（旧的脏数据）一律跳过，不能让日志把更新流程带崩。
+ */
+function collectNotes(current: string, newestTag: string, changelog: any): ChangelogVersion[] {
+	const list = Array.isArray(changelog?.versions) ? changelog.versions : [];
+	const picked: ChangelogVersion[] = [];
+
+	for (const v of list) {
+		if (!v || typeof v.version !== 'string') continue;
+		try {
+			if (!gt(v.version, current)) continue;
+			if (newestTag && gt(v.version, newestTag)) continue;
+		} catch {
+			continue;
+		}
+		const sections = (Array.isArray(v.sections) ? v.sections : [])
+			.map((s: any) => ({
+				title: String(s?.title || '').trim() || '更新',
+				items: (Array.isArray(s?.items) ? s.items : []).map((x: any) => String(x)).filter(Boolean).slice(0, NOTES_MAX_ITEMS)
+			}))
+			.filter((s: { items: string[] }) => s.items.length);
+		if (!sections.length) continue;
+		picked.push({ version: v.version, date: typeof v.date === 'string' ? v.date : '', sections });
+	}
+
+	picked.sort((a, b) => {
+		try {
+			return rcompare(a.version, b.version);
+		} catch {
+			return 0;
+		}
+	});
+	return picked.slice(0, NOTES_MAX_VERSIONS);
+}
+
+/** 更新日志的内存缓存：同一次运行里手动点几次「检查更新」不必反复拉 */
+let changelogCache: { at: number; data: any } | null = null;
+const CHANGELOG_TTL = 10 * 60 * 1000;
+
+async function loadChangelog(): Promise<any> {
+	if (changelogCache && Date.now() - changelogCache.at < CHANGELOG_TTL) return changelogCache.data;
+	const data = await HonghuApi.getChangelogSafe().catch(() => null);
+	// 失败也缓存（空值）：网络不好时不必每次重试都再等一个超时
+	changelogCache = { at: Date.now(), data };
+	return data;
 }
 
 /**
@@ -307,8 +367,13 @@ export async function checkUpdate(manual = false): Promise<UpdateCheckResult> {
 			 *      用户反而永远看不到更新。
 			 * 真下载失败也不必在这里拦：updateApp 有自己的兜底（打开下载页 / 复制错误日志）。
 			 */
+			// 附上「面向用户」的更新日志：拉不到就不带，弹窗照样能弹
+			const notes = collectNotes(current, newest.tag, await loadChangelog());
+			if (notes.length) {
+				logger.info(`附带更新日志 ${notes.length} 段：${notes.map((n) => n.version).join(' / ')}`);
+			}
 			moveWindowToTop();
-			getCurrentWebContents().send('detect-new-app-version', newest);
+			getCurrentWebContents().send('detect-new-app-version', { ...newest, notes });
 		}
 	}
 

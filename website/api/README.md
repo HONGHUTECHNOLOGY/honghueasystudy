@@ -161,28 +161,51 @@ git add website/api/ && git commit -m "chore(release): 同步更新清单" && gi
 - 候选目录若落在打包目录（路径含 `win-unpacked`）或临时目录，一律判为不可信，回退注册表。
 - 清单缺 `installers.win32`、或所有候选目录都不可用时，不要静默失败，退回「打开下载页手动安装」。
 
-### 提示更新前会先探测下载源
+### 提示更新前不再探测下载源
 
 清单是 `push main` 就上线的，而 Release 附件要等 CI 传完（324MB 安装包 + GitCode 镜像同步），
-中间天然存在窗口期。所以客户端在弹更新窗之前，会先对该平台**实际会用的**下载地址做一次可达性探测：
+中间天然存在窗口期——早期的做法是弹窗前先并发 Range GET 探一遍两个源，现在**已移除**：
+
+- 清单不是手写的。`desktop-build` 先把附件传完（GitHub + GitCode 两边），再派发
+  `update-manifest`，后者用 `--verify` 逐条 Range GET 探链、任一不通就 fail-closed
+  拒绝写清单。**「清单里有这个 tag」本身就等于「两边都能下载」**，本地再探一遍是重复劳动。
+- 那轮探测最坏要 6 秒才弹窗，而且网络抖动 / 公司代理临时拦截时会把它判成「源不可达」，
+  于是**静默跳过提示**——用户反而永远看不到更新，比下不动更糟。
+- 真下载失败仍由 `updateApp` 的失败对话框兜底（打开下载页 / 复制错误日志）。
+
+顺带一提：早期为实现探测踩过的坑（GitCode 对 `HEAD` 返 401，必须用带 Range 的 GET 并
+及时断流）在 `scripts/check-manifest-health.js` 里仍然适用，那里是主动体检，不是弹窗前拦截。
+
+### 更新日志 `changelog.json`（面向用户）
+
+更新弹窗里的「更新了什么」不读 `CHANGELOG.md`，而是读同目录的 `changelog.json`：
 
 ```
-读 installers.win32 / darwin / linux → 按平台+架构挑出真实地址
-→ 并发 Range GET（每源 6s 超时）→ 任一可达才弹窗
-→ 全部不可达：本次静默跳过，下次启动重新检测
+CHANGELOG.md ──(scripts/gen-changelog-json.js 过滤)──> website/api/changelog.json ──> 桌面端弹窗 / 官网
 ```
 
-这带来两个运维上的好处：
+按 `tag`（也就是版本号）索引，供客户端截取「比当前版本新」的那几段：
 
-- **清单先上线、附件后到位不会骚扰用户**：探测不过就不弹，不会出现「检测到更新但点了下不了」。
-- **不需要为了时序去压着清单不发**，也不用关 CF 的自动构建。
+| 字段 | 说明 |
+| --- | --- |
+| `latest` | 最新版本号 |
+| `versions[].version` / `date` | 版本号与发布日期 |
+| `versions[].sections[].title` | 已归一化为 新功能 / 问题修复 / 性能优化 |
+| `versions[].sections[].items[]` | 纯文本条目（已去掉 scope、提交链接、PR 号） |
 
-注意实现细节：探测必须用**带 Range 的 GET**，GitCode 附件对 `HEAD` 直接返回 401（实测），
-用 `HEAD` 会把唯一可用的源误判成死链，导致永远不提示更新。
-另外服务器可能忽略 Range 返回 200 + 整包，所以拿到响应头就要断开流，不能读下去。
+过滤规则（见脚本头部注释）：只保留 feat / fix / perf 三类小节；丢掉
+ci / build / deps / release / manifest / mirror 等工程 scope；正文仍含
+「工作流 / 探链 / runner / lockfile」这类黑话的条目一并丢弃。
+**CHANGELOG.md 仍然保持完整**（含 chore、ci 等），只有面向用户的这份被裁剪。
 
-用户手动点版本号检查更新时，探测不过会明确提示「新版本 vX 已发布，但下载服务器当前无法连接」，
-而不是误报「已是最新版本」（自动检测则完全静默）。
+生成时机有两处，口径一致：
+
+- `scripts/build-website.js` 每次构建站点时重新生成到产物（CF Pages 走的就是这条）；
+- `update-manifest.yml` 在提交清单前跑一次，把 `website/api/changelog.json` 一起提交。
+
+手工核对：`node scripts/gen-changelog-json.js --print`（只打印不落盘）。
+
+字段含义：
 
 `url` / `urls`（zip）保留的唯一原因是兼容 <= 3.2.0 的已装用户——那份代码只会走就地更新。
 等这批用户升级完，可以移除。
@@ -205,7 +228,7 @@ git add website/api/ && git commit -m "chore(release): 同步更新清单" && gi
 | 字段 | 作用 |
 | --- | --- |
 | `tag` | **桌面版本**，与 `app.getVersion()` 做 semver 比较（允许带 `v` 前缀） |
-| `description` | 更新弹窗内按 新增 / 修复 / 其他 分组展示 |
+| `description` | 旧版弹窗用的分组文案，现已被 `changelog.json` 取代（客户端优先用日志，留它只为兼容旧版渲染） |
 | `installers.win32` | Windows 安装包：多源地址、sha256、大小、文件名 |
 | `installers.darwin` | mac dmg 数组，每条含 `arch`（`arm64`/`x64`）、`ext`、`urls`、`name` |
 | `installers.linux` | linux 安装包数组，`arch` + `ext`（`AppImage`/`deb`/`rpm`）区分 |

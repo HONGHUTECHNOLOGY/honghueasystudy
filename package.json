@@ -15,6 +15,7 @@
 		"build:ext": "gulp -f ./scripts/build-extension.js",
 		"pack:ext": "node scripts/pack-extension.js",
 		"build:web": "node scripts/build-website.js",
+		"changelog": "node scripts/gen-changelog-json.js",
 		"release:update-pack": "node scripts/pack-app-update.js",
 		"release:update-manifest": "node scripts/write-update-manifest.js",
 		"release:gitcode": "node scripts/publish-to-gitcode.js",
