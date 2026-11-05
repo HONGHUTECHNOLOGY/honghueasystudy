@@ -36,6 +36,9 @@
 					<Icon type="upload">导入数据</Icon>
 				</a-doption>
 				<a-doption @click="relaunch"> <Icon type="sync">重启软件</Icon> </a-doption>
+				<a-doption @click="handleCheckUpdate">
+					<Icon type="refresh">{{ checkingUpdate ? '正在检查更新…' : '检查更新' }}</Icon>
+				</a-doption>
 				<a-doption @click="openLog"> <Icon type="folder">日志目录</Icon> </a-doption>
 				<a-doption
 					class="border-bottom"
@@ -65,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h } from 'vue';
+import { computed, h, ref } from 'vue';
 import { date } from '../utils';
 import { remote } from '../utils/remote';
 import { Message, Modal } from '@arco-design/web-vue';
@@ -77,6 +80,7 @@ import { Folder, root } from '../fs/folder';
 import { FolderOptions, FolderType } from '../fs/interface';
 import { Browser } from '../fs/browser';
 import { checkBrowserCaches } from '../utils/browser';
+import { checkAppUpdate } from '../utils/ipc';
 import Icon from './Icon.vue';
 import StatusBar from './StatusBar.vue';
 
@@ -104,6 +108,18 @@ function toggleMode() {
 function relaunch() {
 	remote.app.call('relaunch');
 	remote.app.call('quit');
+}
+
+/** 手动检查更新：启动时只在后台静默检测，网络抖动时用户无从察觉 */
+const checkingUpdate = ref(false);
+async function handleCheckUpdate() {
+	if (checkingUpdate.value) return;
+	checkingUpdate.value = true;
+	try {
+		await checkAppUpdate();
+	} finally {
+		checkingUpdate.value = false;
+	}
 }
 
 // 打开日志目录

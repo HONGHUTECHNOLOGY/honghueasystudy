@@ -5,9 +5,10 @@ import { join, dirname } from 'path';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rm, rmSync, statSync, writeFileSync } from 'fs';
 import * as fsMod from 'fs';
 import { getCurrentWebContents, moveWindowToTop } from '../utils';
-import { downloadFromMirrors, hostOf, normalizeUrls, probeSources } from '../utils/download-source';
+import { downloadFromMirrors, hostOf, normalizeUrls } from '../utils/download-source';
 import { resolveInstallDir, spawnSilentInstaller } from '../utils/installer';
-import { detectLinuxDistro, pickPlatformInstaller, resolveDownloadTargets } from '../utils/platform-installer';
+import { spawnProgressWindow } from '../utils/update-window';
+import { detectLinuxDistro, pickPlatformInstaller } from '../utils/platform-installer';
 import { HonghuApi, UpdateInformationResource } from '@honghu-desktop/common';
 
 const logger = Logger('updater');
@@ -25,8 +26,10 @@ export interface UpdateCheckResult {
 	hasUpdate: boolean;
 	error?: 'network' | 'unknown';
 	/**
-	 * 有新版，但该平台的下载地址当前全部不可达：本次不弹更新提示。
-	 * 渲染端据此给出「已发布但暂时下载不了」的说明，而不是误报「已是最新」。
+	 * 历史字段：旧版在提示更新前会探一遍下载源，全部不可达时置为 'unreachable' 并静默跳过。
+	 *
+	 * 现在不再探测（见 checkUpdate 里的说明），这个字段恒为 undefined，保留仅为兼容
+	 * 仍在读它的渲染端代码。
 	 */
 	blocked?: 'unreachable';
 }
@@ -293,34 +296,17 @@ export async function checkUpdate(manual = false): Promise<UpdateCheckResult> {
 			}
 		} else {
 			/*
-			 * 提示前先确认「点更新真的能下到包」。
+			 * 这里不再做「下载源可达性预检」。
 			 *
-			 * 官网清单是 push 即上线的，而 Release 附件要等 CI 传完（324MB 安装包 + 镜像同步），
-			 * 中间存在一段窗口期；清单写错、附件被删、公司网络封了 GitHub/GitCode 也会造成同样结果。
-			 * 这些情况下弹窗只会把用户推向一个死链，所以探测不到就静默跳过，下次启动重试。
+			 * 清单不是手写的：CI 的 desktop-build 先把安装包传完（GitHub + GitCode 两边），
+			 * 再派发 update-manifest，后者用 Range GET 逐条探链、任一不通就 fail-closed 拒绝写清单
+			 * （见 .github/workflows/desktop-build.yml 的 Dispatch update manifest）。
+			 * 也就是说「清单里有这个 tag」本身已经等于「两边都能下载」，本地再探一遍只会：
+			 *   1) 把更新提示白白推迟 0~6 秒（探测是并发 HTTP，但慢源会拖满超时）；
+			 *   2) 在代理抖动 / 公司网络临时拦截时，把「有新版本」误判成「下载源不可达」而静默不提示，
+			 *      用户反而永远看不到更新。
+			 * 真下载失败也不必在这里拦：updateApp 有自己的兜底（打开下载页 / 复制错误日志）。
 			 */
-			const targets = resolveDownloadTargets(newest, {
-				platform: process.platform,
-				arch: process.arch,
-				distro: process.platform === 'linux' ? detectLinuxDistro() : undefined
-			});
-
-			if (targets.length) {
-				const probe = await probeSources(targets, {
-					onLog: (level, msg) => (level === 'warn' ? logger.warn(msg) : logger.info(msg))
-				});
-				if (!probe.ok) {
-					logger.warn(
-						`新版本 ${newest.tag} 的下载源全部不可达，本次不提示更新（下次启动重试）：` +
-							probe.attempts.map((a) => `${hostOf(a.url)}=${a.detail}`).join(', ')
-					);
-					return { ok: true, current, latest: newest.tag, hasUpdate: true, blocked: 'unreachable' };
-				}
-			} else {
-				// 清单连下载页都没给：交给 updateApp 的兜底分支，那里会打开官网
-				logger.warn(`新版本 ${newest.tag} 没有任何可用下载地址，仍按可达处理（由下载页兜底）`);
-			}
-
 			moveWindowToTop();
 			getCurrentWebContents().send('detect-new-app-version', newest);
 		}
@@ -461,8 +447,13 @@ export async function updateApp(newVersion: UpdateInformationResource): Promise<
 			sha256: installer.sha256,
 			size: installer.size,
 			onLog: (level, msg) => (level === 'warn' ? logger.warn(msg) : logger.info(msg)),
-			onProgress: (rate, totalLength, chunkLength) => {
-				getCurrentWebContents().send('update-download', rate, totalLength, chunkLength);
+			onProgress: (percent, totalLength, received) => {
+				// 对象化：渲染端要同时显示百分比、已下载/总量、速度与剩余时间
+				getCurrentWebContents().send('update-download', {
+					percent: Math.max(0, Math.min(100, percent)),
+					received,
+					total: totalLength
+				});
 			}
 		});
 		if (!installer.sha256) logger.warn('清单未提供安装包 sha256，跳过完整性校验');
@@ -537,6 +528,34 @@ export async function installUpdate(): Promise<{ ok: boolean }> {
 
 	logger.info(`启动安装程序：${pending.exePath}`);
 	logger.info(`覆盖安装目录：${pending.installDir}（来源：${resolved.source === 'registry' ? '注册表' : '当前运行目录'}）`);
+
+	/*
+	 * Windows 优先交给「安装进度窗口」：静默安装期间没有任何界面，
+	 * 从本进程退出到装完的 1~3 分钟里用户完全看不到发生什么。
+	 * 窗口是独立的 PowerShell 进程，负责等本进程退出 → 启动安装器 → 装完自动拉起新版本。
+	 * 环境不支持时（找不到 powershell.exe 等）必须回退到原来的静默安装，不能因此放弃更新。
+	 */
+	if (process.platform === 'win32') {
+		const targetExe = resolved.exeName ? join(pending.installDir, resolved.exeName) : app.getPath('exe');
+		const win = spawnProgressWindow({
+			installerPath: pending.exePath,
+			installDir: pending.installDir,
+			appExe: targetExe,
+			waitPid: process.pid,
+			version: pending.tag,
+			scriptDir: pendingDir(),
+			onLog: (level, msg) => (level === 'warn' ? logger.warn(msg) : logger.info(msg))
+		});
+		if (win.ok) {
+			logger.info('退出以完成安装（进度窗口接管，装完自动启动新版本）');
+			// 给渲染端回执与窗口显示留一点时间；安装器和窗口都是 detached 的，不受影响
+			setTimeout(() => {
+				app.quit();
+			}, 900);
+			return { ok: true };
+		}
+		logger.warn('安装进度窗口不可用，回退为静默安装（安装期间无界面）');
+	}
 
 	await spawnSilentInstaller({
 		exePath: pending.exePath,

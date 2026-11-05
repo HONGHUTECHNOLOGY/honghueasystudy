@@ -52,8 +52,16 @@
 						</template>
 					</div>
 
-					<div class="text-secondary version mb-1 ms-2" @click="handleCheckUpdate">
-						{{ checking ? '检查中…' : version }}
+					<div
+						class="version mb-1 ms-2"
+						:title="checking ? '正在检查更新…' : '点击检查更新'"
+						@click="handleCheckUpdate"
+					>
+						<Icon
+							:type="checking ? 'sync' : 'refresh'"
+							:size="13"
+						/>
+						<span v-if="store.render.setting.showSideBarText">{{ checking ? '检查中' : version }}</span>
 					</div>
 				</div>
 			</div>
@@ -197,13 +205,22 @@ function clickMenu(route: RouteRecordRaw & { meta: { title: string } }) {
 		font-size: 11px;
 		position: absolute;
 		bottom: 0px;
-		opacity: 0.5;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 3px 8px;
+		border: 1px solid var(--micro-border-light);
+		border-radius: 999px;
+		color: var(--color-text-3);
+		opacity: 0.72;
 		cursor: pointer;
 		user-select: none;
-		transition: opacity 0.2s var(--ease-precise);
+		transition: opacity 0.2s var(--ease-precise), color 0.2s var(--ease-precise), border-color 0.2s var(--ease-precise);
 
 		&:hover {
 			opacity: 1;
+			color: rgb(var(--primary-6));
+			border-color: rgb(var(--primary-3));
 		}
 	}
 }
