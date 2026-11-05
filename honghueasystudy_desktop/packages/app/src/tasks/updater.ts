@@ -330,6 +330,15 @@ export async function checkUpdate(manual = false): Promise<UpdateCheckResult> {
 	// 启动时顺手清理上次更新留下的残留，不阻塞检测
 	cleanupUpdateResidue();
 
+	/*
+	 * 更新日志与清单**并行**拉取。
+	 *
+	 * 两者同站同量级（13KB / 20KB），串行等于白等一倍：先拿清单再拉日志的话，
+	 * 网络差时日志那 5s 超时会直接推迟「发现新版本」弹窗。这里先发出去，
+	 * 真正要用的时候再 await（多半已经回来了）；日志拉不到也不影响更新本身。
+	 */
+	const changelogPromise = loadChangelog();
+
 	const infos = await HonghuApi.getInfosSafe().catch(() => null);
 	if (!infos) {
 		logger.warn('检测更新失败：远程配置拉取失败');
@@ -368,7 +377,7 @@ export async function checkUpdate(manual = false): Promise<UpdateCheckResult> {
 			 * 真下载失败也不必在这里拦：updateApp 有自己的兜底（打开下载页 / 复制错误日志）。
 			 */
 			// 附上「面向用户」的更新日志：拉不到就不带，弹窗照样能弹
-			const notes = collectNotes(current, newest.tag, await loadChangelog());
+			const notes = collectNotes(current, newest.tag, await changelogPromise);
 			if (notes.length) {
 				logger.info(`附带更新日志 ${notes.length} 段：${notes.map((n) => n.version).join(' / ')}`);
 			}
