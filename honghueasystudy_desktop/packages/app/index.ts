@@ -15,6 +15,9 @@ import { store } from './src/store';
 import { initAesKey } from './src/crypto';
 import { initRemoteControl, remoteControl } from './src/tasks/remote-control';
 import { hideToTray, initTray } from './src/tasks/tray';
+import { Logger } from './src/logger';
+
+const logger = Logger('launch');
 
 /**
  * 是否已经进入「真正退出」流程（app.quit / 安装更新 / 系统退出）
@@ -36,6 +39,14 @@ app.setName('鸿鹄易学');
  * 那种情况必须正常显示窗口。
  */
 const silentStart = process.argv.includes('--hidden');
+
+/**
+ * 启动参数与静默判定留痕
+ *
+ * 开机自启是否真的带了 `--hidden`、判定结果如何，全靠这一行。
+ * 出问题时（明明是自启却弹了界面）第一件事就是看它，别再靠猜。
+ */
+logger.info(`启动参数：${process.argv.slice(1).join(' ') || '(无)'}；静默启动=${silentStart}`);
 
 // 防止软件崩溃以及兼容
 app.commandLine.appendSwitch('no-sandbox');
@@ -146,8 +157,11 @@ function bootstrap() {
 				 * 任务管理器里也只能看到一个没有界面的进程，等同于「程序打不开」。
 				 */
 				if (app.isPackaged && silentStart && trayReady) {
-					console.log('[启动] 静默启动：窗口保留在托盘，不显示界面');
+					logger.info('静默启动：窗口保留在托盘，不显示界面');
 				} else {
+					logger.info(
+						`显示主窗口（isPackaged=${app.isPackaged}, 静默参数=${silentStart}, 托盘可用=${trayReady}）`
+					);
 					window.show();
 				}
 			})

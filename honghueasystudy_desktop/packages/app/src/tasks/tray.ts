@@ -106,6 +106,20 @@ function destroyTray(): void {
 /** 把主窗口带回前台（隐藏/最小化都能恢复） */
 export function showMainWindow(): void {
 	if (!win || win.isDestroyed()) return;
+
+	/**
+	 * 留痕调用来源。
+	 *
+	 * 开机静默启动后窗口本应留在托盘，若它自己冒出来，必须知道是谁叫的
+	 * （托盘点击 / 第二次启动 / activate / 远程调用），否则只能靠猜。
+	 */
+	const caller = (new Error().stack || '')
+		.split('\n')
+		.slice(2, 5)
+		.map((line) => line.trim().replace(/^at\s+/, ''))
+		.join(' ← ');
+	logger.info(`显示主窗口（可见性=${win.isVisible()}）；调用来源：${caller}`);
+
 	if (win.isMinimized()) win.restore();
 	if (!win.isVisible()) win.show();
 	win.focus();
