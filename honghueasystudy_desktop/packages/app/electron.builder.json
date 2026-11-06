@@ -10,7 +10,7 @@
   "files": [
     "**/*",
     "!dist/**",
-    "!dist-*/**",
+    "!**/dist-*/**",
     "!**/dist-links/**"
   ],
   "extraResources": [
