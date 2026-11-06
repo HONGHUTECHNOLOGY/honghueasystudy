@@ -1,5 +1,5 @@
-import { app, shell } from 'electron';
-import { existsSync, mkdirSync, rmSync } from 'fs';
+import { app } from 'electron';
+import { existsSync, rmSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { Logger } from '../logger';
@@ -21,17 +21,21 @@ function isAutoLaunchEnabled(): boolean {
 }
 
 /**
- * Windows「启动」文件夹里的快捷方式
+ * 清理旧版本留下的「启动」文件夹快捷方式
  *
- * 只写注册表 `Run` 项不够可靠：安全软件、装机工具和「系统优化」经常把那条
- * 条目清掉或标成禁用，而应用每次启动又会原样写回去 —— 于是注册表看起来永远
- * 是对的，开机却从来不启动，日志里也全是「已开启」。
+ * 早期为了防「注册表条目被系统优化工具清掉」，自启做了双通道（注册表 Run 项
+ * 与启动文件夹快捷方式）。后来查明当时「开了却不自启」的真正原因是 exe 清单
+ * 声明了 highestAvailable（登录启动项无法弹 UAC，被系统静默跳过），双通道是
+ * 误判下的过度设计 —— 而且两条都生效时会拉起两个进程，第二个把已藏好的窗口
+ * 唤回前台，直接导致「开机自己弹界面」。
  *
- * 启动文件夹是 Windows 官方支持的第二种自启方式，两条路任意一条生效就够。
- * 都生效时会拉起两个进程，但第二个会被单实例锁挡掉，不会出现两套界面。
+ * 现在只保留注册表一条路。但老用户机器上的 lnk 还在，留着它关掉自启照样会
+ * 启动程序，所以每次启动都顺手清一次（不存在时是空操作）。
  */
-function startupShortcut(): string {
-	return path.join(
+function removeLegacyStartupShortcut(): void {
+	if (process.platform !== 'win32') return;
+
+	const link = path.join(
 		app.getPath('appData'),
 		'Microsoft',
 		'Windows',
@@ -40,69 +44,13 @@ function startupShortcut(): string {
 		'Startup',
 		'鸿鹄易学.lnk'
 	);
-}
+	if (!existsSync(link)) return;
 
-/**
- * 同步启动文件夹快捷方式
- *
- * 必须用 `create`，不能用 `replace` ——这个坑曾经让自启功能长期静默失效：
- * Electron 文档写明 replace 只覆盖**已存在**的快捷方式、不存在时直接返回 false，
- * 而首次安装时启动文件夹里当然没有这个文件，于是每次启动都「写入失败」，
- * 只剩注册表一条路（那条一旦被系统忽略，就彻底不自启了）。
- *
- * create 的语义是「创建，必要时覆盖」，同样满足「用户换过安装目录后要更新指向」
- * 的需求，不会留下指向已卸载 exe 的旧快捷方式。
- *
- * @returns 快捷方式当前是否存在且指向本程序
- */
-function syncStartupShortcut(enabled: boolean): boolean {
-	if (process.platform !== 'win32') return false;
-
-	const link = startupShortcut();
 	try {
-		if (!enabled) {
-			if (existsSync(link)) rmSync(link, { force: true });
-			return false;
-		}
-
-		const folder = path.dirname(link);
-		if (!existsSync(folder)) mkdirSync(folder, { recursive: true });
-
-		const details = {
-			target: process.execPath,
-			cwd: path.dirname(process.execPath),
-			/** 自启时静默启动：窗口不显示，只留托盘图标 */
-			args: AUTOSTART_FLAG,
-			description: '鸿鹄易学（开机自启）'
-		};
-
-		let created = shell.writeShortcutLink(link, 'create', details);
-		if (!created) {
-			// 兜底：残留的损坏文件（或占用）可能让 create 失败，删掉重来一次
-			if (existsSync(link)) rmSync(link, { force: true });
-			created = shell.writeShortcutLink(link, 'create', details);
-		}
-		if (!created) {
-			logger.error('写入启动文件夹快捷方式失败：' + link);
-			return false;
-		}
-
-		// 不信返回值，读回来比对：快捷方式存在但指向旧 exe 时，开机只会闪一下「找不到文件」
-		try {
-			const back = shell.readShortcutLink(link);
-			const same = path.normalize(back.target).toLowerCase() === path.normalize(process.execPath).toLowerCase();
-			if (!same) {
-				logger.warn(`启动快捷方式指向 ${back.target}，与当前程序 ${process.execPath} 不一致`);
-				return false;
-			}
-			return true;
-		} catch (e) {
-			logger.warn('读取刚写入的启动快捷方式失败', e);
-			return existsSync(link);
-		}
+		rmSync(link, { force: true });
+		logger.info('已清除旧版遗留的启动文件夹快捷方式：' + link);
 	} catch (e) {
-		logger.error('同步启动文件夹快捷方式失败', e);
-		return false;
+		logger.error('清除旧版启动文件夹快捷方式失败', e);
 	}
 }
 
@@ -158,7 +106,6 @@ export function autoLaunch() {
 			logger.error('设置开机自启失败', e);
 		}
 
-		const inStartupFolder = syncStartupShortcut(enabled);
 		const status = readLoginItemStatus();
 
 		/**
@@ -168,21 +115,22 @@ export function autoLaunch() {
 		const bootAge = Math.round(os.uptime());
 		const bootHint = bootAge < 300 ? `开机 ${bootAge}s（疑似自启）` : `开机 ${bootAge}s（手动启动）`;
 
+		/** 自启只走注册表一条路；顺手清掉旧版可能残留的启动文件夹快捷方式 */
+		removeLegacyStartupShortcut();
+
 		if (!enabled) {
-			logger.info(`开机自启：已关闭（注册表与启动文件夹均已清除）；${bootHint}`);
+			logger.info(`开机自启：已关闭（注册表项已清除）；${bootHint}`);
 			return;
 		}
 
-		/**
-		 * 两条通道任意一条生效即可：注册表 Run 项可能被系统优化工具屏蔽，
-		 * 启动文件夹是 Windows 官方支持的第二种方式，互为备份。
-		 */
-		const usable = status.registered || inStartupFolder;
 		logger.info(
-			`开机自启：已开启（注册表登记=${status.registered} 系统将启动=${status.willLaunch} ` +
-				`启动文件夹=${inStartupFolder}）；${bootHint}` + (usable ? '' : ' —— 两条通道都未生效')
+			`开机自启：已开启（注册表登记=${status.registered} 系统将启动=${status.willLaunch}）；${bootHint}`
 		);
-		if (!usable) logger.error('开机自启两条通道都未生效，登录时不会拉起本程序');
+		if (!status.registered) {
+			logger.error('开机自启未写入注册表 Run 项，登录时不会拉起本程序');
+		} else if (!status.willLaunch) {
+			logger.warn('注册表已登记，但系统标记为「不启动」（可能被任务管理器启动项或安全软件禁用）');
+		}
 	};
 
 	/**
