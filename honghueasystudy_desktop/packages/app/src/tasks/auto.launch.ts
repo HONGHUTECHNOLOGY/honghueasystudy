@@ -7,6 +7,14 @@ import { store } from '../store';
 
 const logger = Logger('auto-launch');
 
+/**
+ * 自启项附带的命令行参数：告诉程序「这次是开机拉起来的，不要显示界面」。
+ *
+ * 必须写进自启项本身，而不是靠「系统运行了多久」猜 —— 重启后用户马上手动点开，
+ * uptime 同样只有几十秒，那种情况得正常显示窗口。
+ */
+export const AUTOSTART_FLAG = '--hidden';
+
 /** 开机自启是否开启（默认开启；旧存档没有该字段时按开启处理） */
 function isAutoLaunchEnabled(): boolean {
 	return store.store.window?.autoLaunch !== false;
@@ -63,6 +71,8 @@ function syncStartupShortcut(enabled: boolean): boolean {
 		const details = {
 			target: process.execPath,
 			cwd: path.dirname(process.execPath),
+			/** 自启时静默启动：窗口不显示，只留托盘图标 */
+			args: AUTOSTART_FLAG,
 			description: '鸿鹄易学（开机自启）'
 		};
 
@@ -105,7 +115,12 @@ function syncStartupShortcut(enabled: boolean): boolean {
  */
 function readLoginItemStatus(): { registered: boolean; willLaunch: boolean } {
 	try {
-		const status = app.getLoginItemSettings({ path: process.execPath });
+		/**
+		 * 必须带上和写入时一致的 `args`：Electron 在 Windows 上是拿注册表里的
+		 * 整条命令行（exe + 参数）去比对的，不传参数会判成「不匹配」，
+		 * 于是日志里明明登记成功却显示「系统将启动=false」。
+		 */
+		const status = app.getLoginItemSettings({ path: process.execPath, args: [AUTOSTART_FLAG] });
 		return { registered: !!status.openAtLogin, willLaunch: !!status.executableWillLaunchAtLogin };
 	} catch (e) {
 		logger.error('读取开机自启状态失败', e);
@@ -131,8 +146,14 @@ export function autoLaunch() {
 			/**
 			 * 显式传 `path`：默认值就是 `process.execPath`，但写出来能避免
 			 * 「静默更新换了安装目录，注册表还指着旧 exe」这类静默失效。
+			 *
+			 * `args` 带上 `--hidden`：开机拉起时不弹主界面，直接进托盘。
 			 */
-			app.setLoginItemSettings({ openAtLogin: enabled, path: process.execPath });
+			app.setLoginItemSettings({
+				openAtLogin: enabled,
+				path: process.execPath,
+				args: enabled ? [AUTOSTART_FLAG] : []
+			});
 		} catch (e) {
 			logger.error('设置开机自启失败', e);
 		}

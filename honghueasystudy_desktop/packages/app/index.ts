@@ -26,6 +26,17 @@ let quitRequested = false;
 
 app.setName('鸿鹄易学');
 
+/**
+ * 是否由「开机自启」拉起的静默启动
+ *
+ * 自启项（注册表 Run 项 / 启动文件夹快捷方式）在命令行里带了 `--hidden`，
+ * 手动双击、开始菜单、桌面快捷方式都不带。
+ *
+ * 用参数判断而不是「系统已运行多久」：重启后用户立刻手动点开，uptime 同样是几十秒，
+ * 那种情况必须正常显示窗口。
+ */
+const silentStart = process.argv.includes('--hidden');
+
 // 防止软件崩溃以及兼容
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu');
@@ -76,7 +87,7 @@ function bootstrap() {
 				}
 
 				/** 托盘（默认开启）：后台运行定时任务，关闭窗口只收进托盘、不退出 */
-				initTray(window);
+				const trayReady = initTray(window);
 
 				/** app.quit()（安装更新 / 内置浏览器初始化后重启 / 系统退出）时，关闭窗口不再收进托盘 */
 				app.on('before-quit', () => {
@@ -127,8 +138,18 @@ function bootstrap() {
 					window.webContents.openDevTools();
 				}
 
-				// 加载完成显示，解决一系列的显示/黑屏问题
-				window.show();
+				/**
+				 * 加载完成显示，解决一系列的显示/黑屏问题。
+				 *
+				 * 开机自启（命令行带 `--hidden`）时不显示，直接留在托盘里后台运行；
+				 * 但托盘没建起来时必须照常显示 —— 否则用户点开程序什么都看不到，
+				 * 任务管理器里也只能看到一个没有界面的进程，等同于「程序打不开」。
+				 */
+				if (app.isPackaged && silentStart && trayReady) {
+					console.log('[启动] 静默启动：窗口保留在托盘，不显示界面');
+				} else {
+					window.show();
+				}
 			})
 		])
 	);

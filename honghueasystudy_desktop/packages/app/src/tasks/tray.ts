@@ -20,15 +20,21 @@ export function isTrayEnabled(): boolean {
 	return store.store.window?.tray !== false;
 }
 
-/** 绑定主窗口并在开启托盘时创建托盘图标（应用启动时调用一次） */
-export function initTray(window: BrowserWindow): void {
+/**
+ * 绑定主窗口并在开启托盘时创建托盘图标（应用启动时调用一次）
+ *
+ * @returns 托盘是否真的可用。开机静默启动要靠它判断能不能把窗口藏起来：
+ *          托盘没建起来还隐藏窗口，用户就彻底找不到界面了。
+ */
+export function initTray(window: BrowserWindow): boolean {
 	win = window;
-	if (!isTrayEnabled()) return;
-	if (createTray()) return;
+	if (!isTrayEnabled()) return false;
+	if (createTray()) return true;
 
 	/** 系统装不了托盘：把设置改成关闭，避免开关显示「开」但关窗后软件直接退出 */
 	logger.warn('托盘创建失败，已把「后台托盘运行」改为关闭');
 	store.set('window.tray', false);
+	return false;
 }
 
 /** 托盘图标路径：Windows 用 ico，其它平台用 png */
