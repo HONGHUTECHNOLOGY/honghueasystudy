@@ -1,5 +1,6 @@
 import { app, shell } from 'electron';
 import { existsSync, mkdirSync, rmSync } from 'fs';
+import os from 'os';
 import path from 'path';
 import { Logger } from '../logger';
 import { store } from '../store';
@@ -36,10 +37,15 @@ function startupShortcut(): string {
 /**
  * 同步启动文件夹快捷方式
  *
- * 用 `replace` 而不是 `create`：用户换过安装目录后，旧快捷方式必须被覆盖，
- * 否则它指向的旧 exe 已经被卸载，开机时只会闪一下「找不到文件」。
+ * 必须用 `create`，不能用 `replace` ——这个坑曾经让自启功能长期静默失效：
+ * Electron 文档写明 replace 只覆盖**已存在**的快捷方式、不存在时直接返回 false，
+ * 而首次安装时启动文件夹里当然没有这个文件，于是每次启动都「写入失败」，
+ * 只剩注册表一条路（那条一旦被系统忽略，就彻底不自启了）。
  *
- * @returns 快捷方式当前是否存在
+ * create 的语义是「创建，必要时覆盖」，同样满足「用户换过安装目录后要更新指向」
+ * 的需求，不会留下指向已卸载 exe 的旧快捷方式。
+ *
+ * @returns 快捷方式当前是否存在且指向本程序
  */
 function syncStartupShortcut(enabled: boolean): boolean {
 	if (process.platform !== 'win32') return false;
@@ -54,13 +60,36 @@ function syncStartupShortcut(enabled: boolean): boolean {
 		const folder = path.dirname(link);
 		if (!existsSync(folder)) mkdirSync(folder, { recursive: true });
 
-		const created = shell.writeShortcutLink(link, 'replace', {
+		const details = {
 			target: process.execPath,
 			cwd: path.dirname(process.execPath),
 			description: '鸿鹄易学（开机自启）'
-		});
-		if (!created) logger.error('写入启动文件夹快捷方式失败：' + link);
-		return created;
+		};
+
+		let created = shell.writeShortcutLink(link, 'create', details);
+		if (!created) {
+			// 兜底：残留的损坏文件（或占用）可能让 create 失败，删掉重来一次
+			if (existsSync(link)) rmSync(link, { force: true });
+			created = shell.writeShortcutLink(link, 'create', details);
+		}
+		if (!created) {
+			logger.error('写入启动文件夹快捷方式失败：' + link);
+			return false;
+		}
+
+		// 不信返回值，读回来比对：快捷方式存在但指向旧 exe 时，开机只会闪一下「找不到文件」
+		try {
+			const back = shell.readShortcutLink(link);
+			const same = path.normalize(back.target).toLowerCase() === path.normalize(process.execPath).toLowerCase();
+			if (!same) {
+				logger.warn(`启动快捷方式指向 ${back.target}，与当前程序 ${process.execPath} 不一致`);
+				return false;
+			}
+			return true;
+		} catch (e) {
+			logger.warn('读取刚写入的启动快捷方式失败', e);
+			return existsSync(link);
+		}
 	} catch (e) {
 		logger.error('同步启动文件夹快捷方式失败', e);
 		return false;
@@ -110,10 +139,29 @@ export function autoLaunch() {
 
 		const inStartupFolder = syncStartupShortcut(enabled);
 		const status = readLoginItemStatus();
+
+		/**
+		 * 系统已运行时长：判断「这次到底是不是开机自启拉起来的」最直接的依据。
+		 * 由登录启动的进程，这个值一般在几十秒内；手动打开则是几小时。
+		 */
+		const bootAge = Math.round(os.uptime());
+		const bootHint = bootAge < 300 ? `开机 ${bootAge}s（疑似自启）` : `开机 ${bootAge}s（手动启动）`;
+
+		if (!enabled) {
+			logger.info(`开机自启：已关闭（注册表与启动文件夹均已清除）；${bootHint}`);
+			return;
+		}
+
+		/**
+		 * 两条通道任意一条生效即可：注册表 Run 项可能被系统优化工具屏蔽，
+		 * 启动文件夹是 Windows 官方支持的第二种方式，互为备份。
+		 */
+		const usable = status.registered || inStartupFolder;
 		logger.info(
-			`开机自启：${enabled ? '已开启' : '已关闭'}` +
-				`（注册表登记=${status.registered} 系统将启动=${status.willLaunch} 启动文件夹=${inStartupFolder}）`
+			`开机自启：已开启（注册表登记=${status.registered} 系统将启动=${status.willLaunch} ` +
+				`启动文件夹=${inStartupFolder}）；${bootHint}` + (usable ? '' : ' —— 两条通道都未生效')
 		);
+		if (!usable) logger.error('开机自启两条通道都未生效，登录时不会拉起本程序');
 	};
 
 	/**
