@@ -35,7 +35,7 @@
         "target": "nsis"
       }
     ],
-    "requestedExecutionLevel": "highestAvailable",
+    "requestedExecutionLevel": "asInvoker",
     "extraResources": [
       {
         "from": "../../bin/chrome/win-${arch}/",
