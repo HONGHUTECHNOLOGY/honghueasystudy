@@ -256,6 +256,24 @@ export function activeIpcRenderListener() {
 		store.render.browser.currentBrowserUid = uid;
 	});
 
+	/**
+	 * GPU 连续崩溃后主进程自动关掉了硬件加速。
+	 *
+	 * 必须把内存里的值同步过来：渲染端不 watch window 段，但任何一次
+	 * render 变化都会把整份 store 写回主进程，不同步就会把刚写下的
+	 * `false` 覆盖回 `true`，用户下次启动再崩一轮。
+	 */
+	ipcRenderer.on('gpu-acceleration-disabled', (e, payload: { reason?: string }) => {
+		store.window.gpuAcceleration = false;
+		notify(
+			'已关闭硬件加速',
+			`显卡加速多次异常（${payload?.reason || '未知原因'}），已自动改用软件渲染，重启软件后生效。` +
+				'可在「软件设置 → 图形加速」中重新开启。',
+			'gpu-acceleration',
+			{ type: 'warning', duration: 10000, close: true }
+		);
+	});
+
 	// 检测到新版本
 	ipcRenderer.on('detect-new-app-version', (e, new_version: UpdateInformationResource) => {
 		console.log('detect-new-app-version', new_version);

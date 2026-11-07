@@ -116,7 +116,9 @@ const APP_DEFAULTS = {
 	window: {
 		alwaysOnTop: false,
 		autoLaunch: true,
-		tray: true
+		tray: true,
+		/** 硬件加速：默认开，连续 GPU 崩溃后由主进程守卫写 false 并推事件同步过来 */
+		gpuAcceleration: true
 	},
 	remoteControl: {
 		enabled: false,

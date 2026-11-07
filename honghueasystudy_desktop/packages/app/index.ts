@@ -15,6 +15,7 @@ import { store } from './src/store';
 import { initAesKey } from './src/crypto';
 import { initRemoteControl, remoteControl } from './src/tasks/remote-control';
 import { hideToTray, initTray } from './src/tasks/tray';
+import { initGpuGuard, isGpuAccelerationEnabled, reportGpuStatus } from './src/tasks/gpu.guard';
 import { Logger } from './src/logger';
 
 const logger = Logger('launch');
@@ -48,21 +49,38 @@ const silentStart = process.argv.includes('--hidden');
  */
 logger.info(`启动参数：${process.argv.slice(1).join(' ') || '(无)'}；静默启动=${silentStart}`);
 
-// 防止软件崩溃以及兼容
+// 沙箱兼容开关：部分环境下关掉才不会启动失败，与图形无关，保持原样
 app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('disable-gpu-compositing');
-app.commandLine.appendSwitch('disable-gpu-rasterization');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('--no-sandbox');
-app.disableHardwareAcceleration();
+
+/**
+ * 硬件加速开关
+ *
+ * 早期为了规避「部分机器白屏」把 GPU 全关了（disable-gpu + disable-software-rasterizer 等一整套），
+ * 代价是合成、光栅化、阴影全部走 CPU，界面在任何动画/半透明上都发涩。
+ * 现在改为「默认开启 + 崩溃自动回退 + 用户可关」：
+ *
+ * - 不再追加 `disable-software-rasterizer`。它禁掉了软光栅化兜底，
+ *   一旦显卡驱动异常就是全黑窗口；留着它，Chromium 才能在 GPU 失败时自动退回软件渲染。
+ * - 命令行 `--disable-gpu` 保留为逃生舱：用户机器出问题时不必等新版本，加参数即可启动。
+ */
+if (!isGpuAccelerationEnabled()) {
+	app.disableHardwareAcceleration();
+	logger.warn(
+		`[图形] 硬件加速已关闭（来源：${process.argv.includes('--disable-gpu') ? '命令行参数' : '用户设置'}）`
+	);
+}
 
 /** 获取单进程锁 */
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
 	app.quit();
 } else {
+	/**
+	 * GPU 崩溃守卫必须在拿到单实例锁之后、创建窗口之前装好：
+	 * 显卡驱动不兼容时，崩溃可能发生在首个窗口的第一帧，装晚了就漏掉这一次计数。
+	 */
+	initGpuGuard();
 	bootstrap();
 }
 
@@ -129,6 +147,17 @@ function bootstrap() {
 
 				window.webContents.once('did-finish-load', () => {
 					setTimeout(() => {
+						/**
+						 * GPU 状态必须在这里采样，不能放在 whenReady() 之后。
+						 *
+						 * Chromium 是在「有窗口要合成」时才会真正初始化合成器；
+						 * 没有窗口时它一律报 gpu_compositing=disabled_software。
+						 * 之前在 createWindow() 之前采样，日志里一直写着
+						 * 「实际=软件」，据此还做了一轮错误的性能降级
+						 * （把模糊特效全删了），实际硬件加速一直是好的。
+						 */
+						reportGpuStatus();
+
 						// 因为需要对渲染进程发送信息，所以要在显示完成后开始监听
 						if (app.isPackaged) {
 							task('软件更新', () => updater());
