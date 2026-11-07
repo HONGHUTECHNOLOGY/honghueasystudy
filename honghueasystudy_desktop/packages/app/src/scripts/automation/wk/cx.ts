@@ -169,7 +169,8 @@ function login(
 					const src = await det_target_el?.getAttribute('src');
 
 					if (det_slider_el && src) {
-						const target_base64 = await getBase64(src);
+						// 传 page：图片地址可能带会话校验，独立下载会被服务端回 400
+						const target_base64 = await getBase64(src, page);
 						// 隐藏拼图，要不然会影响算法
 						await page.evaluate(() =>
 							document.querySelector<HTMLDivElement>('.cx_imgBtn')?.style.setProperty('display', 'none')

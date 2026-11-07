@@ -256,9 +256,14 @@ async function verify(page: Page, opts: { ocrApiUrl: string; detTargetKey: strin
 		const det_target_src = await det_target_el.getAttribute('src');
 		const det_bg_src = await det_bg_el.getAttribute('src');
 		if (det_target_src && det_bg_src) {
+			// 必须把 page 传进去：易盾的图片地址带会话校验，由 Node 侧独立下载会被回 400
+			const [det_target_base64, det_bg_base64] = await Promise.all([
+				getBase64(det_target_src, page),
+				getBase64(det_bg_src, page)
+			]);
 			// 拼图元素自身的位移已经按背景图显示比例缩放过了，鼠标拖动距离直接使用 OCR 原始偏移；
 			// 再乘一次显示比例会导致拖动不足，拼图偏左。
-			await breakSliderVerify(page, det_slider_el, await getBase64(det_target_src), await getBase64(det_bg_src), {
+			await breakSliderVerify(page, det_slider_el, det_target_base64, det_bg_base64, {
 				...opts,
 				offset: 0,
 				startAtCenter: true,
