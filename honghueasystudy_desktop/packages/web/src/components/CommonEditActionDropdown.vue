@@ -36,14 +36,12 @@
 				<a-doption
 					v-if="hasPermission('remove')"
 					:value="'remove'"
+					class="doption-danger"
+					style="color: var(--danger)"
 				>
 					<a-row>
 						<a-col flex="20px">
-							<Icon
-								style="color: red"
-								type="delete"
-							>
-							</Icon>
+							<Icon type="delete"> </Icon>
 						</a-col>
 						<a-col flex="auto"> 删除 </a-col>
 					</a-row>
@@ -283,7 +281,7 @@ function onSelect(value: string | number | Record<string, unknown> | undefined) 
 <style scoped>
 .context-tip {
 	font-size: 12px;
-	color: #86909c;
+	color: var(--text-tertiary);
 	padding: 6px 12px 4px;
 	user-select: none;
 }

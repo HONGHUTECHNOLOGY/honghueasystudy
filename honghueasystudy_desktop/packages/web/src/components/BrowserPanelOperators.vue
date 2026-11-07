@@ -66,9 +66,16 @@
 							content="是否删除该浏览器?"
 							@ok="browser.remove()"
 						>
+							<!--
+								删除是破坏性操作，必须是实心红而不是「白底红字」：
+								工具条上一排同尺寸按钮里，只有描边红的那个看起来仍然像普通按钮，
+								误点的概率明显更高。实心 + 白图标是唯一在视觉上「退后一步」的写法。
+							-->
 							<a-button
 								size="mini"
 								status="danger"
+								type="primary"
+								class="delete-browser-btn"
 							>
 								<Icon type="delete" />
 							</a-button>
@@ -113,4 +120,38 @@ function onBlur() {
 }
 </script>
 
-<style scoped></style>
+<style scoped lang="less">
+/**
+ * 删除按钮：实心危险色
+ *
+ * Arco 的 `status="danger"` 只换色相，背景仍是白的，在密集工具条里读起来像「普通按钮」。
+ * 这里显式给实心底 + 白色图标，并把 hover/active 一起接管，避免和全局
+ * `.arco-btn-primary:hover` 的品牌色投影打架。
+ */
+:deep(.arco-btn.delete-browser-btn) {
+	background: var(--danger);
+	border-color: var(--danger);
+	color: #fff;
+	box-shadow: none;
+	transition: background-color var(--dur-2) var(--ease-std), border-color var(--dur-2) var(--ease-std),
+		transform var(--dur-1) var(--ease-std);
+
+	&:hover,
+	&:focus-visible {
+		background: color-mix(in srgb, var(--danger) 86%, #000);
+		border-color: color-mix(in srgb, var(--danger) 86%, #000);
+		color: #fff;
+		box-shadow: 0 4px 12px color-mix(in srgb, var(--danger) 26%, transparent);
+	}
+
+	&:active {
+		background: color-mix(in srgb, var(--danger) 78%, #000);
+		border-color: color-mix(in srgb, var(--danger) 78%, #000);
+		transform: scale(0.98);
+	}
+
+	.material-icons {
+		color: #fff;
+	}
+}
+</style>

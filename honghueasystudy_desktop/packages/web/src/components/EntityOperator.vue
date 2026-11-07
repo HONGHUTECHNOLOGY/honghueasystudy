@@ -30,7 +30,7 @@
 				@click="instance?.remove()"
 			>
 				<Icon
-					style="color: red"
+					style="color: var(--danger)"
 					type="delete"
 				>
 					删除

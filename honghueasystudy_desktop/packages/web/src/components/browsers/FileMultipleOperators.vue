@@ -86,7 +86,14 @@
 
 								<a-doption @click="launchAll"> <Icon type="play_arrow"> 批量运行 </Icon> </a-doption>
 								<a-doption @click="closeAll"> <Icon type="close"> 批量关闭 </Icon> </a-doption>
-								<a-doption @click="deleteAll"> <Icon type="delete"> 批量删除 </Icon> </a-doption>
+								<a-doption @click="deleteAll">
+									<Icon
+										style="color: var(--danger)"
+										type="delete"
+									>
+										批量删除
+									</Icon>
+								</a-doption>
 							</template>
 						</a-dropdown>
 					</a-tooltip>

@@ -12,7 +12,14 @@
 				<a-doption @click="state.showAutomationScriptSelector = true">
 					<Icon type="add"> 批量创建-自动化程序浏览器</Icon>
 				</a-doption>
-				<a-doption @click="state.remove_tags_modal.visible = true"> <Icon type="delete">批量删除标签</Icon> </a-doption>
+				<a-doption @click="state.remove_tags_modal.visible = true">
+					<Icon
+						style="color: var(--danger)"
+						type="delete"
+					>
+						批量删除标签
+					</Icon>
+				</a-doption>
 			</template>
 		</a-dropdown>
 
