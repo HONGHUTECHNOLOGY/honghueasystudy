@@ -114,6 +114,7 @@
 				<main class="main">
 					<OverviewView v-if="ui.tab === 'home'" />
 					<PlansView v-else-if="ui.tab === 'plans'" />
+					<SigninView v-else-if="ui.tab === 'signin'" />
 					<LogsView v-else-if="ui.tab === 'logs'" />
 					<AboutView v-else />
 				</main>
@@ -151,6 +152,7 @@ import ToastStack from './components/ToastStack.vue';
 import DetailSheet from './components/DetailSheet.vue';
 import AutomationSheet from './components/AutomationSheet.vue';
 import PlansView from './components/PlansView.vue';
+import SigninView from './components/SigninView.vue';
 import Icon from './components/Icon.vue';
 import { NAV_ITEMS, findNav } from './nav';
 import { bootstrap, refreshManually, state, ui } from './store';

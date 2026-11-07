@@ -12,12 +12,31 @@ import { detectNetwork, NetworkReport } from './network';
 import { buildLanUrls, buildLanUrlsSync, normalizeClientIp } from './network.addr';
 import { createQRCodeSafe, QRCodeResult } from './qr';
 import { AutomationJob, AutomationRunner } from './automation';
-import { RemoteServer, RemoteSnapshot, ServiceInfo } from './server';
+import {
+	RemoteServer,
+	RemoteSnapshot,
+	RemoteSigninAccount,
+	RemoteSigninActivity,
+	RemoteSigninCheck,
+	RemoteSigninConfigPatch,
+	RemoteSigninLog,
+	ServiceInfo
+} from './server';
+import * as signin from '../../signin';
+import type { SigninAccountConfig, SigninAccountView, SigninActivity } from '../../signin/core/types';
 import { RemoteScriptInfo, AutomationScriptValues, buildAutomationScripts, exportAutomationScripts } from './script-catalog';
 import { CloudflaredTunnel, TunnelStatus } from './tunnel';
 import { normalizeBrowserAutomation, type BrowserAutomation } from '../../scripts/plan';
 
 const logger = Logger('remote-control');
+
+/** 手机号打码：远程端只需要能区分账号，不该看到完整号码 */
+function maskPhone(phone: string): string {
+	const value = String(phone || '');
+	if (value.length <= 4) return value;
+	if (value.length >= 8) return `${value.slice(0, 3)}****${value.slice(-4)}`;
+	return `${value.slice(0, 2)}****${value.slice(-2)}`;
+}
 
 type RemoteControlStore = typeof OriginalAppStore.remoteControl;
 
@@ -229,7 +248,14 @@ export class RemoteControlService {
 					savePlan: (opts) => this.savePlan(opts),
 					runStudy: (uid) => this.runStudy(uid),
 					stopStudy: (opts) => this.stopStudy(opts),
-					listCourses: (opts) => this.listCourses(opts)
+					listCourses: (opts) => this.listCourses(opts),
+					listSignin: () => this.listSignin(),
+					checkSignin: (id) => this.checkSignin(id),
+					signInNow: (id) => this.signInNow(id),
+					setSigninAutoSign: (id, autoSign) => this.setSigninAutoSign(id, autoSign),
+					setSigninConfig: (id, patch) => this.setSigninConfig(id, patch),
+					setSigninMonitor: (id, running) => this.setSigninMonitor(id, running),
+					getSigninLogs: (id, limit) => this.getSigninLogs(id, limit)
 				},
 				this.bridge
 			);
@@ -458,6 +484,215 @@ export class RemoteControlService {
 		const id = String((opts && opts.uid) || '');
 		if (!id) return Promise.reject(new Error('缺少浏览器实例'));
 		return this.bridge.dispatch('automation.courses', { uid: id, refresh: opts && opts.refresh !== false });
+	}
+
+	// ---------------------------------------------------------------- 超星签到
+
+	/** 同一账号的签到请求合并，避免手机端连点重复提交 */
+	private signinSigning = new Map<string, Promise<{ ok: boolean; message: string }>>();
+	/** 刚检测到的活动：紧接着点「立即签到」时直接复用，避免重复检测触发 TooFrequent */
+	private signinChecked = new Map<string, { activity: SigninActivity; time: number }>();
+
+	/** 签到账号列表（手机号打码，不带 Cookie / 密码） */
+	listSignin(): RemoteSigninAccount[] {
+		return signin.listViews().map((item) => this.signinView(item));
+	}
+
+	/** 检测签到活动（命中时会完成预签，签到前必须经过这一步） */
+	async checkSignin(id: string): Promise<RemoteSigninCheck> {
+		const target = String(id || '');
+		if (!target) throw new Error('缺少账号 id');
+		if (!signin.getAccount(target)) throw new Error('账号不存在');
+
+		const result = await signin.checkAccount(target);
+		if (result.code === 'activity') {
+			this.signinChecked.set(target, { activity: result.activity, time: Date.now() });
+			const activity: RemoteSigninActivity = {
+				activeId: result.activity.activeId,
+				name: result.activity.name || '签到活动',
+				typeName: result.typeName || '',
+				otherId: Number(result.activity.otherId) || 0,
+				ifphoto: Number(result.activity.ifphoto) || 0
+			};
+			return { code: 'activity', message: `检测到签到活动：${activity.name}`, activity };
+		}
+		this.signinChecked.delete(target);
+		return { code: result.code, message: result.message };
+	}
+
+	/**
+	 * 立即签到（手动签到）
+	 *
+	 * 不受「自动签到」开关影响：开关只决定监听时要不要自动签，
+	 * 用户在手机上主动点了就一定要签。内部先检测再签，命中活动才提交。
+	 */
+	async signInNow(id: string): Promise<{ ok: boolean; message: string }> {
+		const target = String(id || '');
+		if (!target) throw new Error('缺少账号 id');
+		if (!signin.getAccount(target)) throw new Error('账号不存在');
+
+		const existing = this.signinSigning.get(target);
+		if (existing) return existing;
+
+		const task = (async (): Promise<{ ok: boolean; message: string }> => {
+			try {
+				/** 刚检测过就直接用那次结果，避免立刻重查被服务端判定请求过频 */
+				let activity: SigninActivity | null = null;
+				const cached = this.signinChecked.get(target);
+				if (cached && Date.now() - cached.time < 60 * 1000) activity = cached.activity;
+
+				if (!activity) {
+					const check = await signin.checkAccount(target);
+					if (check.code !== 'activity') {
+						return { ok: false, message: check.message || '未检测到有效签到活动' };
+					}
+					activity = check.activity;
+				}
+
+				this.signinChecked.delete(target);
+				const result = await signin.signActivity(target, activity, { type: 'auto' });
+				return { ok: result.ok, message: result.message };
+			} finally {
+				this.signinSigning.delete(target);
+			}
+		})();
+
+		this.signinSigning.set(target, task);
+		return task;
+	}
+
+	/** 自动签到开关（默认关闭；关闭时仍可手动签到） */
+	setSigninAutoSign(id: string, autoSign: boolean): RemoteSigninAccount {
+		const target = String(id || '');
+		if (!target) throw new Error('缺少账号 id');
+		const view = signin.updateConfig(target, { autoSign: !!autoSign });
+		if (!view) throw new Error('账号不存在');
+		return this.signinView(view);
+	}
+
+	/**
+	 * 远程修改签到设置
+	 *
+	 * 只接受白名单字段（位置、备用位置、二维码 enc、拍照路径、轮询参数与自动签到开关），
+	 * 登录凭证与 Cookie 不在白名单内，远程无法写入。
+	 */
+	setSigninConfig(id: string, patch: RemoteSigninConfigPatch): RemoteSigninAccount {
+		const target = String(id || '');
+		if (!target) throw new Error('缺少账号 id');
+		if (!patch || typeof patch !== 'object') throw new Error('缺少要修改的设置');
+
+		const next: Partial<SigninAccountConfig> = {};
+		if (typeof patch.autoSign === 'boolean') next.autoSign = patch.autoSign;
+		if (patch.interval !== undefined && Number.isFinite(Number(patch.interval))) {
+			next.interval = Number(patch.interval);
+		}
+		if (patch.duration !== undefined && Number.isFinite(Number(patch.duration))) {
+			next.duration = Number(patch.duration);
+		}
+		if (patch.delay !== undefined && Number.isFinite(Number(patch.delay))) {
+			next.delay = Number(patch.delay);
+		}
+		if (typeof patch.im === 'boolean') next.im = patch.im;
+		if (typeof patch.qrcodeEnc === 'string') next.qrcodeEnc = patch.qrcodeEnc.slice(0, 2000);
+		if (typeof patch.photoPath === 'string') next.photoPath = patch.photoPath.slice(0, 500);
+
+		if (patch.address && typeof patch.address === 'object') {
+			const address = patch.address;
+			next.address = {
+				lon: String(address.lon === undefined ? '' : address.lon).slice(0, 30),
+				lat: String(address.lat === undefined ? '' : address.lat).slice(0, 30),
+				address: String(address.address === undefined ? '' : address.address).slice(0, 200),
+				altitude: String(address.altitude === undefined ? '0' : address.altitude).slice(0, 30)
+			};
+		}
+
+		if (Array.isArray(patch.presetAddress)) {
+			/** 备用位置最多 10 组，避免远程往配置里塞无限数据 */
+			next.presetAddress = patch.presetAddress.slice(0, 10).map((item) => ({
+				lon: String(item && item.lon !== undefined ? item.lon : '').slice(0, 30),
+				lat: String(item && item.lat !== undefined ? item.lat : '').slice(0, 30),
+				address: String(item && item.address !== undefined ? item.address : '').slice(0, 200)
+			}));
+		}
+
+		const view = signin.updateConfig(target, next);
+		if (!view) throw new Error('账号不存在');
+		return this.signinView(view);
+	}
+
+	/** 开始 / 停止监听 */
+	setSigninMonitor(id: string, running: boolean): { ok: boolean; message: string; account: RemoteSigninAccount } {
+		const target = String(id || '');
+		if (!target) throw new Error('缺少账号 id');
+		if (!signin.getAccount(target)) throw new Error('账号不存在');
+
+		let ok: boolean;
+		let message: string;
+		if (running) {
+			const started = signin.startMonitor(target);
+			ok = started.ok;
+			message = started.message;
+		} else {
+			ok = signin.stopMonitor(target);
+			message = ok ? '已停止监听' : '监听未在运行';
+		}
+
+		const view = signin.listViews().find((item) => item.id === target);
+		if (!view) throw new Error('账号不存在');
+		return { ok, message, account: this.signinView(view) };
+	}
+
+	/** 最近签到日志 */
+	getSigninLogs(id: string, limit = 30): RemoteSigninLog[] {
+		const target = String(id || '');
+		if (!target) return [];
+		const size = Math.min(200, Math.max(1, Math.floor(Number(limit) || 30)));
+		return signin.getLogs(target, size).map((item) => ({
+			id: item.id,
+			time: item.time,
+			level: item.level,
+			message: item.message
+		}));
+	}
+
+	/** 账号视图脱敏：只保留远程展示与操作需要的字段 */
+	private signinView(view: SigninAccountView): RemoteSigninAccount {
+		const config = view.config || signin.defaultConfig();
+		const address = config.address || { lon: '', lat: '', address: '', altitude: '0' };
+		return {
+			id: view.id,
+			name: view.name || '超星账号',
+			phone: maskPhone(view.phone),
+			monitoring: !!view.monitoring,
+			checking: !!view.checking,
+			imStatus: view.imStatus || 'off',
+			lastCheckTime: Number(view.lastCheckTime) || 0,
+			lastSignTime: Number(view.lastSignTime) || 0,
+			lastResult: view.lastResult || '',
+			config: {
+				autoSign: !!config.autoSign,
+				interval: Number(config.interval) || 30,
+				duration: Number(config.duration) || 0,
+				delay: Number(config.delay) || 0,
+				im: !!config.im,
+				address: {
+					lon: String(address.lon || ''),
+					lat: String(address.lat || ''),
+					address: String(address.address || ''),
+					altitude: String(address.altitude || '0')
+				},
+				presetAddress: (config.presetAddress || []).map((item) => ({
+					lon: String(item.lon || ''),
+					lat: String(item.lat || ''),
+					address: String(item.address || '')
+				})),
+				qrcodeEnc: String(config.qrcodeEnc || ''),
+				photoPath: String(config.photoPath || ''),
+				hasAddress: !!(address.lon && address.lat),
+				hasPhoto: !!config.photoPath,
+				hasQrcodeEnc: !!config.qrcodeEnc
+			}
+		};
 	}
 
 	/**

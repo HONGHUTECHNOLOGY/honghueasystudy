@@ -34,6 +34,15 @@ export const config = reactive({
 					}
 				},
 				{
+					name: 'signin',
+					path: 'signin',
+					component: () => import('@/pages/signin/index.vue'),
+					meta: {
+						icon: 'fact_check',
+						title: '签到助手'
+					}
+				},
+				{
 					name: 'user-scripts',
 					path: 'user-scripts',
 					component: () => import('@/pages/user-scripts/index.vue'),

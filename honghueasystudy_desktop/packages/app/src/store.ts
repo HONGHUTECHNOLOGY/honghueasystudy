@@ -2,6 +2,7 @@ import { app } from 'electron';
 import path from 'path';
 import Store from 'electron-store';
 import { getDecryptedRenderData } from './crypto';
+import type { SigninStoreState } from './signin/types';
 
 // IO操作只能在 app.getPath('userData') 下进行，否则会有权限问题。
 
@@ -33,7 +34,14 @@ export const OriginalAppStore = {
 		/** 开机自启（默认开启，用于开机后按定时任务自动执行脚本） */
 		autoLaunch: true,
 		/** 后台托盘运行（默认开启：关闭窗口时收进托盘，定时任务继续执行） */
-		tray: true
+		tray: true,
+		/**
+		 * 硬件加速
+		 *
+		 * 默认开启：界面依赖合成器做滚动、阴影过渡与半透明，全走 CPU 会明显发涩。
+		 * 连续 GPU 崩溃 3 次后由 gpu.guard 自动置 false，用户也可在设置里手动关闭。
+		 */
+		gpuAcceleration: true
 	},
 	/** 本地服务器数据 */
 	server: {
@@ -63,6 +71,16 @@ export const OriginalAppStore = {
 		/** 会话 Cookie 签名密钥，首次启动生成 */
 		sessionSecret: ''
 	},
+	/**
+	 * 超星签到助手数据
+	 *
+	 * 由主进程独占维护（监听在后台运行，渲染端只读视图），
+	 * 因此加入 MAIN_OWNED_KEYS 防止被渲染端的整份快照覆盖。
+	 */
+	signin: {
+		accounts: [],
+		logs: []
+	} as SigninStoreState,
 	/** 渲染进程数据 */
 	render: {} as { [x: string]: any }
 };

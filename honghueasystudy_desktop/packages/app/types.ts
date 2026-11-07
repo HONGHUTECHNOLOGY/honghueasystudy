@@ -4,6 +4,16 @@ import { ScriptWorker } from './src/worker';
 export { RemoteMethods } from './src/tasks/remote.register';
 export type AppStore = typeof OriginalAppStore;
 
+/** 超星签到助手类型 */
+export type {
+	SigninAccountConfig,
+	SigninAccountView,
+	SigninActivity,
+	SigninLog,
+	SigninType
+} from './src/signin/core/types';
+export type { CheckResult } from './src/signin/manager';
+
 export { ScriptWorker };
 
 export interface UserScripts {

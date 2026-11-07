@@ -98,6 +98,68 @@ export interface ServiceInfo {
 
 export type AuthMode = 'pair' | 'password' | 'none';
 
+/** 远程可见的签到账号（手机号已打码，不含 Cookie / 密码） */
+export interface RemoteSigninAccount {
+	id: string;
+	name: string;
+	phone: string;
+	monitoring: boolean;
+	checking: boolean;
+	imStatus: 'off' | 'connecting' | 'opened' | 'failed';
+	lastCheckTime: number;
+	lastSignTime: number;
+	lastResult: string;
+	config: {
+		autoSign: boolean;
+		interval: number;
+		duration: number;
+		delay: number;
+		im: boolean;
+		address: { lon: string; lat: string; address: string; altitude: string };
+		presetAddress: Array<{ lon: string; lat: string; address: string }>;
+		qrcodeEnc: string;
+		photoPath: string;
+		hasAddress: boolean;
+		hasPhoto: boolean;
+		hasQrcodeEnc: boolean;
+	};
+}
+
+/** 检测到的签到活动 */
+export interface RemoteSigninActivity {
+	activeId: string;
+	name: string;
+	typeName: string;
+	otherId: number;
+	ifphoto: number;
+}
+
+export interface RemoteSigninCheck {
+	code: 'activity' | 'no-activity' | 'too-frequent' | 'auth-failed' | 'no-course' | 'error';
+	message: string;
+	activity?: RemoteSigninActivity;
+}
+
+export interface RemoteSigninLog {
+	id: string;
+	time: number;
+	level: 'info' | 'success' | 'warn' | 'error';
+	message: string;
+}
+
+/** 远程可修改的签到设置（不含账号密码与登录凭证） */
+export interface RemoteSigninConfigPatch {
+	autoSign?: boolean;
+	interval?: number;
+	duration?: number;
+	delay?: number;
+	im?: boolean;
+	qrcodeEnc?: string;
+	photoPath?: string;
+	address?: { lon?: string; lat?: string; address?: string; altitude?: string };
+	presetAddress?: Array<{ lon?: string; lat?: string; address?: string }>;
+}
+
 /** 自动化脚本的表单字段（来自桌面端脚本声明） */
 export interface RemoteScriptField {
 	key: string;
@@ -391,7 +453,53 @@ export const api = {
 		request<{ ok: boolean; data: { ready: boolean; url: string } }>('/api/command', {
 			method: 'POST',
 			body: JSON.stringify({ action: 'catalog.ready', payload: { uid } })
-		})
+		}),
+
+	/** ---------- 超星签到 ---------- */
+
+	/** 签到账号列表（手机号打码） */
+	signinAccounts: () => request<{ ok: boolean; accounts: RemoteSigninAccount[] }>('/api/signin/accounts'),
+
+	/** 检测签到活动（课程多时需要几十秒） */
+	signinCheck: (id: string) =>
+		request<{ ok: boolean; check: RemoteSigninCheck }>('/api/signin/check', {
+			method: 'POST',
+			body: JSON.stringify({ id })
+		}),
+
+	/** 立即签到（内部先检测再提交，不受自动签到开关影响） */
+	signinSign: (id: string) =>
+		request<{ ok: boolean; result: { ok: boolean; message: string } }>('/api/signin/sign', {
+			method: 'POST',
+			body: JSON.stringify({ id })
+		}),
+
+	/** 自动签到开关（默认关闭） */
+	signinAutoSign: (id: string, autoSign: boolean) =>
+		request<{ ok: boolean; account: RemoteSigninAccount }>('/api/signin/config', {
+			method: 'POST',
+			body: JSON.stringify({ id, autoSign })
+		}),
+
+	/** 修改签到设置：位置、备用位置、二维码 enc、拍照路径与轮询参数 */
+	signinConfig: (id: string, patch: RemoteSigninConfigPatch) =>
+		request<{ ok: boolean; account: RemoteSigninAccount }>('/api/signin/config', {
+			method: 'POST',
+			body: JSON.stringify({ id, patch })
+		}),
+
+	/** 开始 / 停止监听 */
+	signinMonitor: (id: string, running: boolean) =>
+		request<{ ok: boolean; message: string; account: RemoteSigninAccount }>('/api/signin/monitor', {
+			method: 'POST',
+			body: JSON.stringify({ id, running })
+		}),
+
+	/** 最近签到日志 */
+	signinLogs: (id: string, limit = 30) =>
+		request<{ ok: boolean; logs: RemoteSigninLog[] }>(
+			`/api/signin/logs/${encodeURIComponent(id)}?limit=${limit}`
+		)
 };
 
 /**

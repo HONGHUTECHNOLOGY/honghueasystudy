@@ -123,7 +123,7 @@ export const state = reactive<State>({
 
 /** 界面态（与业务数据分开） */
 export const ui = reactive({
-	tab: 'home' as 'home' | 'plans' | 'logs' | 'about',
+	tab: 'home' as 'home' | 'plans' | 'signin' | 'logs' | 'about',
 	detailUid: '',
 	/**
 	 * 正在编辑方案的实例 uid（空串 = 面板关着）

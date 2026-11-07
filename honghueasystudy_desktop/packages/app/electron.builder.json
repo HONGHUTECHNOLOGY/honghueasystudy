@@ -20,6 +20,13 @@
       "filter": [
         "**/*"
       ]
+    },
+    {
+      "from": "resources/signin",
+      "to": "signin",
+      "filter": [
+        "**/*"
+      ]
     }
   ],
   "copyright": "Copyright © 2021 ${author}",

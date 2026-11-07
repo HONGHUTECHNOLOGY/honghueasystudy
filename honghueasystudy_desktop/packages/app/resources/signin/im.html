@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<title>超级签到 IM 监听</title>
+		<style>
+			body {
+				margin: 0;
+				font: 12px/1.5 -apple-system, 'Microsoft YaHei', sans-serif;
+				color: #666;
+				padding: 8px;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="status">IM 监听初始化中…</div>
+		<script src="./websdk.js"></script>
+		<script>
+			/* 隐藏窗口：仅用于承载环信 WebIM SDK，实时接收群聊签到消息 */
+			const { ipcRenderer } = require('electron');
+			const statusEl = document.getElementById('status');
+			let accountId = '';
+			let conn = null;
+
+			function send(type, data) {
+				if (!accountId) return;
+				ipcRenderer.send('signin-im:event', { accountId, type, data });
+			}
+
+			function setStatus(text) {
+				statusEl.textContent = text;
+			}
+
+			/**
+			 * websdk 是 UMD 包：
+			 * - 纯浏览器环境会挂到 window.websdk
+			 * - 开启 nodeIntegration 的渲染进程存在 module/exports，会走 CommonJS 分支
+			 */
+			function resolveSdk() {
+				const globalSdk = typeof window.websdk !== 'undefined' ? window.websdk : undefined;
+				const moduleSdk = typeof module !== 'undefined' && module.exports ? module.exports : undefined;
+				const sdk = globalSdk || moduleSdk;
+				if (!sdk) return null;
+				return sdk.default || sdk;
+			}
+
+			function errorText(message) {
+				if (typeof message === 'string') return message;
+				try {
+					return JSON.stringify(message);
+				} catch (e) {
+					return String(message);
+				}
+			}
+
+			ipcRenderer.on('signin-im:start', (_event, params) => {
+				accountId = params.accountId;
+				const webIM = resolveSdk();
+				if (!webIM || !webIM.connection) {
+					setStatus('websdk 加载失败');
+					send('error', { message: 'websdk 加载失败' });
+					return;
+				}
+
+				try {
+					conn = new webIM.connection({
+						isMultiLoginSessions: true,
+						https: true,
+						url: 'https://im-api-vip6-v2.easecdn.com/ws',
+						apiUrl: 'https://a1-vip6.easecdn.com',
+						isAutoLogin: true,
+						heartBeatWait: 4500,
+						autoReconnectNumMax: 2,
+						autoReconnectInterval: 2,
+						appKey: params.appKey,
+						isHttpDNS: false
+					});
+
+					conn.open({
+						apiUrl: 'https://a1-vip6.easecdn.com',
+						user: params.user,
+						accessToken: params.token,
+						appKey: params.appKey
+					});
+
+					conn.listen({
+						onOpened: () => {
+							setStatus('IM 已连接');
+							send('opened');
+						},
+						onClosed: () => {
+							setStatus('IM 已断开');
+							send('closed');
+						},
+						onTextMessage: (message) => {
+							// SDK 消息对象可能带不可序列化字段，跨进程只传主进程需要的字段
+							try {
+								send('message', JSON.parse(JSON.stringify({ to: message && message.to, ext: message && message.ext })));
+							} catch (e) {
+								// 单条消息序列化失败不应中断整个 IM 连接，轮询仍可兜底
+								console.warn('IM 消息解析失败', e);
+							}
+						},
+						onError: (message) => {
+							const text = errorText(message);
+							setStatus('IM 异常：' + text);
+							send('error', { message: text });
+						}
+					});
+				} catch (e) {
+					setStatus('IM 启动异常：' + e.message);
+					send('error', { message: e.message });
+				}
+			});
+		</script>
+	</body>
+</html>

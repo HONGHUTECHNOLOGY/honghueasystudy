@@ -2,6 +2,7 @@ import { ipcMain, app, dialog, BrowserWindow, desktopCapturer, safeStorage, shel
 import { Logger } from '../logger';
 import { autoLaunch, setAutoLaunch } from './auto.launch';
 import { setTrayEnabled, showMainWindow } from './tray';
+import { getGpuStatus, setGpuAcceleration } from './gpu.guard';
 import axios, { AxiosRequestConfig } from 'axios';
 import { downloadFile, moveWindowToTop, unzip, zip } from '../utils';
 import fs from 'fs';
@@ -21,6 +22,9 @@ import { getBrowserMajorVersion, getBuiltinExtensionPaths, getExtensionPaths } f
 import { AppStore } from '../../types';
 import { encryptRenderString, decryptRenderString } from '../crypto';
 import { remoteControl } from './remote-control';
+import * as signin from '../signin';
+import type { SigninAccountConfig, SigninActivity } from '../signin/core/types';
+import type { PerformSignOptions } from '../signin/core/sign';
 
 export type RawAutomationScript = Pick<AutomationScript, 'configs' | 'name'>;
 
@@ -28,7 +32,7 @@ export type RawAutomationScript = Pick<AutomationScript, 'configs' | 'name'>;
  * 由主进程独占维护、渲染端无权覆盖的顶层配置。
  * 渲染进程保存设置时必须沿用主进程的当前值，否则会把主进程侧的修改回滚掉。
  */
-const MAIN_OWNED_KEYS: (keyof AppStore)[] = ['remoteControl', 'paths', 'server'];
+const MAIN_OWNED_KEYS: (keyof AppStore)[] = ['remoteControl', 'paths', 'server', 'signin'];
 /**
  * 注册主进程远程通信事件
  * @param name 事件前缀名称
@@ -140,6 +144,10 @@ const methods = {
 	setAutoLaunch,
 	/** 设置面板：后台托盘运行开关（返回 false 表示当前系统托盘不可用） */
 	setTrayEnabled,
+	/** 设置面板：硬件加速开关（重启生效，返回 restartRequired 供界面提示） */
+	setGpuAcceleration,
+	/** 设置面板：读取 GPU 实际状态（区分「开关开着但实际在软件渲染」） */
+	getGpuStatus,
 	/** 把主窗口带回前台（托盘模式下需要弹确认/更新提示时用） */
 	showMainWindow,
 	get: (url: string, config?: AxiosRequestConfig<any> | undefined) => axios.get(url, config).then((res) => res.data),
@@ -206,6 +214,18 @@ const methods = {
 			}
 		}
 
+		/**
+		 * 硬件加速沿用主进程值。
+		 *
+		 * 它是「重启生效」的机器级设置，只有 gpu.guard 与设置面板专用方法会改它。
+		 * 渲染端快照里的这份值是页面加载时的，若跟着整份写回，崩溃守卫刚写下的
+		 * `false` 会被冲回 `true`，用户下次启动再崩一次。
+		 */
+		const mainGpu = current?.window?.gpuAcceleration;
+		if (mainGpu !== undefined && storeData.window) {
+			storeData.window = { ...storeData.window, gpuAcceleration: mainGpu };
+		}
+
 		store.store = storeData;
 	},
 
@@ -226,7 +246,24 @@ const methods = {
 	rcSetTunnel: (enabled: boolean) => remoteControl.setTunnel(enabled),
 	rcSetPort: (port: number) => remoteControl.setPort(port),
 	rcSetAllowLan: (allowLan: boolean) => remoteControl.setAllowLan(allowLan),
-	rcGetExternalTestUrl: () => remoteControl.getExternalTestUrl()
+	rcGetExternalTestUrl: () => remoteControl.getExternalTestUrl(),
+
+	// ------------------------------------------------------------ 超星签到助手
+	signinList: () => signin.listViews(),
+	signinLogin: (phone: string, password: string) => signin.loginAccount(phone, password),
+	signinRemove: (id: string) => {
+		signin.stopMonitor(id);
+		return signin.removeAccount(id);
+	},
+	signinUpdateConfig: (id: string, patch: Partial<SigninAccountConfig>) => signin.updateConfig(id, patch),
+	signinCheck: (id: string) => signin.checkAccount(id),
+	signinSign: (id: string, activity: SigninActivity, options?: PerformSignOptions) =>
+		signin.signActivity(id, activity, options),
+	signinStartMonitor: (id: string) => signin.startMonitor(id),
+	signinStopMonitor: (id: string) => signin.stopMonitor(id),
+	signinChoosePhoto: () => signin.choosePhoto(),
+	signinGetLogs: (id?: string, limit?: number) => signin.getLogs(id, limit),
+	signinClearLogs: (id?: string) => signin.clearLogs(id)
 };
 
 export type RemoteMethods = typeof methods;

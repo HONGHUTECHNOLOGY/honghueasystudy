@@ -54,6 +54,76 @@ export interface ServiceInfo {
 	deviceName: string;
 }
 
+/** 远程可见的签到账号（不含 Cookie、密码等凭证） */
+export interface RemoteSigninAccount {
+	id: string;
+	name: string;
+	/** 已打码的手机号 */
+	phone: string;
+	monitoring: boolean;
+	checking: boolean;
+	imStatus: 'off' | 'connecting' | 'opened' | 'failed';
+	lastCheckTime: number;
+	lastSignTime: number;
+	lastResult: string;
+	config: {
+		autoSign: boolean;
+		interval: number;
+		duration: number;
+		delay: number;
+		im: boolean;
+		/** 当前位置（位置签到用），远程可编辑 */
+		address: { lon: string; lat: string; address: string; altitude: string };
+		/** 备用位置，远程可编辑 */
+		presetAddress: Array<{ lon: string; lat: string; address: string }>;
+		/** 二维码 enc，远程可编辑 */
+		qrcodeEnc: string;
+		/** 拍照签到图片的本机路径，远程可编辑 */
+		photoPath: string;
+		/** 是否已配置位置（位置签到用） */
+		hasAddress: boolean;
+		/** 是否已配置拍照图片 */
+		hasPhoto: boolean;
+		/** 是否已配置二维码 enc */
+		hasQrcodeEnc: boolean;
+	};
+}
+
+/** 远程可见的签到活动（只保留展示需要的字段） */
+export interface RemoteSigninActivity {
+	activeId: string;
+	name: string;
+	typeName: string;
+	otherId: number;
+	ifphoto: number;
+}
+
+export interface RemoteSigninCheck {
+	code: 'activity' | 'no-activity' | 'too-frequent' | 'auth-failed' | 'no-course' | 'error';
+	message: string;
+	activity?: RemoteSigninActivity;
+}
+
+export interface RemoteSigninLog {
+	id: string;
+	time: number;
+	level: 'info' | 'success' | 'warn' | 'error';
+	message: string;
+}
+
+/** 远程可修改的签到配置（凭证、登录态不在白名单内） */
+export interface RemoteSigninConfigPatch {
+	autoSign?: boolean;
+	interval?: number;
+	duration?: number;
+	delay?: number;
+	im?: boolean;
+	qrcodeEnc?: string;
+	photoPath?: string;
+	address?: { lon?: string; lat?: string; address?: string; altitude?: string };
+	presetAddress?: Array<{ lon?: string; lat?: string; address?: string }>;
+}
+
 export interface RemoteServerContext {
 	auth: RemoteAuth;
 	staticDir: string;
@@ -92,6 +162,21 @@ export interface RemoteServerContext {
 	stopStudy(opts: { uid: string; keepTab?: boolean; closeBrowser?: boolean }): Promise<any>;
 	/** 读课程列表（选课用） */
 	listCourses(opts: { uid: string; refresh?: boolean }): Promise<any>;
+
+	/** 签到账号列表（已脱敏，不含 Cookie 与密码） */
+	listSignin(): RemoteSigninAccount[];
+	/** 检测签到活动（命中时会完成预签） */
+	checkSignin(id: string): Promise<RemoteSigninCheck>;
+	/** 立即签到：先检测再签，不受自动签到开关影响 */
+	signInNow(id: string): Promise<{ ok: boolean; message: string }>;
+	/** 修改自动签到开关（仅此一项开放给远程） */
+	setSigninAutoSign(id: string, autoSign: boolean): RemoteSigninAccount;
+	/** 修改签到设置（位置、备用位置、二维码 enc、拍照路径、轮询参数） */
+	setSigninConfig(id: string, patch: RemoteSigninConfigPatch): RemoteSigninAccount;
+	/** 开始 / 停止监听 */
+	setSigninMonitor(id: string, running: boolean): { ok: boolean; message: string; account: RemoteSigninAccount };
+	/** 某账号最近的签到日志 */
+	getSigninLogs(id: string, limit?: number): RemoteSigninLog[];
 }
 
 /** 快照缓存的有效期（ms） */
@@ -569,6 +654,124 @@ export class RemoteServer {
 					refresh: body.refresh !== false
 				});
 				res.json({ ok: true, ...data });
+			} catch (e) {
+				res.status(500).json({ ok: false, error: errText(e) });
+			}
+		});
+
+		/**
+		 * ---------- 超星签到助手 ----------
+		 *
+		 * 签到逻辑常驻主进程，这里直接调用签到模块，不经过渲染进程的命令桥：
+		 * 电脑端窗口最小化/渲染进程卡死时，手机仍然能检测与签到。
+		 * 返回的账号视图一律脱敏（不含 Cookie、密码），手机端拿不到登录凭证。
+		 */
+
+		app.get('/api/signin/accounts', auth, (req, res) => {
+			try {
+				res.json({ ok: true, accounts: this.ctx.listSignin() });
+			} catch (e) {
+				logger.warn('读取签到账号失败：' + errText(e));
+				res.status(500).json({ ok: false, error: '读取签到账号失败' });
+			}
+		});
+
+		/** 检测签到活动：课程多时要逐个查询，耗时几十秒属于正常 */
+		app.post('/api/signin/check', auth, csrfGuard, async (req, res) => {
+			if (!this.commandLimiter.take()) {
+				res.status(429).json({ ok: false, error: '操作过于频繁，请稍后再试' });
+				return;
+			}
+			const id = String((req.body && req.body.id) || '');
+			if (!id) {
+				res.status(400).json({ ok: false, error: '缺少账号 id' });
+				return;
+			}
+			try {
+				res.json({ ok: true, check: await this.ctx.checkSignin(id) });
+			} catch (e) {
+				res.status(500).json({ ok: false, error: errText(e) });
+			}
+		});
+
+		/** 立即签到：内部先检测活动再签到，自动签到关闭时也能用 */
+		app.post('/api/signin/sign', auth, csrfGuard, async (req, res) => {
+			if (!this.commandLimiter.take()) {
+				res.status(429).json({ ok: false, error: '操作过于频繁，请稍后再试' });
+				return;
+			}
+			const id = String((req.body && req.body.id) || '');
+			if (!id) {
+				res.status(400).json({ ok: false, error: '缺少账号 id' });
+				return;
+			}
+			try {
+				res.json({ ok: true, result: await this.ctx.signInNow(id) });
+			} catch (e) {
+				res.status(500).json({ ok: false, error: errText(e) });
+			}
+		});
+
+		app.post('/api/signin/config', auth, csrfGuard, (req, res) => {
+			if (!this.commandLimiter.take()) {
+				res.status(429).json({ ok: false, error: '操作过于频繁，请稍后再试' });
+				return;
+			}
+			const id = String((req.body && req.body.id) || '');
+			if (!id) {
+				res.status(400).json({ ok: false, error: '缺少账号 id' });
+				return;
+			}
+			try {
+				const body = req.body || {};
+				const patch =
+					body.patch && typeof body.patch === 'object' && !Array.isArray(body.patch)
+						? body.patch
+						: null;
+				/** 兼容只传 autoSign 的旧调用（桌面开关） */
+				const fallback = typeof body.autoSign === 'boolean' ? { autoSign: body.autoSign } : null;
+				const target = patch || fallback;
+				if (!target) {
+					res.status(400).json({ ok: false, error: '缺少要修改的设置' });
+					return;
+				}
+				const account = patch
+					? this.ctx.setSigninConfig(id, patch)
+					: this.ctx.setSigninAutoSign(id, !!fallback!.autoSign);
+				res.json({ ok: true, account });
+			} catch (e) {
+				res.status(400).json({ ok: false, error: errText(e) });
+			}
+		});
+
+		app.post('/api/signin/monitor', auth, csrfGuard, (req, res) => {
+			if (!this.commandLimiter.take()) {
+				res.status(429).json({ ok: false, error: '操作过于频繁，请稍后再试' });
+				return;
+			}
+			const id = String((req.body && req.body.id) || '');
+			if (!id) {
+				res.status(400).json({ ok: false, error: '缺少账号 id' });
+				return;
+			}
+			try {
+				/** ok 表示监听是否成功切换，直接平铺返回给手机端判断 */
+				res.json(this.ctx.setSigninMonitor(id, !!(req.body && req.body.running)));
+			} catch (e) {
+				res.status(400).json({ ok: false, error: errText(e) });
+			}
+		});
+
+		app.get('/api/signin/logs/:id', auth, (req, res) => {
+			const id = String(req.params.id || '');
+			if (!id) {
+				res.status(400).json({ ok: false, error: '缺少账号 id' });
+				return;
+			}
+			const raw = Number(req.query.limit);
+			const limit = Number.isFinite(raw) ? Math.min(200, Math.max(1, Math.floor(raw))) : 30;
+			try {
+				res.json({ ok: true, logs: this.ctx.getSigninLogs(id, limit) });
 			} catch (e) {
 				res.status(500).json({ ok: false, error: errText(e) });
 			}
