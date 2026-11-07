@@ -8,9 +8,11 @@
 		"build": "vite build --emptyOutDir"
 	},
 	"dependencies": {
+		"leaflet": "^1.9.4",
 		"vue": "^3.3.2"
 	},
 	"devDependencies": {
+		"@types/leaflet": "^1.9.22",
 		"@vitejs/plugin-vue": "4.2.3",
 		"typescript": "^4.3.2",
 		"vite": "3.2.6"

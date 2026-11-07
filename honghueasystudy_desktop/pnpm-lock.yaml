@@ -190,10 +190,16 @@ importers:
 
   packages/remote:
     dependencies:
+      leaflet:
+        specifier: ^1.9.4
+        version: 1.9.4
       vue:
         specifier: ^3.3.2
         version: 3.5.34(typescript@4.9.5)
     devDependencies:
+      '@types/leaflet':
+        specifier: ^1.9.22
+        version: 1.9.22
       '@vitejs/plugin-vue':
         specifier: 4.2.3
         version: 4.2.3(vite@3.2.6(@types/node@22.19.19)(less@4.6.4)(terser@5.48.0))(vue@3.5.34(typescript@4.9.5))
@@ -206,6 +212,9 @@ importers:
 
   packages/web:
     dependencies:
+      '@fontsource-variable/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@honghu-desktop/app':
         specifier: workspace:^2.1.3
         version: link:../app
@@ -236,6 +245,9 @@ importers:
       highlight.js:
         specifier: ^11.11.1
         version: 11.11.1
+      leaflet:
+        specifier: ^1.9.4
+        version: 1.9.4
       markdown-it:
         specifier: ^13.0.1
         version: 13.0.2
@@ -279,6 +291,9 @@ importers:
       '@arco-design/web-vue':
         specifier: ^2.42.0
         version: 2.58.0(vue@3.5.34(typescript@4.9.5))
+      '@types/leaflet':
+        specifier: ^1.9.22
+        version: 1.9.22
       '@types/markdown-it':
         specifier: ^12.2.3
         version: 12.2.3
@@ -474,6 +489,9 @@ packages:
     resolution: {integrity: sha512-J6KFFz5QCYUJq3pf0mjEcCJVERbzv71PUIDczuh9JkwGEzced6CO5ADLHB1rbf/+oPBtoPfMYNOpGDzCANlbXw==}
     engines: {node: ^10.12.0 || >=12.0.0}
 
+  '@fontsource-variable/inter@5.3.0':
+    resolution: {integrity: sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA==}
+
   '@html-eslint/eslint-plugin@0.15.0':
     resolution: {integrity: sha512-6DUb2ZN1PUlzlNzNj4aBhoObBp3Kl/+YbZ6CnkgFAsQSW0tSFAu7p8WwESkz9RZLZZN9gCUlcaYKJnQjTkmnDA==}
     engines: {node: '>=8.10.0'}
@@ -584,6 +602,9 @@ packages:
   '@types/fs-extra@9.0.13':
     resolution: {integrity: sha512-nEnwB++1u5lVDM2UI4c1+5R+FYaKfaAzS4OococimjVm3nQw3TuzH5UNsocrcTBbhnerblyHj4A49qXbIiZdpA==}
 
+  '@types/geojson@7946.0.16':
+    resolution: {integrity: sha512-6C8nqWur3j98U6+lXDfTUWIfgvZU+EumvpHKcYjujKH7woYyLj2sUmff0tRhrqM7BohUw7Pz3ZB1jj2gW9Fvmg==}
+
   '@types/glob@7.2.0':
     resolution: {integrity: sha512-ZUxbzKl0IfJILTS6t7ip5fQQM/J3TJYubDm3nMbgubNNYS62eXeUpoLUC8/7fJNiFYHTrGPQn7hspDUzIHX3UA==}
 
@@ -605,6 +626,9 @@ packages:
 
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
+
+  '@types/leaflet@1.9.22':
+    resolution: {integrity: sha512-h3lhECYEKDasG7LFHu+GiHqAvsgLuQvlJvVZzJDGONo3sEL+wUOqSFLnwkZlK0qVxnxbuGFW8iBlJNYs5wgndA==}
 
   '@types/linkify-it@5.0.0':
     resolution: {integrity: sha512-sVDA58zAw4eWAffKOaQH5/5j3XeayukzDk+ewSsnv3p4yJEZHCCzMDiZM8e0OUrRvmpGZ85jf4yDHkHsgBNr9Q==}
@@ -3437,6 +3461,9 @@ packages:
     resolution: {integrity: sha512-IpSVCk9AYvLHo5ctcIXxOBpMWUe+4TKN3VPWAKUbJikkmsGp0VrSM8IttVc32D6J4WUsiPE6aEFRNmIoF/gdow==}
     engines: {node: '>= 0.10'}
 
+  leaflet@1.9.4:
+    resolution: {integrity: sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA==}
+
   less-loader@10.2.0:
     resolution: {integrity: sha512-AV5KHWvCezW27GT90WATaDnfXBv99llDbtaj4bshq6DvAihMdNjaPDcUMa6EXKLRF+P2opFenJp89BXg91XLYg==}
     engines: {node: '>= 12.13.0'}
@@ -5722,6 +5749,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@fontsource-variable/inter@5.3.0': {}
+
   '@html-eslint/eslint-plugin@0.15.0': {}
 
   '@humanwhocodes/config-array@0.5.0':
@@ -5861,6 +5890,8 @@ snapshots:
     dependencies:
       '@types/node': 17.0.45
 
+  '@types/geojson@7946.0.16': {}
+
   '@types/glob@7.2.0':
     dependencies:
       '@types/minimatch': 6.0.0
@@ -5882,6 +5913,10 @@ snapshots:
   '@types/keyv@3.1.4':
     dependencies:
       '@types/node': 17.0.45
+
+  '@types/leaflet@1.9.22':
+    dependencies:
+      '@types/geojson': 7946.0.16
 
   '@types/linkify-it@5.0.0': {}
 
@@ -9169,6 +9204,8 @@ snapshots:
   lead@1.0.0:
     dependencies:
       flush-write-stream: 1.1.1
+
+  leaflet@1.9.4: {}
 
   less-loader@10.2.0(less@4.6.4)(webpack@5.107.1):
     dependencies:
