@@ -134,7 +134,7 @@ function handleCancel() {
 }
 
 .official-scripts-empty {
-	color: #86909c;
+	color: var(--text-tertiary);
 	font-size: 12px;
 	padding: 4px 0;
 }
@@ -150,13 +150,13 @@ function handleCancel() {
 	align-items: center;
 	justify-content: space-between;
 	padding: 8px 12px;
-	border: 1px solid #e5e6eb;
-	border-radius: 6px;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--r-sm);
 	cursor: pointer;
 	transition: border-color 0.2s;
 
 	&:hover {
-		border-color: #165dff;
+		border-color: var(--accent);
 	}
 }
 
@@ -172,7 +172,7 @@ function handleCancel() {
 
 .script-desc {
 	font-size: 12px;
-	color: #86909c;
+	color: var(--text-tertiary);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -189,7 +189,7 @@ body[arco-theme='dark'] & {
 		border-color: #3d3d3f;
 
 		&:hover {
-			border-color: #165dff;
+			border-color: var(--accent);
 		}
 	}
 }

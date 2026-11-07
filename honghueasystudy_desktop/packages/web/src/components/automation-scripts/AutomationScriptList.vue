@@ -137,6 +137,6 @@ function remove(index: number) {
 	width: 18px;
 	height: 18px;
 	object-fit: contain;
-	border-radius: 3px;
+	border-radius: var(--r-xs);
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-	<div class="scripts-page">
+	<div class="scripts-page reveal-stack">
 		<!--
 			脚本页同时装着两类东西，用分段按钮摊开，别再靠「一长条往下滚」去猜：
 			定时脚本 = 按实例的到点自动刷课；用户脚本 = 打开网课时注入的增强脚本。

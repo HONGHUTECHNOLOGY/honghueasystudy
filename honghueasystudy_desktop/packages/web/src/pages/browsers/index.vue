@@ -1,76 +1,72 @@
 <template>
 	<div
 		id="browsers"
-		class="h-100 browsers-page"
+		class="browsers-page"
 	>
-		<!-- ====================== 浏览器列表内容部分 ======================-->
-
-		<a-card
-			class="operations-card"
-			:bordered="true"
-			size="small"
-		>
-			<div class="operations">
-				<!-- 路径栏 / 统计栏 -->
-				<FileBreadcrumb
-					v-if="currentSearchedEntities === undefined && currentFolder.type !== 'root'"
-					:key="currentFolder.uid"
-				></FileBreadcrumb>
-				<div
-					v-else-if="currentSearchedEntities === undefined && currentFolder.type === 'root'"
-					class="stats-bar"
-				>
-					<span><icon-desktop /> {{ stats.browsers }}</span>
-					<span><icon-code /> {{ stats.scripts }}</span>
-					<span><icon-folder /> {{ stats.folders }}</span>
-					<span><icon-tag /> {{ stats.tags }}</span>
-				</div>
-				<!-- 撑开间距，将搜索和筛选推到最右边 -->
-				<div class="flex-grow-1"></div>
-				<!-- 文件筛选 -->
-				<FileFilters></FileFilters>
-
-				<!-- 搜索时禁止文件操作 -->
-				<template v-if="currentSearchedEntities">
-					<a-button
-						size="mini"
-						@click="resetSearch"
-					>
-						<Icon type="restart_alt"> 重置 </Icon>
-					</a-button>
-				</template>
+		<!--
+			工具栏：粘顶。
+			原来这里是 a-card + 内部 flex + 列表独立滚动；
+			现在改成「整个页面一起滚 + 工具栏 sticky」，
+			好处是滚到深处时工具栏仍在，且不再需要 absolute 定位的那套容器。
+		-->
+		<div class="browsers-toolbar">
+			<!-- 路径栏 / 统计栏 -->
+			<FileBreadcrumb
+				v-if="currentSearchedEntities === undefined && currentFolder.type !== 'root'"
+				:key="currentFolder.uid"
+			></FileBreadcrumb>
+			<div
+				v-else-if="currentSearchedEntities === undefined && currentFolder.type === 'root'"
+				class="stats-bar"
+			>
+				<span class="stat"><IconDesktop /> <b>{{ stats.browsers }}</b> 浏览器</span>
+				<span class="stat"><IconCode /> <b>{{ stats.scripts }}</b> 脚本</span>
+				<span class="stat"><IconFolder /> <b>{{ stats.folders }}</b> 文件夹</span>
+				<span class="stat"><IconTag /> <b>{{ stats.tags }}</b> 标签</span>
 			</div>
 
-			<!-- 文件操作 -->
+			<div class="flex-grow-1"></div>
+
+			<!-- 文件筛选 -->
+			<FileFilters></FileFilters>
+
+			<!-- 搜索时禁止文件操作 -->
+			<a-button
+				v-if="currentSearchedEntities"
+				size="mini"
+				@click="resetSearch"
+			>
+				<Icon type="restart_alt">重置</Icon>
+			</a-button>
+		</div>
+
+		<!-- 文件操作 -->
+		<div class="browsers-operators">
 			<FileMultipleOperators></FileMultipleOperators>
-		</a-card>
+		</div>
 
-		<EnvironmentAlert class="p-2"> </EnvironmentAlert>
+		<div class="browsers-body">
+			<EnvironmentAlert class="mb-2" />
 
-		<template v-if="currentSearchedEntities !== undefined && currentSearchedEntities.length === 0">
 			<a-empty
-				class="p-3"
-				description="暂无浏览器搜索结果"
-			></a-empty>
-		</template>
+				v-if="currentSearchedEntities !== undefined && currentSearchedEntities.length === 0"
+				class="py-5"
+				description="没有匹配的浏览器或文件夹"
+			/>
 
-		<div class="entities-wrapper">
 			<Transition
 				name="entities-slide"
 				appear
 			>
 				<div
 					:key="currentFolder.uid"
-					class="entities-container"
+					class="entities"
 				>
-					<!-- 显示浏览器以及文件夹列表 -->
-					<div class="entities">
-						<BrowserList
-							:entities="currentSearchedEntities ? currentSearchedEntities : currentEntities || []"
-						></BrowserList>
-					</div>
-					<!-- 右键菜单提示 -->
-					<div class="text-end">
+					<BrowserList
+						:entities="currentSearchedEntities ? currentSearchedEntities : currentEntities || []"
+					></BrowserList>
+
+					<div class="text-end mt-2">
 						<RightClickOpenMenuTip />
 					</div>
 				</div>
@@ -115,78 +111,112 @@ const stats = computed(() => {
 </script>
 
 <style scoped lang="less">
+/**
+ * 滚动由父级 .app-page 负责，这里只做内容排布。
+ * 不再用 h-100 + flex column + absolute 容器：那套是为了让列表在卡片内独立滚动，
+ * 代价是工具栏与列表的滚动上下文分离，滚到深处工具栏就消失了。
+ */
+
 .browsers-page {
 	display: flex;
 	flex-direction: column;
+	min-height: 100%;
 }
 
-.operations-card {
-	flex-shrink: 0;
-	margin: 6px 8px 0;
-}
+/* ============================================================ 工具栏 */
 
-.operations {
+.browsers-toolbar {
+	position: sticky;
+	top: 0;
+	z-index: 15;
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	flex-wrap: nowrap;
+	min-height: 40px;
+	padding: 10px 20px;
+	/**
+	 * 粘顶工具栏用玻璃而不是纯白：
+	 * 列表向上滚时会在工具栏下方被模糊掉，形成「内容在玻璃后面走」的层次，
+	 * 比一条实心白带自然得多。80% 不透明保证文字仍有足够对比。
+	 */
+	background: color-mix(in srgb, var(--surface-panel) 80%, transparent);
+	backdrop-filter: blur(14px) saturate(160%);
+	-webkit-backdrop-filter: blur(14px) saturate(160%);
+	border-bottom: 1px solid var(--border-subtle);
 	overflow-x: auto;
 	overflow-y: hidden;
+	white-space: nowrap;
 }
 
-.entities-wrapper {
-	flex: 1;
-	min-height: 0;
-	position: relative;
-}
-
-.entities-container {
-	position: absolute;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
+.browsers-operators {
 	display: flex;
-	flex-direction: column;
+	align-items: center;
+	padding: 8px 20px 0;
+	background: var(--surface-panel);
 }
 
-.entities {
-	flex: 1;
-	min-height: 0;
-	overflow: overlay;
-
-	padding: 4px 12px 0;
+.browsers-body {
+	flex: 1 1 auto;
+	padding: 12px 20px 28px;
+	/* 与简洁模式一致：顶部一层极淡品牌色环境光，避免大面积纯色底显得平 */
+	background: radial-gradient(ellipse 90% 30% at 50% 0%, var(--surface-glow), transparent 70%),
+		var(--surface-page);
 }
+
+/* ============================================================ 统计 */
 
 .stats-bar {
 	display: flex;
 	align-items: center;
 	gap: 16px;
-	font-size: 12px;
-	color: #86909c;
-	white-space: nowrap;
+	font-size: var(--fs-12);
+	color: var(--text-tertiary);
 	user-select: none;
 
-	span {
+	.stat {
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
+		gap: 5px;
+	}
+
+	/** 数字用等宽 + 主文字色：数量才是信息，单位是注脚 */
+	b {
+		font-weight: var(--fw-medium);
+		color: var(--text-primary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.arco-icon {
+		font-size: 13px;
+		opacity: 0.7;
 	}
 }
 
-/* 浏览器列表过渡动画 */
+/* ============================================================ 列表 */
+
+.entities {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+/* 列表切换过渡：只动 opacity 与 transform */
 .entities-slide-enter-active {
-	transition: opacity 0.2s ease 0.2s, transform 0.2s ease 0.2s;
+	transition: opacity var(--dur-3) var(--ease-dec) var(--dur-1),
+		transform var(--dur-3) var(--ease-dec) var(--dur-1);
 }
+
 .entities-slide-leave-active {
-	transition: opacity 0.15s ease, transform 0.15s ease;
+	transition: opacity var(--dur-1) var(--ease-acc), transform var(--dur-1) var(--ease-acc);
 }
+
 .entities-slide-enter-from {
 	opacity: 0;
-	transform: translateY(8px);
+	transform: translateY(6px);
 }
+
 .entities-slide-leave-to {
 	opacity: 0;
-	transform: translateY(8px);
+	transform: translateY(-4px);
 }
 </style>

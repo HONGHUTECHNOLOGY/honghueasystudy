@@ -142,7 +142,7 @@ function isSelected(item: Item) {
 	border: 1px solid #e1e1e18c;
 	padding: 6px;
 	margin: 4px 0px;
-	border-radius: 4px;
+	border-radius: var(--r-xs);
 	cursor: pointer;
 
 	&.selected {

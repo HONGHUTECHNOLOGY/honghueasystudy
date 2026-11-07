@@ -1,0 +1,311 @@
+/**
+ * 应用壳层几何
+ * ============================================================================
+ * 目标：把「标题栏 + 内容区」从 `calc(100vh - var(--title-height))` 这种
+ * 硬算高度的写法，换成 flex 自然分配。好处有三：
+ *
+ * 1. 改标题栏高度不用再去追每一处 calc；
+ * 2. 窗口缩放时不会因为 100vh 与容器实际高度差 1px 而出现双滚动条；
+ * 3. 嵌套滚动（页面内滚动 + 内部列表滚动）的层级关系变得明确。
+ *
+ * 结构：
+ *   #app (flex column)
+ *   ├─ .app-title  固定 var(--title-height)
+ *   └─ .app-main   flex:1, 横向
+ *      ├─ .app-sidebar  固定宽度（仅专业模式）
+ *      └─ .app-page     纵向滚动区
+ * ============================================================================
+ */
+
+#app {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	height: 100%;
+	overflow: hidden;
+	background: var(--surface-page);
+}
+
+/**
+ * 壳层高度传递点
+ *
+ * App.vue 里 <a-config-provider> 的第一层子元素就是它，包着标题栏与内容区。
+ * 这一层必须是 flex 列并吃掉剩余高度，否则 flex 链条在这里断掉：
+ * Title 按内容高度排，.main-container 的 flex:1 找不到参照，
+ * 结果是内容区塌成 0 高或整页溢出到窗口外。
+ */
+.app-root {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	height: 100%;
+	overflow: hidden;
+}
+
+/* ============================================================== 标题栏 */
+
+.app-title {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	height: var(--title-height);
+
+	/**
+	 * 原生窗口按钮避让。
+	 *
+	 * Windows 右上角是三个系统绘制的按钮（最小化/最大化/关闭，各 46 CSS px，共 138），
+	 * 它们盖在页面之上但没有自己的布局占位。不在这里留出内边距，
+	 * 最右侧的状态提示就会被按钮压住看不清、也点不到。
+	 *
+	 * 用固定值而不是 env(titlebar-area-width)：后者在窗口最大化、DPI 切换、
+	 * 多显示器拖动时都有返回 0 的历史问题，只适合当渐进增强。
+	 */
+	padding-left: var(--title-inset-left);
+	padding-right: var(--title-inset-right);
+
+	-webkit-app-region: drag;
+	user-select: none;
+	background: var(--surface-panel);
+	border-bottom: 1px solid var(--border-subtle);
+	position: relative;
+	z-index: 100;
+}
+
+/** 标题栏里的交互元素必须显式取消拖拽，否则点不动 */
+.app-title button,
+.app-title a,
+.app-title .no-drag,
+.app-title .arco-dropdown,
+.app-title .arco-switch,
+.app-title .segmented {
+	-webkit-app-region: no-drag;
+}
+
+/**
+ * 标题栏文字按钮（"工具"等）
+ *
+ * 定义在全局而非某个组件的 scoped 样式里：这类按钮可能由子组件渲染，
+ * 父组件的 scoped 选择器作用不到子组件内部元素。
+ */
+.title-item {
+	-webkit-app-region: no-drag;
+	display: inline-flex;
+	align-items: center;
+	height: 26px;
+	padding: 0 12px;
+	font-size: var(--fs-12);
+	font-weight: var(--fw-medium);
+	color: var(--text-secondary);
+	cursor: pointer;
+	/* 标题栏是「条」，里面每个可点项用胶囊才和这个形状同构 */
+	border-radius: var(--r-pill);
+	white-space: nowrap;
+	transition: background-color var(--dur-2) var(--ease-std), color var(--dur-2) var(--ease-std);
+}
+
+.title-item:hover {
+	background: var(--surface-hover);
+	color: var(--text-primary);
+}
+
+/**
+ * 当前页名：**仅 macOS 显示**
+ *
+ * Windows 上标题栏中间若也放页名，会和左侧「工具」菜单、右侧状态挤在一起，
+ * 而且专业模式的侧栏本身已经高亮了当前页，属于重复信息。
+ * 这里默认隐藏，只有 macOS（红绿灯在左、中间天然空出一块）才绝对居中显示。
+ */
+.app-title__center {
+	display: none;
+}
+
+body.platform-darwin .app-title__center {
+	display: block;
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	font-size: var(--fs-12);
+	font-weight: var(--fw-medium);
+	color: var(--text-tertiary);
+	letter-spacing: 0;
+	pointer-events: none;
+	max-width: 40%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ============================================================== 主体区 */
+
+.app-main {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	overflow: hidden;
+}
+
+/* ============================================================== 侧栏 */
+
+.app-sidebar {
+	flex: 0 0 auto;
+	width: var(--sidebar-w);
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	/* 与内容同底：靠右边框分隔，而不是靠深一块的底色 */
+	background: var(--surface-page);
+	border-right: 1px solid var(--border-subtle);
+	-webkit-app-region: no-drag;
+	user-select: none;
+	transition: width var(--dur-3) var(--ease-dec);
+	overflow: hidden;
+	/**
+	 * 从左侧滑入
+	 *
+	 * 侧栏只在进入专业模式时被创建（简洁模式没有它），所以这条动画
+	 * 实际表达的是「切换到专业模式」这个动作：栏先滑进来，条目再依次浮现。
+	 * 位移 8px：再大就像抽屉被拉开，8px 只是「推到位」。
+	 */
+	animation: sidebar-in var(--dur-4) var(--ease-dec) backwards;
+}
+
+@keyframes sidebar-in {
+	from {
+		opacity: 0;
+		transform: translateX(-8px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.app-sidebar.is-collapsed {
+	width: var(--sidebar-w-collapsed);
+}
+
+/* ============================================================== 内容区 */
+
+.app-page {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	/**
+	 * 作为子路由离场动画（.t-page-leave-active 的 position:absolute）的定位祖先。
+	 * 不加的话离场元素会退到外层 .main-container 去定位，覆盖到侧栏上淡出。
+	 */
+	position: relative;
+	/**
+	 * 不在这里设 padding。
+	 * 各页面本身已有自己的间距（p-2 / p-3 或 PageShell），外层再加一层会变成双重留白，
+	 * 表现为「内容被挤到中间一小块」。滚动容器只负责滚动与高度分配。
+	 */
+}
+
+/** 窄栏：简洁模式的居中内容，比原来 800px 略收，行长更舒适 */
+.app-page__inner {
+	width: 100%;
+	max-width: 880px;
+	margin: 0 auto;
+}
+
+.app-page__inner--wide {
+	max-width: var(--page-max);
+}
+
+/* ============================================================ Arco 容器 */
+
+/**
+ * 模态/抽屉的定位容器。
+ *
+ * 原来只推了 `top`，没有同步收 `height`，于是容器底部溢出 var(--title-height)，
+ * 在 600 高的窗口里相当于底部约 7% 的可点区域被切掉——滚动到底的按钮点不到。
+ * 标题栏从 32 涨到 40 之后这个偏差会更明显。
+ */
+.arco-modal-container,
+.arco-drawer-container {
+	top: var(--title-height) !important;
+	height: calc(100% - var(--title-height)) !important;
+}
+
+/** 消息与通知：贴在标题栏下方，不要盖住标题栏 */
+.arco-message-list {
+	top: calc(16px + var(--title-height)) !important;
+}
+
+.arco-notification-list {
+	top: calc(12px + var(--title-height)) !important;
+}
+
+/* ====================================================== Win10 窗口描边 */
+
+/**
+ * Win10 的无边框窗口缺少系统阴影，需要自己描一圈边。
+ *
+ * 注意这里不能用 var(--border-default)：CSS 变量继承是从 html 向下到 body，
+ * body 上定义的变量在 html 自身取不到。所以只能给固定值。
+ * Win10 是少数环境，暗色下这条淡边稍亮但不影响使用。
+ */
+html.window-frame {
+	border: 1px solid rgba(16, 24, 40, 0.12);
+	overflow: hidden;
+	box-shadow: none;
+}
+
+/* ============================================================== 分段控件 */
+
+/**
+ * 二态分段控件（简洁 / 专业模式）
+ *
+ * 用「容器凹陷 + 选中项浮起」表达当前状态，比原来一个文字按钮显示目标模式清楚得多：
+ * 用户一眼看到的是「我现在在哪」，而不是「点了会去哪」。
+ *
+ * 容器与选中项都是胶囊：分段控件的本质是「一个药丸里塞了半片药」，
+ * 外面圆、里面方会露出四个角的小尖，是这类控件最常见的不精致之处。
+ */
+.segmented {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px;
+	height: 26px;
+	border-radius: var(--r-pill);
+	background: var(--surface-sunken);
+	border: 1px solid transparent;
+}
+
+.segmented__item {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 20px;
+	padding: 0 11px;
+	border-radius: var(--r-pill);
+	font-size: var(--fs-12);
+	font-weight: var(--fw-medium);
+	color: var(--text-tertiary);
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background-color var(--dur-2) var(--ease-std), color var(--dur-2) var(--ease-std);
+}
+
+.segmented__item:hover {
+	color: var(--text-primary);
+}
+
+.segmented__item.is-active {
+	background: var(--surface-panel);
+	color: var(--text-primary);
+	box-shadow: var(--shadow-sm);
+}
+
+/**
+ * 书签导航 / 使用指南 / 关于：**不加额外入场**
+ *
+ * 这三页自带一整套入场编排（topbar-enter / reveal-up 五级延迟 /
+ * card-enter 七级错峰 / ambient-breathe / spotlight-drift 等），
+ * 精细程度高于主界面那一套。在它们外面再套一层整页淡入，
+ * 只会让整页晚 420ms 才「亮起来」，把原本的层次压平。
+ * 留这段注释是为了避免以后有人（包括我）重复这个判断。
+ */

@@ -1,0 +1,880 @@
+/**
+ * Arco 组件重绘
+ * ============================================================================
+ * 取代原来的 assets/less/arco-custom.less。
+ *
+ * 【统一手法：边框承托代替阴影堆叠】
+ * 原来每张卡片、每个折叠面板都挂一层 `0 1px 2px + 0 4px 12px` 双层阴影，
+ * 满屏阴影互相叠加的结果不是「有层次」，而是「脏」。
+ * 现在默认态只有 1px 微边框，阴影只在真正浮起来的东西上（模态、下拉、hover 的卡片）。
+ *
+ * 【过渡只允许廉价的属性】
+ * color / border-color / background-color 是小面积重绘；opacity / transform 走合成器。
+ * 不给 box-shadow 加 transition —— 那会让整个卡片区域每帧重绘。
+ * ============================================================================
+ */
+
+/* ================================================================== 卡片 */
+
+.arco-card {
+	border-radius: var(--r-md);
+	background: var(--surface-panel);
+	/* 默认只有边框，没有阴影 */
+	box-shadow: none;
+	/**
+	 * 用 --border-default 而不是 --border-subtle：
+	 * 卡片白底（#FFF）与页面底（#F7F8FA）只差 8 个亮度值，
+	 * 再配最淡的边框，整页会糊成一片分不出卡片边界。
+	 * 「克制」不等于「看不见」，边界是这一层唯一的承托。
+	 */
+	border: 1px solid var(--border-default);
+	transition: border-color var(--dur-2) var(--ease-std), background-color var(--dur-2) var(--ease-std),
+		box-shadow var(--dur-2) var(--ease-std), transform var(--dur-2) var(--ease-dec);
+}
+
+/**
+ * hover 只加深边框，不上浮。
+ *
+ * 原来全站卡片 hover 都 `translateY(-2px)` + 加大阴影，在列表页几十张卡片时
+ * 鼠标划过会看到整片区域在抖。需要「可点」暗示的卡片自己加 .card-interactive。
+ */
+.arco-card.card-interactive {
+	cursor: pointer;
+}
+
+.arco-card.card-interactive:hover {
+	border-color: var(--border-default);
+	box-shadow: var(--shadow-md);
+	/* 只上浮 1px：桌面鼠标划过时 2px 会有"飘"的感觉，1px 是"被指尖顶起" */
+	transform: translateY(-1px);
+}
+
+.arco-card-header {
+	border-bottom: 1px solid var(--border-subtle);
+	padding: 0 16px;
+	height: 44px;
+}
+
+.arco-card-header-title {
+	font-size: var(--fs-14);
+	font-weight: var(--fw-semibold);
+	letter-spacing: -0.01em;
+	color: var(--text-primary);
+}
+
+.arco-card-body {
+	padding: 16px;
+}
+
+.arco-card-meta-title {
+	color: var(--text-primary);
+	font-weight: var(--fw-medium);
+}
+
+.arco-card-meta-description {
+	color: var(--text-tertiary);
+}
+
+/* ================================================================== 按钮 */
+
+.arco-btn {
+	border-radius: var(--r-sm);
+	font-weight: var(--fw-medium);
+	transition: background-color var(--dur-2) var(--ease-std), border-color var(--dur-2) var(--ease-std),
+		color var(--dur-2) var(--ease-std), transform var(--dur-1) var(--ease-std);
+}
+
+/** 按下时轻微内缩：比改颜色更接近物理反馈，且只动 transform */
+.arco-btn:active:not(.arco-btn-disabled) {
+	transform: scale(0.98);
+}
+
+.arco-btn-primary {
+	box-shadow: none;
+}
+
+/**
+ * 暗色下的主按钮：浅蓝底 + 深色字
+ *
+ * 品牌蓝在暗色下被提亮到 #5F9BFF，此时白字对比度只有 2.6:1（低于 4.5:1 的可读线）。
+ * 反过来用深色字能到 6.5:1，而且「亮底深字」正是暗色模式里主操作该有的样子
+ * —— 它把按钮推近光源，而不是让按钮变成一块发光的色块。
+ */
+body[arco-theme='dark'] .arco-btn-primary:not(.arco-btn-disabled) {
+	color: var(--text-inverse);
+}
+
+body[arco-theme='dark'] .arco-btn-primary:not(.arco-btn-disabled):hover {
+	color: var(--text-inverse);
+}
+
+/**
+ * 主按钮 hover：带品牌色的投影
+ *
+ * 不是加发光边（那会变成廉价科技风），而是让阴影本身带一点品牌色，
+ * 像按钮在纸面上投下的一小片蓝影。静止时没有，hover 才出现。
+ */
+.arco-btn-primary:not(.arco-btn-disabled):hover {
+	box-shadow: var(--accent-shadow);
+}
+
+/** 次要按钮：白底 + 边框，不用浅灰填充（浅灰填充在纸白背景上会显得脏） */
+.arco-btn-secondary:not(.arco-btn-disabled),
+.arco-btn-outline:not(.arco-btn-disabled) {
+	background: var(--surface-panel);
+	border-color: var(--border-default);
+	color: var(--text-primary);
+}
+
+.arco-btn-secondary:not(.arco-btn-disabled):hover,
+.arco-btn-outline:not(.arco-btn-disabled):hover {
+	background: var(--surface-panel);
+	border-color: var(--border-strong);
+	color: var(--text-primary);
+}
+
+.arco-btn-text:not(.arco-btn-disabled) {
+	color: var(--text-secondary);
+}
+
+.arco-btn-text:not(.arco-btn-disabled):hover {
+	background: var(--surface-hover);
+	color: var(--text-primary);
+}
+
+/**
+ * 小号按钮与纯图标按钮：胶囊 / 正圆
+ *
+ * 为什么要按尺寸分开做：
+ * 28px 以上的常规按钮用 8px 圆角是对的——它们承载表单主操作，方一点更「稳」。
+ * 但 22~24px 的 mini 按钮（工具栏里成排出现的那种）用 8px 会显得四个角被啃掉，
+ * 因为半径已经接近高度的一半，视觉上既不像矩形也不像胶囊。直接给足到胶囊，
+ * 弧线走完整个端部，一串工具按钮看起来才像一组「药丸」而不是一堆残角方块。
+ */
+.arco-btn-size-mini,
+.arco-btn-size-small {
+	border-radius: var(--r-pill);
+}
+
+/** 纯图标按钮：正圆。它是圆的语义（没有文字就没有方向性），胶囊会把圆压成椭圆 */
+.arco-btn-shape-circle {
+	border-radius: 50%;
+}
+
+/* ============================================================ 输入类控件 */
+
+.arco-input-wrapper,
+.arco-textarea-wrapper,
+.arco-select-view-single,
+.arco-select-view-multiple,
+.arco-input-tag,
+.arco-picker {
+	border-radius: var(--r-sm);
+	border-color: var(--border-default);
+	background: var(--surface-panel);
+	transition: border-color var(--dur-2) var(--ease-std), box-shadow var(--dur-2) var(--ease-std);
+}
+
+.arco-input-wrapper:hover,
+.arco-textarea-wrapper:hover,
+.arco-select-view-single:hover,
+.arco-select-view-multiple:hover {
+	border-color: var(--border-strong);
+	background: var(--surface-panel);
+}
+
+.arco-input-wrapper.arco-input-focus,
+.arco-textarea-wrapper.arco-textarea-focus,
+.arco-select-view-single.arco-select-view-focus,
+.arco-select-view-multiple.arco-select-view-focus {
+	border-color: var(--border-focus);
+	box-shadow: var(--shadow-ring);
+	background: var(--surface-panel);
+}
+
+.arco-input::placeholder,
+.arco-textarea::placeholder {
+	color: var(--text-disabled);
+}
+
+/**
+ * 搜索框：胶囊
+ *
+ * 搜索是「输入 + 触发」的复合控件，不是纯文字录入，用胶囊把它和普通的
+ * 表单输入框区分开是有意义的——用户扫一眼就知道那个带放大镜的圆条可以打字。
+ * 高度 24px，胶囊半径正好是半高，端部弧线完整。
+ * 左右内边距同步加大：胶囊两端是弧线，同样的 padding 会让文字贴到弧上。
+ */
+.arco-input-wrapper.arco-input-search {
+	border-radius: var(--r-pill);
+	padding-left: 12px;
+	padding-right: 4px;
+}
+
+.arco-input-wrapper.arco-input-search .arco-input-suffix {
+	margin-left: 2px;
+}
+
+/* ================================================================== 弹层 */
+
+/**
+ * 模态：深色玻璃
+ *
+ * 92% 不透明度 + 24px 模糊。压在遮罩上时，背后的页面会化成一层很淡的晕，
+ * 比纯不透明面板更有「浮在内容之上」的空间感，又不会影响正文可读性。
+ * 遮罩本身保持纯色（不模糊）——遮罩再模糊只会得到一团灰。
+ */
+.arco-modal {
+	border-radius: var(--r-lg);
+	background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+	backdrop-filter: blur(24px) saturate(180%);
+	-webkit-backdrop-filter: blur(24px) saturate(180%);
+	border: 1px solid var(--border-subtle);
+	box-shadow: var(--shadow-xl);
+	/**
+	 * 这里**不能**挂常驻 animation 来做入场。
+	 *
+	 * Arco 的 Modal 用 <Transition name="zoom-modal"> 控制进出，类上写的是 transition。
+	 * CSS animation 的优先级高于 transition：两者同时作用在 transform / opacity 上时，
+	 * 离场的 transition 会被 animation 完全压制——表现为「点了关闭弹窗不动，
+	 * 过一会儿突然消失」，或者动画还在播时点关闭直接闪没。
+	 * 进出必须走同一条通道，也就是下面覆写 Arco 的过渡类。
+	 */
+}
+
+/** 入场：320ms，1.5% 放大 + 8px 上浮 */
+.zoom-modal-enter-active,
+.zoom-modal-appear-active {
+	transition: opacity var(--dur-3) var(--ease-dec), transform var(--dur-3) var(--ease-dec);
+}
+
+.zoom-modal-enter-from,
+.zoom-modal-appear-from {
+	opacity: 0;
+	transform: scale(0.985) translateY(8px);
+}
+
+.zoom-modal-enter-to,
+.zoom-modal-appear-to {
+	opacity: 1;
+	transform: scale(1) translateY(0);
+}
+
+/**
+ * 离场：180ms，只淡出 + 3px 下沉，**不做缩放**。
+ *
+ * 两个理由：
+ * 1. 面板带 backdrop-filter，缩放会让模糊的采样区域跟着一起缩，
+ *    关闭过程中边缘会出现明显的明暗抖动（每帧重算一次卷积）。
+ *    纯 opacity 不触发重算，全程干净。
+ * 2. 离场比入场快是必要的礼貌——「消失」应该利落，
+ *    拖到 320ms 会和主人「已经点完了」的心理预期打架。
+ */
+.zoom-modal-leave-active {
+	transition: opacity var(--dur-2) var(--ease-acc), transform var(--dur-2) var(--ease-acc);
+}
+
+.zoom-modal-leave-from {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+.zoom-modal-leave-to {
+	opacity: 0;
+	transform: translateY(3px);
+}
+
+.arco-modal-mask {
+	background: var(--surface-mask);
+}
+
+/** 遮罩：入场 320ms 跟上内容，离场 180ms 同步退干净 */
+.fade-modal-enter-active,
+.fade-modal-appear-active {
+	transition: opacity var(--dur-3) var(--ease-std);
+}
+
+.fade-modal-leave-active {
+	transition: opacity var(--dur-2) var(--ease-acc);
+}
+
+.fade-modal-enter-from,
+.fade-modal-appear-from,
+.fade-modal-leave-to {
+	opacity: 0;
+}
+
+.fade-modal-enter-to,
+.fade-modal-appear-to {
+	opacity: 1;
+}
+
+.arco-modal-header {
+	border-bottom: none;
+	padding: 20px 20px 0;
+}
+
+.arco-modal-title {
+	font-size: var(--fs-16);
+	font-weight: var(--fw-semibold);
+	letter-spacing: -0.01em;
+	color: var(--text-primary);
+}
+
+.arco-modal-body {
+	padding: 16px 20px;
+	color: var(--text-secondary);
+}
+
+.arco-modal-footer {
+	border-top: 1px solid var(--border-subtle);
+	padding: 12px 20px;
+}
+
+.arco-modal-close-btn {
+	color: var(--text-tertiary);
+	transition: color var(--dur-2) var(--ease-std), background-color var(--dur-2) var(--ease-std);
+}
+
+.arco-modal-close-btn:hover {
+	color: var(--text-primary);
+	background: var(--surface-hover);
+}
+
+/**
+ * 抽屉：贴边，只在一侧留圆角
+ */
+.arco-drawer {
+	background: var(--surface-raised);
+	box-shadow: var(--shadow-xl);
+}
+
+.arco-drawer-header {
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+/**
+ * 折叠面板：统一过渡曲线与箭头旋转
+ *
+ * Arco 用 JS 设置 content 的 height，所以 transition 必须加在 height 上；
+ * 箭头用 transform 旋转，与展开动作同步。
+ */
+.arco-collapse-item-content {
+	transition: height var(--dur-3) var(--ease-dec);
+}
+
+.arco-collapse-item-header-icon {
+	transition: transform var(--dur-3) var(--ease-dec), color var(--dur-2) var(--ease-std);
+}
+
+.arco-collapse-item-header-title {
+	font-weight: var(--fw-medium);
+}
+
+/**
+ * 下拉与气泡：玻璃浮层
+ *
+ * 硬件加速已确认可用（Intel Iris Xe / ANGLE D3D11，gpu_compositing=enabled），
+ * 这里恢复半透明 + 背景模糊。
+ *
+ * 用 color-mix 把面板色压到 86% 不透明度而不是直接 rgba：
+ * 这样亮暗两套主题都能从同一个 --surface-raised 推导，
+ * 不需要为暗色再写一份玻璃规则。
+ */
+.arco-dropdown,
+.arco-select-dropdown,
+.arco-trigger-popup .arco-popover-inner,
+.arco-popover-inner {
+	background: color-mix(in srgb, var(--surface-raised) 86%, transparent);
+	backdrop-filter: blur(20px) saturate(180%);
+	-webkit-backdrop-filter: blur(20px) saturate(180%);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--r-md);
+	box-shadow: var(--shadow-lg);
+}
+
+/**
+ * 只有「菜单型」下拉需要最小宽度。
+ *
+ * Arco 默认按内容自适应，标题栏的「工具」菜单算出来只有 127px，
+ * 中文菜单项几乎贴着左右边缘。选择器下拉不能跟着吃这个下限——
+ * 它需要和选择器本身对齐。
+ */
+.arco-dropdown {
+	min-width: 190px;
+	padding: 4px 0;
+}
+
+.arco-dropdown-option,
+.arco-select-option {
+	border-radius: var(--r-xs);
+	margin: 1px 4px;
+	padding: 0 8px;
+	height: 30px;
+	line-height: 30px;
+	font-size: var(--fs-12);
+	color: var(--text-secondary);
+	transition: background-color var(--dur-1) var(--ease-std), color var(--dur-1) var(--ease-std);
+}
+
+/**
+ * 菜单项内容：图标 + 文字的排版
+ *
+ * 这段必须写在全局而不是某个组件的 scoped 样式里：
+ * Arco 的下拉是通过 teleport 挂到 body 上的，
+ * scoped 选择器（编译成 .parent[data-v-x] .target）永远命中不到它。
+ *
+ * 注意里面的间距不是由 gap 控制的：Icon 组件在有 slot 时会用 <a-space size="mini">
+ * 把图标和文字包起来（4px 间距），所以真正要改的是 .arco-space-item 的 margin。
+ */
+.arco-dropdown-option-content {
+	display: flex;
+	align-items: center;
+	width: 100%;
+}
+
+.arco-dropdown-option .arco-space-item:not(:last-child) {
+	margin-right: 8px !important;
+}
+
+.arco-dropdown-option .material-icons,
+.arco-dropdown-option .material-icons-outlined {
+	font-size: 15px;
+	color: var(--text-tertiary);
+	transition: color var(--dur-1) var(--ease-std);
+}
+
+.arco-dropdown-option:hover .material-icons,
+.arco-dropdown-option:hover .material-icons-outlined {
+	color: var(--text-secondary);
+}
+
+.arco-dropdown-option:hover,
+.arco-select-option:hover,
+.arco-dropdown-option-hover {
+	background: var(--surface-hover);
+	color: var(--text-primary);
+}
+
+.arco-dropdown-option-active,
+.arco-select-option-selected {
+	background: var(--accent-subtle);
+	color: var(--accent);
+	font-weight: var(--fw-medium);
+}
+
+/**
+ * 分组标题
+ *
+ * 不用 uppercase：中文没有大小写，`text-transform: uppercase` 对它是空操作，
+ * 只在混排的英文分组名上产生不一致。改用「字号小一档 + 字重略高 + 淡色」分层。
+ * 11px 的中文在 100% 缩放下已经偏小，这里用 12px。
+ */
+.arco-dropdown-group-title {
+	padding: 10px 14px 4px;
+	font-size: var(--fs-12);
+	font-weight: var(--fw-medium);
+	letter-spacing: 0;
+	color: var(--text-tertiary);
+}
+
+/* ============================================================== 标签页 */
+
+.arco-tabs-header-nav::before {
+	background: var(--border-subtle);
+}
+
+.arco-tabs-tab {
+	color: var(--text-tertiary);
+	font-size: var(--fs-13);
+	transition: color var(--dur-2) var(--ease-std);
+}
+
+.arco-tabs-tab:hover {
+	color: var(--text-primary);
+}
+
+.arco-tabs-tab-active {
+	color: var(--text-primary);
+	font-weight: var(--fw-medium);
+}
+
+/** 选中指示条用 2px 品牌色，是全局少数几个「用蓝色」的地方之一 */
+.arco-tabs-header-ink,
+.arco-tabs-tab-line ~ .arco-tabs-header-ink {
+	background: var(--accent);
+	height: 2px;
+	border-radius: 2px;
+}
+
+/* ================================================================ 表格 */
+
+.arco-table-th {
+	background: var(--surface-sunken);
+	color: var(--text-tertiary);
+	font-size: var(--fs-12);
+	font-weight: var(--fw-medium);
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.arco-table-td {
+	border-bottom: 1px solid var(--border-subtle);
+	color: var(--text-secondary);
+}
+
+.arco-table-tr:hover .arco-table-td {
+	background: var(--surface-hover);
+}
+
+.arco-table-border .arco-table-td,
+.arco-table-border .arco-table-th {
+	border-color: var(--border-subtle);
+}
+
+/* ================================================================ 树 */
+
+.arco-tree-node-title {
+	border-radius: var(--r-xs);
+	font-size: var(--fs-13);
+	transition: background-color var(--dur-1) var(--ease-std);
+}
+
+.arco-tree-node-title:hover {
+	background: var(--surface-hover);
+}
+
+.arco-tree-node-selected .arco-tree-node-title {
+	background: var(--accent-subtle);
+	color: var(--accent);
+}
+
+/* ============================================================ 折叠面板 */
+
+.arco-collapse {
+	border-radius: var(--r-md);
+	border: 1px solid var(--border-subtle);
+	box-shadow: none;
+	overflow: hidden;
+	background: var(--surface-panel);
+}
+
+.arco-collapse-item {
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.arco-collapse-item-header {
+	background: transparent;
+	font-size: var(--fs-13);
+	font-weight: var(--fw-medium);
+	color: var(--text-primary);
+}
+
+/* ============================================================== 提示条 */
+
+.arco-alert {
+	border-radius: var(--r-md);
+	border: 1px solid var(--border-subtle);
+	box-shadow: none;
+	font-size: var(--fs-12);
+}
+
+/**
+ * info 提示：中性底 + 中性边框，只有图标保留品牌色
+ *
+ * 原来给了淡蓝底，于是「警告（杏）+ 提示（蓝）」两个高饱和块并排出现，
+ * 页面看上去花且没有主次。信息提示本就不需要抢注意力：
+ * 灰底足以区分，品牌色退回图标这一小块作为点缀。
+ */
+.arco-alert-info {
+	background: var(--surface-sunken);
+	border-color: var(--border-subtle);
+	color: var(--text-secondary);
+}
+
+/** 只有 info 的图标留在品牌色上，是页面上少数几处蓝色之一 */
+.arco-alert-info .arco-alert-icon {
+	color: var(--accent);
+}
+
+.arco-alert-warning {
+	background: var(--warn-subtle);
+	border-color: color-mix(in srgb, var(--warn) 30%, transparent);
+}
+
+.arco-alert-error {
+	background: var(--danger-subtle);
+	border-color: color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+.arco-alert-success {
+	background: var(--ok-subtle);
+	border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+}
+
+/* ============================================================ 小控件 */
+
+/**
+ * 标签：胶囊
+ *
+ * 标签是全站最适合胶囊的元素——它比按钮小、比正文短，圆角矩形会显得像
+ * 「被切掉一角的色块」，胶囊才让它看起来是个可以「贴在」别处的小物件。
+ * 横向留白也同步加大（6px → 9px）：胶囊两端是弧线，同样字数下需要更多余量，
+ * 否则文字会挤在弧线上。
+ */
+.arco-tag {
+	border-radius: var(--r-pill);
+	font-size: var(--fs-11);
+	height: 21px;
+	line-height: 19px;
+	padding: 0 9px;
+	border: 1px solid transparent;
+	font-weight: var(--fw-medium);
+}
+
+/** 带关闭按钮的标签：右侧留白收一点，让 × 不至于离边缘太远 */
+.arco-tag-closable {
+	padding-right: 5px;
+}
+
+/**
+ * 小号标签单独收尺寸
+ *
+ * 上面对 `.arco-tag` 的统一高度会盖掉 Arco 的 size 变体（同为单类选择器，
+ * 后加载的赢），结果 size="small" 也变成 21px，塞在筛选下拉里会把下拉项撑高。
+ */
+.arco-tag-size-small {
+	height: 19px;
+	line-height: 17px;
+	padding: 0 8px;
+	font-size: 10px;
+}
+
+.arco-tag .arco-tag-close-btn {
+	border-radius: var(--r-pill);
+}
+
+.arco-checkbox-icon,
+.arco-radio-icon {
+	border-radius: var(--r-xs);
+	border-color: var(--border-strong);
+}
+
+.arco-checkbox-checked .arco-checkbox-icon,
+.arco-radio-checked .arco-radio-icon {
+	background: var(--accent);
+	border-color: var(--accent);
+}
+
+/**
+ * 按钮式单选组（如「自定义 / 自动 / 手动」）：两端走胶囊
+ *
+ * 这一组只有 22px 高，8px 圆角已经接近半高——四条边的弧线互不相接，
+ * 结果既不像矩形也不像胶囊，是这类小控件最常见的「不精致」。
+ *
+ * 先把所有项清零，再单独给首尾补圆形：
+ * 只改首尾而不管中间项的话，中间项会留着 8px 圆角，
+ * 在连体组里表现为「首尾项旁边各露出一个缺口」。
+ */
+.arco-radio-group-button .arco-radio-button {
+	border-radius: 0;
+}
+
+/** 容器也要一起变圆，否则它 8px 的边框会从两端胶囊弧线外露出来 */
+.arco-radio-group-button {
+	border-radius: var(--r-pill);
+}
+
+.arco-radio-group-button .arco-radio-button:first-child {
+	border-radius: var(--r-pill) 0 0 var(--r-pill);
+}
+
+.arco-radio-group-button .arco-radio-button:last-child {
+	border-radius: 0 var(--r-pill) var(--r-pill) 0;
+}
+
+/** 组里只有一项时首尾是同一个元素，上面两条会互相覆盖成「左直右圆」 */
+.arco-radio-group-button .arco-radio-button:only-child {
+	border-radius: var(--r-pill);
+}
+
+/**
+ * mini 尺寸的选择器：胶囊
+ *
+ * 24px 高，和同为 mini 的搜索框并排出现（浏览器列表的筛选栏就是这种组合）。
+ * 一个胶囊配一个圆角矩形，会显得右边那个「没做完」。
+ */
+.arco-select-view-size-mini {
+	border-radius: var(--r-pill);
+}
+
+.arco-switch {
+	/* 开关放在纵向 flex 容器里时，Arco 只有 min-width，会被 align-items: stretch 拉成整行宽，
+	   锁定为自身宽度后各处尺寸才一致 */
+	width: fit-content;
+	flex: none;
+	border-radius: var(--r-pill);
+}
+
+/**
+ * 未开启的开关轨道
+ *
+ * Arco 默认用最淡的填充色，在白卡片上几乎看不见，
+ * 会让人误以为是禁用状态。提到 --border-strong 之后才能在浅色卡片上认出「这是个可点的开关」。
+ */
+.arco-switch:not(.arco-switch-checked) {
+	background-color: var(--border-strong);
+}
+
+.arco-switch-checked {
+	background: var(--accent);
+}
+
+/* ========================================================== 空状态/加载 */
+
+.arco-empty-description,
+.arco-spin-tip {
+	color: var(--text-tertiary);
+	font-size: var(--fs-12);
+}
+
+/* ======================================================== 消息与通知 */
+
+.arco-message,
+.arco-notification {
+	border-radius: var(--r-md);
+	background: var(--surface-raised);
+	border: 1px solid var(--border-subtle);
+	box-shadow: var(--shadow-lg);
+	font-size: var(--fs-12);
+}
+
+.arco-notification {
+	padding: 14px 16px;
+}
+
+.arco-notification-title {
+	font-size: var(--fs-13);
+	font-weight: var(--fw-semibold);
+	color: var(--text-primary);
+}
+
+.arco-notification-content {
+	color: var(--text-secondary);
+}
+
+/* ============================================================== 步骤条 */
+
+.arco-steps-item-title {
+	font-size: var(--fs-13);
+	color: var(--text-primary);
+}
+
+.arco-steps-item-description {
+	font-size: var(--fs-12);
+	color: var(--text-tertiary);
+}
+
+.arco-steps-icon {
+	background: var(--surface-panel);
+	border-color: var(--border-default);
+}
+
+/* ============================================================== 分页 */
+
+.arco-pagination-item {
+	border-radius: var(--r-xs);
+	font-size: var(--fs-12);
+	transition: background-color var(--dur-1) var(--ease-std), color var(--dur-1) var(--ease-std);
+}
+
+.arco-pagination-item:hover {
+	background: var(--surface-hover);
+}
+
+.arco-pagination-item-active {
+	background: var(--accent);
+	color: var(--accent-contrast);
+}
+
+/* ============================================================== 分割线 */
+
+.arco-divider {
+	border-color: var(--border-subtle);
+}
+
+/* ============================================================ 工具提示 */
+
+.arco-tooltip-content {
+	border-radius: var(--r-sm);
+	background: var(--surface-raised);
+	color: var(--text-primary);
+	border: 1px solid var(--border-subtle);
+	box-shadow: var(--shadow-md);
+	font-size: var(--fs-12);
+	padding: 6px 10px;
+	max-width: 320px;
+}
+
+/* ============================================================== 取色器 */
+
+/**
+ * 触发器：灰底无边框 → 白底 + 边框
+ *
+ * Arco 默认把它做成 `--color-fill-2` 的灰块、2px 圆角、没有边框，
+ * 单独看没问题；但标签表单里它紧挨着白底描边的输入框，
+ * 一个灰块一个白框，会读成「两个不同层级的控件」。统一成输入框语言后整行才是平的。
+ */
+.arco-color-picker {
+	background: var(--surface-panel);
+	border: 1px solid var(--border-default);
+	border-radius: var(--r-sm);
+	transition: border-color var(--dur-2) var(--ease-std), box-shadow var(--dur-2) var(--ease-std);
+
+	&:hover {
+		background: var(--surface-panel);
+		border-color: var(--border-strong);
+	}
+
+	&:focus-within {
+		border-color: var(--accent);
+		box-shadow: var(--shadow-ring);
+	}
+}
+
+/** 面板：2px 圆角 + 无边框 → r-lg + 细边 + 大阴影，和其他浮层一致 */
+.arco-color-picker-panel {
+	overflow: hidden;
+	background: var(--surface-raised);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--r-lg);
+	box-shadow: var(--shadow-xl);
+}
+
+/**
+ * 画布自己的 1px 边框去掉
+ * 面板已经有边框了，这里再加一层会在顶部和左右看到双线。
+ */
+.arco-color-picker-panel .arco-color-picker-palette {
+	border: none;
+}
+
+/** 预置色块：小圆角 + hover 轻微抬升。留方角会和标签本体的胶囊打架 */
+.arco-color-picker-panel .arco-color-picker-color-block {
+	overflow: hidden;
+	border-radius: var(--r-xs);
+	transition: transform var(--dur-2) var(--ease-dec), box-shadow var(--dur-2) var(--ease-std);
+
+	&:hover {
+		box-shadow: var(--shadow-md);
+		transform: translateY(-1px);
+	}
+}
+
+/** 触发器里的色块：跟着触发器圆角走，不要露出硬边 */
+.arco-color-picker .arco-color-picker-preview {
+	border-radius: var(--r-xs);
+}
+
+.arco-color-picker-panel .arco-color-picker-preview {
+	border-radius: var(--r-sm);
+}

@@ -1,5 +1,5 @@
 <template>
-	<div class="col-12 p-2 m-auto">
+	<div class="col-12 p-2 m-auto reveal-stack">
 		<div
 			class="text-secondary markdown mb-2"
 			v-html="lang('notice_dashboard_monitor_page_usage', '')"
@@ -35,12 +35,18 @@
 					</div>
 				</a-tooltip>
 
-				<a-switch v-model="store.render.dashboard.details.tags">
+				<a-switch
+					v-model="store.render.dashboard.details.tags"
+					size="small"
+				>
 					<template #checked> 显示标签 </template>
 					<template #unchecked> 显示标签 </template>
 				</a-switch>
 
-				<a-switch v-model="store.render.dashboard.details.notes">
+				<a-switch
+					v-model="store.render.dashboard.details.notes"
+					size="small"
+				>
 					<template #checked> 显示备注 </template>
 					<template #unchecked> 显示备注 </template>
 				</a-switch>
@@ -103,7 +109,7 @@
 			></a-empty>
 			<div
 				v-show="state.loading === false"
-				class="dashboard mt-2"
+				class="dashboard mt-2 reveal-stack"
 				:style="{
 					'grid-template-columns': `repeat(${store.render.dashboard.num}, 1fr)`
 				}"
@@ -495,17 +501,25 @@ function openBrowser(uid: string) {
 }
 
 .browser {
-	background: var(--glass-bg-light);
+	background: var(--surface-panel);
 	padding: 6px;
-	border-radius: var(--border-radius-medium);
-	border: 1px solid var(--micro-border-light);
-	transition: all 0.3s var(--ease-precise);
-	animation: linear-fade-up 0.4s var(--ease-precise) backwards;
+	border-radius: var(--r-md);
+	border: 1px solid var(--border-subtle);
+	/**
+	 * 只过渡具体属性，不用 `transition: all`：
+	 * 后者会让 padding / border-radius / background 全部参与过渡，
+	 * 监控墙同时有十几张卡片在播视频时，任何一次 hover 都会连带重算这些属性。
+	 *
+	 * 也去掉了原来的入场 animation：十几张卡片同时上浮 0.4s，
+	 * 在视频解码的同时跑动画，是最容易掉帧的组合。
+	 */
+	transition: border-color var(--dur-2) var(--ease-std), box-shadow var(--dur-2) var(--ease-std),
+		transform var(--dur-2) var(--ease-dec);
 
 	&:hover {
-		box-shadow: var(--shadow-glow);
+		box-shadow: var(--shadow-md);
 		transform: translateY(-2px);
-		border-color: rgba(99, 102, 241, 0.2);
+		border-color: var(--border-default);
 	}
 }
 
@@ -531,17 +545,8 @@ function openBrowser(uid: string) {
 	overflow: hidden;
 }
 
-body[arco-theme='dark'] {
-	.dashboard {
-		.browser {
-			background: var(--glass-bg-dark);
-			border-color: var(--micro-border-dark);
-
-			&:hover {
-				border-color: rgba(99, 102, 241, 0.25);
-				box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15), 0 8px 24px rgba(0, 0, 0, 0.3);
-			}
-		}
-	}
-}
+/**
+ * 暗色适配已移除：.browser 现在全部使用语义 token，
+ * 亮暗两套由 tokens.less 统一提供，不需要在这里再写一遍覆盖。
+ */
 </style>

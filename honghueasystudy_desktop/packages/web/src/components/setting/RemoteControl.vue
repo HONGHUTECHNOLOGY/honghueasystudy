@@ -5,6 +5,7 @@
 				content="开启后会在本机启动一个网页服务，手机等设备可通过浏览器访问，查看运行状态并操作浏览器实例。关闭软件后服务自动停止。"
 			>
 				<a-switch
+					size="small"
 					:model-value="status.running"
 					:loading="state.pending"
 					@change="onToggle"
@@ -15,6 +16,7 @@
 		<Description label="允许局域网访问">
 			<a-tooltip content="关闭后仅本机可访问（127.0.0.1），手机将无法连接。仅在需要排查问题时关闭。">
 				<a-switch
+					size="small"
 					:model-value="settings.allowLan"
 					:disabled="!status.running"
 					@change="onAllowLanChange"
@@ -42,6 +44,7 @@
 		<Description label="内网穿透">
 			<a-tooltip :content="tunnelTip">
 				<a-switch
+					size="small"
 					:model-value="settings.tunnel.enabled"
 					:disabled="!status.running"
 					@change="onTunnelChange"
@@ -802,7 +805,7 @@ onBeforeUnmount(() => {
 .rc-block {
 	margin: 8px 0 12px;
 	padding: 12px 14px;
-	border-radius: 10px;
+	border-radius: var(--r-md);
 	background: var(--color-fill-1);
 }
 
@@ -860,7 +863,7 @@ onBeforeUnmount(() => {
 .rc-addr-badge {
 	flex: none;
 	padding: 0 5px;
-	border-radius: 4px;
+	border-radius: var(--r-xs);
 	background: rgb(var(--primary-1));
 	color: rgb(var(--primary-6));
 	font-size: 10px;
@@ -892,14 +895,14 @@ onBeforeUnmount(() => {
 .rc-pair {
 	margin: 12px 0;
 	padding: 14px;
-	border-radius: 10px;
+	border-radius: var(--r-md);
 	border: 1px solid var(--color-border-2);
 }
 
 .rc-auth {
 	margin: 12px 0;
 	padding: 14px;
-	border-radius: 10px;
+	border-radius: var(--r-md);
 	background: var(--color-fill-1);
 }
 
@@ -930,7 +933,7 @@ onBeforeUnmount(() => {
 .rc-qr-box {
 	width: 150px;
 	height: 150px;
-	border-radius: 10px;
+	border-radius: var(--r-md);
 	background: #fff;
 	display: flex;
 	align-items: center;
@@ -1022,7 +1025,7 @@ onBeforeUnmount(() => {
 
 .rc-report {
 	padding: 10px 12px;
-	border-radius: 8px;
+	border-radius: var(--r-sm);
 	background: var(--color-fill-1);
 	border-left: 3px solid var(--color-border-3);
 }

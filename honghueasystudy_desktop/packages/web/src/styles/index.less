@@ -1,0 +1,33 @@
+/**
+ * 样式入口 · 唯一事实源
+ * ============================================================================
+ * 由 main.ts 在 arco.css 之后引入：
+ *
+ *   import '@arco-design/web-vue/dist/arco.css';          // ① Arco 基础
+ *   import 'material-icons/iconfont/material-icons.css';  // ② 图标字体
+ *   import './assets/css/bootstrap.min.css';              // ③ 过渡期保留（P6 删除）
+ *   import './assets/css/common.css';                     // ④ 过渡期保留（P6 收敛）
+ *   import './styles/index.less';                         // ⑤ 本文件
+ *
+ * 【下方顺序不可调换】
+ *   fonts    只声明 @font-face，无选择器，放最前不参与层叠
+ *   tokens   定义 body / body[arco-theme=dark] 上的语义变量
+ *   bridge   把 Arco 的 --primary-* / --gray-* 接到 tokens（必须晚于 arco.css）
+ *   reset    底层行为：盒模型、滚动条、选区
+ *   typo     字体栈与字号阶梯（依赖 fonts + tokens）
+ *   override 组件级重绘（必须晚于 bridge，里面要用新变量）
+ *   motion   过渡类与 keyframes
+ *   shell    壳层几何
+ *   utils    工具类必须最后：要能压过上面所有组件默认值
+ * ============================================================================
+ */
+
+@import './fonts.less';
+@import './tokens.less';
+@import './arco-bridge.less';
+@import './reset.less';
+@import './typography.less';
+@import './arco-override.less';
+@import './motion.less';
+@import './shell.less';
+@import './utilities.less';

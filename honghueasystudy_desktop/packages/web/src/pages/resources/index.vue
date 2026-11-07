@@ -1,6 +1,6 @@
 <!-- eslint-disable vue/no-v-html -->
 <template>
-	<div class="p-3">
+	<div class="p-3 reveal-stack">
 		<div
 			class="text-secondary markdown mb-2"
 			v-html="lang('notice_resources_page_usage', '')"
@@ -289,26 +289,26 @@ function openDownloadFolder() {
 </script>
 
 <style scoped lang="less">
-:deep(.arco-card) {
-	animation: linear-fade-up 0.4s var(--ease-precise) backwards;
-
-	.arco-card-header {
-		.arco-card-header-title {
-			font-size: 15px;
-			font-weight: 600;
-			letter-spacing: -0.01em;
-		}
-	}
-}
+/**
+ * 卡片外观交给全局 arco-override，这里不重复定义。
+ * 原来给所有卡片加了 0.4s 的上浮入场，一进页面 8 张卡同时动——
+ * 动画的价值是引导注意力，同时动 8 个只是噪声，而且和卡片 hover 的
+ * transform 会打架（入场动画结束时抢走 transform 控制权）。
+ */
 
 :deep(.arco-btn-size-mini) {
 	border-radius: var(--border-radius-small);
-	transition: all 0.2s var(--ease-snappy);
+	/* 只过渡颜色与边框：`transition: all` 会把 padding、圆角、宽高都拉进来重算 */
+	transition: background-color var(--dur-2) var(--ease-std), border-color var(--dur-2) var(--ease-std),
+		color var(--dur-2) var(--ease-std);
 }
 
-body[arco-theme='dark'] {
-	:deep(.markdown) {
-		color: #8a8f98;
-	}
+/**
+ * 说明文字统一用语义色：不再单独写暗色覆盖。
+ * 原来亮色下继承默认正文色、暗色下单独指定 #8a8f98，
+ * 两套值都不跟 token 走，换主题时容易漏。
+ */
+:deep(.markdown) {
+	color: var(--text-secondary);
 }
 </style>

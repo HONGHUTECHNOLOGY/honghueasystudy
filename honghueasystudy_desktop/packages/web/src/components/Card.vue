@@ -29,7 +29,7 @@ const { title } = toRefs(props);
 <style scoped lang="less">
 #app .ant-badge-status-dot {
 	height: 16px;
-	border-radius: 4px;
+	border-radius: var(--r-xs);
 }
 
 .title {

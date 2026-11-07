@@ -10,6 +10,7 @@
 
 					<a-switch
 						v-model="store.render.setting.launchOptions.custom"
+						size="small"
 						style="width: 84px"
 					>
 						<template #checked>自定义</template>

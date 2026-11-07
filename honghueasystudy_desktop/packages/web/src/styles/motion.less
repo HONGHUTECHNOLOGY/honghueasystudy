@@ -1,0 +1,312 @@
+/**
+ * 动效系统
+ * ============================================================================
+ * 设计原则：**动作要能被「感觉到」但不能被「注意到」**。
+ * 高级感的动画不是更炫，而是更短、更准、更有方向。
+ *
+ * 【性能预算（硬件加速已开启，但仍然遵守）】
+ * - 只过渡 opacity / transform（走合成器），以及 color / border-color /
+ *   background-color（小面积重绘）。
+ * - 不过渡 box-shadow / width / height / top / left：都会触发整块重绘或布局重排。
+ * - 同时动画的元素不超过 12 个，列表错峰只作用于前 8 项。
+ * - 不用 will-change：常驻图层占显存，收益远小于代价（shimmer 例外）。
+ *
+ * 【时长参照】
+ *   90ms  —— 按压、hover 这类「即时反馈」，超过 120ms 会觉得粘手
+ *   160ms —— 弹层、下拉
+ *   240ms —— 页面切换、面板展开
+ *   320ms —— 只给首屏这类一次性入场
+ * ============================================================================
+ */
+
+/* ======================================================= 内容分层入场 */
+
+/**
+ * 依次浮现（staggered reveal）
+ *
+ * 给容器加这个类，它的**直接子元素**会按顺序淡入并上浮。
+ *
+ * 为什么作用在子元素而不是容器整体：容器整体淡入只告诉用户「内容来了」，
+ * 子元素依次出现则先给出「这里分几块」，再给出「每块是什么」——观感从
+ * 「一块布被揭开」变成「东西被一件件摆上来」，后者才是被称为优雅的那种。
+ *
+ * 为什么用 nth-child 而不是给每个元素挂 `--i`：页面结构会变，
+ * 模板里手工数序号迟早数漏；nth-child 是声明式的，改结构不用管。
+ *
+ * 上限 8 级、间隔 36ms：再长的话尾部元素要等超过 300ms，会被读成卡顿。
+ * 真正的长列表交给 `.t-stagger-*` 或列表自己的错峰（Entity 那套）。
+ *
+ * `backwards` 是必须的：delay 期间元素要停在 from 帧（不可见），
+ * 否则会先原样显示、再「消失—重新浮现」，闪一下。
+ * 不能用 `both`——动画结束后它会一直压住 transform，害得 hover 的上浮失效
+ * （卡片入场踩过这个坑）。
+ */
+.reveal-stack > * {
+	animation: hh-reveal-up var(--dur-3) var(--ease-dec) backwards;
+}
+
+.reveal-stack > *:nth-child(1) {
+	animation-delay: 0ms;
+}
+.reveal-stack > *:nth-child(2) {
+	animation-delay: 36ms;
+}
+.reveal-stack > *:nth-child(3) {
+	animation-delay: 72ms;
+}
+.reveal-stack > *:nth-child(4) {
+	animation-delay: 108ms;
+}
+.reveal-stack > *:nth-child(5) {
+	animation-delay: 144ms;
+}
+.reveal-stack > *:nth-child(6) {
+	animation-delay: 180ms;
+}
+.reveal-stack > *:nth-child(n + 7) {
+	animation-delay: 216ms;
+}
+
+/**
+ * 单个区块浮现
+ *
+ * 位移只有 5px：320ms 配更大的位移会像「整块在滑」，5px 才是「浮上来」。
+ */
+@keyframes hh-reveal-up {
+	from {
+		opacity: 0;
+		transform: translateY(5px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.reveal {
+	animation: hh-reveal-up var(--dur-3) var(--ease-dec) backwards;
+	animation-delay: calc(var(--i, 0) * 36ms);
+}
+
+/**
+ * 面板切换（v-show 场景）
+ *
+ * 不需要 JS：元素从 `display: none` 切回可见时，浏览器会**重新触发** CSS animation。
+ * 这条正是简洁模式三个页签之间切换也能有入场的原因。
+ * （反过来，切走时是瞬间隐藏——保留组件状态就要接受没有离场，
+ *  tab 之间的切换本来也该是「立刻换成新的」而不是「旧的慢慢退场」。）
+ */
+.panel-in {
+	animation: hh-reveal-up var(--dur-3) var(--ease-dec);
+}
+
+/* ============================================================ 页面切换 */
+
+.t-page-enter-active {
+	transition: opacity var(--dur-4) var(--ease-dec), transform var(--dur-4) var(--ease-dec);
+}
+
+/**
+ * 离场必须比入场短得多。
+ *
+ * 入场与离场同时进行时，两层内容会叠在一起被看见；
+ * 让旧内容快速消失，新内容慢慢浮现，观感才是「切换」而不是「交叠」。
+ *
+ * 离场元素还必须脱离文档流（position: absolute）：
+ * 页面容器 .main-container 是 flex，两个页面同时存在时会各占一半宽度，
+ * 表现为切换瞬间整个界面被挤成两列再弹回来。
+ */
+.t-page-leave-active {
+	transition: opacity var(--dur-1) var(--ease-std);
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+/**
+ * 位移只给 4px。
+ * 420ms 的时长配 6px 以上位移会像"整页在滑动"，4px 才是"轻轻浮上来"。
+ */
+.t-page-enter-from {
+	opacity: 0;
+	transform: translateY(4px);
+}
+
+.t-page-leave-to {
+	opacity: 0;
+}
+
+/**
+ * 页面根元素入场（keep-alive 场景）
+ *
+ * 为什么不用 <Transition>：keep-alive 缓存的组件切换走 deactivated/activated，
+ * 而不是卸载/挂载，Transition 的 enter/leave 不会触发（实测 class 从未出现）。
+ * 为什么不用 JS 加 class：.app-page 每次 patch 都会被 Vue 重写 className，
+ * 手动加的类活不过一次渲染。
+ *
+ * 退而用 CSS：动画绑在「页面根元素被插入 DOM」这一刻，天然随路由切换重播；
+ * keep-alive 复用同一批 DOM 节点时不会重新插入，也就不会误播。
+ * 代价是从缓存返回上一页时没有动画——可接受，因为它换来的是零 JS 依赖。
+ *
+ * 只动 opacity：页面里可能含 position: sticky 的工具栏，祖先上的 transform
+ * 会创建新的包含块，让 sticky 失效。
+ */
+.app-page > * {
+	animation: page-in var(--dur-4) var(--ease-dec);
+}
+
+@keyframes page-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+/* ============================================================ 列表错峰 */
+
+/**
+ * 错峰靠 `--i` 变量，不用 JS 计算 delay。
+ *
+ * 使用方式：
+ *   <div v-for="(x, i) in list" :style="{ '--i': Math.min(i, 8) }">
+ * 超过 8 项一律按 8 算，避免长列表尾部要等两秒才出现。
+ */
+.t-stagger-enter-active {
+	transition: opacity var(--dur-3) var(--ease-dec), transform var(--dur-3) var(--ease-dec);
+	transition-delay: calc(var(--i, 0) * 32ms);
+}
+
+.t-stagger-enter-from {
+	opacity: 0;
+	transform: translateY(4px);
+}
+
+/* ================================================================ 弹层 */
+
+.t-pop-enter-active {
+	transition: opacity var(--dur-3) var(--ease-dec), transform var(--dur-3) var(--ease-dec);
+}
+
+.t-pop-leave-active {
+	transition: opacity var(--dur-2) var(--ease-acc), transform var(--dur-2) var(--ease-acc);
+}
+
+.t-pop-enter-from,
+.t-pop-leave-to {
+	opacity: 0;
+	transform: scale(0.985);
+}
+
+/* ============================================================ 展开收起 */
+
+/**
+ * 高度无法用 transform 模拟，所以用「网格行高从 0fr 到 1fr」这条现代写法：
+ * 它由布局引擎连续插值，不需要预先测量高度，也不触发布局抖动。
+ */
+.t-expand {
+	display: grid;
+	grid-template-rows: 0fr;
+	transition: grid-template-rows var(--dur-3) var(--ease-dec);
+}
+
+.t-expand > * {
+	overflow: hidden;
+}
+
+.t-expand.is-open {
+	grid-template-rows: 1fr;
+}
+
+/* ============================================================ 按压反馈 */
+
+.t-press {
+	transition: transform var(--dur-1) var(--ease-std);
+}
+
+.t-press:active {
+	transform: scale(0.985);
+}
+
+/* ============================================================== 骨架屏 */
+
+@keyframes sk-shimmer {
+	from {
+		transform: translateX(-100%);
+	}
+	to {
+		transform: translateX(100%);
+	}
+}
+
+/**
+ * 动的是覆盖层的 translateX，不是 background-position。
+ * 后者每帧都要重绘整块区域，长列表加载时肉眼可见地卡。
+ */
+.skeleton {
+	position: relative;
+	overflow: hidden;
+	background: var(--surface-sunken);
+	border-radius: var(--r-sm);
+}
+
+.skeleton::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+	animation: sk-shimmer 1.4s var(--ease-std) infinite;
+}
+
+body[arco-theme='dark'] .skeleton::after {
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+}
+
+/* ========================================================== 状态指示点 */
+
+@keyframes dot-breathe {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.45;
+	}
+}
+
+/** 运行中：只动 opacity，比缩放更安静，也比闪烁更不刺眼 */
+.dot-running {
+	animation: dot-breathe 2.4s var(--ease-std) infinite;
+}
+
+/* ============================================================== 旋转 */
+
+@keyframes spin-once {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.spin {
+	animation: spin-once 0.9s linear infinite;
+}
+
+/* ============================================================ 无障碍 */
+
+/**
+ * 系统开启「减少动态效果」时全部关掉。
+ *
+ * 这既是无障碍要求，也是弱机器兜底：老机器上关掉动效后，
+ * 界面的响应感反而更稳。
+ */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}

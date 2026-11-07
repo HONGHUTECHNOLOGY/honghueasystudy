@@ -223,6 +223,7 @@
 
 						<a-switch
 							v-model="script.enable"
+							size="small"
 							style="width: 84px"
 							class="user-script-action"
 						>

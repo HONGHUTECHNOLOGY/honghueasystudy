@@ -25,7 +25,8 @@
 				v-if="child.type !== 'browser'"
 				:key="child.uid"
 				class="entity"
-				:entity="child"
+				:style="{ '--i': entities.indexOf(child) }"
+								:entity="child"
 				:is-drop-target="entityDragStates[child.uid]?.isDropTarget ?? false"
 				:drop-position="entityDragStates[child.uid]?.dropPosition ?? null"
 				:drag-count="
@@ -51,7 +52,8 @@
 				v-if="child.type === 'browser'"
 				:key="child.uid"
 				class="entity"
-				:entity="child"
+				:style="{ '--i': entities.indexOf(child) }"
+								:entity="child"
 				:is-dragging="entityDragStates[child.uid]?.isDragging ?? false"
 				:is-drop-target="entityDragStates[child.uid]?.isDropTarget ?? false"
 				:drop-position="entityDragStates[child.uid]?.dropPosition ?? null"
@@ -260,14 +262,18 @@ function onParentBackDrop() {
 </script>
 
 <style scoped>
+/**
+ * 行间距与内边距统一交给 Entity 控制。
+ * 两处都设 padding 时，父组件的 scoped 样式作用在子组件根元素上，
+ * 会与子组件自己的 padding 打架——表现为行高忽大忽小。
+ */
 .notes {
-	font-size: 12px;
+	font-size: var(--fs-12);
 	max-height: 24px;
-	overflow: overlay;
+	overflow: auto;
 }
 
 .entity {
-	padding: 6px 0px;
 	cursor: pointer;
 }
 

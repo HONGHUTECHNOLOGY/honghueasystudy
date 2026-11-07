@@ -7,6 +7,7 @@ import { electron } from './node';
 import { HonghuApi } from '@honghu-desktop/common/src/api';
 import axios from 'axios';
 import { Infos } from '@honghu-desktop/common';
+import { initTheme } from './theme';
 
 const { ipcRenderer } = electron;
 
@@ -159,26 +160,16 @@ function installListener(name: string, channel: string, rate: number, chunkLengt
 	}
 }
 
+/**
+ * 应用当前主题（保持旧函数名，兼容既有调用点）
+ *
+ * 真正的实现收敛到 utils/theme.ts 的 initTheme：
+ * 它同时负责平台识别、壳层度量注入、arco-theme 属性与标题栏按钮配色。
+ * 原来这里只改了属性、没同步 setTitleBarOverlay，导致切夜间模式后窗口右上角
+ * 三个按钮还是黑字压在深色标题栏上，要重启才对。
+ */
 export async function changeTheme() {
-	const platform = await remote.methods.call('getPlatform');
-	document.body.classList.add('platform-' + platform);
-	if (platform !== 'darwin') {
-		if (store.render.setting.theme.dark) {
-			// 设置为暗黑主题
-			document.body.setAttribute('arco-theme', 'dark');
-			remote.win.call('setTitleBarOverlay', {
-				color: '#2C2C2C',
-				symbolColor: 'white'
-			});
-		} else {
-			// 恢复亮色主题
-			document.body.removeAttribute('arco-theme');
-			remote.win.call('setTitleBarOverlay', {
-				color: '#fff',
-				symbolColor: 'black'
-			});
-		}
-	}
+	await initTheme();
 }
 
 /** 开机自启开关：落盘并立即注册/取消系统登录启动项 */

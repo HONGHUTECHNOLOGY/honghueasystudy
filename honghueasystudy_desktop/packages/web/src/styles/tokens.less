@@ -1,0 +1,244 @@
+/**
+ * 设计令牌 · 唯一事实源
+ * ============================================================================
+ * 基调：静奢极简（Quiet Luxury）
+ *   —— 明度分层 + 1px 微边框承托层次，而不是靠阴影堆叠；
+ *   —— 品牌蓝只占约 8% 面积，其余交给中性阶。
+ *
+ * 【为什么必须写在 body 选择器上】
+ * arco.css 把 --primary-6 / --color-neutral-* 等声明在 `body {}` 上。
+ * CSS 自定义属性靠继承传递，body 自身的声明会盖掉从 html(:root) 继承来的值，
+ * 所以写在 :root 上对 body 内元素无效。这里用同选择器 + 后加载取胜。
+ *
+ * 【两层结构】
+ *   原始阶（--n-* / --b-*）  仅本文件使用，业务代码一律不准碰
+ *   语义层（--surface-* / --text-* / --border-* / --accent-*）  业务只用这一层
+ * 暗色只覆盖语义层、不动原始阶：这样任何「原始阶直用」的漏网之鱼
+ * 会立刻在白底上暴露出来，方便自查。
+ * ============================================================================
+ */
+
+body {
+	/* ---------------------------------------------------------------- 原始阶 */
+	--n-0: #ffffff;
+	--n-25: #fcfcfd;
+	--n-50: #f7f8fa;
+	--n-100: #f1f3f5;
+	--n-150: #e9ecef;
+	--n-200: #e1e5ea;
+	--n-300: #cbd2da;
+	--n-400: #9aa4b2;
+	--n-500: #6b7684;
+	--n-600: #4e5969;
+	--n-700: #343b45;
+	--n-800: #1f242b;
+	--n-900: #12161b;
+
+	/** 品牌阶：--b-600 即 #165DFF，与 Arco 的 --arcoblue-6 完全一致 */
+	--b-50: #eff5ff;
+	--b-100: #dbe9fe;
+	--b-200: #bfd8fe;
+	--b-300: #93bfff;
+	--b-400: #5f9bff;
+	--b-500: #2e7bff;
+	--b-600: #165dff;
+	--b-700: #0e4bd6;
+	--b-800: #0a3aa8;
+
+	--ok: #12a150;
+	--warn: #c7791a;
+	--danger: #d93f3f;
+
+	/* ------------------------------------------------------- 语义层 · 表面 */
+	--surface-page: var(--n-50);
+	--surface-panel: var(--n-0);
+	--surface-raised: var(--n-0);
+	--surface-sunken: var(--n-100);
+	--surface-hover: var(--n-100);
+	--surface-active: var(--n-150);
+	--surface-selected: var(--b-50);
+	/** 遮罩：模态/抽屉背后的压暗层，不用模糊，纯色更稳 */
+	--surface-mask: rgba(16, 24, 40, 0.32);
+
+	/* ------------------------------------------------------- 语义层 · 边框 */
+	--border-subtle: var(--n-150);
+	--border-default: var(--n-200);
+	--border-strong: var(--n-300);
+	--border-focus: var(--b-600);
+
+	/* ------------------------------------------------------- 语义层 · 文字 */
+	--text-primary: var(--n-800);
+	--text-secondary: var(--n-600);
+	--text-tertiary: var(--n-500);
+	--text-disabled: var(--n-400);
+	--text-inverse: var(--n-0);
+
+	/* ------------------------------------------------------- 语义层 · 强调 */
+	--accent: var(--b-600);
+	--accent-hover: var(--b-700);
+	--accent-subtle: var(--b-50);
+	--accent-border: var(--b-200);
+	--accent-contrast: #ffffff;
+	/** 品牌色投影：只用在主按钮 hover，给一点「有光」的感觉而不是加发光边 */
+	--accent-shadow: 0 4px 14px rgba(22, 93, 255, 0.18);
+	/**
+	 * 页面环境光
+	 *
+	 * 极淡的品牌色径向渐变铺在页面顶部，用来给纯色底一点「空气感」。
+	 * 透明度必须低到"说不出哪里不一样，但关掉会觉得平"的程度（3%~5%），
+	 * 再高就成了廉价渐变背景。
+	 */
+	--surface-glow: rgba(22, 93, 255, 0.045);
+
+	/* --------------------------------------------------- 语义层 · 状态浅底 */
+	--ok-subtle: #e7f6ee;
+	--warn-subtle: #fbf1e4;
+	--danger-subtle: #fbeceb;
+
+	/* ------------------------------------------------------------- 圆角档位 */
+	/**
+	 * 整体比上一版圆一档。
+	 *
+	 * 桌面软件长期偏爱 4/6px 的「硬边」，因为那看起来像系统控件；
+	 * 但 13px 正文 + 1px 微边框的组合下，小圆角会显得刻板、像十年前的后台。
+	 * 把每一档加 2~4px 之后，边框的转折变缓，同一个界面会明显「软」下来，
+	 * 而不会滑向「糖果化」——分界在于**半径始终小于元素高度的 1/6**：
+	 * 28px 高的按钮用 8px、82px 高的卡片用 12px、600px 宽的模态用 16px。
+	 */
+	--r-xs: 6px;
+	--r-sm: 8px;
+	--r-md: 12px;
+	--r-lg: 16px;
+	--r-xl: 20px;
+	--r-pill: 999px;
+
+	/* --------------------------------------------------------------- 阴影 */
+	/** 短半径多层：比单层大模糊更干净，也更容易被 GPU 光栅化 */
+	--shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+	--shadow-md: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 8px -2px rgba(16, 24, 40, 0.06);
+	--shadow-lg: 0 2px 4px rgba(16, 24, 40, 0.04), 0 12px 24px -6px rgba(16, 24, 40, 0.08);
+	--shadow-xl: 0 4px 8px rgba(16, 24, 40, 0.04), 0 24px 48px -12px rgba(16, 24, 40, 0.12);
+	/** 焦点环：只在键盘导航与输入聚焦时出现，鼠标点击不显示 */
+	--shadow-ring: 0 0 0 3px rgba(22, 93, 255, 0.14);
+
+	/* --------------------------------------------------------------- 动效 */
+	/**
+	 * 时长分级
+	 *
+	 * 偏长一档：桌面应用没有网络延迟，「等一下」不会被误认为卡住，
+	 * 反而更长的时间让动画有余韵。90ms 这类极短时长只适合按压反馈，
+	 * 用在面板上会显得"闪一下"。
+	 */
+	--dur-1: 120ms; /* 微反馈：hover 变色、按压 */
+	--dur-2: 180ms; /* 常规：边框、背景、下拉项 */
+	--dur-3: 320ms; /* 面板：折叠展开、页签、卡片入场、指示器滑动 */
+	--dur-4: 420ms; /* 转场：页面切换、模态浮起 */
+	--dur-5: 600ms; /* 大型：首屏入场等一次性动作 */
+
+	/**
+	 * 缓动曲线
+	 *
+	 * dec 从 expo-out(0.16,1,0.3,1) 换成更柔的 (0.22,1,0.36,1)：
+	 * expo-out 在前 15% 时间就走完 70% 的位移，短时长久看不出来，
+	 * 拉长到 320ms 后会明显"开头一顿、后面磨蹭"。
+	 * 新曲线在整段时长里分配更均匀，才撑得住更长的时长。
+	 */
+	--ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+	--ease-dec: cubic-bezier(0.22, 1, 0.36, 1);
+	--ease-acc: cubic-bezier(0.4, 0, 1, 1);
+
+	/**
+	 * 允许 height / width 在 auto 与具体值之间插值（Chromium 129+）。
+	 *
+	 * 折叠面板不用这个就只能靠 grid 0fr→1fr，而那条路径在容器高度为 auto 时
+	 * 插值是不连续的——实测 320ms 的过渡在 160ms 时就已到位（高度 55px 瞬间跳完）。
+	 * 开启后 `height: 0 → auto` 能真正连续动画，也不需要 JS 预测量高度。
+	 * 旧版本浏览器会忽略该属性，退化为瞬间展开（不影响功能）。
+	 */
+	interpolate-size: allow-keywords;
+
+	/* ----------------------------------------------------------- 壳层几何 */
+	--title-height: 40px;
+	/** 原生窗口按钮避让，由 utils/theme.ts 按平台注入（Win 138px / mac 0） */
+	--title-inset-left: 0px;
+	--title-inset-right: 0px;
+	--sidebar-w: 216px;
+	--sidebar-w-collapsed: 60px;
+	--page-pad-x: 32px;
+	--page-pad-y: 28px;
+	--page-max: 1120px;
+
+	/* --------------------------------------------------------------- 玻璃 */
+	/** 仅用于模态/抽屉/下拉这类「背后确实有内容」的浮层，标题栏不用 */
+	--glass-blur: 20px;
+	--glass-saturate: 180%;
+
+	/* --------------------------------------------------- 旧变量名兼容层 */
+	/**
+	 * arco-custom.less 时代的变量名，业务代码里还有 37 处引用。
+	 * 直接删掉那个文件会让 `transition: all .2s var(--ease-precise)` 变成
+	 * 无效值——动画静默消失，不报错也看不出来，最难排查。
+	 * 这里全部重定向到新 token：旧代码立刻变成新配色，无需逐个改。
+	 * 待 P5/P6 把引用逐个替换为语义 token 后，本段可整体删除。
+	 */
+	--ease-precise: var(--ease-dec);
+	--ease-snappy: var(--ease-std);
+	--glow-indigo: var(--accent);
+	--glow-blue: var(--accent);
+	--glow-purple: var(--accent);
+	--micro-border-light: var(--border-subtle);
+	--micro-border-dark: var(--border-subtle);
+	--glass-bg-light: var(--surface-panel);
+	--glass-bg-dark: var(--surface-panel);
+	--shadow-glow: var(--shadow-ring);
+}
+
+/**
+ * 暗色：只覆盖语义层
+ *
+ * 深石墨而非纯黑：纯黑在 OLED 上会让 1px 边框彻底消失，层次全靠猜。
+ */
+body[arco-theme='dark'] {
+	--surface-page: #0e1014;
+	--surface-panel: #16191e;
+	--surface-raised: #1d2127;
+	--surface-sunken: #0b0d10;
+	--surface-hover: rgba(255, 255, 255, 0.05);
+	--surface-active: rgba(255, 255, 255, 0.08);
+	--surface-selected: rgba(95, 155, 255, 0.12);
+	--surface-mask: rgba(0, 0, 0, 0.56);
+
+	--border-subtle: rgba(255, 255, 255, 0.07);
+	--border-default: rgba(255, 255, 255, 0.1);
+	--border-strong: rgba(255, 255, 255, 0.16);
+	--border-focus: var(--b-400);
+
+	--text-primary: #e8ebf0;
+	--text-secondary: #a0a8b4;
+	--text-tertiary: #6b7480;
+	--text-disabled: #4a515b;
+	--text-inverse: #0e1014;
+
+	/* 暗色下品牌蓝提亮一档，否则 #165DFF 在深底上对比度不足、像被压灰了 */
+	--accent: var(--b-400);
+	--accent-hover: var(--b-300);
+	--accent-subtle: rgba(95, 155, 255, 0.12);
+	--accent-border: rgba(95, 155, 255, 0.32);
+	--accent-shadow: 0 4px 14px rgba(95, 155, 255, 0.22);
+	/* 暗底上同样的透明度几乎看不见，提到 6.5% 才有一层极薄的光 */
+	--surface-glow: rgba(95, 155, 255, 0.065);
+
+	--ok: #2eb66e;
+	--warn: #e09b3c;
+	--danger: #f06060;
+	--ok-subtle: rgba(46, 182, 110, 0.12);
+	--warn-subtle: rgba(224, 155, 60, 0.12);
+	--danger-subtle: rgba(240, 96, 96, 0.12);
+
+	/* 暗色阴影要更重才看得见，但同时更短——层次主要交给边框 */
+	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
+	--shadow-md: 0 1px 2px rgba(0, 0, 0, 0.28), 0 4px 8px -2px rgba(0, 0, 0, 0.32);
+	--shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.3), 0 12px 24px -6px rgba(0, 0, 0, 0.4);
+	--shadow-xl: 0 4px 8px rgba(0, 0, 0, 0.3), 0 24px 48px -12px rgba(0, 0, 0, 0.5);
+	--shadow-ring: 0 0 0 3px rgba(95, 155, 255, 0.22);
+}

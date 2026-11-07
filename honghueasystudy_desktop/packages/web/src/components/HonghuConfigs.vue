@@ -142,22 +142,29 @@ function renderConfigs() {
 		root.append(h('style', state.css));
 
 		/** 删除阴影 */
-		root.append(h('style', `script-panel-element {box-shadow: none;resize: none;color:#2e2e2e}`));
+		root.append(h('style', `script-panel-element {box-shadow: none;resize: none;color:var(--text-secondary)}`));
 
-		/** details / summary 样式 */
+		/**
+		 * details / summary 样式
+		 *
+		 * 这段 CSS 注入在 ShadowRoot 里（见下方 attachShadow），有两个特性要利用好：
+		 *   1. 选择器天然隔离，`details {}` 不会泄漏到主界面；
+		 *   2. **CSS 自定义属性可以穿透 shadow 边界**，所以这里能直接用主界面的
+		 *      语义 token，暗色主题下会自动跟随，不必再写两套颜色。
+		 */
 		root.append(
 			h(
 				'style',
 				[
-					'details { margin: 0 0 8px 0; border-radius: 8px; border: 1px solid #e5e6eb; background: #fafafa; overflow: hidden; transition: all 0.2s ease; }',
-					'details:hover { border-color: #c9cdd4; }',
-					'details[open] { border-color: #165dff; background: #fff; box-shadow: 0 2px 12px rgba(22,93,255,0.08); }',
-					'summary { padding: 10px 14px; font-weight: 600; font-size: 13px; color: #1d2129; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; user-select: none; outline: none; background: transparent; transition: background 0.15s; border-radius: 8px; }',
+					'details { margin: 0 0 8px 0; border-radius: var(--r-md); border: 1px solid var(--border-subtle); background: var(--surface-page); overflow: hidden; transition: border-color var(--dur-2) var(--ease-std), background-color var(--dur-2) var(--ease-std); }',
+					'details:hover { border-color: var(--border-default); }',
+					'details[open] { border-color: var(--accent-border); background: var(--surface-panel); box-shadow: var(--shadow-sm); }',
+					'summary { padding: 10px 14px; font-weight: var(--fw-medium); font-size: var(--fs-13); color: var(--text-primary); cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; user-select: none; outline: none; background: transparent; transition: background-color var(--dur-2) var(--ease-std); border-radius: var(--r-md); }',
 					'summary::-webkit-details-marker { display: none; }',
-					'summary::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid #86909c; border-bottom: 1.5px solid #86909c; transform: rotate(-45deg); transition: transform 0.25s ease, margin-top 0.25s ease; margin-top: -2px; flex-shrink: 0; margin-left: 8px; }',
-					'details[open] > summary::after { transform: rotate(45deg); margin-top: 2px; border-color: #165dff; }',
-					'details[open] > summary { color: #165dff; background: rgba(22,93,255,0.04); }',
-					'summary:hover { background: rgba(0,0,0,0.02); }'
+					'summary::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--text-tertiary); border-bottom: 1.5px solid var(--text-tertiary); transform: rotate(-45deg); transition: transform 0.25s ease, margin-top 0.25s ease; margin-top: -2px; flex-shrink: 0; margin-left: 8px; }',
+					'details[open] > summary::after { transform: rotate(45deg); margin-top: 2px; border-color: var(--accent); }',
+					'details[open] > summary { color: var(--accent); background: var(--accent-subtle); }',
+					'summary:hover { background: var(--surface-hover); }'
 				].join('\n')
 			)
 		);

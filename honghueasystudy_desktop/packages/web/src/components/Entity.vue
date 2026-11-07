@@ -161,6 +161,14 @@ function active() {
 }
 </script>
 <style scoped lang="less">
+/**
+ * 列表项
+ *
+ * 这是专业模式下出现频率最高的元素，任何一点粗糙都会被放大：
+ * 所以这里不用分割线（每行一条线 + hover 变圆角，线与圆角会打架），
+ * 改成「整行小圆角 + hover 底色」，靠留白和底色区分行。
+ */
+
 .entity-drop-menu {
 	min-width: 180px;
 }
@@ -169,36 +177,39 @@ function active() {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	overflow: hidden;
-	font-size: 14px;
-	color: #474747 !important;
-
-	// 禁止选择
-	-moz-user-select: none;
-	/*火狐*/
-	-webkit-user-select: none;
-	/*webkit浏览器*/
-	-ms-user-select: none;
-	/*IE10*/
-	-khtml-user-select: none;
-	/*早期浏览器*/
+	font-size: var(--fs-13);
+	color: var(--text-primary) !important;
 	user-select: none;
 }
 
 .entity {
-	border-bottom: 1px solid #eeeeee;
+	position: relative;
+	border-radius: var(--r-sm);
+	border-bottom: none;
+	padding: 5px 8px;
+	transition: background-color var(--dur-1) var(--ease-std);
+
+	/**
+	 * 入场：从左侧 4px 处淡入，按 --i 错峰。
+	 *
+	 * 只动 opacity + transform（走合成器）；用 translateX 而不是 translateY，
+	 * 因为列表项的阅读方向是从左往右，横向滑入与「逐条列出来」的动作一致。
+	 * backwards 让动画结束后把 transform 交还给 CSS，不影响拖拽与 hover。
+	 */
+	animation: entity-in var(--dur-3) var(--ease-dec) backwards;
+	animation-delay: calc(min(var(--i, 0), 8) * 32ms);
 
 	&:hover {
-		border-radius: 4px;
-		background-color: #f7f7f7;
+		background-color: var(--surface-hover);
 	}
 
 	&.active {
-		background-color: #3577db25;
+		background-color: var(--surface-selected);
 	}
+
 	// 右键选中样式
 	&.is-context {
-		background-color: #e8f3ff;
-		border-radius: 4px;
+		background-color: var(--accent-subtle);
 	}
 
 	// 拖拽中的项目样式
@@ -206,20 +217,49 @@ function active() {
 		opacity: 0.4;
 	}
 
-	// 放置位置指示线 - 上方
-	&.drop-before {
-		box-shadow: inset 0 2px 0 0 #3577db;
+	/**
+	 * 放置位置指示线
+	 *
+	 * 原来用 `box-shadow: inset 0 2px 0 0`，被 common.css 里
+	 * `body[arco-theme='dark'] * { box-shadow: none !important }` 一刀切掉，
+	 * 结果是暗色主题下拖拽完全没有落点提示（功能还在，只是看不见）。
+	 * 改用伪元素画线，与 box-shadow 彻底解耦。
+	 */
+	&.drop-before::before,
+	&.drop-after::after {
+		content: '';
+		position: absolute;
+		left: 6px;
+		right: 6px;
+		height: 2px;
+		background: var(--accent);
+		border-radius: 2px;
+		z-index: 1;
 	}
 
-	// 放置位置指示线 - 下方
-	&.drop-after {
-		box-shadow: inset 0 -2px 0 0 #3577db;
+	&.drop-before::before {
+		top: -1px;
+	}
+
+	&.drop-after::after {
+		bottom: -1px;
 	}
 
 	// 文件夹接收拖入样式
 	&.drop-inside {
-		background-color: rgba(53, 119, 219, 0.1);
-		border-radius: 4px;
+		background-color: var(--accent-subtle);
+		box-shadow: inset 0 0 0 1px var(--accent-border);
+	}
+}
+
+@keyframes entity-in {
+	from {
+		opacity: 0;
+		transform: translateX(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
 	}
 }
 </style>

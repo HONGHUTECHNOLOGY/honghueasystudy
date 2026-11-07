@@ -1,5 +1,5 @@
 <template>
-	<div class="setting container-md">
+	<div class="setting container-md reveal-stack">
 		<a-card title="脚本设置">
 			<Description class="pt-2 pb-2">
 				<template #label>
@@ -72,7 +72,10 @@
 				<a-tooltip
 					content="开启后启动浏览器会额外开放本机调试端口（DevTools / 调试工具 / AI 可直接连入查看真实页面），并在浏览器操作栏提供「导出网页信息」。排查识别不到课程、元素点不到这类问题时使用。"
 				>
-					<a-switch v-model="store.render.setting.dev.enabled" />
+					<a-switch
+						v-model="store.render.setting.dev.enabled"
+						size="small"
+					/>
 				</a-tooltip>
 			</Description>
 
@@ -110,13 +113,19 @@
 
 			<Description label="原生弹窗">
 				<a-tooltip content="启用后，浏览器中的原版弹窗可能会影响脚本运行">
-					<a-switch v-model="store.render.setting.browser.enableDialog" />
+					<a-switch
+						v-model="store.render.setting.browser.enableDialog"
+						size="small"
+					/>
 				</a-tooltip>
 			</Description>
 
 			<Description label="强制安装脚本">
 				<a-tooltip content="启用后，启动浏览器时将跳过版本检查，强制安装所有启用的脚本">
-					<a-switch v-model="store.render.setting.browser.forceUpdateScript" />
+					<a-switch
+						v-model="store.render.setting.browser.forceUpdateScript"
+						size="small"
+					/>
 				</a-tooltip>
 			</Description>
 
@@ -124,7 +133,10 @@
 				<a-tooltip
 					content="启用后，点击新建浏览器将自动打开初始化弹窗并执行（新建浏览器、添加自动化程序），关闭则直接创建空浏览器"
 				>
-					<a-switch v-model="store.render.setting.browser.autoInitNewBrowser" />
+					<a-switch
+						v-model="store.render.setting.browser.autoInitNewBrowser"
+						size="small"
+					/>
 				</a-tooltip>
 			</Description>
 		</a-card>
@@ -136,7 +148,10 @@
 				<a-tooltip
 					content="开启后，点击关闭按钮只会把软件收进系统托盘（窗口右下角的小图标），已启动的浏览器与定时自动化任务继续在后台执行。右键托盘图标可显示主界面或彻底退出。"
 				>
-					<a-switch v-model="store.window.tray" />
+					<a-switch
+						v-model="store.window.tray"
+						size="small"
+					/>
 				</a-tooltip>
 			</Description>
 
@@ -144,22 +159,41 @@
 				<a-tooltip
 					content="开机后自动启动软件（默认开启），到点由定时任务自动拉起浏览器执行脚本。关闭后需要手动打开软件，定时任务才会执行。"
 				>
-					<a-switch v-model="store.window.autoLaunch" />
+					<a-switch
+						v-model="store.window.autoLaunch"
+						size="small"
+					/>
 				</a-tooltip>
 			</Description>
 
 			<Description label="窗口置顶">
-				<a-switch v-model="store.window.alwaysOnTop" />
+				<a-switch
+					v-model="store.window.alwaysOnTop"
+					size="small"
+				/>
+			</Description>
+			<Description label="图形加速">
+				<a-tooltip
+					content="使用显卡渲染界面，滚动与动画更顺滑。关闭后改用软件渲染，界面会变钝但兼容性最好。连续崩溃 3 次会自动关闭。修改后需重启软件生效。"
+				>
+					<a-switch
+						size="small"
+						:model-value="store.window.gpuAcceleration !== false"
+						@change="onGpuAccelerationChange"
+					/>
+				</a-tooltip>
 			</Description>
 			<Description label="夜间模式">
 				<a-switch
 					v-model="store.render.setting.theme.dark"
+					size="small"
 					@click="changeTheme"
 				/>
 			</Description>
 			<Description label="显示侧边栏文字">
 				<a-switch
 					v-model="store.render.setting.showSideBarText"
+					size="small"
 					@click="changeTheme"
 				/>
 			</Description>
@@ -259,6 +293,30 @@ async function reset() {
 	remote.app.call('relaunch');
 	remote.app.call('exit', 0);
 }
+
+/**
+ * 图形加速开关
+ *
+ * 不能直接 v-model 到 store.window：保存 store 时 gpuAcceleration 会被主进程的当前值覆盖
+ * （它是机器级、重启生效的设置，崩溃守卫也会写它），所以必须走专用方法落盘，
+ * 成功后再把权威值同步回本地用于显示。
+ */
+async function onGpuAccelerationChange(value: any) {
+	const enabled = !!value;
+	try {
+		const res = await remote.methods.call('setGpuAcceleration', enabled);
+		store.window.gpuAcceleration = enabled;
+		if (res?.restartRequired) {
+			Message.info({
+				content: enabled ? '已开启图形加速，重启软件后生效。' : '已关闭图形加速，重启软件后生效。',
+				duration: 5000
+			});
+		}
+	} catch (e) {
+		Message.error('设置图形加速失败：' + e);
+	}
+}
+
 async function onUserDataDirsFolderChange(previous: string, current: string) {
 	// 更改全部浏览器缓存路径
 	const browsers = Folder.from(store.render.browser.root.uid).findAll((e) => e.type === 'browser') as Browser[];
@@ -292,34 +350,37 @@ function syncNote() {
 </script>
 
 <style scoped lang="less">
+/**
+ * 设置面板
+ *
+ * 卡片本身的外观（白底 / 1px 边框 / 圆角 / 标题字号）由 styles/arco-override.less
+ * 统一控制，这里只管布局：宽度上限、卡片间距、内嵌配置区的高度。
+ */
+
 .setting {
 	min-height: 500px;
 	max-width: 800px;
 }
 
 #hh-global-configs {
-	overflow: overlay;
+	overflow: auto;
+	scrollbar-gutter: stable;
 	max-width: 600px;
-	max-height: calc(100vh - 200px);
+	/**
+	 * 用 vh 而不是 100%：这个容器在 Modal 内，父级没有确定高度，
+	 * `100%` 会解析成 auto（等于不限高），配置区会把弹窗顶得很长。
+	 */
+	max-height: min(520px, 60vh);
 }
 
-:deep(.arco-card) {
-	animation: linear-fade-up 0.4s var(--ease-precise) backwards;
-
-	.arco-card-header-title {
-		font-size: 15px;
-		font-weight: 600;
-		letter-spacing: -0.01em;
-	}
-}
-
+/**
+ * 卡片间距
+ *
+ * 原来还给每张卡片加了 `animation: linear-fade-up .4s backwards`，
+ * 一进设置页 8 张卡片同时上浮，视觉上像整页在抖一下，而且全部同时跑动画。
+ * 动画的价值在于「引导注意力」，同时动 8 个就只是噪声。
+ */
 .arco-card + .arco-card {
-	margin-top: 16px;
-}
-
-body[arco-theme='dark'] {
-	:deep(.arco-card-header-title) {
-		color: #ededf0;
-	}
+	margin-top: 14px;
 }
 </style>

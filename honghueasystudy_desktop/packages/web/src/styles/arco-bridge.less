@@ -1,0 +1,139 @@
+/**
+ * Arco 变量桥接
+ * ============================================================================
+ * 目的：让 Arco 组件（按钮/输入框/卡片/表格/弹层…）自动跟随我们的语义层，
+ * 这样业务代码写一次 token，亮暗与「静奢」质感就能一致生效。
+ *
+ * 【必须知道的三个约定】
+ *
+ * 1. 色阶是 RGB 三元组，不是完整色值。
+ *    Arco 里 `--arcoblue-6: 22,93,255`，用时写 `rgb(var(--primary-6))`。
+ *    若在这里写 `--primary-6: #165dff`，`rgb(...)` 会解析失败变黑。
+ *
+ * 2. 中性阶在暗色下是【反转】的。
+ *    亮色 gray-1 最浅(252) → gray-10 最深(31)；
+ *    暗色 gray-1 最深(20)  → gray-10 最浅(232)。
+ *    Arco 靠这个反转，让 `--color-text-1: var(--color-neutral-10)` 在两种主题下
+ *    都指向「正文色」。覆写时若两边都按「1 最浅」写，暗色会出现深底深字。
+ *
+ * 3. 不需要覆写 --color-text-* / --color-fill-*。
+ *    它们由 Arco 自己从 --color-neutral-* 派生，中性阶换对了这几层自动正确。
+ *    本文件只显式接管「Arco 在暗色里写死的、不跟中性阶走」的那几个：
+ *    --color-bg-1..5 / --color-border / --color-bg-popup。
+ * ============================================================================
+ */
+
+body {
+	/* -------------------------------------------------- 中性阶（浅 → 深） */
+	--gray-1: 252, 252, 253;
+	--gray-2: 247, 248, 250;
+	--gray-3: 235, 238, 241;
+	--gray-4: 225, 229, 234;
+	--gray-5: 212, 217, 223;
+	/** gray-6 起是文字区，直接跳到可用对比度（#6B7684，白底 4.9:1） */
+	--gray-6: 107, 118, 132;
+	--gray-7: 90, 101, 115;
+	--gray-8: 78, 89, 105;
+	--gray-9: 52, 59, 69;
+	--gray-10: 31, 36, 43;
+
+	/* ------------------------------------------- 品牌阶：#165DFF 原值 */
+	--arcoblue-1: 239, 245, 255;
+	--arcoblue-2: 219, 233, 254;
+	--arcoblue-3: 191, 216, 254;
+	--arcoblue-4: 147, 191, 255;
+	--arcoblue-5: 95, 155, 255;
+	--arcoblue-6: 22, 93, 255;
+	--arcoblue-7: 14, 75, 214;
+	--arcoblue-8: 10, 58, 168;
+	--arcoblue-9: 8, 45, 132;
+	--arcoblue-10: 5, 33, 99;
+
+	/* ------------------------------------------------ 语义色：更沉的版本 */
+	--green-6: 18, 161, 80;
+	--orange-6: 199, 121, 26;
+	--red-6: 217, 63, 63;
+
+	/**
+	 * 背景层：接语义层
+	 *
+	 * Arco 默认五层全白，导致卡片、页面、浮层没有明度差，
+	 * 只能靠阴影区分——这正是「廉价感」的来源之一。
+	 */
+	--color-bg-1: var(--surface-page);
+	--color-bg-2: var(--surface-panel);
+	--color-bg-3: var(--surface-panel);
+	--color-bg-4: var(--surface-raised);
+	--color-bg-5: var(--surface-raised);
+	--color-bg-popup: var(--surface-raised);
+	--color-bg-white: var(--surface-panel);
+	--color-menu-dark-bg: var(--surface-raised);
+
+	--color-border: var(--border-default);
+
+	/* -------------------------------------------------------------- 圆角 */
+	/**
+	 * 直接引用 tokens，而不是抄一份数值。
+	 *
+	 * Arco 组件内部大量直接引用这三个变量，只改 tokens 的话会出现
+	 * 「外壳 12px、内件 6px」的错位感——外壳跟着我们走、内件跟着 Arco 走。
+	 * 用 var() 引用后，将来调整圆角阶梯只需要改 tokens 一处。
+	 *
+	 * 映射关系按语义对齐，不是按名字：
+	 * small（按钮/输入框/下拉触发器，28~32px 高）→ --r-sm
+	 * medium（卡片、折叠面板）→ --r-md
+	 * large（模态、抽屉）→ --r-lg
+	 */
+	--border-radius-none: 0;
+	--border-radius-small: var(--r-sm);
+	--border-radius-medium: var(--r-md);
+	--border-radius-large: var(--r-lg);
+	--border-radius-circle: 50%;
+	/* 标签用胶囊：小元件胶囊化是静奢里唯一允许的「圆」，圆角矩形在那里会显得拘谨 */
+	--tag-border-radius: var(--r-pill);
+	--badge-border-radius: var(--r-pill);
+	--switch-radius: var(--r-pill);
+}
+
+body[arco-theme='dark'] {
+	/* -------------------------------------------- 中性阶（深 → 浅，反转） */
+	--gray-1: 20, 23, 28;
+	--gray-2: 26, 30, 36;
+	--gray-3: 33, 38, 45;
+	--gray-4: 41, 47, 55;
+	--gray-5: 51, 58, 68;
+	/** 暗底上的辅助文字要比亮色更亮才读得清（#808A98，深底 5.4:1） */
+	--gray-6: 128, 138, 152;
+	--gray-7: 145, 155, 168;
+	--gray-8: 168, 177, 188;
+	--gray-9: 202, 208, 216;
+	--gray-10: 232, 235, 240;
+
+	/* --------------------------------- 品牌阶（暗色从暗到亮，6 为主色） */
+	--arcoblue-1: 10, 20, 45;
+	--arcoblue-2: 14, 32, 78;
+	--arcoblue-3: 20, 50, 120;
+	--arcoblue-4: 30, 75, 180;
+	--arcoblue-5: 50, 115, 235;
+	/* 与 tokens.less 的 --accent(var(--b-400) #5F9BFF) 严格一致，避免组件与自绘两套蓝 */
+	--arcoblue-6: 95, 155, 255;
+	--arcoblue-7: 130, 180, 255;
+	--arcoblue-8: 165, 205, 255;
+	--arcoblue-9: 200, 228, 255;
+	--arcoblue-10: 235, 245, 255;
+
+	--green-6: 46, 182, 110;
+	--orange-6: 224, 155, 60;
+	--red-6: 240, 96, 96;
+
+	/* 暗色里 Arco 把这几个写成了固定值，不跟中性阶走，必须显式接管 */
+	--color-bg-1: var(--surface-page);
+	--color-bg-2: var(--surface-panel);
+	--color-bg-3: var(--surface-panel);
+	--color-bg-4: var(--surface-raised);
+	--color-bg-5: var(--surface-raised);
+	--color-bg-popup: var(--surface-raised);
+	--color-bg-white: var(--surface-raised);
+
+	--color-border: var(--border-default);
+}

@@ -110,7 +110,7 @@ watch(versions, async () => {
 
 	&::-webkit-scrollbar-thumb {
 		background: var(--color-fill-3);
-		border-radius: 3px;
+		border-radius: var(--r-xs);
 
 		&:hover {
 			background: var(--color-fill-4);

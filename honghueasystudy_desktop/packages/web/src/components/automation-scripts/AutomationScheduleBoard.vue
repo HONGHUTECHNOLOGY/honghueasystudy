@@ -426,7 +426,7 @@ const enabledCount = computed(
 	flex-wrap: wrap;
 	gap: 10px 18px;
 	padding: 10px 12px;
-	border-radius: 6px;
+	border-radius: var(--r-sm);
 	background: var(--color-fill-1);
 }
 

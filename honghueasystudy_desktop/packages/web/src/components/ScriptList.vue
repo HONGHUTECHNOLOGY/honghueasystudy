@@ -6,6 +6,7 @@
 		<div
 			class="user-script d-flex"
 			:class="{ 'user-script-active': script.id === selectedScript }"
+			:style="{ '--i': Math.min(_index, 8) }"
 			@mouseleave="selectedScript = 0"
 			@mouseover="selectedScript = script.id"
 		>
@@ -268,7 +269,7 @@ function getUrlVersion(url: string) {
 
 .user-script-name:hover {
 	cursor: pointer;
-	color: #1890ff;
+	color: var(--accent);
 	text-decoration: underline;
 }
 
@@ -276,7 +277,6 @@ function getUrlVersion(url: string) {
 	width: 24px;
 	height: 24px;
 	font-size: 20px;
-	border-radius: 50%;
 	border-radius: 50%;
 }
 
@@ -294,16 +294,38 @@ function getUrlVersion(url: string) {
 	font-size: 0px;
 }
 
+/**
+ * 脚本条目
+ *
+ * 原来：底边框 #bdbdbd（很深）+ 四边阴影 #d7d7d7 + 硬编码白色背景。
+ * 三个问题：深边框在浅底上像表格线；阴影与全站「边框承托」的策略冲突；
+ * 硬编码 white 在暗色下会变成白块。
+ * 现在统一成「1px 微边框 + 面板底色」，hover 只加深边框。
+ */
 .user-script {
-	border-bottom: 1px solid #bdbdbd;
-	border-radius: 4px;
-	padding: 8px 12px;
-	box-shadow: 0px 2px 4px 0px #d7d7d7;
-	background-color: white;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--r-md);
+	padding: 10px 14px;
+	background: var(--surface-panel);
+	transition: border-color var(--dur-2) var(--ease-std), background-color var(--dur-2) var(--ease-std);
+	/**
+	 * 列表错峰入场
+	 *
+	 * 索引由模板写进 `--i`（上限 8）。列表从 0 开始逐条浮现，
+	 * 比整块淡入更能表达「这些是并列的、可以逐条看的条目」。
+	 * backwards 保证延迟期间不可见；不能用 both，否则会压住 hover 的 transition。
+	 */
+	animation: hh-reveal-up var(--dur-3) var(--ease-dec) backwards;
+	animation-delay: calc(min(var(--i, 0), 8) * 32ms);
+
+	&:hover {
+		border-color: var(--border-default);
+	}
 }
 
 .user-script-active {
-	box-shadow: 0px 2px 4px 0px #9ec6eb;
+	border-color: var(--accent-border);
+	background: var(--accent-subtle);
 }
 
 .user-script + .user-script {

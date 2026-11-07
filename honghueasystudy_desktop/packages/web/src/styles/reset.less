@@ -1,0 +1,107 @@
+/**
+ * 基础重置
+ * ============================================================================
+ * 只处理「所有页面都该一致」的底层行为：盒模型、铺满高度、滚动条、选区。
+ * 不复位 margin/padding 到 0 —— 这个项目已经有 Bootstrap 工具类在排版，
+ * 全局清零会让既有页面的间距全部塌掉。
+ * ============================================================================
+ */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	height: 100%;
+	/* 防止横向滚动条：窗口最小宽度已经由主进程兜住，这里是最后一道保险 */
+	overflow: hidden;
+}
+
+body {
+	color: var(--text-primary);
+	background: var(--surface-page);
+	/* 主题切换时给底色一个短过渡，避免暗色/亮色瞬间闪白 */
+	transition: background-color var(--dur-3) var(--ease-std), color var(--dur-3) var(--ease-std);
+}
+
+/**
+ * 滚动条
+ *
+ * 原来 12px 宽 + 灰色轨道 + 上下箭头按钮，是 2010 年代桌面软件的观感。
+ * 现在改成 8px 无箭头、透明轨道；thumb 用「透明边框 + background-clip」收窄，
+ * 视觉上只有 4px 粗，但热区仍是 8px，既细又好点。
+ */
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background-color: rgba(15, 23, 42, 0.18);
+	background-clip: padding-box;
+	border: 2px solid transparent;
+	border-radius: 999px;
+	transition: background-color var(--dur-2) var(--ease-std);
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background-color: rgba(15, 23, 42, 0.32);
+}
+
+::-webkit-scrollbar-thumb:active {
+	background-color: rgba(15, 23, 42, 0.44);
+}
+
+/** 彻底去掉箭头按钮（common.css 里曾把 display 设为 block 并用 svg 贴图） */
+::-webkit-scrollbar-button {
+	display: none !important;
+	width: 0 !important;
+	height: 0 !important;
+}
+
+::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+body[arco-theme='dark'] ::-webkit-scrollbar-thumb {
+	background-color: rgba(255, 255, 255, 0.16);
+}
+
+body[arco-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+	background-color: rgba(255, 255, 255, 0.28);
+}
+
+body[arco-theme='dark'] ::-webkit-scrollbar-thumb:active {
+	background-color: rgba(255, 255, 255, 0.4);
+}
+
+/**
+ * 滚动容器留出稳定槽位
+ *
+ * 列表长短变化时若滚动条忽然出现/消失，内容会横跳 8px，
+ * 在侧栏折叠、页签切换这种高频操作里非常扎眼。
+ */
+.scroll-stable {
+	overflow: auto;
+	scrollbar-gutter: stable;
+}
+
+/** 选区：用品牌淡底而不是系统默认的深蓝，与整体调性一致 */
+::selection {
+	background: var(--accent-subtle);
+	color: var(--text-primary);
+}
+
+/** 图片默认不拖出虚影 */
+img {
+	-webkit-user-drag: none;
+}

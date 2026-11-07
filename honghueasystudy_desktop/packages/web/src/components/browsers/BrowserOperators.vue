@@ -22,7 +22,7 @@
 				>
 					<Icon
 						type="play_circle"
-						color="#165dff"
+						color="var(--accent)"
 						:class="iconClass"
 					/>
 					<span class="ms-1">启动</span>
@@ -44,7 +44,7 @@
 					<Icon
 						type="bug_report"
 						:class="iconClass"
-						color="#165dff"
+						color="var(--accent)"
 					/>
 				</a-button>
 			</a-tooltip>
@@ -61,7 +61,7 @@
 					<Icon
 						type="push_pin"
 						:class="iconClass"
-						color="#165dff"
+						color="var(--accent)"
 					/>
 				</a-button>
 			</a-tooltip>
@@ -78,7 +78,7 @@
 					<Icon
 						type="sync"
 						:class="iconClass"
-						color="#165dff"
+						color="var(--accent)"
 					/>
 				</a-button>
 			</a-tooltip>
@@ -95,7 +95,7 @@
 					<Icon
 						type="cancel"
 						:class="iconClass"
-						color="#ff0000db"
+						color="var(--danger)"
 					/>
 				</a-button>
 			</a-tooltip>

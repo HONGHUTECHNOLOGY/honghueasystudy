@@ -141,7 +141,7 @@ function onConfirm(val: RawAutomationScript[]) {
 	border: 1px solid #e1e1e18c;
 	padding: 6px;
 	margin: 8px 0px;
-	border-radius: 4px;
+	border-radius: var(--r-xs);
 	cursor: pointer;
 
 	&.selected {
@@ -153,6 +153,6 @@ function onConfirm(val: RawAutomationScript[]) {
 	width: 18px;
 	height: 18px;
 	object-fit: contain;
-	border-radius: 3px;
+	border-radius: var(--r-xs);
 }
 </style>

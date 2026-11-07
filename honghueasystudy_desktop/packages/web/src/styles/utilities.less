@@ -1,0 +1,124 @@
+/**
+ * 工具类兼容层
+ * ============================================================================
+ * 背景：项目用 Bootstrap 5 的 CSS 提供排版工具类（d-flex / mb-2 / text-center…），
+ * 实测 95 个文件里有 50 个真实在用的类名。不引入 Tailwind/UnoCSS。
+ *
+ * 【当前策略（P2~P5）】
+ * 保留 bootstrap.min.css，本文件只覆盖「值必须指向新 token」的那几个类：
+ * 颜色、边框、圆角、字重。几何类（间距/弹性布局）bootstrap 已经给对，不重复实现。
+ *
+ * 【P6 策略】
+ * 删掉 bootstrap（195KB / 1292 处 !important）后，本文件补全几何类。
+ * 届时这些「颜色类」的 !important 可以去掉了。
+ *
+ * 注意：这里必须带 !important。bootstrap 源码里这些工具类本身就是 !important，
+ * 我们靠「同特异性 + 后加载 + 同样 !important」取胜，少一个就失效。
+ * ============================================================================
+ */
+
+/** 次要文字：原值是 #6c757d（偏暖灰），统一到冷调中性阶 */
+.text-secondary {
+	color: var(--text-secondary) !important;
+}
+
+.text-primary {
+	color: var(--text-primary) !important;
+}
+
+.text-danger {
+	color: var(--danger) !important;
+}
+
+.text-success {
+	color: var(--ok) !important;
+}
+
+.text-warning {
+	color: var(--warn) !important;
+}
+
+/** 分隔线：统一到 1px 微边框，不用 bootstrap 的 #dee2e6 */
+.border-bottom {
+	border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+.border-top {
+	border-top: 1px solid var(--border-subtle) !important;
+}
+
+.border-start {
+	border-left: 1px solid var(--border-subtle) !important;
+}
+
+.border-end {
+	border-right: 1px solid var(--border-subtle) !important;
+}
+
+.border {
+	border: 1px solid var(--border-subtle) !important;
+}
+
+/** 圆角对齐到 6px 档（bootstrap 的 .rounded 是 4px） */
+.rounded {
+	border-radius: var(--r-sm) !important;
+}
+
+/** 粗体：用 600 而不是 700。700 在中英混排里会让中文比英文重一档 */
+.fw-bold {
+	font-weight: var(--fw-semibold) !important;
+}
+
+/**
+ * 滚动容器：统一去掉已废弃的 overflow: overlay
+ * （Chromium 98+ 视同 auto，但写法过时会误导后续维护）
+ */
+.overflow-auto {
+	overflow: auto;
+	scrollbar-gutter: stable;
+}
+
+/* ========================================================== 自有辅助类 */
+
+/** 布局：竖向排列并带统一间距，比手写 d-flex flex-column + gap 更省 */
+.vstack {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.hstack {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	min-width: 0;
+}
+
+/** 单行省略 */
+.ellipsis {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+}
+
+/** 两行省略 */
+.ellipsis-2 {
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+/** 视觉隐藏但保留可访问性（给屏幕阅读器/自动化用） */
+.visually-hidden {
+	position: absolute !important;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}

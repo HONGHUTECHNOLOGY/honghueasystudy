@@ -809,7 +809,7 @@ async function waitLaunched(timeout: number): Promise<void> {
 	align-items: center;
 	gap: 6px;
 	padding: 4px 6px;
-	border-radius: 4px;
+	border-radius: var(--r-xs);
 	background: var(--color-fill-2);
 }
 
@@ -826,7 +826,7 @@ async function waitLaunched(timeout: number): Promise<void> {
 	align-items: center;
 	gap: 8px;
 	padding: 8px;
-	border-radius: 6px;
+	border-radius: var(--r-sm);
 	cursor: pointer;
 	border: 1px solid var(--color-border-2);
 	margin-bottom: 6px;
@@ -865,7 +865,7 @@ async function waitLaunched(timeout: number): Promise<void> {
 	max-height: 320px;
 	overflow: auto;
 	border: 1px solid var(--color-border-2);
-	border-radius: 6px;
+	border-radius: var(--r-sm);
 }
 
 .catalog-row {

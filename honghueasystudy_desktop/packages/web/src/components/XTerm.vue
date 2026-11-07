@@ -49,7 +49,7 @@ function openXTerm() {
 	/* fix : https://github.com/xtermjs/xterm.js/issues/3564#issue-1062239799 */
 	overflow: hidden;
 	height: 200px;
-	border-radius: 4px;
+	border-radius: var(--r-xs);
 	padding: 12px;
 	background-color: #32302f;
 }

@@ -43,7 +43,7 @@ const parents = computed(() => (currentFolder.value ? Folder.from(currentFolder.
 }
 
 .path-item.active {
-	color: #165dff;
+	color: var(--accent);
 	font-weight: 500;
 }
 </style>
