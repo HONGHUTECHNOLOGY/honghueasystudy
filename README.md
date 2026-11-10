@@ -136,7 +136,7 @@ pnpm -C honghueasystudy_desktop dev:web    # 只调渲染端
 
 ## 相关链接
 
-- 官网：https://honghueasystudy.honghutech.eu.org
+- 官网：https://easystudy.honghutech.eu.org
 - 鸿鹄科技官网：https://honghutech.eu.org
 - GitCode 仓库：https://gitcode.com/honghutech/honghueasystudy
 - GitHub 仓库：https://github.com/HONGHUTECHNOLOGY/honghueasystudy

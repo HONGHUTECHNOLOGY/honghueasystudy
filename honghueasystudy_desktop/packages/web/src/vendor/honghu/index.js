@@ -9276,7 +9276,7 @@ ${content}</tr>
               [
                 lib.h("span", [
                   "如果您使用",
-                  lib.h("a", { href: "https://honghueasystudy.honghutech.eu.org", target: "_blank" }, "鸿鹄易学桌面软件"),
+                  lib.h("a", { href: "https://easystudy.honghutech.eu.org", target: "_blank" }, "鸿鹄易学桌面软件"),
                   "启动浏览器，并使用此脚本，"
                 ]),
                 "我们会同步软件中的配置到此脚本上，方便多个浏览器的管理。",
@@ -10571,7 +10571,7 @@ ${content}</tr>
                     [
                       lib.h("div", { style: { fontSize: "16px", marginBottom: "8px" } }, [
                         lib.h("b", "题库配置填写教程👉："),
-                        lib.h("a", { href: "https://honghueasystudy.honghutech.eu.org" }, "https://honghueasystudy.honghutech.eu.org")
+                        lib.h("a", { href: "https://easystudy.honghutech.eu.org" }, "https://easystudy.honghutech.eu.org")
                       ])
                     ],
                     [
@@ -10778,7 +10778,7 @@ ${content}</tr>
                                         lib.h(
                                           "a",
                                           {
-                                            href: "https://honghueasystudy.honghutech.eu.org"
+                                            href: "https://easystudy.honghutech.eu.org"
                                           },
                                           "鸿鹄易学全域名通用版本"
                                         ),
@@ -11071,7 +11071,7 @@ ${content}</tr>
                 className: "base-style-button ",
                 style: { display: "none" },
                 onclick() {
-                  window.open("https://honghueasystudy.honghutech.eu.org", "_blank");
+                  window.open("https://easystudy.honghutech.eu.org", "_blank");
                 }
               },
               "📖连接失败如何解决？"
@@ -11950,13 +11950,13 @@ ${content}</tr>
       });
     };
     const gotoHome = lib.h("button", { className: "base-style-button-secondary" }, "🏡官网教程");
-    gotoHome.onclick = () => window.open("https://honghueasystudy.honghutech.eu.org", "_blank");
+    gotoHome.onclick = () => window.open("https://easystudy.honghutech.eu.org", "_blank");
     const contactUs = lib.h("button", { className: "base-style-button-secondary" }, "🗨️交流群");
-    contactUs.onclick = () => window.open("https://honghueasystudy.honghutech.eu.org", "_blank");
+    contactUs.onclick = () => window.open("https://easystudy.honghutech.eu.org", "_blank");
     const changeLog = lib.h("button", { className: "base-style-button-secondary" }, "📄更新日志");
     changeLog.onclick = () => CommonProject.scripts.apps.methods.showChangelog();
     const closeGuide = lib.h("button", { className: "base-style-button-secondary" }, "📄如何关闭脚本？");
-    closeGuide.onclick = () => window.open("https://honghueasystudy.honghutech.eu.org", "_blank");
+    closeGuide.onclick = () => window.open("https://easystudy.honghutech.eu.org", "_blank");
     const cardStyle = {
       border: "1px solid #eee",
       borderRadius: "4px",
@@ -12000,10 +12000,10 @@ ${content}</tr>
       let href = "#";
       if (err == null ? void 0 : err.includes("is not valid JSON")) {
         err = "题库返回数据错误";
-        href = "https://honghueasystudy.honghutech.eu.org";
+        href = "https://easystudy.honghutech.eu.org";
       } else if (err == null ? void 0 : err.includes("题库连接失败")) {
         err = "题库连接失败";
-        href = "https://honghueasystudy.honghutech.eu.org";
+        href = "https://easystudy.honghutech.eu.org";
       }
       info = lib.h("div", { className: "result-info error" }, [
         "❌ " + err,
@@ -12064,7 +12064,7 @@ ${content}</tr>
   }
   const $playwright = {
     showError: () => {
-      const href = "https://honghueasystudy.honghutech.eu.org";
+      const href = "https://easystudy.honghutech.eu.org";
       const errorEl = lib.h("div", [
         "当前页面需要下载鸿鹄易学桌面端，并在桌面端中新建浏览器，在新建的浏览器中才能进行正常刷课，点击链接查看详情 => ",
         lib.h("a", { href, target: "_blank" }, href)
