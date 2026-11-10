@@ -1,13 +1,13 @@
 import { app, dialog, clipboard, shell } from 'electron';
 import { gt, rcompare } from 'semver';
 import { Logger } from '../logger';
-import { join, dirname, basename } from 'path';
+import { join, dirname } from 'path';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rm, rmSync, statSync, writeFileSync } from 'fs';
 import * as fsMod from 'fs';
 import { getCurrentWebContents, moveWindowToTop } from '../utils';
 import { downloadFromMirrors, hostOf, normalizeUrls } from '../utils/download-source';
-import { resolveInstallDir, spawnSilentInstaller } from '../utils/installer';
-import { spawnProgressWindow, progressLogPath } from '../utils/update-window';
+import { killStaleInstaller, resolveInstallDir, spawnInstallerWizard } from '../utils/installer';
+import { progressLogPath } from '../utils/update-window';
 import { detectLinuxDistro, pickPlatformInstaller } from '../utils/platform-installer';
 import { HonghuApi, ChangelogVersion, UpdateInformationResource } from '@honghu-desktop/common';
 
@@ -76,7 +76,7 @@ interface InstallJob {
 	startedAt: number;
 	waitPid: number;
 	logPath: string;
-	mode: 'progress-window' | 'silent';
+	mode: 'progress-window' | 'silent' | 'wizard';
 }
 
 const INSTALL_JOB_NAME = 'install-job.json';
@@ -715,59 +715,55 @@ export async function installUpdate(): Promise<{ ok: boolean }> {
 		`覆盖安装目录：${pending.installDir}（来源：${resolved.source === 'registry' ? '注册表' : '当前运行目录'}）`
 	);
 
-	/*
-	 * Windows 优先交给「安装进度窗口」：静默安装期间没有任何界面，
-	 * 从本进程退出到装完的 1~3 分钟里用户完全看不到发生什么。
-	 * 窗口是独立的 PowerShell 进程，负责等本进程退出 → 启动安装器 → 装完自动拉起新版本。
-	 * 环境不支持时（找不到 powershell.exe 等）必须回退到原来的静默安装，不能因此放弃更新。
-	 */
 	const logPath = progressLogPath(pendingDir());
-	// 进度窗口按「pid + 进程名」双重判定，PID 被复用时不会一直等一个无关的进程
-	const waitName = basename(app.getPath('exe')).replace(/\.exe$/i, '');
 
 	if (process.platform === 'win32') {
-		const targetExe = resolved.exeName ? join(pending.installDir, resolved.exeName) : app.getPath('exe');
-		const win = spawnProgressWindow({
-			installerPath: pending.exePath,
+		/*
+		 * 可见安装向导：先启动安装器（**不带 /S**），再退出本进程。
+		 *
+		 * 不再走「静默安装 + 外部进度窗口」那一套：静默安装期间界面为零，安装器又必须由
+		 * 「应用退出之后」的进程接力；一旦接力进程出问题（实测 ps1 会把日志自己锁死、也活在
+		 * 不了无桌面会话里），整段过程就是黑盒，用户只知道软件退出了。向导模式把界面交还给
+		 * 用户，装到哪个目录、装没装完都能当场看到；完成页默认勾选「运行」，装完自动拉起新版本。
+		 *
+		 * **5.5.0 起不再回退静默安装**：静默失败时用户完全无从判断，宁可明确报错并帮他把
+		 * 安装包定位出来，让他手动双击。
+		 */
+		// 先清掉残留的同名安装器：NSIS 单实例锁会让新安装器直接 Abort（退出码 2 且全静默）
+		const killed = await killStaleInstaller(pending.exePath);
+		if (killed) {
+			logger.warn(`已结束 ${killed} 个残留安装器进程（否则会占住 NSIS 单实例锁）`);
+		}
+		const launched = spawnInstallerWizard({
+			exePath: pending.exePath,
 			installDir: pending.installDir,
-			appExe: targetExe,
-			waitPid: process.pid,
-			waitName,
-			version: pending.tag,
-			scriptDir: pendingDir(),
-			onLog: (level, msg) => (level === 'warn' ? logger.warn(msg) : logger.info(msg))
+			onSpawn: (pid) => logger.info('安装向导已启动（pid=' + pid + '），即将退出本程序')
 		});
-		if (win.ok) {
+		if (launched.ok) {
 			writeInstallJob({
 				tag: pending.tag,
 				startedAt: Date.now(),
 				waitPid: process.pid,
-				logPath: win.logPath || logPath,
-				mode: 'progress-window'
+				logPath,
+				mode: 'wizard'
 			});
-			logger.info('退出以完成安装（进度窗口接管，装完自动启动新版本）');
-			// 给渲染端回执与窗口显示留一点时间；窗口是 detached 的，不受影响
-			exitForInstall(1200);
+			logger.info('退出以完成安装（安装向导接管，装完可在向导里直接启动新版本）');
+			// NSIS 要先解压自身再显示向导；退得太早，用户只会看到窗口一闪
+			exitForInstall(3000);
 			return { ok: true };
 		}
-		logger.warn('安装进度窗口不可用，回退为静默安装（安装期间无界面）');
+		logger.warn('安装向导启动失败，不再回退静默安装：' + (launched.error || '未知原因'));
+		try {
+			shell.showItemInFolder(pending.exePath);
+		} catch (e) {
+			logger.warn('定位安装包失败', e);
+		}
+		throw new Error('无法启动安装向导，已在文件夹中定位安装包，请手动双击安装');
 	}
 
-	await spawnSilentInstaller({
-		exePath: pending.exePath,
-		installDir: pending.installDir,
-		onSpawn: (pid) => logger.info('安装程序已接管（pid=' + pid + '），即将退出本程序')
-	});
-
-	writeInstallJob({
-		tag: pending.tag,
-		startedAt: Date.now(),
-		waitPid: process.pid,
-		logPath,
-		mode: 'silent'
-	});
-	logger.info('退出以完成安装（静默安装，安装期间无界面）');
-	exitForInstall(800);
-
-	return { ok: true };
+	/*
+	 * 非 Windows 平台走不到这里：mac / linux 在 updateApp 里就改为打开下载页了。
+	 * 保留一个明确报错，避免将来误接回静默安装 —— 5.5.0 起自动更新一律可见。
+	 */
+	throw new Error('当前平台不支持自动安装，请手动下载安装包');
 }
