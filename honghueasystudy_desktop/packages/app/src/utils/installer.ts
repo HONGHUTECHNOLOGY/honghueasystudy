@@ -111,6 +111,66 @@ export function spawnSilentInstaller(opts: SpawnInstallerOptions): Promise<void>
 	});
 }
 
+/**
+ * 以「可见安装向导」方式启动安装包（Windows）。
+ *
+ * 与 `spawnSilentInstaller` 的唯一区别：**不传 `/S`**。
+ * 本项目是 assisted installer（`oneClick: false`），去掉 `/S` 后会显示
+ * 「选择安装目录 → 安装 → 完成」向导，完成页还能勾选直接运行新版本。
+ *
+ * 为什么不再默认静默：静默安装期间界面为零，安装器必须靠「应用退出之后」的外部进程接力；
+ * 一旦接力进程被应用退出带走（实测 ps1 启动后没活过应用退出），就变成彻底的黑盒——
+ * 用户只知道软件退出了，装没装上完全靠猜。向导模式把这段过程交还给用户可见的界面。
+ *
+ * 参数规范与静默安装一致：`/D=` 必须是最后一个参数且不能加引号。
+ * 只给 `/D=` 只是设置向导里的默认目录（用户仍可改），和 `/S` 放一起才是静默安装。
+ */
+export function spawnInstallerWizard(opts: SpawnInstallerOptions): { ok: boolean; pid?: number; error?: string } {
+	try {
+		assertSafeInstallDir(opts.installDir);
+		const child = spawn(opts.exePath, [`/D=${opts.installDir.replace(/"/g, '')}`], {
+			detached: true,
+			stdio: 'ignore' as const,
+			windowsHide: false,
+			windowsVerbatimArguments: true
+		});
+		// 进程独立后不再持有引用，父进程随后退出也不会拖住它
+		child.unref();
+		opts.onSpawn?.(child.pid);
+		return { ok: true, pid: child.pid };
+	} catch (e: any) {
+		return { ok: false, error: e?.message || String(e) };
+	}
+}
+
+/**
+ * 结束同名的残留安装器进程（Windows）。
+ *
+ * NSIS 用 `CreateMutex(APP_GUID)` 做安装器单实例（allowOnlyOneInstallerInstance.nsh）：
+ * 只要还有一个同名安装器活着，新安装器会直接 `Abort` —— **退出码 2，而且完全静默**。
+ * 最常见的来源是用户装完后把完成页留在那儿没关，进程一直挂着；
+ * 表现就是「点了更新没反应、版本还是旧的」，日志里看不出任何东西。
+ *
+ * 启动新安装器前先清掉残留，避免被一个忘记关的窗口挡死。
+ * 返回结束掉的进程数（taskkill 在没有匹配进程时返回非 0，属正常，记 0）。
+ */
+export function killStaleInstaller(exePath: string): Promise<number> {
+	const name = basename(exePath);
+	if (!name || !/\.exe$/i.test(name)) return Promise.resolve(0);
+	return new Promise((resolve) => {
+		execFile(
+			'taskkill',
+			['/f', '/im', name],
+			{ windowsHide: true, encoding: 'latin1' as BufferEncoding },
+			(err, stdout) => {
+				if (err) return resolve(0);
+				const matches = String(stdout || '').match(/PID\s+\d+/gi);
+				resolve(matches ? matches.length : 1);
+			}
+		);
+	});
+}
+
 /* ------------------------------------------------------------------ *
  * 安装目录定位
  *
