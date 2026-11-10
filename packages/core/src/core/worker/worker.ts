@@ -143,19 +143,50 @@ export class HonghuWorker<E extends RawElements = RawElements> extends CommonEve
 				console.log('ctx', result.ctx);
 			}
 
-			try {
-				ctx.searchInfos = (await this.opts.answerer(ctx.elements, ctx)) || [];
+			/**
+			 * 搜题重试
+			 *
+			 * 搜题是概率性失败：网络抖动、接口超时、模型偶发返回空 content、
+			 * 题库风控限流，都会让这一道题直接留空。以前只 catch 记个 error 就
+			 * 往下走，结果是「漏一题但流程照常」——提交时才发现有题没答。
+			 *
+			 * 这里对「抛异常」和「答案全为空」两种情况都重试，最多 3 次尝试，
+			 * 退避 1s / 2s。重试仍失败才记错误，交给上层的提交前复查兜底。
+			 */
+			const ANSWER_ATTEMPTS = 3;
+			let lastError: string | undefined;
+			for (let attempt = 1; attempt <= ANSWER_ATTEMPTS; attempt++) {
+				try {
+					ctx.searchInfos = (await this.opts.answerer(ctx.elements, ctx)) || [];
 
-				// 答案为 undefined 的情况， 需要赋值给一个空字符串，因为可能传回的题目中带有其他提示信息，或者题目里包含答案。
-				ctx.searchInfos.forEach((info) => {
-					info.results = info.results.map((ans) => {
-						ans.answer = ans.answer ? ans.answer.trim() : '';
-						return ans;
+					// 答案为 undefined 的情况， 需要赋值给一个空字符串，因为可能传回的题目中带有其他提示信息，或者题目里包含答案。
+					ctx.searchInfos.forEach((info) => {
+						info.results = (info.results || []).map((ans) => {
+							ans.answer = ans.answer ? ans.answer.trim() : '';
+							return ans;
+						});
 					});
-				});
-			} catch (err) {
-				error = String(err);
+
+					/** 有结果但答案全空，同样视为失败（模型只回了思考过程、题库返回占位符等） */
+					const allEmpty =
+						ctx.searchInfos.length > 0 &&
+						!ctx.searchInfos.some((info) => info.results.some((ans) => ans.answer));
+					if (allEmpty) throw new Error('搜到的答案为空白');
+
+					lastError = undefined;
+					break;
+				} catch (err) {
+					lastError = String(err);
+					if (options?.enable_debug) {
+						console.warn(`搜题失败（第 ${attempt}/${ANSWER_ATTEMPTS} 次）:`, lastError);
+					}
+					ctx.searchInfos = [];
+					if (attempt < ANSWER_ATTEMPTS) {
+						await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+					}
+				}
 			}
+			if (lastError) error = lastError;
 
 			result.ctx = ctx;
 			result.requested = true;

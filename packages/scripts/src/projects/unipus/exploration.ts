@@ -15,6 +15,7 @@ import {
 } from '@honghu/core';
 import { BackgroundProject } from '../background';
 import { createLocalRemotePage } from '../../utils/app';
+import { trustedPointerClick } from '../../utils/safe-click';
 import { answerWrapperEmptyWarning, simplifyWorkResult } from '../../utils/work';
 
 const state = {
@@ -118,9 +119,15 @@ export const UnipusExplorationScript = new Script({
 		}
 	},
 	async oncomplete() {
+		/**
+		 * 新版 U 校园（uai.unipus.cn）把课程目录做成了 SPA：从目录点进章节
+		 * 不会重新加载页面，oncomplete 也就不会再执行一次。
+		 *
+		 * 所以这里只提示、**不能 return** —— 一旦提前返回，下面的轮询就不会启动，
+		 * 表现就是「点进任意章节都不自动学习」。
+		 */
 		if (location.href.includes('cmgt/resource-detail')) {
-			$msg.info('请打开任意课程的章节进行自动学习');
-			return;
+			$msg.info('已就绪，点开任意章节会自动开始学习');
 		}
 
 		CommonProject.scripts.render.methods.pin(this);
@@ -169,15 +176,58 @@ export const UnipusExplorationScript = new Script({
 		})();
 		console.log('[U校园调试] oncomplete 开始执行, readyState:', document.readyState);
 		console.log('[U校园调试] 当前URL:', location.href);
-		const wrap = await waitForElement('.question-wrap', { timeout_seconds: 30 });
-		if (!wrap) {
-			console.error('[U校园调试] 未找到 .question-wrap！页面DOM可能已变更');
-			$msg.error('未找到题目容器 .question-wrap，可能页面结构已变更或页面未完全加载');
-			return;
-		}
-		console.log('[U校园调试] .question-wrap 已找到，开始答题');
-		$msg.info('题目容器已找到，开始答题');
-		await job(this.cfg, rp);
+
+		/**
+		 * 题目容器的等待策略
+		 *
+		 * 从课程列表点进任务是 SPA 软导航，oncomplete 早已执行完、不会重跑；
+		 * 而首次进入时任务还没点开，容器根本不存在。旧逻辑等 30 秒就报错退出，
+		 * 用户看到的就是「必须手动刷新一次才行」——刷新是硬导航，脚本会在答题页重新初始化。
+		 *
+		 * 现在：先等 30 秒（正常进入会立刻命中）；没命中就转入持续观察，
+		 * 用户什么时候点开任务，就什么时候开始答题，不再需要刷新。
+		 */
+		/**
+		 * 常驻观察驱动答题。
+		 *
+		 * oncomplete 只在页面加载时执行一次，而任务入口随时可能被打开
+		 * （从课程列表点进去、或在页面内切换题目）。原来「等 30 秒 → 循环等待」
+		 * 有一个致命缺陷：只要 waitForElement 返回过元素就直接 job()，
+		 * 而那个元素可能已经被 Vue 重新渲染掉，job 在失效节点上静默失败，
+		 * 表现就是「必须手动刷新一次才行」——刷新是硬导航，脚本会重新初始化。
+		 *
+		 * 改成低频轮询统一驱动：任何时刻出现题目容器就开始答题。
+		 * 用题干签名去重，同一道题不会被反复处理。
+		 */
+		let answering = false;
+		let lastSignature = '';
+		const tick = async () => {
+			if (answering) return;
+			/**
+			 * 域名而不是路径判断：旧版课程页在 ucontent.unipus.cn/_explorationpc_xxx，
+			 * 新版在 uai.unipus.cn/app/cmgt/...，写死 _explorationpc 会让新版永远不触发。
+			 * 两者都在 unipus.cn 下，没题目时下一行就返回，开销可忽略。
+			 */
+			if (!location.hostname.endsWith('unipus.cn')) return;
+			const wrap = document.querySelector<HTMLElement>('.question-wrap');
+			if (!wrap) return;
+			const signature = (wrap.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+			if (!signature || signature === lastSignature) return;
+
+			answering = true;
+			try {
+				lastSignature = signature;
+				console.log('[U校园调试] 检测到题目，开始答题');
+				$msg.info('题目容器已找到，开始答题');
+				await job(this.cfg, rp);
+			} catch (err) {
+				console.error('[鸿鹄] 自动答题出错', err);
+			} finally {
+				answering = false;
+			}
+		};
+		setInterval(tick, 2000);
+		tick();
 	},
 	onrender(elements) {
 		const translateBtn = h(
@@ -548,27 +598,39 @@ async function job(cfg: typeof UnipusExplorationScript.cfg, rp: RemotePage) {
 				.map((el) => el?.textContent || '')
 				.join('\n');
 
-			const questions = resoleInputWrapLines($el('.question-material-banked-cloze-scoop') as HTMLElement);
+			const questions = resoleInputWrapLines(
+				$el('.question-material-banked-cloze-scoop') as HTMLElement | undefined
+			);
 
 			if (!blanks.trim()) {
-				$msg.error('未找到题目内容，跳过该任务');
+				$msg.error(
+					`未找到候选词（.option-wrapper 命中 ${$$el('.question-material-banked-cloze-reply .option-wrapper').length} 个），跳过该任务`
+				);
 				return;
 			}
+			if (!questions.trim()) {
+				$msg.error('未提取到题干文本（.question-material-banked-cloze-scoop 为空或不可见），跳过该任务');
+				return;
+			}
+			console.log(
+				'[U校园调试] 选词填空：题干长度',
+				questions.length,
+				'候选词',
+				blanks.split('\n').filter(Boolean).length,
+				'空位',
+				$$el('.question-wrap .input-wrapper input').length
+			);
 
 			try {
+				// 先清掉上一次的草稿，否则答案会与残留值整体串位
+				await clearBlankInputs('.question-wrap .input-wrapper input');
 				const res = await singleQuestionHandle({
 					rp,
 					question: [direction, '-'.repeat(10), blanks, '-'.repeat(10), questions].join('\n'),
 					type: 'completion',
 					options: $$el('.question-wrap .input-wrapper input'),
-					handler: async (type, answer, option) => {
-						const input = option as HTMLInputElement;
-						if (input.value) {
-							return;
-						}
-						await rp.click(input);
-						await rp['keyboard.type'](answer, { delay: 20 });
-						await $.sleep(200);
+					handler: async (type, answer) => {
+						await writeBlank('.question-wrap .input-wrapper input', answer);
 					}
 				});
 
@@ -677,6 +739,8 @@ async function job(cfg: typeof UnipusExplorationScript.cfg, rp: RemotePage) {
 			}
 
 			try {
+				const freeSelector = '.layout-reply-container .fe-scoop input';
+				await clearBlankInputs(freeSelector);
 				const res = await singleQuestionHandle({
 					rp,
 					question: [
@@ -687,15 +751,9 @@ async function job(cfg: typeof UnipusExplorationScript.cfg, rp: RemotePage) {
 					].join('\n'),
 					type: 'completion',
 					// 支持单列和双列的自由填空题
-					options: $$el('.layout-reply-container .fe-scoop input'),
-					handler: async (type, answer, option) => {
-						const input = option as HTMLInputElement;
-						if (input.value) {
-							return;
-						}
-						await rp.click(input);
-						await rp['keyboard.type'](answer, { delay: 20 });
-						await $.sleep(200);
+					options: $$el(freeSelector),
+					handler: async (type, answer) => {
+						await writeBlank(freeSelector, answer);
 					}
 				});
 
@@ -878,22 +936,132 @@ async function waitHashChange(hash: string, timeout = 8000) {
 	return false;
 }
 
+	/**
+	 * 等待顶部 Learning / Practicing 页签的激活位置移动到目标页签。
+	 *
+	 * 两个关键约束：
+	 * 1. 页签切换**不改变 URL hash**，hash 判据永远超时失败，会让 next() 落到
+	 *    目录树级直接切下一个板块 —— Practicing 整个被跳过；
+	 * 2. React 平台点击页签后会**重建整个 tab 行**，旧元素引用随即 disconnect，
+	 *    盯着旧元素的 classList 检查同样永远失败（第一版修复就栽在这里）。
+	 *
+	 * 所以判据必须是：在**最新 DOM** 里找带激活类的页签，比对它的文字。
+	 */
+	async function waitTabSwitch(targetLabel: string, activeClass: string, timeout = 3000) {
+		const start = Date.now();
+		while (Date.now() - start < timeout) {
+			await $.sleep(400);
+			const active = (($$el('.pc-tab-row .tab') as HTMLElement[]) || []).find((t) =>
+				t.classList.contains(activeClass)
+			);
+			if (active && (active.textContent || '').trim() === targetLabel) return true;
+		}
+		return false;
+	}
+
+/** 页签点击的候选层：外层 .tab 或内层 .pc-tab-view-container */
+type TabLayer = 'outer' | 'inner';
+/** 页签点击的候选方式 */
+type TabHow = 'rp' | 'pointer' | 'native';
+
+/**
+ * 页签点击的「层 + 方式」组合。
+ *
+ * 已在 U 校园实测确认（2026-11-09，渲染端日志可见）：
+ * **内层 `.pc-tab-view-container` + 模拟点击**是唯一生效的组合 ——
+ * 外层 `.tab` 点不动（平台把事件绑在内层），完整鼠标序列也不必要。
+ *
+ * 所以直接把它作为默认值，页面每次加载后第一次切页签就命中，
+ * 不再空跑「外层/内层 × 三种方式」的矩阵（每次失败都要等一次激活类轮询）。
+ * 矩阵仍然保留为兜底：万一平台改版或某些板块结构不同，会自动回退试完再更新记忆。
+ */
+let tabHit: { layer: TabLayer; how: TabHow } | null = { layer: 'inner', how: 'rp' };
+
+const TAB_HOW_LABEL: Record<TabHow, string> = {
+	rp: '模拟点击',
+	pointer: '完整鼠标序列',
+	native: '原生 click'
+};
+
+/**
+ * 点击顶部 Learning / Practicing 页签并等待切换成功。
+ *
+ * 判据用 waitTabSwitch（按页签文字在最新 DOM 里找激活项）。
+ * 点击则穷举「两层 × 三种方式」—— 页签是 React 自绘控件，任何一个环节不匹配
+ * 都会静默失败：
+ * 1. 事件可能绑在**外层 .tab**，也可能绑在**内层 .pc-tab-view-container**；
+ *    点外层不会冒泡进内层的事件处理器，反之亦然，两层都要点；
+ * 2. 监听的事件可能是 click，也可能是 mousedown/pointerdown（自绘 tab 常见），
+ *    单一 el.click() 只发 click，必须再补完整鼠标序列。
+ *
+ * 生效过的组合会被 tabHit 记住并优先尝试。
+ */
+async function goTab(el: HTMLElement | undefined, rp: RemotePage) {
+	/** 当前激活的已经是最后一个页签时，target 为 undefined，必须直接返回 */
+	if (!el) return false;
+	const label = (el.textContent || '').trim();
+	const check = () => waitTabSwitch(label, 'pc-header-tab-activity', 2000);
+
+	const combos: { target: HTMLElement; layer: TabLayer; how: TabHow }[] = [];
+	const outer = el;
+	const inner = el.querySelector<HTMLElement>('.pc-tab-view-container');
+	if (outer) for (const how of ['rp', 'pointer', 'native'] as TabHow[]) combos.push({ target: outer, layer: 'outer', how });
+	if (inner) for (const how of ['rp', 'pointer', 'native'] as TabHow[]) combos.push({ target: inner, layer: 'inner', how });
+
+	/** 命中过的组合提到最前，其余保持原有顺序作为回退 */
+	if (tabHit) {
+		const idx = combos.findIndex((c) => c.layer === tabHit!.layer && c.how === tabHit!.how);
+		if (idx > 0) combos.unshift(combos.splice(idx, 1)[0]);
+	}
+
+	for (const { target, layer, how } of combos) {
+		try {
+			if (how === 'rp') await rp.click(target);
+			else if (how === 'pointer') trustedPointerClick(target);
+			else target.click();
+			if (await check()) {
+				const name = (layer === 'outer' ? '外层 .tab' : '内层 .pc-tab-view-container') + ' + ' + TAB_HOW_LABEL[how];
+				if (!tabHit || tabHit.layer !== layer || tabHit.how !== how) {
+					tabHit = { layer, how };
+					console.log('[U校园调试] 页签生效方式：' + name + '（已记忆，后续优先复用）');
+				} else {
+					console.log('[U校园调试] 页签切换命中记忆方式：' + name);
+				}
+				return true;
+			}
+		} catch (err) {
+			/** 任何一种点击方式抛错都不能中断整条答题链，继续换下一种 */
+			console.warn('[U校园调试] 页签点击异常，换下一种方式:', err instanceof Error ? err.message : String(err));
+		}
+	}
+	console.error('[U校园调试] 页签「' + label + '」所有点击方式都未生效');
+	return false;
+}
+
 /**
  * 进入下一个任务。
  * 光点击不判断结果的话，一旦平台没响应就会在同一个任务上无限空转，
  * 所以这里统一用 hash 是否变化来确认跳转成功，并补一次原生 click 兜底。
+ *
+ * 例外是顶部 Learning / Practicing 页签：切换不改 hash，走 goTab。
  */
 async function next(rp: RemotePage) {
 	const hash = location.hash;
 
 	const go = async (el?: HTMLElement) => {
 		if (!el) return false;
-		await rp.click(el);
-		if (await waitHashChange(hash, 5000)) return true;
-		// 模拟点击被平台忽略时，用原生 click 再试一次
-		if (el.isConnected) {
-			el.click();
+		console.log('[U校园调试] next: 点击目标「' + (el.textContent || '').trim().slice(0, 20) + '」');
+		try {
+			await rp.click(el);
 			if (await waitHashChange(hash, 5000)) return true;
+			// 模拟点击被平台忽略时，用原生 click 再试一次
+			if (el.isConnected) {
+				el.click();
+				if (await waitHashChange(hash, 5000)) return true;
+			}
+		} catch (err) {
+			/** 点击环节任何异常都只算这一级失败，继续尝试下一级，不能让整条链崩掉 */
+			console.warn('[U校园调试] 点击异常:', err instanceof Error ? err.message : String(err));
 		}
 		return false;
 	};
@@ -910,8 +1078,13 @@ async function next(rp: RemotePage) {
 
 	// 小任务
 	if (await findNext('.pc-header-tasks-row .pc-task', 'pc-header-task-activity')) return true;
-	// 小章节
-	if (await findNext('.pc-tab-row .tab', 'pc-header-tab-activity')) return true;
+	// 学习模式页签（Learning / Practicing）：切换不改 hash，按页签文字判断成功
+	const tabEls = $$el<HTMLElement>('.pc-tab-row .tab') as HTMLElement[];
+	for (let index = 0; index < tabEls.length; index++) {
+		if (tabEls[index].classList.contains('pc-header-tab-activity')) {
+			if (await goTab(tabEls[index + 1], rp)) return true;
+		}
+	}
 	// 大章节，好像有两个UI版本
 	if (await findNext('.pc-slider-content [data-role="micro"],.pc-slider-content [data-role="node"]', 'pc-menu-activity')) {
 		return true;
@@ -991,6 +1164,21 @@ async function singleQuestionHandle({
 	if (!searchedInfos || searchedInfos.length === 0) {
 		throw new Error('未搜到到任何答案。');
 	}
+
+	console.log(
+		'[U校园调试] 搜题结果',
+		JSON.stringify(
+			searchedInfos.map((info) => ({
+				name: info.name,
+				error: info.error,
+				answers: info.results.map((r) => r.answer)
+			}))
+		).slice(0, 600),
+		'空位数量',
+		options.length,
+		'题型',
+		type
+	);
 
 	const ctx: WorkContext<any> = {
 		searchInfos: searchedInfos,
@@ -1106,6 +1294,51 @@ function doUnderstandingText(rp: RemotePage, opts: CommonWorkOptions, root = '.q
 			return [direction, '-'.repeat(10), ctx, '-'.repeat(10), ques].filter(Boolean).join('\n');
 		}
 	});
+}
+
+/**
+ * 提交前用 DOM 实测一遍「仍未作答」的控件。
+ *
+ * `uploadHandler` 的完成率是按 `results` 算的，而 `results` 只包含**脚本真正
+ * 遍历到的题**：一旦某题的 root 或内部元素没被选择器命中（平台改过容器类名、
+ * 题目分批懒加载、同一 wrap 里混排了别的形态），这题根本不在 results 里，
+ * 完成率依然是 100% → 被判为可提交 → 漏题直接交卷。
+ *
+ * 这里不看 results，只数页面上真实存在的作答控件，有空白就不自动提交
+ * （U 校园选择即自动保存，不提交不会丢答案，下次进任务继续答）。
+ */
+function countUnansweredControls() {
+	let total = 0;
+	let empty = 0;
+	const isVisible = (el: HTMLElement) => {
+		const rect = el.getBoundingClientRect();
+		return rect.width > 0 && rect.height > 0;
+	};
+
+	// 文本类：填空 / 简答 / 翻译
+	$$el<HTMLTextAreaElement | HTMLInputElement>(
+		'.question-wrap textarea, .question-wrap input[type="text"]'
+	).forEach((el) => {
+		if (!el.isConnected || !isVisible(el)) return;
+		// 排除非作答控件：笔记框、选项卡搜索框
+		if (el.closest('.mark-info-in, .pc-header-tasks-row, .pc-header-tabs-container')) return;
+		total++;
+		if (!String(el.value || '').trim()) empty++;
+	});
+
+	// 选项类：一个 option-wrap 算一组，组内至少选中一个才算作答
+	$$el<HTMLElement>('.question-wrap .option-wrap').forEach((group) => {
+		const options = Array.from(group.querySelectorAll<HTMLElement>('.option'));
+		if (!options.length) return;
+		if (!isVisible(group)) return;
+		total++;
+		const chosen = options.some(
+			(option) => option.classList.contains('selected') || !!option.querySelector('input:checked')
+		);
+		if (!chosen) empty++;
+	});
+
+	return { total, empty };
 }
 
 function doCompletion(rp: RemotePage, opts: CommonWorkOptions, root = '.question-common-abs-reply') {
@@ -1325,6 +1558,32 @@ async function handleCommonUnitTest(
 	});
 
 	const results = await worker.doWork({ enable_debug: BackgroundProject.scripts.dev.cfg.enable_answerer_debug });
+
+	/**
+	 * 提交前补答
+	 *
+	 * 搜题是概率性失败（网络抖动、题库限流、模型返回空 content），core 层已经
+	 * 对单题做了 3 次重试；这里再从「页面实际空白」的角度补一轮：
+	 * 已作答的题在 handler 里会自行跳过（`input.value` / `selected` 判断），
+	 * 所以重跑只会对仍空白的题重新搜一遍，正常情况一次都不会触发。
+	 */
+	const MAX_RETRY_ROUNDS = 2;
+	for (let round = 1; round <= MAX_RETRY_ROUNDS; round++) {
+		const before = countUnansweredControls();
+		if (before.empty === 0) break;
+		$msg.info(`发现有 ${before.empty}/${before.total} 处未作答，开始第 ${round} 轮补答…`);
+		await $.sleep(800);
+		try {
+			await worker.doWork({ enable_debug: BackgroundProject.scripts.dev.cfg.enable_answerer_debug });
+		} catch (err) {
+			$msg.warn(`第 ${round} 轮补答异常：${err instanceof Error ? err.message : String(err)}`);
+			break;
+		}
+		const after = countUnansweredControls();
+		$msg.info(`第 ${round} 轮补答结束，剩余 ${after.empty}/${after.total} 处未作答`);
+		if (after.empty === 0) break;
+	}
+
 	// 停顿等待
 	const msg = `答题完成，将等待 ${opts.stopSecondWhenFinish} 秒后进行保存或提交。`;
 	$msg.info({ content: msg, duration: opts.stopSecondWhenFinish });
@@ -1334,6 +1593,31 @@ async function handleCommonUnitTest(
 		type: opts.upload,
 		results,
 		async callback(finishedRate, uploadable) {
+			/**
+			 * 提交前再用 DOM 兜一道：results 只覆盖脚本遍历到的题，
+			 * 没命中的题不在里面，完成率照旧 100%。页面还有空白控件时不提交。
+			 */
+			const domCheck = countUnansweredControls();
+			if (domCheck.empty > 0) {
+				/** 题目可能还在懒加载，稍等再复查一次，避免把「还没渲染出来」当成漏题 */
+				await $.sleep(2000);
+				const again = countUnansweredControls();
+				if (again.empty > 0) {
+					uploadable = false;
+					$msg.warn(
+						`提交前复查发现 ${again.empty}/${again.total} 处仍未作答，本次只保存不提交（下次进入会继续作答）`
+					);
+				}
+			} else if (domCheck.total > 0 && opts.upload !== 'save' && !uploadable) {
+				/**
+				 * 页面上的题已经全部作答（补答轮把第一轮搜题失败的补上了），
+				 * 但 results 用的是第一轮、那些题被记成未完成，完成率被低估。
+				 * 以页面实际状态为准放行提交。
+				 */
+				uploadable = true;
+				$msg.info('补答后页面题目已全部作答，按完整作答提交');
+			}
+
 			const msg = `完成率 ${finishedRate.toFixed(2)}% :  ${uploadable ? '3秒后将自动提交' : '3秒后将自动保存'} `;
 			$msg.success({ content: msg, duration: 3 });
 
@@ -1400,8 +1684,15 @@ async function submitAnswer(rp: RemotePage) {
  * 解决选词填空、填空题等存在横线的题目，这里吧横线（innerText无法读取）替换成 _____ 以便搜题
  * @param root
  */
-function resoleInputWrapLines(root: HTMLElement) {
-	let temp_ques = '\n' + root?.innerText.trim() || '';
+function resoleInputWrapLines(root?: HTMLElement) {
+	/**
+	 * 两处必须兜底，否则题干会被污染成 "undefined" 或空串，搜题必然失败：
+	 *   1. root 为空（选择器没命中）时，`'\n' + undefined` 会得到字符串 "undefined"；
+	 *   2. innerText 对不可见元素返回空串，要退回 textContent。
+	 */
+	if (!root) return '';
+
+	let temp_ques = '\n' + (root.innerText || root.textContent || '').trim();
 	if (temp_ques.match(/\s\d+\)/)) {
 		// 如果有序号，则替换成空格，避免影响匹配
 		temp_ques = temp_ques.replace(/\s(\d+)\)/g, ' ($1) _____ ');
@@ -1411,8 +1702,100 @@ function resoleInputWrapLines(root: HTMLElement) {
 			input.replaceChildren(' _____ ');
 		}
 		document.body.appendChild(wrap);
-		temp_ques = wrap.innerText.trim();
+		temp_ques = (wrap.innerText || wrap.textContent || '').trim();
 		document.body.removeChild(wrap);
 	}
 	return temp_ques;
+}
+
+/**
+ * 清空所有空位。
+ *
+ * 平台会把上一次的作答作为草稿持久化，重新进入时输入框里已经有旧值。
+ * 如果直接往上写，答案会与残留值错位（实测第 1 个空是上次的答案，
+ * 本次第 1 题的答案被挤到第 2 个空，整体串位）。
+ */
+async function clearBlankInputs(selector: string) {
+	for (const el of $$el(selector) as HTMLInputElement[]) {
+		if (!el.value) continue;
+		if (el.getBoundingClientRect().height <= 0) continue;
+		el.focus();
+		try {
+			el.select();
+		} catch {
+			// 忽略不支持 select 的输入类型
+		}
+		let cleared = false;
+		try {
+			cleared = document.execCommand('delete', false);
+		} catch {
+			cleared = false;
+		}
+		if (!cleared || el.value) {
+			el.value = '';
+			el.dispatchEvent(new Event('input', { bubbles: true }));
+		}
+		await $.sleep(50);
+	}
+}
+
+/**
+ * 往「当前第一个空位」写入答案。
+ *
+ * 不按索引定位：实测初始数组与实时 DOM 的节点顺序会错位，
+ * 按索引写会把答案写到别的空里（第 1 题的值落到第 2 个空）。
+ * 答案本身是按题号顺序给出的，空位也按顺序排列，所以「填第一个空」
+ * 天然与题号对齐，不依赖任何索引假设。
+ *
+ * 写入用 execCommand('insertText')：它产生的是浏览器原生输入事件
+ * （isTrusted 为 true），受控组件一定接受；合成 InputEvent 会被忽略，
+ * 值写进去后下一次渲染就被数据模型里的旧值覆盖。
+ */
+async function writeBlank(selector: string, answer: string) {
+	if (!answer) return;
+	for (let attempt = 0; attempt < 3; attempt++) {
+		const inputs = ($$el(selector) as HTMLInputElement[]).filter(
+			(el) => el.getBoundingClientRect().height > 0
+		);
+		const target = inputs.find((el) => !el.value.trim());
+		if (!target) return;
+
+		target.focus();
+		try {
+			target.select();
+		} catch {
+			// 忽略
+		}
+		let inserted = false;
+		try {
+			inserted = document.execCommand('insertText', false, answer);
+		} catch {
+			inserted = false;
+		}
+		if (!inserted || target.value !== answer) {
+			const proto =
+				target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+			const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+			if (desc && desc.set) {
+				try {
+					desc.set.call(target, answer);
+				} catch {
+					target.value = answer;
+				}
+			} else {
+				target.value = answer;
+			}
+			target.dispatchEvent(
+				new InputEvent('input', {
+					bubbles: true,
+					data: answer,
+					view: document.defaultView || window,
+					composed: true
+				})
+			);
+			target.dispatchEvent(new Event('change', { bubbles: true }));
+		}
+		await $.sleep(200);
+		if (target.value === answer) return;
+	}
 }

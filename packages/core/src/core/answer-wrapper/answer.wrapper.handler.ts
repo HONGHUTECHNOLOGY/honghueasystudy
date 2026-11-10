@@ -19,6 +19,43 @@ function isSizeError(error: any): boolean {
 }
 
 /**
+ * 推理模型的思考过程会占用输出预算。
+ *
+ * 调用方通常只配 model / messages / temperature，不会设 max_tokens：
+ * 一旦模型把预算全花在 reasoning_content 上，最终答案所在的 content 就会被挤成空串，
+ * 表现为「接口 200 但没有答案」。这里只对 OpenAI 风格的对话请求补一个默认上限，
+ * 不认识的接口（普通题库 API）不会被塞入多余字段。
+ */
+function ensureReasoningBudget(requestData: any): void {
+	if (!requestData || typeof requestData !== 'object') return;
+	if (!Array.isArray(requestData.messages)) return;
+	if (typeof requestData.model !== 'string') return;
+	if (requestData.max_tokens != null || requestData.max_completion_tokens != null) return;
+	requestData.max_tokens = 4096;
+}
+
+/**
+ * 只取最终结果。
+ *
+ * reasoning_content 是模型的思考过程，把它当答案会直接污染作答，
+ * 因此这里只做一件事：当 content 为空、却存在思考内容时给出可操作的错误，
+ * 而不是静默返回空答案或退而使用思考过程。
+ */
+function assertFinalAnswerPresent(responseData: any, results: Result[]): void {
+	const answered = results.some((item) => String(item.answer ?? '').trim().length > 0);
+	if (answered) return;
+	const message = responseData?.choices?.[0]?.message;
+	if (!message) return;
+	const content = String(message.content ?? '').trim();
+	const reasoning = String(message.reasoning_content ?? '').trim();
+	if (!content && reasoning) {
+		throw new Error(
+			'模型只返回了思考过程（reasoning_content），没有给出最终答案。已自动放宽输出长度，请重试；若仍为空，请改用非推理模型（如 deepseek-chat）。'
+		);
+	}
+}
+
+/**
  *
  * 默认题库配置解析器
  *
@@ -121,6 +158,7 @@ export async function defaultAnswerWrapperHandler(
 					});
 
 					requestData = data;
+					ensureReasoningBudget(requestData);
 				} else {
 					throw new Error('不支持的请求方式');
 				}
@@ -167,6 +205,9 @@ export async function defaultAnswerWrapperHandler(
 						});
 					}
 				}
+
+				// 只认最终结果：思考过程不能当答案
+				assertFinalAnswerPresent(responseData, results);
 
 				searchInfos.push({
 					url: wrapper.url,

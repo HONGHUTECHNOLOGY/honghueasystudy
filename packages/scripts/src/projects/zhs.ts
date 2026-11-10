@@ -4228,13 +4228,18 @@ function dispatchMouseSequence(el: HTMLElement) {
 	const init = {
 		bubbles: true,
 		cancelable: true,
-		view: window,
+		/** 不能用沙箱里的 `window`（Proxy）当 view，构造事件时会被内核拒收 */
+		view: (document.defaultView || window),
 		button: 0,
 		clientX: rect.left + rect.width / 2,
 		clientY: rect.top + rect.height / 2
 	};
 	for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-		trustedDispatch(el, new OrigMouseEvent(type, init));
+		try {
+			trustedDispatch(el, new OrigMouseEvent(type, init));
+		} catch {
+			// 单个事件类型不可用时跳过，不中断整串序列
+		}
 	}
 }
 

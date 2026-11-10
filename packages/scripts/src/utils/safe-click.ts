@@ -76,7 +76,16 @@ export function trustedPointerClick(el: HTMLElement | null | undefined): void {
 		bubbles: true,
 		cancelable: true,
 		composed: true,
-		view: window,
+		/**
+		 * 必须用 document.defaultView，**不能写 window**。
+		 *
+		 * 脚本跑在伪 Window 沙箱里，这里的 `window` 是 Proxy；把它塞进
+		 * MouseEventInit.view 会在构造事件时抛
+		 * 「Failed to convert value to 'Window'」——而且异常发生在 new 那一刻，
+		 * 不在 dispatchEvent 的 try 里，会直接冒泡把整个答题流程打断
+		 * （表现就是「卡着不动」，因为 job 的递归链被异常终结）。
+		 */
+		view: (document.defaultView || window),
 		clientX: x,
 		clientY: y,
 		screenX: x,
@@ -95,19 +104,19 @@ export function trustedPointerClick(el: HTMLElement | null | undefined): void {
 				// 单个事件派发失败不影响其余事件
 			}
 		};
-		try {
-			fire(new OrigPointerEvent('pointerdown', pointer));
-		} catch {
-			// 环境不支持 PointerEvent 时跳过
-		}
-		fire(new OrigMouseEvent('mousedown', base));
-		try {
-			fire(new OrigPointerEvent('pointerup', pointer));
-		} catch {
-			// 同上
-		}
-		fire(new OrigMouseEvent('mouseup', base));
-		fire(new OrigMouseEvent('click', base));
+		/** 构造事件本身也可能抛（环境不支持某类事件），每一步都单独兜住 */
+		const fireNew = (ctor: typeof MouseEvent, type: string, init: MouseEventInit) => {
+			try {
+				fire(new ctor(type, init));
+			} catch {
+				// 忽略：该事件类型在当前环境不可用
+			}
+		};
+		fireNew(OrigPointerEvent as unknown as typeof MouseEvent, 'pointerdown', pointer as MouseEventInit);
+		fireNew(OrigMouseEvent, 'mousedown', base);
+		fireNew(OrigPointerEvent as unknown as typeof MouseEvent, 'pointerup', pointer as MouseEventInit);
+		fireNew(OrigMouseEvent, 'mouseup', base);
+		fireNew(OrigMouseEvent, 'click', base);
 	} finally {
 		restore();
 	}
