@@ -323,18 +323,26 @@ export function spawnProgressWindow(
 	}
 
 	let script: string;
-	let fd: number | undefined;
+	let stdioFd: number | undefined;
 	const logPath = progressLogPath(opts.scriptDir);
 	try {
 		mkdirSync(opts.scriptDir, { recursive: true });
 		script = writeProgressScript(opts.scriptDir);
 		// 主进程先写一行：即使 PowerShell 根本没起来，日志里也能看出「调度过安装」
 		appendFileSync(logPath, `[main] ${new Date().toISOString()} 调度安装，waitPid=${opts.waitPid}\r\n`, 'utf8');
-		fd = openSync(logPath, 'a');
+		/*
+		 * stdout/stderr 必须落到**另一个**文件。
+		 *
+		 * 曾经图省事直接复用 logPath，结果 ps1 里的 Add-Content 要写同一个文件，
+		 * 两个句柄抢同一路径时 Add-Content 抛错、而每处 catch 又把错误吞掉 ——
+		 * 实测表现是「ps1 进程还活着，日志里只有主进程写的那一行」，
+		 * 比原来的 `stdio: 'ignore'` 更难排查。分开之后两路互不影响。
+		 */
+		stdioFd = openSync(join(opts.scriptDir, 'update-window.stdio.log'), 'a');
 	} catch (e: any) {
-		if (fd !== undefined) {
+		if (stdioFd !== undefined) {
 			try {
-				closeSync(fd);
+				closeSync(stdioFd);
 			} catch {}
 		}
 		opts.onLog?.('warn', '写入安装进度窗口脚本失败：' + (e?.message || e));
@@ -370,8 +378,8 @@ export function spawnProgressWindow(
 	try {
 		const child = spawn(ps, args, {
 			detached: true,
-			// 不再 ignore：PowerShell 的解析错误/未捕获异常全部落到 update-window.log
-			stdio: ['ignore', fd, fd],
+			// 解析错误/未捕获异常落到独立的 stdio 日志，不与 ps1 自己写的 update-window.log 抢句柄
+			stdio: ['ignore', stdioFd!, stdioFd!],
 			windowsHide: true
 		});
 		child.unref();
@@ -383,7 +391,7 @@ export function spawnProgressWindow(
 	} finally {
 		// 父进程手里这份句柄可以关掉，子进程已经继承了自己的副本
 		try {
-			closeSync(fd);
+			closeSync(stdioFd!);
 		} catch {}
 	}
 }
