@@ -185,7 +185,8 @@ export function writeScriptValues(values: any, existing: any, defs: ScriptDef[],
 			 * 远端永远读不到已存密码（导出时清空了），不能把「没填」当成「清空」，
 			 * 否则用户在手机上改一下学习时长，登录脚本的密码就被抹掉了。
 			 */
-			const keepExisting = field.type === 'password' && (newValue === '' || newValue === null || newValue === undefined);
+			const keepExisting =
+				field.type === 'password' && (newValue === '' || newValue === null || newValue === undefined);
 			const oldValue = prev && prev.configs && prev.configs[key] ? prev.configs[key].value : field.value;
 			let value = keepExisting ? oldValue : newValue !== undefined ? newValue : oldValue;
 

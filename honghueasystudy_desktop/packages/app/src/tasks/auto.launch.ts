@@ -83,8 +83,7 @@ function winRunValueName(): string {
 	return `electron.app.${!name || name === 'Electron' ? '鸿鹄易学' : name}`;
 }
 /** 任务管理器的「启动项」启用/禁用标记就存在这里 */
-const WIN_STARTUP_APPROVED_KEY =
-	'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run';
+const WIN_STARTUP_APPROVED_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run';
 
 /**
  * reg.exe 的绝对路径（主进程 PATH 在精简系统里可能不含 System32）
@@ -148,17 +147,7 @@ function writeWindowsLoginItem(enabled: boolean): boolean {
 		return true;
 	}
 
-	const r = runReg([
-		'add',
-		WIN_RUN_KEY,
-		'/v',
-		name,
-		'/t',
-		'REG_SZ',
-		'/d',
-		winLoginCommand(),
-		'/f'
-	]);
+	const r = runReg(['add', WIN_RUN_KEY, '/v', name, '/t', 'REG_SZ', '/d', winLoginCommand(), '/f']);
 	if (!r.ok) {
 		logger.error(
 			`写入注册表自启项失败（${r.failed ? 'reg.exe 无法运行' : 'reg 返回非零'}）：` + (r.out.trim() || '无输出')
@@ -296,9 +285,7 @@ export function autoLaunch() {
 			return;
 		}
 
-		logger.info(
-			`开机自启：已开启（注册表登记=${status.registered} 系统将启动=${status.willLaunch}）；${bootHint}`
-		);
+		logger.info(`开机自启：已开启（注册表登记=${status.registered} 系统将启动=${status.willLaunch}）；${bootHint}`);
 		/** 把登记的命令行原样打出来：路径含空格时，这里能一眼看出引号在不在 */
 		if (process.platform === 'win32') logger.info('自启命令行：' + winLoginCommand());
 		if (!status.registered) {
@@ -314,7 +301,10 @@ export function autoLaunch() {
 	 * Windows 同理，延后执行没有副作用。
 	 */
 	if (!app.isReady()) {
-		app.whenReady().then(apply).catch((e) => logger.error('等待 app ready 后设置开机自启失败', e));
+		app
+			.whenReady()
+			.then(apply)
+			.catch((e) => logger.error('等待 app ready 后设置开机自启失败', e));
 		return;
 	}
 	apply();

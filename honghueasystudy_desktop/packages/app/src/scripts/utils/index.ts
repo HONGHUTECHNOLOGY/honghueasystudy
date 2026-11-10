@@ -116,8 +116,7 @@ export async function breakSliderVerify(
 						total += step;
 						await page.mouse.move(x1 + total, y1, { steps: 12 });
 						await page.waitForTimeout(150);
-						const next_actual =
-							(await opts.pieceElement.evaluate((el) => el.getBoundingClientRect().x)) - piece_rect.x;
+						const next_actual = (await opts.pieceElement.evaluate((el) => el.getBoundingClientRect().x)) - piece_rect.x;
 						const measured_ratio = step !== 0 ? (next_actual - actual) / step : ratio;
 						actual = next_actual;
 						if (measured_ratio > 0.2 && measured_ratio < 2) ratio = measured_ratio;
@@ -242,9 +241,7 @@ export async function getBase64(url: string, page?: Page): Promise<string> {
 				return await downloadBase64(url);
 			} catch (fallbackErr) {
 				throw new Error(
-					`验证码图片获取失败（${briefUrl(url)}）：页面内请求 ${errorText(err)}；独立请求 ${errorText(
-						fallbackErr
-					)}`
+					`验证码图片获取失败（${briefUrl(url)}）：页面内请求 ${errorText(err)}；独立请求 ${errorText(fallbackErr)}`
 				);
 			}
 		}

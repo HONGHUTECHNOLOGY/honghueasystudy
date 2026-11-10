@@ -4,13 +4,7 @@ import { store, getDecryptedRenderData } from '../store';
 import { Logger } from '../logger';
 import { decryptRenderString, encryptRenderString } from '../crypto';
 import { AUTH_FAILED, NO_COURSE, getAccountInfo, getCourses, login } from './core/user';
-import {
-	TOO_FREQUENT,
-	getPPTActiveInfo,
-	getSignTypeName,
-	preSign,
-	traverseCourseActivity
-} from './core/activity';
+import { TOO_FREQUENT, getPPTActiveInfo, getSignTypeName, preSign, traverseCourseActivity } from './core/activity';
 import { performSign, type PerformSignOptions } from './core/sign';
 import { setSpoofClient } from './core/http';
 import type {
@@ -434,7 +428,8 @@ export async function signActivity(
 	syncSpoofSetting();
 
 	try {
-		const info = activity.info || (activity.courseId ? await getPPTActiveInfo(account.cookies, activity.activeId) : null);
+		const info =
+			activity.info || (activity.courseId ? await getPPTActiveInfo(account.cookies, activity.activeId) : null);
 		if (info) {
 			activity.info = info;
 			activity.ifphoto = Number(info.ifphoto) || activity.ifphoto || 0;

@@ -66,9 +66,7 @@ app.commandLine.appendSwitch('--no-sandbox');
  */
 if (!isGpuAccelerationEnabled()) {
 	app.disableHardwareAcceleration();
-	logger.warn(
-		`[图形] 硬件加速已关闭（来源：${process.argv.includes('--disable-gpu') ? '命令行参数' : '用户设置'}）`
-	);
+	logger.warn(`[图形] 硬件加速已关闭（来源：${process.argv.includes('--disable-gpu') ? '命令行参数' : '用户设置'}）`);
 }
 
 /** 获取单进程锁 */
@@ -188,9 +186,7 @@ function bootstrap() {
 				if (app.isPackaged && silentStart && trayReady) {
 					logger.info('静默启动：窗口保留在托盘，不显示界面');
 				} else {
-					logger.info(
-						`显示主窗口（isPackaged=${app.isPackaged}, 静默参数=${silentStart}, 托盘可用=${trayReady}）`
-					);
+					logger.info(`显示主窗口（isPackaged=${app.isPackaged}, 静默参数=${silentStart}, 托盘可用=${trayReady}）`);
 					window.show();
 				}
 			})

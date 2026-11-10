@@ -1,7 +1,15 @@
 import { BrowserWindow, app, ipcMain } from 'electron';
 import path from 'path';
 import { runtimes, type MonitorRuntime } from './runtime';
-import { addLog, checkAccount, findSignRecord, formatSignTime, getAccount, signActivity, syncSpoofSetting } from './manager';
+import {
+	addLog,
+	checkAccount,
+	findSignRecord,
+	formatSignTime,
+	getAccount,
+	signActivity,
+	syncSpoofSetting
+} from './manager';
 import { getPPTActiveInfo, getSignTypeName, preSign, preSign2, speculateType } from './core/activity';
 import { getIMParams } from './core/user';
 import { sleep } from './core/http';
@@ -84,11 +92,7 @@ async function handleImMessage(accountId: string, runtime: MonitorRuntime, messa
 	if (record) {
 		if (!runtime.reportedActivities.has(parsed.activeId)) {
 			runtime.reportedActivities.add(parsed.activeId);
-			addLog(
-				accountId,
-				'info',
-				`IM 检测到签到消息，该活动已签到（${formatSignTime(record.time)}），跳过重复签到`
-			);
+			addLog(accountId, 'info', `IM 检测到签到消息，该活动已签到（${formatSignTime(record.time)}），跳过重复签到`);
 		}
 		return;
 	}
@@ -300,20 +304,14 @@ async function pollLoop(runtime: MonitorRuntime): Promise<void> {
 					// 台账里已经签过：不再重复提交，只在首次发现时记一条，避免刷屏
 					if (!runtime.reportedActivities.has(activeId)) {
 						runtime.reportedActivities.add(activeId);
-						const signTime = result.activity.signedTime
-							? `（${formatSignTime(result.activity.signedTime)}）`
-							: '';
+						const signTime = result.activity.signedTime ? `（${formatSignTime(result.activity.signedTime)}）` : '';
 						addLog(accountId, 'info', `签到活动「${activityName}」已签到${signTime}，跳过重复签到`);
 					}
 				} else if (!config.autoSign) {
 					// 自动签到关闭：只记录一次，不调用签到接口
 					if (!runtime.reportedActivities.has(activeId)) {
 						runtime.reportedActivities.add(activeId);
-						addLog(
-							accountId,
-							'info',
-							`检测到签到活动「${activityName}」，自动签到已关闭，请手动签到`
-						);
+						addLog(accountId, 'info', `检测到签到活动「${activityName}」，自动签到已关闭，请手动签到`);
 					}
 				} else if (!runtime.signedActivities.has(activeId)) {
 					runtime.signedActivities.add(activeId);

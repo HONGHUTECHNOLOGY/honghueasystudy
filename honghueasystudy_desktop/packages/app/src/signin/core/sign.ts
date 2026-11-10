@@ -5,7 +5,14 @@ import { API } from './api';
 import { activityToSignType } from './activity';
 import { clientUserAgent, cookieSerialize, cxGet, cxPost, cxRequest, isSpoofClient, sleep } from './http';
 import { getPanToken } from './user';
-import type { AddressItem, ChaoxingCookies, SigninAccountConfig, SigninActivity, SigninResult, SigninType } from './types';
+import type {
+	AddressItem,
+	ChaoxingCookies,
+	SigninAccountConfig,
+	SigninActivity,
+	SigninResult,
+	SigninType
+} from './types';
 
 /**
  * 服务端「已经签过」类文案
@@ -292,7 +299,7 @@ export async function performSign(
 ): Promise<SigninResult> {
 	const config = options.config;
 	const info = (activity as any).info;
-	let type: SigninType = options.type && options.type !== 'auto' ? options.type : activityToSignType(activity, info);
+	const type: SigninType = options.type && options.type !== 'auto' ? options.type : activityToSignType(activity, info);
 	const name = options.name || cookies.name || '';
 	const isGroup = !activity.courseId;
 	const address = options.address || config?.address;

@@ -64,17 +64,19 @@ export function getBrowserMajorVersion(executablePath: string) {
 }
 
 export function getExtensionPaths(extensionsFolder: string) {
-	return fs
-		.readdirSync(extensionsFolder)
-		.filter((f) => f !== '.DS_Store')
-		.filter((f) => !f.endsWith('.zip'))
-		/**
-		 * 排除同步扩展时留下的备份目录（如「鸿鹄易学.bak-20261026-134537」）。
-		 * 备份目录带着完整的 manifest.json，会被当成第二个同名扩展一起加载，
-		 * 导致两个扩展实例重复注入 content script、争抢 chrome.userScripts 与 storage。
-		 */
-		.filter((f) => !/\.bak([-_.]|$)/i.test(f))
-		.map((file) => path.join(extensionsFolder, file));
+	return (
+		fs
+			.readdirSync(extensionsFolder)
+			.filter((f) => f !== '.DS_Store')
+			.filter((f) => !f.endsWith('.zip'))
+			/**
+			 * 排除同步扩展时留下的备份目录（如「鸿鹄易学.bak-20261026-134537」）。
+			 * 备份目录带着完整的 manifest.json，会被当成第二个同名扩展一起加载，
+			 * 导致两个扩展实例重复注入 content script、争抢 chrome.userScripts 与 storage。
+			 */
+			.filter((f) => !/\.bak([-_.]|$)/i.test(f))
+			.map((file) => path.join(extensionsFolder, file))
+	);
 }
 
 /** 只返回鸿鹄易学内置扩展，避免加载脚本猫/篡改猴等外部脚本管理器 */

@@ -2,7 +2,16 @@ import { Instance as Chalk } from 'chalk';
 import { LoggerCore } from '../logger.core';
 import path, { basename } from 'path';
 import fs from 'fs';
-import { chromium, BrowserContext, Page, Frame, ElementHandle, LaunchOptions, Response, Request } from 'playwright-core';
+import {
+	chromium,
+	BrowserContext,
+	Page,
+	Frame,
+	ElementHandle,
+	LaunchOptions,
+	Response,
+	Request
+} from 'playwright-core';
 import { AppStore } from '../../types';
 import { AutomationScripts } from '../scripts/index';
 import { Config } from '../scripts/interface';
@@ -64,7 +73,6 @@ function watchScriptConsole(page: Page) {
 		}
 	});
 }
-
 
 type AS = { name: string; configs: Record<string, Config> };
 
@@ -308,7 +316,7 @@ export class ScriptWorker {
 						active: true,
 						pause: !!override.pause,
 						endAt: override.pause ? Number(override.endAt) || 0 : 0
-					}
+				  }
 				: null;
 
 		/**
@@ -852,7 +860,9 @@ export class ScriptWorker {
 					/** 只留名字，不落 cookie 值 */
 					cookies: cookieNames()
 				},
-				iframes: Array.from(document.querySelectorAll('iframe')).map((item) => item.src).slice(0, 20)
+				iframes: Array.from(document.querySelectorAll('iframe'))
+					.map((item) => item.src)
+					.slice(0, 20)
 			};
 		});
 
@@ -940,9 +950,7 @@ export class ScriptWorker {
 							v: document.visibilityState,
 							f: document.hasFocus()
 						})),
-						new Promise<{ v: string; f: boolean }>((resolve) =>
-							setTimeout(() => resolve({ v: '', f: false }), 900)
-						)
+						new Promise<{ v: string; f: boolean }>((resolve) => setTimeout(() => resolve({ v: '', f: false }), 900))
 					]);
 					if (state.v) {
 						visible = state.v === 'visible';
@@ -1050,7 +1058,9 @@ export class ScriptWorker {
 		if (!focusTrusted && !this.focusConflictLogged) {
 			this.debug(
 				'多个页面同时报告持有焦点（焦点模拟未生效），本次降级为可见性判定：',
-				states.map((state) => `${state.visible ? 'V' : '-'}${state.focused ? 'F' : '-'} ${state.url.slice(0, 60)}`).join(' | ')
+				states
+					.map((state) => `${state.visible ? 'V' : '-'}${state.focused ? 'F' : '-'} ${state.url.slice(0, 60)}`)
+					.join(' | ')
 			);
 			this.focusConflictLogged = true;
 		} else if (focusTrusted) {
@@ -1179,18 +1189,18 @@ export class ScriptWorker {
 					const count = await frame
 						.evaluate(() => {
 							let n = 0;
-							(
-								Array.from(document.querySelectorAll('video,audio')) as (HTMLVideoElement | HTMLAudioElement)[]
-							).forEach((media) => {
-								if (!media.paused) {
-									try {
-										media.pause();
-										n += 1;
-									} catch {
-										// 某些播放器会拒绝外部 pause，忽略即可
+							(Array.from(document.querySelectorAll('video,audio')) as (HTMLVideoElement | HTMLAudioElement)[]).forEach(
+								(media) => {
+									if (!media.paused) {
+										try {
+											media.pause();
+											n += 1;
+										} catch {
+											// 某些播放器会拒绝外部 pause，忽略即可
+										}
 									}
 								}
-							});
+							);
 							return n;
 						})
 						.catch(() => 0);
@@ -1215,8 +1225,8 @@ export class ScriptWorker {
 		const message = leftPages
 			? `已暂停刷课并退出课程页（暂停 ${paused} 个媒体）`
 			: pages.length
-				? '已暂停播放（没有找到课程页）'
-				: '浏览器没有打开的页面';
+			? '已暂停播放（没有找到课程页）'
+			: '浏览器没有打开的页面';
 
 		this.info(`[自动化] ${message}`);
 		return { paused, leftPages, message };
@@ -1290,9 +1300,7 @@ export class ScriptWorker {
 		 * 结束时得重新认一下「登录后的落点在哪一页」，否则紧接着抽课程
 		 * 还会抽旧页面，一门课都读不到。
 		 */
-		const landed = (this.browser?.pages() || []).find(
-			(item) => !item.isClosed() && detectCoursePlatform(item.url())
-		);
+		const landed = (this.browser?.pages() || []).find((item) => !item.isClosed() && detectCoursePlatform(item.url()));
 		if (landed) this.automationPage = landed;
 		const platform = detectCoursePlatform((landed || page).url());
 		if (platform) this.automationPlatformId = platform.id;
@@ -1495,9 +1503,9 @@ export class ScriptWorker {
 		const hint = items.length
 			? ''
 			: finalPlatform
-				? `已识别为${finalPlatform.label}，但没读到课程（当前页面：${pageTitle || used.url()}）。` +
-						'课程页可能还没加载完，点「刷新课程列表」重试，或在桌面端浏览器里打开「我的课程」后再点刷新。'
-				: '没有检测到教学平台的登录状态。请先在桌面端浏览器里完成登录（或运行登录脚本），再点「刷新课程列表」。';
+			? `已识别为${finalPlatform.label}，但没读到课程（当前页面：${pageTitle || used.url()}）。` +
+			  '课程页可能还没加载完，点「刷新课程列表」重试，或在桌面端浏览器里打开「我的课程」后再点刷新。'
+			: '没有检测到教学平台的登录状态。请先在桌面端浏览器里完成登录（或运行登录脚本），再点「刷新课程列表」。';
 
 		this.info(`[远程] 课程列表：识别到 ${items.length} 门课程（${finalPlatform?.id || '未知平台'}）`);
 		return {
@@ -1655,13 +1663,14 @@ export class ScriptWorker {
 			 * 新开标签进入：课程列表页得留着，用户才能接着点下一门
 			 * （以前直接 `page.goto` 会把列表页顶掉，想换门课只能手工退回来）。
 			 */
-			const tab = await page.context().newPage().catch(() => null);
+			const tab = await page
+				.context()
+				.newPage()
+				.catch(() => null);
 			if (tab) {
 				await tab
 					.goto(linkTarget, { waitUntil: 'domcontentloaded', timeout: 45000 })
-					.catch((e: any) =>
-						this.warn('[远程] 打开课程页失败：', String(e && e.message ? e.message : e))
-					);
+					.catch((e: any) => this.warn('[远程] 打开课程页失败：', String(e && e.message ? e.message : e)));
 				enteredPage = tab;
 			} else {
 				await page.goto(linkTarget, { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -1711,7 +1720,10 @@ export class ScriptWorker {
 				if (entry && entry.href) {
 					const href = new URL(entry.href, page.url()).href;
 					this.info(`[远程] 使用卡片内链接进入：${href}`);
-					const tab = await page.context().newPage().catch(() => null);
+					const tab = await page
+						.context()
+						.newPage()
+						.catch(() => null);
 					if (tab) {
 						let opened = true;
 						try {
@@ -2005,7 +2017,7 @@ export class ScriptWorker {
 			if (frame) {
 				/** iframe 的 src 换掉之后 DOM 还要渲染，空 body 直接抽会拿到 0 条 */
 				const ready = await frame
-					.evaluate(() => (((document.body && document.body.innerText) || '').replace(/\s+/g, '').length > 8))
+					.evaluate(() => ((document.body && document.body.innerText) || '').replace(/\s+/g, '').length > 8)
 					.catch(() => false);
 				if (ready) return frame;
 			}
@@ -2177,7 +2189,8 @@ export class ScriptWorker {
 	}
 
 	/** 跳转到特殊图像共享浏览器窗口 */
-	async gotoWebRTCPage() {		const page = await this.browser?.newPage();
+	async gotoWebRTCPage() {
+		const page = await this.browser?.newPage();
 		if (page) {
 			const loadingText = ScriptWorker.lang('webrtc_page_loading_notice', `正在获取图像中，请勿操作...`);
 			await page
@@ -2442,7 +2455,10 @@ export async function autoScrollForCourses(target: Page | Frame, maxRounds = 10)
  */
 export function findCourseEntryInPage(card: HTMLElement): { href: string; text: string } | null {
 	if (!card) return null;
-	const clean = (value: any) => String(value || '').replace(/\s+/g, ' ').trim();
+	const clean = (value: any) =>
+		String(value || '')
+			.replace(/\s+/g, ' ')
+			.trim();
 
 	/**
 	 * 标记有可能打在内层节点上（标题/封面），入口在它的父级里。
@@ -2545,7 +2561,10 @@ export function extractCoursesInPage(arg: { platform: string }): {
 	/** 教师称谓 */
 	const TEACHER_RX = /(老师|教授|副教授|讲师|助教|教师|导师|博士|硕士)/;
 
-	const clean = (text: string) => String(text || '').replace(/\s+/g, ' ').trim();
+	const clean = (text: string) =>
+		String(text || '')
+			.replace(/\s+/g, ' ')
+			.trim();
 
 	/** 2~4 个纯汉字、且不含学校/教师/类型词 —— 很像人名（作者名就是这么被误当课程名的） */
 	const looksLikePerson = (text: string) => {
@@ -3211,9 +3230,7 @@ export async function launchBrowser({
 	return new Promise<void>((resolve, reject) => {
 		/** 握手耗时参考：全新 profile 约 0.5~2 秒；已有大量会话/扩展的 profile 可达 10~15 秒 */
 		const launchStartedAt = Date.now();
-		console.log(
-			`[启动] 开始拉起浏览器 exe=${executablePath} userDataDir=${userDataDir} 附加参数=${args.length} 个`
-		);
+		console.log(`[启动] 开始拉起浏览器 exe=${executablePath} userDataDir=${userDataDir} 附加参数=${args.length} 个`);
 
 		chromium
 			.launchPersistentContext(userDataDir, {
@@ -3350,9 +3367,7 @@ export async function launchBrowser({
 			})
 			.catch((err) => {
 				console.error(
-					`[启动] 握手失败，耗时 ${Date.now() - launchStartedAt}ms：${
-						err instanceof Error ? err.message : String(err)
-					}`
+					`[启动] 握手失败，耗时 ${Date.now() - launchStartedAt}ms：${err instanceof Error ? err.message : String(err)}`
 				);
 				reject(err);
 			});
@@ -3389,7 +3404,8 @@ export async function runAutomationScripts(opts: {
 	navPage?: Page;
 	/** 跑完后把「落在哪一页 / 哪个平台」交回 worker，供远程端读课程、选课直接复用 */
 	onDone?: (result: { page?: Page; platformId?: string }) => void;
-}) {	const { automationScripts, browser, serverPort, step, navPage, onDone } = opts;
+}) {
+	const { automationScripts, browser, serverPort, step, navPage, onDone } = opts;
 
 	if (!automationScripts.length) return;
 
@@ -3491,11 +3507,7 @@ async function waitAndCloseExtensionHomepage(opts: { browser: BrowserContext; cl
 	});
 }
 
-function browserNetworkRoute(
-	authToken: string,
-	browser: BrowserContext,
-	getAutoStop?: () => AutoStopOverride | null
-) {
+function browserNetworkRoute(authToken: string, browser: BrowserContext, getAutoStop?: () => AutoStopOverride | null) {
 	browser.route(/hh-environment/, async (route) => {
 		await route.fulfill({
 			status: 200,

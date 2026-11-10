@@ -65,12 +65,7 @@ export class AutomationRunner {
 	 * `browserStatus` 由调用方从最新快照里取：runner 不持有浏览器状态，
 	 * 才能保持纯逻辑、可测试。
 	 */
-	start(opts: {
-		uid: string;
-		name: string;
-		configs?: Record<string, any>;
-		browserStatus?: string;
-	}): AutomationJob {
+	start(opts: { uid: string; name: string; configs?: Record<string, any>; browserStatus?: string }): AutomationJob {
 		const uid = String((opts && opts.uid) || '');
 		const name = String((opts && opts.name) || '');
 

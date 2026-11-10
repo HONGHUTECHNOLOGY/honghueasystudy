@@ -24,7 +24,12 @@ import {
 } from './server';
 import * as signin from '../../signin';
 import type { SigninAccountConfig, SigninAccountView, SigninActivity } from '../../signin/core/types';
-import { RemoteScriptInfo, AutomationScriptValues, buildAutomationScripts, exportAutomationScripts } from './script-catalog';
+import {
+	RemoteScriptInfo,
+	AutomationScriptValues,
+	buildAutomationScripts,
+	exportAutomationScripts
+} from './script-catalog';
 import { CloudflaredTunnel, TunnelStatus } from './tunnel';
 import { normalizeBrowserAutomation, type BrowserAutomation } from '../../scripts/plan';
 

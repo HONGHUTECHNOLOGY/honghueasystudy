@@ -350,7 +350,10 @@ export function normalizeHm(text: any, fallback: string): string {
 
 /** 本地日期 → YYYY-MM-DD（不要用 toISOString，那是 UTC，跨时区会差一天） */
 export function dateKey(date: Date): string {
-	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(
+		2,
+		'0'
+	)}`;
 }
 
 /** 星期索引，0=周日 */
@@ -537,21 +540,21 @@ export function scheduleSummary(schedule: AutomationSchedule): string {
 		!schedule.days || schedule.days.length === 0
 			? '每天'
 			: schedule.days.length === 7
-				? '每天'
-				: schedule.days
-						.slice()
-						.sort((a, b) => a - b)
-						.map((day) => WEEK_LABELS[day] || '')
-						.join('、');
+			? '每天'
+			: schedule.days
+					.slice()
+					.sort((a, b) => a - b)
+					.map((day) => WEEK_LABELS[day] || '')
+					.join('、');
 
 	const action =
 		schedule.endAction === 'pause'
 			? '暂停'
 			: schedule.endAction === 'pause-close'
-				? '暂停并关闭'
-				: schedule.endAction === 'close'
-					? '关闭'
-					: '不处理';
+			? '暂停并关闭'
+			: schedule.endAction === 'close'
+			? '关闭'
+			: '不处理';
 
 	/**
 	 * 起止不同 = 升级前的「时间段」存档，保留原样描述；

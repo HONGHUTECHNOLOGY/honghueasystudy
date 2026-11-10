@@ -128,9 +128,10 @@ async function selectSchool(page: Page, schoolname: string) {
 
 /** 勾选隐私协议并点击登录 */
 async function agreeAndSubmit(page: Page) {
-	const isChecked = () => evaluateSafe(page, () =>
-		page.evaluate(() => !!(document.querySelector('input.el-checkbox__original') as HTMLInputElement | null)?.checked)
-	);
+	const isChecked = () =>
+		evaluateSafe(page, () =>
+			page.evaluate(() => !!(document.querySelector('input.el-checkbox__original') as HTMLInputElement | null)?.checked)
+		);
 
 	if (!(await isChecked())) {
 		// 只点复选框本身，不能点整个 label：label 内的《用户协议》等文字会打开协议页

@@ -728,10 +728,7 @@ export class RemoteServer {
 			}
 			try {
 				const body = req.body || {};
-				const patch =
-					body.patch && typeof body.patch === 'object' && !Array.isArray(body.patch)
-						? body.patch
-						: null;
+				const patch = body.patch && typeof body.patch === 'object' && !Array.isArray(body.patch) ? body.patch : null;
 				/** 兼容只传 autoSign 的旧调用（桌面开关） */
 				const fallback = typeof body.autoSign === 'boolean' ? { autoSign: body.autoSign } : null;
 				const target = patch || fallback;

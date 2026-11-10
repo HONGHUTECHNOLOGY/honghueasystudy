@@ -290,7 +290,10 @@ export function extractInstallCandidates(entries: RegEntry[]): InstallDirCandida
  *
  * 这里不抛错而是返回原因：候选可能来自注册表残留，需要逐个试。
  */
-export function inspectInstallDir(dir: string, exeNames: string[] = []): { ok: boolean; reason?: string; exe?: string } {
+export function inspectInstallDir(
+	dir: string,
+	exeNames: string[] = []
+): { ok: boolean; reason?: string; exe?: string } {
 	if (!isWinAbsPath(dir)) return { ok: false, reason: '不是有效的绝对路径' };
 	if (PACKAGED_DIR.test(dir)) return { ok: false, reason: '位于打包产物目录 win-unpacked' };
 	if (TEMP_DIR.test(dir)) return { ok: false, reason: '位于临时目录' };
@@ -460,14 +463,14 @@ export async function resolveInstallDir(opts: ResolveInstallDirOptions): Promise
 		return { dir: hit.dir, source: hit.source, exeName: hit.exe, registryDir, candidates };
 	}
 
-	const reasons = candidates.map((c) => `· ${c.dir || '(空)'}（${c.source === 'exe' ? '当前运行目录' : '注册表'}）：${c.reason}`).join('\n');
+	const reasons = candidates
+		.map((c) => `· ${c.dir || '(空)'}（${c.source === 'exe' ? '当前运行目录' : '注册表'}）：${c.reason}`)
+		.join('\n');
 	return {
 		dir: undefined,
 		registryDir,
 		candidates,
 		error:
-			'无法确定软件的安装目录，已取消自动安装。\n' +
-			(reasons ? reasons + '\n' : '') +
-			'请从官网下载安装包手动安装。'
+			'无法确定软件的安装目录，已取消自动安装。\n' + (reasons ? reasons + '\n' : '') + '请从官网下载安装包手动安装。'
 	};
 }

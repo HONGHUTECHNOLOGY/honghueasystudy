@@ -7,7 +7,10 @@ export const TOO_FREQUENT = 'TooFrequent';
 /**
  * 查询单个课程的最新活动，有效签到则返回活动信息
  */
-export async function getActivity(cookies: ChaoxingCookies, course: Course): Promise<SigninActivity | typeof TOO_FREQUENT> {
+export async function getActivity(
+	cookies: ChaoxingCookies,
+	course: Course
+): Promise<SigninActivity | typeof TOO_FREQUENT> {
 	const result = await cxGet(API.ACTIVE_LIST, cookies, {
 		fid: 0,
 		courseId: course.courseId,

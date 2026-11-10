@@ -127,7 +127,10 @@ function collectNotes(current: string, newestTag: string, changelog: any): Chang
 		const sections = (Array.isArray(v.sections) ? v.sections : [])
 			.map((s: any) => ({
 				title: String(s?.title || '').trim() || '更新',
-				items: (Array.isArray(s?.items) ? s.items : []).map((x: any) => String(x)).filter(Boolean).slice(0, NOTES_MAX_ITEMS)
+				items: (Array.isArray(s?.items) ? s.items : [])
+					.map((x: any) => String(x))
+					.filter(Boolean)
+					.slice(0, NOTES_MAX_ITEMS)
 			}))
 			.filter((s: { items: string[] }) => s.items.length);
 		if (!sections.length) continue;
@@ -435,7 +438,9 @@ export async function updateApp(newVersion: UpdateInformationResource): Promise<
 		}
 
 		// 清单里没有对应平台的包（只发了 Windows），或没有匹配当前架构的产物：退回下载页
-		const platformUrl = (newVersion.app_downloads as Record<string, string | undefined> | undefined)?.[process.platform];
+		const platformUrl = (newVersion.app_downloads as Record<string, string | undefined> | undefined)?.[
+			process.platform
+		];
 		logger.warn(`清单没有 ${process.platform}/${process.arch} 的安装包，改为打开下载页`);
 		await shell.openExternal(platformUrl || 'https://easystudy.honghutech.eu.org');
 		await dialog.showMessageBox({
@@ -448,7 +453,12 @@ export async function updateApp(newVersion: UpdateInformationResource): Promise<
 	}
 
 	if (!app.isPackaged) {
-		await dialog.showMessageBox({ title: '鸿鹄易学更新程序', message: '开发模式下不支持自动更新。', type: 'info', noLink: true });
+		await dialog.showMessageBox({
+			title: '鸿鹄易学更新程序',
+			message: '开发模式下不支持自动更新。',
+			type: 'info',
+			noLink: true
+		});
 		return { ok: false, reason: 'cancelled' };
 	}
 
@@ -502,7 +512,11 @@ export async function updateApp(newVersion: UpdateInformationResource): Promise<
 		mkdirSync(dir, { recursive: true });
 		writeFileSync(
 			logPath,
-			JSON.stringify({ tag, installDir, exePath, sources, expectSha256: installer.sha256, expectSize: installer.size }, null, 4)
+			JSON.stringify(
+				{ tag, installDir, exePath, sources, expectSha256: installer.sha256, expectSize: installer.size },
+				null,
+				4
+			)
 		);
 
 		// 磁盘预检：安装包 + 解压安装（NSIS 会临时占用约两倍）
@@ -601,7 +615,9 @@ export async function installUpdate(): Promise<{ ok: boolean }> {
 	pending.installDir = resolved.dir;
 
 	logger.info(`启动安装程序：${pending.exePath}`);
-	logger.info(`覆盖安装目录：${pending.installDir}（来源：${resolved.source === 'registry' ? '注册表' : '当前运行目录'}）`);
+	logger.info(
+		`覆盖安装目录：${pending.installDir}（来源：${resolved.source === 'registry' ? '注册表' : '当前运行目录'}）`
+	);
 
 	/*
 	 * Windows 优先交给「安装进度窗口」：静默安装期间没有任何界面，

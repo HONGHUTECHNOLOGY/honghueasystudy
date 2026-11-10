@@ -29,9 +29,7 @@ function parseSetCookie(setCookie: string | string[] | undefined): Record<string
 	const result: Record<string, string> = {};
 	if (!setCookie) return result;
 	// 兼容 axios 不同版本：可能是数组，也可能被合并成单个字符串
-	const list = Array.isArray(setCookie)
-		? setCookie
-		: setCookie.split(/,(?=\s*[A-Za-z0-9_-]+=)/);
+	const list = Array.isArray(setCookie) ? setCookie : setCookie.split(/,(?=\s*[A-Za-z0-9_-]+=)/);
 	for (const item of list) {
 		const equalIndex = item.indexOf('=');
 		const semiIndex = item.indexOf(';');

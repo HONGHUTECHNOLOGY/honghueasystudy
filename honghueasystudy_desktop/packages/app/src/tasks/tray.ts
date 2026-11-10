@@ -150,7 +150,8 @@ function showHiddenTip(): void {
 	 * 提示里补一条「重新打开」：少数 Linux 桌面（如原生 GNOME）没有状态栏服务，
 	 * 托盘图标可能不显示，用户仍可通过再次启动软件（单实例会唤起已有窗口）找回界面。
 	 */
-	const content = '已最小化到系统托盘，定时自动化任务会继续执行。右键托盘图标可退出；找不到图标时再次打开软件即可恢复界面。';
+	const content =
+		'已最小化到系统托盘，定时自动化任务会继续执行。右键托盘图标可退出；找不到图标时再次打开软件即可恢复界面。';
 	try {
 		if (process.platform === 'win32' && tray) {
 			tray.displayBalloon({ title, content });

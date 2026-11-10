@@ -22,7 +22,10 @@ process.on(
 			}
 		} catch (error) {
 			if (replyId && process.send) {
-				process.send({ event: '__reply__', args: [replyId, { error: String(error && error.message ? error.message : error) }] });
+				process.send({
+					event: '__reply__',
+					args: [replyId, { error: String(error && error.message ? error.message : error) }]
+				});
 			} else {
 				console.error(error);
 			}

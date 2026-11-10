@@ -40,7 +40,9 @@ export interface DownloadOptions {
 
 /** 把候选地址整理成去重后的 http(s) 列表 */
 export function normalizeUrls(urls: unknown): string[] {
-	const list = (Array.isArray(urls) ? urls : []).filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u));
+	const list = (Array.isArray(urls) ? urls : []).filter(
+		(u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u)
+	);
 	return [...new Set(list)];
 }
 
@@ -164,7 +166,11 @@ export function downloadOne(url: string, dest: string, opts: DownloadOptions = {
  * 校验必须放在这里而不只是下载之后 —— 镜像站最常见的故障是「返回 200 但内容是错误页」，
  * 那种情况只有校验能发现，否则会拿一个坏包去覆盖用户的程序目录。
  */
-export async function downloadFromMirrors(sources: string[], dest: string, opts: DownloadOptions = {}): Promise<string> {
+export async function downloadFromMirrors(
+	sources: string[],
+	dest: string,
+	opts: DownloadOptions = {}
+): Promise<string> {
 	const failures: string[] = [];
 	const log = opts.onLog || (() => {});
 

@@ -91,7 +91,8 @@ export function pickPlatformInstaller(
 ): PlatformInstallerPick | undefined {
 	if (!installers || opts.platform === 'win32') return undefined;
 
-	const list = opts.platform === 'darwin' ? installers.darwin : opts.platform === 'linux' ? installers.linux : undefined;
+	const list =
+		opts.platform === 'darwin' ? installers.darwin : opts.platform === 'linux' ? installers.linux : undefined;
 	if (!Array.isArray(list) || !list.length) return undefined;
 
 	const arch = normalizeArch(opts.arch);
