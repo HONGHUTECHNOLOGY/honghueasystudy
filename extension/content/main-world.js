@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-var __HH_BRIDGE_KEY__="2e048cd9-d055-4137-b50d-ff0d009bef81";
+var __HH_BRIDGE_KEY__="7fcbb3c9-6613-4e24-a911-824b2cc7d030";
 /* 鸿鹄易学 · MAIN world 运行时（ScriptCat 风格）
  *
  * 本文件由 background.js 通过 chrome.userScripts.register({ world: "MAIN" })
@@ -235,9 +235,18 @@ function __ocsCreateSandbox() {
 
 	return proxy;
 }
-var __ocsMarker=Symbol.for("__"+__HH_BRIDGE_KEY__);
+/* 幂等守卫：done 只在核心包真正挂上 HH 之后才写。
+ * 旧实现把标记写在初始化之前，首次注入只要中途失败（例如 userScripts 不可用、
+ * 回退注入时机过晚、核心包异常），标记就留在了页面上，之后所有重注入都在这里
+ * 静默 return —— 用户看到的就是「刷新也没用、扩展完全没反应」。 */
+var __ocsMarker=Symbol.for("__"+__HH_BRIDGE_KEY__+"_done");
 if (globalThis[__ocsMarker]) return;
-try { Object.defineProperty(globalThis, __ocsMarker, {value:1, configurable:true}); } catch(e) {}
+var __ocsLock=Symbol.for("__"+__HH_BRIDGE_KEY__+"_lock");
+if (globalThis[__ocsLock]) return;
+try { Object.defineProperty(globalThis, __ocsLock, {value:1, configurable:true}); } catch(e) {}
+/* 锁只用于防同步重入，下一轮事件循环无条件释放：
+ * 初始化抛错、或被内层 IIFE 的 return 提前结束时，都不会把页面锁死。 */
+setTimeout(function(){ try { delete globalThis[__ocsLock]; } catch(e) {} }, 0);
 var __ocs_sandbox__=__ocsCreateSandbox();
 (function(window){
 /*!
@@ -411,7 +420,16 @@ var GM = (function () {
 			if (bridgeReady) return;
 			fire(__ocsBridgeKey, { action: 'requestEventFlag' });
 			attempts += 1;
-			if (attempts < 50) setTimeout(request, 100);
+			/**
+			 * 重试 30 秒（原来 5 秒）
+			 *
+			 * ISOLATED 与 MAIN 都在 document_start 执行，但顺序不保证：
+			 * 扩展刚重载、页面很重、或浏览器在加载高峰时，ISOLATED 侧的监听
+			 * 可能晚于这里的首次请求。5 秒内没等到回执就永久放弃，
+			 * 表现是「页面完全没反应、刷新一次又好了」——典型的时序竞态。
+			 * 只要这里持续请求，对方一旦就绪就会广播回执。
+			 */
+			if (attempts < 300) setTimeout(request, 100);
 		}
 		request();
 	})();
@@ -4518,6 +4536,36 @@ try {
     const msg2 = typeof error === "string" ? error : (error == null ? void 0 : error.message) || ((_a = error == null ? void 0 : error.toString) == null ? void 0 : _a.call(error)) || String(error || "");
     return /413|too large|too long|payload|entity|size.*limit|max.*size|request.*large|body.*limit/i.test(msg2);
   }
+  function ensureReasoningBudget(requestData) {
+    if (!requestData || typeof requestData !== "object")
+      return;
+    if (!Array.isArray(requestData.messages))
+      return;
+    if (typeof requestData.model !== "string")
+      return;
+    if (requestData.max_tokens != null || requestData.max_completion_tokens != null)
+      return;
+    requestData.max_tokens = 4096;
+  }
+  function assertFinalAnswerPresent(responseData, results) {
+    var _a, _b, _c, _d;
+    const answered = results.some((item) => {
+      var _a2;
+      return String((_a2 = item.answer) != null ? _a2 : "").trim().length > 0;
+    });
+    if (answered)
+      return;
+    const message2 = (_b = (_a = responseData == null ? void 0 : responseData.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message;
+    if (!message2)
+      return;
+    const content = String((_c = message2.content) != null ? _c : "").trim();
+    const reasoning = String((_d = message2.reasoning_content) != null ? _d : "").trim();
+    if (!content && reasoning) {
+      throw new Error(
+        "模型只返回了思考过程（reasoning_content），没有给出最终答案。已自动放宽输出长度，请重试；若仍为空，请改用非推理模型（如 deepseek-chat）。"
+      );
+    }
+  }
   async function defaultAnswerWrapperHandler(answererWrappers, env) {
     const searchInfos = [];
     const temp = JSON.parse(JSON.stringify(answererWrappers));
@@ -4563,6 +4611,7 @@ try {
               }
             });
             requestData = data;
+            ensureReasoningBudget(requestData);
           } else {
             throw new Error("不支持的请求方式");
           }
@@ -4601,6 +4650,7 @@ try {
               });
             }
           }
+          assertFinalAnswerPresent(responseData, results);
           searchInfos.push({
             url: wrapper.url,
             name,
@@ -4843,17 +4893,35 @@ try {
           );
           console.log("ctx", result.ctx);
         }
-        try {
-          ctx.searchInfos = await this.opts.answerer(ctx.elements, ctx) || [];
-          ctx.searchInfos.forEach((info) => {
-            info.results = info.results.map((ans) => {
-              ans.answer = ans.answer ? ans.answer.trim() : "";
-              return ans;
+        const ANSWER_ATTEMPTS = 3;
+        let lastError;
+        for (let attempt = 1; attempt <= ANSWER_ATTEMPTS; attempt++) {
+          try {
+            ctx.searchInfos = await this.opts.answerer(ctx.elements, ctx) || [];
+            ctx.searchInfos.forEach((info) => {
+              info.results = (info.results || []).map((ans) => {
+                ans.answer = ans.answer ? ans.answer.trim() : "";
+                return ans;
+              });
             });
-          });
-        } catch (err) {
-          error = String(err);
+            const allEmpty = ctx.searchInfos.length > 0 && !ctx.searchInfos.some((info) => info.results.some((ans) => ans.answer));
+            if (allEmpty)
+              throw new Error("搜到的答案为空白");
+            lastError = void 0;
+            break;
+          } catch (err) {
+            lastError = String(err);
+            if (options == null ? void 0 : options.enable_debug) {
+              console.warn(`搜题失败（第 ${attempt}/${ANSWER_ATTEMPTS} 次）:`, lastError);
+            }
+            ctx.searchInfos = [];
+            if (attempt < ANSWER_ATTEMPTS) {
+              await new Promise((resolve) => setTimeout(resolve, 1e3 * attempt));
+            }
+          }
         }
+        if (lastError)
+          error = lastError;
         result.ctx = ctx;
         result.requested = true;
         result.error = error;
@@ -5156,7 +5224,7 @@ try {
       bubbles: true,
       cancelable: true,
       composed: true,
-      view: window,
+      view: document.defaultView || window,
       clientX: x,
       clientY: y,
       screenX: x,
@@ -5173,17 +5241,17 @@ try {
         } catch {
         }
       };
-      try {
-        fire(new OrigPointerEvent("pointerdown", pointer));
-      } catch {
-      }
-      fire(new OrigMouseEvent("mousedown", base));
-      try {
-        fire(new OrigPointerEvent("pointerup", pointer));
-      } catch {
-      }
-      fire(new OrigMouseEvent("mouseup", base));
-      fire(new OrigMouseEvent("click", base));
+      const fireNew = (ctor, type, init) => {
+        try {
+          fire(new ctor(type, init));
+        } catch {
+        }
+      };
+      fireNew(OrigPointerEvent, "pointerdown", pointer);
+      fireNew(OrigMouseEvent, "mousedown", base);
+      fireNew(OrigPointerEvent, "pointerup", pointer);
+      fireNew(OrigMouseEvent, "mouseup", base);
+      fireNew(OrigMouseEvent, "click", base);
     } finally {
       restore();
     }
@@ -5245,15 +5313,47 @@ try {
   function createLocalRemotePage() {
     const noop = async () => {
     };
+    let lastEditable = null;
+    const isEditable = (el) => {
+      if (!el)
+        return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable === true;
+    };
+    const rememberEditable = (el) => {
+      if (isEditable(el))
+        lastEditable = el;
+    };
+    const setNativeValue2 = (el, text) => {
+      const target = el;
+      if (typeof target.value !== "string") {
+        target.textContent = text;
+        return;
+      }
+      const proto = target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      const desc = Object.getOwnPropertyDescriptor(proto, "value");
+      if (desc && desc.set) {
+        try {
+          desc.set.call(target, text);
+          return;
+        } catch (e) {
+          console.warn("[鸿鹄] 原生 value setter 失败，降级为直接赋值", e == null ? void 0 : e.message, target.tagName);
+        }
+      }
+      target.value = text;
+    };
     return {
       async click(selectorOrElement) {
         const el = resolveEl(selectorOrElement);
-        if (el)
+        if (el) {
+          rememberEditable(el);
           await safeClick(el);
+        }
       },
       async dblclick(selectorOrElement) {
         const el = resolveEl(selectorOrElement);
         if (el) {
+          rememberEditable(el);
           await safeClick(el);
           await lib.$.sleep(50);
           await safeClick(el);
@@ -5262,22 +5362,24 @@ try {
       async hover(selectorOrElement) {
         const el = resolveEl(selectorOrElement);
         if (el) {
-          trustedDispatch(el, new OrigMouseEvent("mouseover", { bubbles: true, view: window, composed: true }));
-          trustedDispatch(el, new OrigMouseEvent("mousemove", { bubbles: true, view: window, composed: true }));
-          trustedDispatch(el, new OrigMouseEvent("mouseenter", { bubbles: true, view: window, composed: true }));
+          trustedDispatch(el, new OrigMouseEvent("mouseover", { bubbles: true, view: document.defaultView || window, composed: true }));
+          trustedDispatch(el, new OrigMouseEvent("mousemove", { bubbles: true, view: document.defaultView || window, composed: true }));
+          trustedDispatch(el, new OrigMouseEvent("mouseenter", { bubbles: true, view: document.defaultView || window, composed: true }));
         }
       },
       async focus(selectorOrElement) {
-        var _a;
-        (_a = resolveEl(selectorOrElement)) == null ? void 0 : _a.focus();
+        const el = resolveEl(selectorOrElement);
+        rememberEditable(el);
+        el == null ? void 0 : el.focus();
       },
       async fill(selectorOrElement, value) {
         const el = resolveEl(selectorOrElement);
         if (el) {
+          rememberEditable(el);
           const restore = hidePanel();
           try {
             el.focus();
-            el.value = value;
+            setNativeValue2(el, value);
             trustedDispatch(el, new OrigEvent("input", { bubbles: true, composed: true }));
             trustedDispatch(el, new OrigEvent("change", { bubbles: true, composed: true }));
           } finally {
@@ -5288,8 +5390,8 @@ try {
       async press(selectorOrElement, key) {
         const el = resolveEl(selectorOrElement);
         if (el) {
-          trustedDispatch(el, new OrigKeyboardEvent("keydown", { key, bubbles: true, cancelable: true, view: window, composed: true }));
-          trustedDispatch(el, new OrigKeyboardEvent("keyup", { key, bubbles: true, cancelable: true, view: window, composed: true }));
+          trustedDispatch(el, new OrigKeyboardEvent("keydown", { key, bubbles: true, cancelable: true, view: document.defaultView || window, composed: true }));
+          trustedDispatch(el, new OrigKeyboardEvent("keyup", { key, bubbles: true, cancelable: true, view: document.defaultView || window, composed: true }));
         }
       },
       async tap(selectorOrElement) {
@@ -5344,15 +5446,41 @@ try {
       selectOption: noop,
       setInputFiles: noop,
       ["keyboard.type"]: async (text) => {
-        const el = document.activeElement;
-        if (el)
-          trustedDispatch(el, new OrigInputEvent("input", { data: text, bubbles: true, cancelable: true, view: window, composed: true }));
+        let el = document.activeElement;
+        if (!isEditable(el)) {
+          el = lastEditable && lastEditable.isConnected ? lastEditable : null;
+        }
+        if (!el) {
+          console.warn("[鸿鹄] keyboard.type 没有可写入的目标元素，已跳过");
+          return;
+        }
+        if (document.activeElement !== el && typeof el.focus === "function") {
+          try {
+            el.focus();
+          } catch (e) {
+          }
+        }
+        setNativeValue2(el, text);
+        try {
+          el.dispatchEvent(
+            new OrigInputEvent("input", {
+              data: text,
+              bubbles: true,
+              cancelable: true,
+              view: document.defaultView || window,
+              composed: true
+            })
+          );
+          el.dispatchEvent(new OrigEvent("change", { bubbles: true }));
+        } catch (e) {
+          console.warn("[鸿鹄] 派发输入事件失败", e == null ? void 0 : e.message);
+        }
       },
       ["keyboard.press"]: async (key) => {
         const el = document.activeElement;
         if (el) {
-          trustedDispatch(el, new OrigKeyboardEvent("keydown", { key, bubbles: true, cancelable: true, view: window, composed: true }));
-          trustedDispatch(el, new OrigKeyboardEvent("keyup", { key, bubbles: true, cancelable: true, view: window, composed: true }));
+          trustedDispatch(el, new OrigKeyboardEvent("keydown", { key, bubbles: true, cancelable: true, view: document.defaultView || window, composed: true }));
+          trustedDispatch(el, new OrigKeyboardEvent("keyup", { key, bubbles: true, cancelable: true, view: document.defaultView || window, composed: true }));
         }
       },
       ["mouse.wheel"]: async (deltaX, deltaY) => {
@@ -12981,13 +13109,16 @@ try {
     const init = {
       bubbles: true,
       cancelable: true,
-      view: window,
+      view: document.defaultView || window,
       button: 0,
       clientX: rect.left + rect.width / 2,
       clientY: rect.top + rect.height / 2
     };
     for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
-      trustedDispatch(el, new OrigMouseEvent(type, init));
+      try {
+        trustedDispatch(el, new OrigMouseEvent(type, init));
+      } catch {
+      }
     }
   }
   async function clickOptionNatively(remotePage, el) {
@@ -21230,8 +21361,7 @@ try {
     },
     async oncomplete() {
       if (location.href.includes("cmgt/resource-detail")) {
-        $msg.info("请打开任意课程的章节进行自动学习");
-        return;
+        $msg.info("已就绪，点开任意章节会自动开始学习");
       }
       CommonProject.scripts.render.methods.pin(this);
       const rp = createLocalRemotePage();
@@ -21273,15 +21403,33 @@ try {
       })();
       console.log("[U校园调试] oncomplete 开始执行, readyState:", document.readyState);
       console.log("[U校园调试] 当前URL:", location.href);
-      const wrap = await waitForElement(".question-wrap", { timeout_seconds: 30 });
-      if (!wrap) {
-        console.error("[U校园调试] 未找到 .question-wrap！页面DOM可能已变更");
-        $msg.error("未找到题目容器 .question-wrap，可能页面结构已变更或页面未完全加载");
-        return;
-      }
-      console.log("[U校园调试] .question-wrap 已找到，开始答题");
-      $msg.info("题目容器已找到，开始答题");
-      await job(this.cfg, rp);
+      let answering = false;
+      let lastSignature = "";
+      const tick = async () => {
+        if (answering)
+          return;
+        if (!location.hostname.endsWith("unipus.cn"))
+          return;
+        const wrap = document.querySelector(".question-wrap");
+        if (!wrap)
+          return;
+        const signature = (wrap.innerText || "").replace(/\s+/g, " ").trim().slice(0, 120);
+        if (!signature || signature === lastSignature)
+          return;
+        answering = true;
+        try {
+          lastSignature = signature;
+          console.log("[U校园调试] 检测到题目，开始答题");
+          $msg.info("题目容器已找到，开始答题");
+          await job(this.cfg, rp);
+        } catch (err) {
+          console.error("[鸿鹄] 自动答题出错", err);
+        } finally {
+          answering = false;
+        }
+      };
+      setInterval(tick, 2e3);
+      tick();
     },
     onrender(elements2) {
       var _a;
@@ -21579,25 +21727,36 @@ try {
         $msg.info("检测到选词填空任务，即将开始答题");
         const direction = ((_c = lib.$el(".abs-direction")) == null ? void 0 : _c.innerText.trim()) || "";
         const blanks = lib.$$el(".question-material-banked-cloze-reply .option-wrapper").map((el) => el.querySelector(".option") || el.querySelector(".option-placeholder")).map((el) => (el == null ? void 0 : el.textContent) || "").join("\n");
-        const questions = resoleInputWrapLines(lib.$el(".question-material-banked-cloze-scoop"));
+        const questions = resoleInputWrapLines(
+          lib.$el(".question-material-banked-cloze-scoop")
+        );
         if (!blanks.trim()) {
-          $msg.error("未找到题目内容，跳过该任务");
+          $msg.error(
+            `未找到候选词（.option-wrapper 命中 ${lib.$$el(".question-material-banked-cloze-reply .option-wrapper").length} 个），跳过该任务`
+          );
           return;
         }
+        if (!questions.trim()) {
+          $msg.error("未提取到题干文本（.question-material-banked-cloze-scoop 为空或不可见），跳过该任务");
+          return;
+        }
+        console.log(
+          "[U校园调试] 选词填空：题干长度",
+          questions.length,
+          "候选词",
+          blanks.split("\n").filter(Boolean).length,
+          "空位",
+          lib.$$el(".question-wrap .input-wrapper input").length
+        );
         try {
+          await clearBlankInputs(".question-wrap .input-wrapper input");
           const res = await singleQuestionHandle({
             rp,
             question: [direction, "-".repeat(10), blanks, "-".repeat(10), questions].join("\n"),
             type: "completion",
             options: lib.$$el(".question-wrap .input-wrapper input"),
-            handler: async (type, answer, option) => {
-              const input = option;
-              if (input.value) {
-                return;
-              }
-              await rp.click(input);
-              await rp["keyboard.type"](answer, { delay: 20 });
-              await lib.$.sleep(200);
+            handler: async (type, answer) => {
+              await writeBlank(".question-wrap .input-wrapper input", answer);
             }
           });
           if (res.finish) {
@@ -21681,6 +21840,8 @@ try {
           return;
         }
         try {
+          const freeSelector = ".layout-reply-container .fe-scoop input";
+          await clearBlankInputs(freeSelector);
           const res = await singleQuestionHandle({
             rp,
             question: [
@@ -21690,15 +21851,9 @@ try {
               questions
             ].join("\n"),
             type: "completion",
-            options: lib.$$el(".layout-reply-container .fe-scoop input"),
-            handler: async (type, answer, option) => {
-              const input = option;
-              if (input.value) {
-                return;
-              }
-              await rp.click(input);
-              await rp["keyboard.type"](answer, { delay: 20 });
-              await lib.$.sleep(200);
+            options: lib.$$el(freeSelector),
+            handler: async (type, answer) => {
+              await writeBlank(freeSelector, answer);
             }
           });
           if (res.finish) {
@@ -21851,18 +22006,85 @@ try {
     }
     return false;
   }
+  async function waitTabSwitch(targetLabel, activeClass, timeout = 3e3) {
+    const start2 = Date.now();
+    while (Date.now() - start2 < timeout) {
+      await lib.$.sleep(400);
+      const active = (lib.$$el(".pc-tab-row .tab") || []).find(
+        (t) => t.classList.contains(activeClass)
+      );
+      if (active && (active.textContent || "").trim() === targetLabel)
+        return true;
+    }
+    return false;
+  }
+  let tabHit = { layer: "inner", how: "rp" };
+  const TAB_HOW_LABEL = {
+    rp: "模拟点击",
+    pointer: "完整鼠标序列",
+    native: "原生 click"
+  };
+  async function goTab(el, rp) {
+    if (!el)
+      return false;
+    const label = (el.textContent || "").trim();
+    const check = () => waitTabSwitch(label, "pc-header-tab-activity", 2e3);
+    const combos = [];
+    const outer = el;
+    const inner = el.querySelector(".pc-tab-view-container");
+    if (outer)
+      for (const how of ["rp", "pointer", "native"])
+        combos.push({ target: outer, layer: "outer", how });
+    if (inner)
+      for (const how of ["rp", "pointer", "native"])
+        combos.push({ target: inner, layer: "inner", how });
+    if (tabHit) {
+      const idx = combos.findIndex((c) => c.layer === tabHit.layer && c.how === tabHit.how);
+      if (idx > 0)
+        combos.unshift(combos.splice(idx, 1)[0]);
+    }
+    for (const { target, layer, how } of combos) {
+      try {
+        if (how === "rp")
+          await rp.click(target);
+        else if (how === "pointer")
+          trustedPointerClick(target);
+        else
+          target.click();
+        if (await check()) {
+          const name = (layer === "outer" ? "外层 .tab" : "内层 .pc-tab-view-container") + " + " + TAB_HOW_LABEL[how];
+          if (!tabHit || tabHit.layer !== layer || tabHit.how !== how) {
+            tabHit = { layer, how };
+            console.log("[U校园调试] 页签生效方式：" + name + "（已记忆，后续优先复用）");
+          } else {
+            console.log("[U校园调试] 页签切换命中记忆方式：" + name);
+          }
+          return true;
+        }
+      } catch (err) {
+        console.warn("[U校园调试] 页签点击异常，换下一种方式:", err instanceof Error ? err.message : String(err));
+      }
+    }
+    console.error("[U校园调试] 页签「" + label + "」所有点击方式都未生效");
+    return false;
+  }
   async function next(rp) {
     const hash = location.hash;
     const go = async (el) => {
       if (!el)
         return false;
-      await rp.click(el);
-      if (await waitHashChange(hash, 5e3))
-        return true;
-      if (el.isConnected) {
-        el.click();
+      console.log("[U校园调试] next: 点击目标「" + (el.textContent || "").trim().slice(0, 20) + "」");
+      try {
+        await rp.click(el);
         if (await waitHashChange(hash, 5e3))
           return true;
+        if (el.isConnected) {
+          el.click();
+          if (await waitHashChange(hash, 5e3))
+            return true;
+        }
+      } catch (err) {
+        console.warn("[U校园调试] 点击异常:", err instanceof Error ? err.message : String(err));
       }
       return false;
     };
@@ -21877,8 +22099,13 @@ try {
     };
     if (await findNext(".pc-header-tasks-row .pc-task", "pc-header-task-activity"))
       return true;
-    if (await findNext(".pc-tab-row .tab", "pc-header-tab-activity"))
-      return true;
+    const tabEls = lib.$$el(".pc-tab-row .tab");
+    for (let index = 0; index < tabEls.length; index++) {
+      if (tabEls[index].classList.contains("pc-header-tab-activity")) {
+        if (await goTab(tabEls[index + 1], rp))
+          return true;
+      }
+    }
     if (await findNext('.pc-slider-content [data-role="micro"],.pc-slider-content [data-role="node"]', "pc-menu-activity")) {
       return true;
     }
@@ -21929,6 +22156,20 @@ try {
     if (!searchedInfos || searchedInfos.length === 0) {
       throw new Error("未搜到到任何答案。");
     }
+    console.log(
+      "[U校园调试] 搜题结果",
+      JSON.stringify(
+        searchedInfos.map((info) => ({
+          name: info.name,
+          error: info.error,
+          answers: info.results.map((r) => r.answer)
+        }))
+      ).slice(0, 600),
+      "空位数量",
+      options.length,
+      "题型",
+      type
+    );
     const ctx = {
       searchInfos: searchedInfos,
       answerSeparators: answerSeparators.split(","),
@@ -22024,6 +22265,39 @@ try {
         return [direction, "-".repeat(10), ctx, "-".repeat(10), ques].filter(Boolean).join("\n");
       }
     });
+  }
+  function countUnansweredControls() {
+    let total = 0;
+    let empty = 0;
+    const isVisible = (el) => {
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+    lib.$$el(
+      '.question-wrap textarea, .question-wrap input[type="text"]'
+    ).forEach((el) => {
+      if (!el.isConnected || !isVisible(el))
+        return;
+      if (el.closest(".mark-info-in, .pc-header-tasks-row, .pc-header-tabs-container"))
+        return;
+      total++;
+      if (!String(el.value || "").trim())
+        empty++;
+    });
+    lib.$$el(".question-wrap .option-wrap").forEach((group) => {
+      const options = Array.from(group.querySelectorAll(".option"));
+      if (!options.length)
+        return;
+      if (!isVisible(group))
+        return;
+      total++;
+      const chosen = options.some(
+        (option) => option.classList.contains("selected") || !!option.querySelector("input:checked")
+      );
+      if (!chosen)
+        empty++;
+    });
+    return { total, empty };
   }
   function doCompletion(rp, opts, root2 = ".question-common-abs-reply") {
     return handleCommonUnitTest(rp, opts, {
@@ -22186,6 +22460,24 @@ try {
       }
     });
     const results = await worker.doWork({ enable_debug: BackgroundProject.scripts.dev.cfg.enable_answerer_debug });
+    const MAX_RETRY_ROUNDS = 2;
+    for (let round = 1; round <= MAX_RETRY_ROUNDS; round++) {
+      const before = countUnansweredControls();
+      if (before.empty === 0)
+        break;
+      $msg.info(`发现有 ${before.empty}/${before.total} 处未作答，开始第 ${round} 轮补答…`);
+      await lib.$.sleep(800);
+      try {
+        await worker.doWork({ enable_debug: BackgroundProject.scripts.dev.cfg.enable_answerer_debug });
+      } catch (err) {
+        $msg.warn(`第 ${round} 轮补答异常：${err instanceof Error ? err.message : String(err)}`);
+        break;
+      }
+      const after = countUnansweredControls();
+      $msg.info(`第 ${round} 轮补答结束，剩余 ${after.empty}/${after.total} 处未作答`);
+      if (after.empty === 0)
+        break;
+    }
     const msg2 = `答题完成，将等待 ${opts.stopSecondWhenFinish} 秒后进行保存或提交。`;
     $msg.info({ content: msg2, duration: opts.stopSecondWhenFinish });
     await lib.$.sleep(opts.stopSecondWhenFinish * 1e3);
@@ -22193,6 +22485,20 @@ try {
       type: opts.upload,
       results,
       async callback(finishedRate, uploadable) {
+        const domCheck = countUnansweredControls();
+        if (domCheck.empty > 0) {
+          await lib.$.sleep(2e3);
+          const again = countUnansweredControls();
+          if (again.empty > 0) {
+            uploadable = false;
+            $msg.warn(
+              `提交前复查发现 ${again.empty}/${again.total} 处仍未作答，本次只保存不提交（下次进入会继续作答）`
+            );
+          }
+        } else if (domCheck.total > 0 && opts.upload !== "save" && !uploadable) {
+          uploadable = true;
+          $msg.info("补答后页面题目已全部作答，按完整作答提交");
+        }
         const msg22 = `完成率 ${finishedRate.toFixed(2)}% :  ${uploadable ? "3秒后将自动提交" : "3秒后将自动保存"} `;
         $msg.success({ content: msg22, duration: 3 });
         await lib.$.sleep(3e3);
@@ -22229,7 +22535,9 @@ try {
     await waitForElement(".summary-tab-container,.question-common-course-page .btn");
   }
   function resoleInputWrapLines(root2) {
-    let temp_ques = "\n" + (root2 == null ? void 0 : root2.innerText.trim()) || "";
+    if (!root2)
+      return "";
+    let temp_ques = "\n" + (root2.innerText || root2.textContent || "").trim();
     if (temp_ques.match(/\s\d+\)/)) {
       temp_ques = temp_ques.replace(/\s(\d+)\)/g, " ($1) _____ ");
     } else {
@@ -22238,10 +22546,82 @@ try {
         input.replaceChildren(" _____ ");
       }
       document.body.appendChild(wrap);
-      temp_ques = wrap.innerText.trim();
+      temp_ques = (wrap.innerText || wrap.textContent || "").trim();
       document.body.removeChild(wrap);
     }
     return temp_ques;
+  }
+  async function clearBlankInputs(selector) {
+    for (const el of lib.$$el(selector)) {
+      if (!el.value)
+        continue;
+      if (el.getBoundingClientRect().height <= 0)
+        continue;
+      el.focus();
+      try {
+        el.select();
+      } catch {
+      }
+      let cleared = false;
+      try {
+        cleared = document.execCommand("delete", false);
+      } catch {
+        cleared = false;
+      }
+      if (!cleared || el.value) {
+        el.value = "";
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      await lib.$.sleep(50);
+    }
+  }
+  async function writeBlank(selector, answer) {
+    if (!answer)
+      return;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const inputs = lib.$$el(selector).filter(
+        (el) => el.getBoundingClientRect().height > 0
+      );
+      const target = inputs.find((el) => !el.value.trim());
+      if (!target)
+        return;
+      target.focus();
+      try {
+        target.select();
+      } catch {
+      }
+      let inserted = false;
+      try {
+        inserted = document.execCommand("insertText", false, answer);
+      } catch {
+        inserted = false;
+      }
+      if (!inserted || target.value !== answer) {
+        const proto = target instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const desc = Object.getOwnPropertyDescriptor(proto, "value");
+        if (desc && desc.set) {
+          try {
+            desc.set.call(target, answer);
+          } catch {
+            target.value = answer;
+          }
+        } else {
+          target.value = answer;
+        }
+        target.dispatchEvent(
+          new InputEvent("input", {
+            bubbles: true,
+            data: answer,
+            view: document.defaultView || window,
+            composed: true
+          })
+        );
+        target.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      await lib.$.sleep(200);
+      if (target.value === answer)
+        return;
+    }
   }
   const UnipusProject = lib.Project.create({
     name: "U校园",
@@ -23216,5 +23596,10 @@ if (!HH) {
 })();
 //# sourceURL=app.js
 })(__ocs_sandbox__);
+/* 核心包执行成功时 UMD 会写入 globalThis.HH；没挂上就不写 done，
+ * 让 isolated 侧的下一次回退注入能够真正重试，而不是被永久拦掉。 */
+if (globalThis.HH && typeof globalThis.HH === "object") {
+	try { Object.defineProperty(globalThis, __ocsMarker, {value:1, configurable:true}); } catch(e) {}
+}
 })();
 //# sourceURL=app.js

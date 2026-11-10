@@ -1,16 +1,98 @@
 const TAB_STORE_PREFIX = '__ocs_tab_';
 
 /* ============================================================
- * ScriptCat 风格：用 chrome.userScripts 把运行时注册到 MAIN world
+ * 把运行时注册到 MAIN world
  * ============================================================
  * 页面 DOM 里不再出现 <script>；MAIN world 代码由浏览器直接执行。
- * 如果 userScripts API 不可用（旧版 Chrome / 未开启 Allow User Scripts），
- * isolated.js 会自动回退到闭 Shadow DOM <script> 注入。
+ *
+ * 主路径是 chrome.scripting.registerContentScripts({ world: 'MAIN' })：
+ * 它只需要 scripting 权限 + host_permissions，**不需要**「允许用户脚本」开关。
+ *
+ * 曾经用 chrome.userScripts 做主路径，踩了一个致命的坑：Chrome 138+ 起
+ * 「允许用户脚本」默认关闭，关闭时 chrome.userScripts 整个对象都不存在。
+ * 而桌面端每次新建浏览器都是全新 profile，开关必然处于关闭状态，
+ * 结果所有平台的页面脚本静默失效（表现：面板不出现、不自动答题），
+ * 用户还得手动去 edge://extensions 点一次开关再重启浏览器。
+ *
+ * 现在优先 scripting 通道；只有在不支持 world:'MAIN' 的旧内核上
+ * 才退回 userScripts，最后才回退到 isolated 侧的 <script> 注入。
  */
 const MAIN_SCRIPT_ID = 'honghu-main';
-let injectionMode = 'unknown'; // userScripts | fallback | unknown
+/** chrome.scripting 的 id 只允许 [A-Za-z0-9_]，不能用连字符 */
+const MAIN_CS_ID = 'hh_main_world';
+let injectionMode = 'unknown'; // scripting | userScripts | fallback | unknown
 let registrationPromise = null;
 let cachedMainWorldCode = null;
+
+function collectMatchPatterns() {
+	const manifest = chrome.runtime.getManifest();
+	const matches = [];
+	(manifest.content_scripts || []).forEach(function (cs) {
+		(cs.matches || []).forEach(function (m) {
+			if (matches.indexOf(m) < 0) matches.push(m);
+		});
+	});
+	return matches;
+}
+
+/**
+ * 用 chrome.scripting 注册 MAIN world content script。
+ *
+ * 注册的是**文件路径**而不是内联代码，所以磁盘上的 main-world.js 更新后
+ * 下次页面加载自动生效，不需要重新注册。
+ */
+async function registerViaScripting(force) {
+	const scripting = chrome.scripting;
+	if (!scripting || !scripting.registerContentScripts) {
+		throw new Error('scripting.registerContentScripts 不可用');
+	}
+	const matches = collectMatchPatterns();
+	if (!matches.length) throw new Error('没有可注入的匹配规则');
+
+	let existing = [];
+	try {
+		existing = await scripting.getRegisteredContentScripts({ ids: [MAIN_CS_ID] });
+	} catch (e) {
+		existing = [];
+	}
+
+	if (existing && existing.length) {
+		if (!force) return;
+		try {
+			await scripting.unregisterContentScripts({ ids: [MAIN_CS_ID] });
+		} catch (e) {
+			/* 忽略：后面直接覆盖注册 */
+		}
+	}
+
+	await scripting.registerContentScripts([
+		{
+			id: MAIN_CS_ID,
+			js: ['content/main-world.js'],
+			matches: matches,
+			runAt: 'document_start',
+			allFrames: true,
+			world: 'MAIN',
+			persistAcrossSessions: true
+		}
+	]);
+}
+
+/** 切到 scripting 通道后，清掉历史遗留的 userScripts 注册，避免同一份代码跑两遍 */
+async function clearUserScriptsRegistration() {
+	let userScripts;
+	try {
+		userScripts = chrome.userScripts;
+	} catch (e) {
+		return;
+	}
+	if (!userScripts || !userScripts.unregister) return;
+	try {
+		await userScripts.unregister({ ids: [MAIN_SCRIPT_ID] });
+	} catch (e) {
+		/* 本来就没注册 */
+	}
+}
 
 function ensureMainWorldScript(force) {
 	if (registrationPromise) return registrationPromise;
@@ -32,6 +114,21 @@ async function getMainWorldCode() {
 }
 
 async function doEnsureMainWorldScript(force) {
+	// ① 首选：chrome.scripting 注册 MAIN world（不需要「允许用户脚本」开关）
+	try {
+		await registerViaScripting(force);
+		injectionMode = 'scripting';
+		clearUserScriptsRegistration();
+		console.log('[鸿鹄易学] MAIN world 注入已通过 chrome.scripting 注册');
+		return;
+	} catch (e) {
+		console.warn(
+			'[鸿鹄易学] chrome.scripting 注册 MAIN world 失败，尝试 userScripts:',
+			e && e.message ? e.message : e
+		);
+	}
+
+	// ② 退回 chrome.userScripts（仅旧内核 path，且需要用户开启开关）
 	// Chrome 137- 在未开启开发者模式时，读取 chrome.userScripts 本身就会抛错
 	let userScripts;
 	try {
@@ -201,15 +298,32 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 		return true;
 	}
 	if (type === 'setValue') {
-		chrome.storage.local.set({ [payload.key]: payload.value }).then(() => sendResponse({ ok: true }));
+		/**
+		 * 必须带 reject 分支
+		 *
+		 * 只写 `.then(() => sendResponse(...))` 时，只要 set 被拒绝
+		 * （值不可结构化克隆、配额、storage 未就绪），Promise 就悬着，
+		 * sendResponse 永远不调用 —— 内容脚本那边不会收到回执也不会报错，
+		 * 最终只能等 GM_xmlhttpRequest 的 300 秒超时。
+		 */
+		chrome.storage.local.set({ [payload.key]: payload.value }).then(
+			() => sendResponse({ ok: true }),
+			(err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) })
+		);
 		return true;
 	}
 	if (type === 'deleteValue') {
-		chrome.storage.local.remove(payload.key).then(() => sendResponse({ ok: true }));
+		chrome.storage.local.remove(payload.key).then(
+			() => sendResponse({ ok: true }),
+			(err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) })
+		);
 		return true;
 	}
 	if (type === 'storageInit') {
-		chrome.storage.local.get(null).then((all) => sendResponse({ data: all }));
+		chrome.storage.local.get(null).then(
+			(all) => sendResponse({ data: all }),
+			(err) => sendResponse({ data: {}, error: String(err && err.message ? err.message : err) })
+		);
 		return true;
 	}
 	if (type === 'getTab') {
@@ -218,9 +332,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 			sendResponse({ tab: {} });
 			return false;
 		}
-		chrome.storage.session.get([TAB_STORE_PREFIX + tabId]).then((res) => {
-			sendResponse({ tab: res[TAB_STORE_PREFIX + tabId] || {} });
-		});
+		// session 存储在部分上下文未开访问级别时会直接拒绝，同样必须兜住
+		chrome.storage.session.get([TAB_STORE_PREFIX + tabId]).then(
+			(res) => sendResponse({ tab: res[TAB_STORE_PREFIX + tabId] || {} }),
+			(err) => sendResponse({ tab: {}, error: String(err && err.message ? err.message : err) })
+		);
 		return true;
 	}
 	if (type === 'saveTab') {
@@ -229,8 +345,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 			sendResponse({ ok: true });
 			return false;
 		}
-		chrome.storage.session.set({ [TAB_STORE_PREFIX + tabId]: payload.tab }).then(() =>
-			sendResponse({ ok: true })
+		chrome.storage.session.set({ [TAB_STORE_PREFIX + tabId]: payload.tab }).then(
+			() => sendResponse({ ok: true }),
+			(err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) })
 		);
 		return true;
 	}

@@ -194,4 +194,68 @@
 			});
 		} catch (e) {}
 	}
+
+	/**
+	 * 运行时就绪检测
+	 *
+	 * 之前这里没有任何兜底提示：userScripts 不可用 → 回退注入 → 核心包没起来，
+	 * 页面上就只是「什么都没发生」。用户看到的是「自动答题没反应」，
+	 * 既不知道是扩展没启动，也不知道要去开开关，只能反复刷新。
+	 *
+	 * 8 秒还没收到 MAIN world 的 flag 回执，就在右下角明确写清原因与操作路径。
+	 * 正常情况（userScripts 可用 / 回退成功）通常在 1 秒内就 ready，不会出现。
+	 */
+	function showInjectFailedTip() {
+		try {
+			if (document.getElementById('hh-inject-failed-tip')) return;
+
+			var mount = function () {
+				if (document.getElementById('hh-inject-failed-tip')) return;
+				var box = document.createElement('div');
+				box.id = 'hh-inject-failed-tip';
+				box.setAttribute(
+					'style',
+					'position:fixed;right:16px;bottom:16px;z-index:2147483647;max-width:330px;' +
+						'padding:12px 34px 12px 14px;background:#fff;color:#1d2129;' +
+						'border:1px solid #e5e6eb;border-radius:10px;' +
+						'box-shadow:0 8px 24px rgba(0,0,0,.14);' +
+						'font:12px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;' +
+						'text-align:left;letter-spacing:0;'
+				);
+
+				var title = document.createElement('div');
+				title.textContent = '鸿鹄易学未能启动';
+				title.setAttribute('style', 'font-size:13px;font-weight:600;margin-bottom:4px;color:#1d2129;');
+
+				var body = document.createElement('div');
+				body.setAttribute('style', 'color:#4e5969;');
+				body.innerHTML =
+					'页面脚本没有完成初始化，自动答题不会启动。' +
+					'<br /><br />请先<b>刷新一次本页</b>；仍然出现的话，完全关闭浏览器再重新打开' +
+					'（扩展首次注册主世界脚本后，已打开的标签页不会自动生效）。';
+
+				var close = document.createElement('span');
+				close.textContent = '×';
+				close.setAttribute(
+					'style',
+					'position:absolute;top:4px;right:9px;cursor:pointer;color:#86909c;font-size:17px;line-height:1;'
+				);
+				close.onclick = function () {
+					box.remove();
+				};
+
+				box.appendChild(title);
+				box.appendChild(body);
+				box.appendChild(close);
+				(document.body || document.documentElement).appendChild(box);
+			};
+
+			if (document.body) mount();
+			else document.addEventListener('DOMContentLoaded', mount, { once: true });
+		} catch (e) {}
+	}
+
+	setTimeout(function () {
+		if (!mainWorldReady) showInjectFailedTip();
+	}, 12000);
 })();
