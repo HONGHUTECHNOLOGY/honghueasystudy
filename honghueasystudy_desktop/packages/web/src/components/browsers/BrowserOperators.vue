@@ -6,6 +6,7 @@
 	>
 		<template v-if="process === undefined || process.status === 'closed'">
 			<a-tooltip
+				key="op-launch"
 				:position="tooltipPosition"
 				mini
 			>
@@ -33,6 +34,7 @@
 		<template v-else-if="process.status === 'launched'">
 			<a-tooltip
 				v-if="devEnabled"
+				key="op-dump"
 				content="导出当前网页信息（HTML / 截图 / 结构摘要），用于排查识别不到课程、元素点不到等问题"
 				:position="tooltipPosition"
 			>
@@ -50,6 +52,7 @@
 			</a-tooltip>
 
 			<a-tooltip
+				key="op-pin"
 				content="置顶"
 				:position="tooltipPosition"
 			>
@@ -67,6 +70,7 @@
 			</a-tooltip>
 
 			<a-tooltip
+				key="op-relaunch"
 				content="重启"
 				:position="tooltipPosition"
 			>
@@ -84,6 +88,7 @@
 			</a-tooltip>
 
 			<a-tooltip
+				key="op-close"
 				content="关闭"
 				:position="tooltipPosition"
 			>

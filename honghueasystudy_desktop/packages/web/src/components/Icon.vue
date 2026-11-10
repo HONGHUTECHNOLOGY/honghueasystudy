@@ -1,7 +1,7 @@
 <template>
 	<!-- see https://fonts.google.com/icons -->
 	<component
-		:is="slots.default ? Space : span"
+		:is="slots.default ? Space : 'span'"
 		class="d-inline-flex"
 		size="mini"
 	>
@@ -19,8 +19,7 @@
 
 <script setup lang="ts">
 import { Space } from '@arco-design/web-vue';
-import { h, toRefs, useSlots } from 'vue';
-const span = h('span');
+import { toRefs, useSlots } from 'vue';
 interface IconProps {
 	type: string;
 	theme?: 'outlined' | 'filled' | 'rounded' | 'sharp' | 'two-tone';

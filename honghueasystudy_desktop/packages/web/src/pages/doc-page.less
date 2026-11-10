@@ -6,8 +6,16 @@
 	--accent: #635bff;
 	--paper: #f6f7f9;
 	position: relative;
-	min-height: 100vh;
-	overflow: hidden;
+	/**
+	 * 高度由 .main-container 的 flex 分配，不能写 min-height: 100vh。
+	 *
+	 * 视口高度包含顶部标题栏，而内容区只有「视口 − 标题栏」，100vh 必然多出一截；
+	 * 父级 .main-container 是 overflow: hidden，多出来的部分既看不见也滚不到，
+	 * 表现为整页滚不动（主页 bookmarks 踩的是同一个坑）。
+	 * 页面自己作为滚动容器，sticky 目录也会以它为参照。
+	 */
+	overflow-y: auto;
+	overflow-x: hidden;
 	background:
 		radial-gradient(circle at 88% 2%, rgba(99, 91, 255, 0.08), transparent 25%),
 		radial-gradient(circle at 0% 38%, rgba(73, 170, 255, 0.05), transparent 23%),

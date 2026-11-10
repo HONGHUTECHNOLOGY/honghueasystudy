@@ -20,10 +20,15 @@
 			</template>
 		</Entity>
 
-		<template v-for="child of entities">
+		<!-- key 必须挂在 template 上：放在内部元素上时 fragment diff 仍按索引复用，
+		     列表顺序变化会让卡片内部组件（tooltip、图标）残留上一个 child 的状态，
+		     表现就是「某个浏览器的启动按钮变成了别家状态的图标」 -->
+		<template
+			v-for="child of entities"
+			:key="child.uid"
+		>
 			<Entity
 				v-if="child.type !== 'browser'"
-				:key="child.uid"
 				class="entity"
 				:style="{ '--i': entities.indexOf(child) }"
 								:entity="child"
@@ -47,10 +52,12 @@
 			</Entity>
 		</template>
 
-		<template v-for="child of entities">
+		<template
+			v-for="child of entities"
+			:key="child.uid"
+		>
 			<Entity
 				v-if="child.type === 'browser'"
-				:key="child.uid"
 				class="entity"
 				:style="{ '--i': entities.indexOf(child) }"
 								:entity="child"

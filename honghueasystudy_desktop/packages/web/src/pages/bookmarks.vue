@@ -584,8 +584,17 @@ onBeforeUnmount(() => {
 	--line: rgba(31, 45, 41, 0.12);
 	--vermilion: #b65c40;
 	position: relative;
-	min-height: 100vh;
-	overflow: hidden;
+	/**
+	 * 高度由 .main-container 的 flex 分配（`> *` 已设 flex: 1 / min-height: 0）。
+	 *
+	 * 这里**不能**写 min-height: 100vh：视口高度已经包含了顶部标题栏，
+	 * 而内容区只有「视口 − 标题栏」，100vh 必然多出一截；父级又是 overflow: hidden，
+	 * 多出来的部分既看不到也滚不到，表现就是主页完全无法滚动。
+	 *
+	 * 页面自己作为滚动容器（纵向滚、横向裁），这样内容多长都能滚到底。
+	 */
+	overflow-y: auto;
+	overflow-x: hidden;
 	background: var(--paper);
 	color: var(--ink);
 	font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -786,7 +795,7 @@ onBeforeUnmount(() => {
 .footer__links a:hover { color: var(--forest); }
 .footer__copyright { margin-left: 15px; font-size: 8px; letter-spacing: 0.08em; }
 
-.loading-state { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--forest); }
+.loading-state { min-height: calc(100vh - var(--title-height, 40px)); display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--forest); }
 .loading-state p { margin: 20px 0 5px; font-family: 'STSong', 'Songti SC', serif; font-size: 18px; letter-spacing: 0.08em; }
 .loading-mark { display: flex; align-items: center; gap: 6px; height: 32px; }
 .loading-mark span { width: 3px; height: 16px; border-radius: 3px; background: var(--forest); animation: loading-wave 1.1s ease-in-out infinite; }
