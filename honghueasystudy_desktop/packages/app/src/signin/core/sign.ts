@@ -3,14 +3,25 @@ import fs from 'fs';
 import path from 'path';
 import { API } from './api';
 import { activityToSignType } from './activity';
-import { cookieSerialize, cxGet, cxPost, cxRequest, sleep } from './http';
+import { clientUserAgent, cookieSerialize, cxGet, cxPost, cxRequest, isSpoofClient, sleep } from './http';
 import { getPanToken } from './user';
 import type { AddressItem, ChaoxingCookies, SigninAccountConfig, SigninActivity, SigninResult, SigninType } from './types';
+
+/**
+ * 服务端「已经签过」类文案
+ *
+ * 重复提交、或在手机端先签过再让电脑端补签时，超星返回的是提示文案而不是 success。
+ * 这类结果目标已经达成，按「已签到」处理，由调用方写进本地台账。
+ */
+const ALREADY_SIGNED_HINTS = ['已签到', '已经签到', '已签过', '重复签到', '请勿重复'];
 
 function toResult(tag: string, data: string): SigninResult {
 	const text = String(data || '').trim();
 	if (text === 'success') return { ok: true, message: `[${tag}]签到成功` };
 	if (text === 'fail-need-qrcode') return { ok: false, message: `[${tag}]需要二维码` };
+	if (ALREADY_SIGNED_HINTS.some((hint) => text.includes(hint))) {
+		return { ok: true, already: true, message: `[${tag}]${text}` };
+	}
 	return { ok: false, message: `[${tag}]${text || '签到失败'}` };
 }
 
@@ -39,16 +50,42 @@ export async function generalSignGroup(cookies: ChaoxingCookies, activeId: strin
 	return toResult('通用', result.data);
 }
 
+/** 经纬度保留 6 位小数，和手机定位上报的精度一致 */
+function roundCoord(value: number): number {
+	return Math.round(value * 1e6) / 1e6;
+}
+
+/**
+ * 校验并归一化上报坐标
+ *
+ * 地图选点已经保证坐标就是所选位点，这里不再做任何偏移，只做合法性校验和
+ * 6 位小数归一化（与手机定位上报的精度一致）。坐标非法时返回 null，交给调用方跳过。
+ */
+function resolveLocation(item: AddressItem): { lon: number; lat: number } | null {
+	const lon = Number(item.lon);
+	const lat = Number(item.lat);
+	if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+	if (Math.abs(lon) > 180 || Math.abs(lat) > 90) return null;
+	// 0,0 基本只会是占位值，按未配置处理
+	if (lon === 0 && lat === 0) return null;
+	return { lon: roundCoord(lon), lat: roundCoord(lat) };
+}
+
+function validCandidates(address?: AddressItem, presetAddress?: AddressItem[]): AddressItem[] {
+	const list =
+		address && String(address.address || '').trim()
+			? [address]
+			: (presetAddress || []).filter((item) => item && String(item.address || '').trim());
+	return list;
+}
+
 /** 位置签到（课程），支持多地址逐个尝试 */
 export async function locationSign(
 	cookies: ChaoxingCookies,
 	activity: SigninActivity,
 	args: { name: string; address?: AddressItem; presetAddress?: AddressItem[] }
 ): Promise<SigninResult> {
-	const candidates =
-		args.address && args.address.address
-			? [args.address]
-			: (args.presetAddress || []).filter((item) => item && item.address);
+	const candidates = validCandidates(args.address, args.presetAddress);
 
 	if (candidates.length === 0) {
 		return { ok: false, message: '[位置]未配置签到位置，请先在签到助手中填写坐标' };
@@ -56,14 +93,19 @@ export async function locationSign(
 
 	let last: SigninResult = { ok: false, message: '[位置]签到失败' };
 	for (const item of candidates) {
+		const point = resolveLocation(item);
+		if (!point) {
+			last = { ok: false, message: '[位置]经纬度无效，请用「地图选点」重新选择位置' };
+			continue;
+		}
 		const result = await cxGet(API.PPT_SIGN, cookies, {
 			name: args.name,
-			address: item.address,
+			address: String(item.address).trim(),
 			activeId: activity.activeId,
 			uid: cookies._uid,
 			clientip: '',
-			latitude: item.lat,
-			longitude: item.lon,
+			latitude: point.lat,
+			longitude: point.lon,
 			fid: cookies.fid || '',
 			appType: 15,
 			ifTiJiao: 1
@@ -81,19 +123,22 @@ export async function locationSignGroup(
 	activeId: string,
 	args: { address?: AddressItem; presetAddress?: AddressItem[] }
 ): Promise<SigninResult> {
-	const candidates =
-		args.address && args.address.address
-			? [args.address]
-			: (args.presetAddress || []).filter((item) => item && item.address);
+	const candidates = validCandidates(args.address, args.presetAddress);
 	if (candidates.length === 0) {
 		return { ok: false, message: '[位置]未配置签到位置，请先在签到助手中填写坐标' };
 	}
 
 	let last: SigninResult = { ok: false, message: '[位置]签到失败' };
 	for (const item of candidates) {
+		const point = resolveLocation(item);
+		if (!point) {
+			last = { ok: false, message: '[位置]经纬度无效，请用「地图选点」重新选择位置' };
+			continue;
+		}
 		const body =
-			`address=${encodeURIComponent(item.address)}&activeId=${activeId}&uid=${cookies._uid}` +
-			`&clientip=&useragent=&latitude=${item.lat}&longitude=${item.lon}&fid=&ifTiJiao=1`;
+			`address=${encodeURIComponent(String(item.address).trim())}&activeId=${activeId}&uid=${cookies._uid}` +
+			`&clientip=&useragent=${encodeURIComponent(isSpoofClient() ? clientUserAgent() : '')}` +
+			`&latitude=${point.lat}&longitude=${point.lon}&fid=&ifTiJiao=1`;
 		const result = await cxPost(API.CHAT_SIGN, cookies, body);
 		last = toResult('位置', result.data);
 		if (last.ok) break;
@@ -112,7 +157,7 @@ export async function photoSign(
 		activeId: activity.activeId,
 		uid: cookies._uid,
 		clientip: '',
-		useragent: '',
+		useragent: isSpoofClient() ? clientUserAgent() : '',
 		latitude: -1,
 		longitude: -1,
 		appType: 15,
@@ -133,7 +178,7 @@ export async function photoSignGroup(
 		activeId,
 		uid: cookies._uid,
 		clientip: '',
-		useragent: '',
+		useragent: isSpoofClient() ? clientUserAgent() : '',
 		latitude: -1,
 		longitude: -1,
 		fid: 0,

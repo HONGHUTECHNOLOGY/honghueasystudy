@@ -143,6 +143,19 @@
 
 		<RemoteControl />
 
+		<a-card title="签到助手">
+			<Description label="客户端特征伪装">
+				<a-tooltip
+					content="开启后，签到请求会伪装成手机端学习通：使用 Android 浏览器 UA，并让签到提交里的 useragent 与 appType=15 保持一致，降低被识别为脚本的概率。登录与课程查询仍使用桌面 UA，不影响课程识别。默认关闭。"
+				>
+					<a-switch
+						v-model="store.render.setting.signin.spoofClient"
+						size="small"
+					/>
+				</a-tooltip>
+			</Description>
+		</a-card>
+
 		<a-card title="基本设置">
 			<Description label="后台托盘运行">
 				<a-tooltip

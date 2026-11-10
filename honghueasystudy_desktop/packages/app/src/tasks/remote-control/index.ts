@@ -512,9 +512,12 @@ export class RemoteControlService {
 				name: result.activity.name || '签到活动',
 				typeName: result.typeName || '',
 				otherId: Number(result.activity.otherId) || 0,
-				ifphoto: Number(result.activity.ifphoto) || 0
+				ifphoto: Number(result.activity.ifphoto) || 0,
+				signed: !!result.activity.signed,
+				signedTime: Number(result.activity.signedTime) || 0
 			};
-			return { code: 'activity', message: `检测到签到活动：${activity.name}`, activity };
+			const suffix = activity.signed ? '（已签到）' : '';
+			return { code: 'activity', message: `检测到签到活动：${activity.name}${suffix}`, activity };
 		}
 		this.signinChecked.delete(target);
 		return { code: result.code, message: result.message };
@@ -547,6 +550,12 @@ export class RemoteControlService {
 						return { ok: false, message: check.message || '未检测到有效签到活动' };
 					}
 					activity = check.activity;
+				}
+
+				// 台账里已有成功签到：直接回「已签到」，不向超星重复提交
+				if (activity.signed) {
+					const signTime = activity.signedTime ? `（${signin.formatSignTime(activity.signedTime)}）` : '';
+					return { ok: true, message: `该活动已签到${signTime}，无需重复签到` };
 				}
 
 				this.signinChecked.delete(target);

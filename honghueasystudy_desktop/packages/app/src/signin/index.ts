@@ -8,6 +8,8 @@ export {
 	checkAccount,
 	clearLogs,
 	defaultConfig,
+	findSignRecord,
+	formatSignTime,
 	getAccount,
 	getLogs,
 	listViews,

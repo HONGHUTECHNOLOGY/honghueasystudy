@@ -62,6 +62,11 @@ export type WebStore = {
 		theme: {
 			dark: boolean;
 		};
+		/** 签到助手 */
+		signin: {
+			/** 客户端特征伪装：签到请求使用手机端 UA，并让 useragent 与 appType=15 保持一致 */
+			spoofClient: boolean;
+		};
 		/** 鸿鹄易学特殊配置 */
 		hh: {
 			/** 当前配置名 */
@@ -176,6 +181,9 @@ const APP_DEFAULTS = {
 			},
 			theme: {
 				dark: false
+			},
+			signin: {
+				spoofClient: false
 			},
 			hh: {
 				currentProjectName: '',

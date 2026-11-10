@@ -42,12 +42,31 @@
 				</div>
 
 				<div v-if="activity" class="activity-box">
-					<div class="activity-name">{{ activity.name }}</div>
+					<div class="activity-name">
+						<span>{{ activity.name }}</span>
+						<a-tag v-if="activity.signed" color="green">
+							已签到{{ activity.signedTime ? ` ${timeText(activity.signedTime)}` : '' }}
+						</a-tag>
+					</div>
 					<div class="activity-meta">
 						<a-tag color="arcoblue">{{ activity.typeName || '签到' }}</a-tag>
 						<span class="hint">活动 ID：{{ activity.activeId }}</span>
 					</div>
-					<a-button type="primary" size="small" :loading="signing" @click="signNow">立即签到</a-button>
+					<div class="card-row">
+						<a-button
+							v-if="!activity.signed"
+							type="primary"
+							size="small"
+							:loading="signing"
+							@click="signNow"
+						>
+							立即签到
+						</a-button>
+						<a-button v-else size="small" :loading="signing" @click="signNow">重新签到</a-button>
+						<span v-if="activity.signed" class="hint">
+							{{ activity.signedMessage || '该活动已完成签到' }}
+						</span>
+					</div>
 					<div class="hint">
 						位置/拍照/二维码签到会使用下方「自动签到设置」中的坐标、图片和 enc。
 					</div>
@@ -115,7 +134,7 @@
 					</div>
 					<div class="form-item span-2">
 						<div class="hint">
-							位置签到不是只报一个地址：超星服务端会按经纬度与老师设置的签到点算距离，坐标必须落在允许范围内。建议用「地图选点」，默认 BD-09；若签到提示超出范围，可换 GCJ-02 / WGS-84 再试。
+							位置签到不是只报一个地址：超星服务端会按经纬度与老师设置的签到点算距离，坐标必须落在允许范围内。建议用「地图选点」，默认 BD-09；若签到提示超出范围，可换 GCJ-02 / WGS-84 再试。上报的坐标就是地图上选中的位点，不做任何偏移。
 						</div>
 					</div>
 					<div class="form-item span-2">
@@ -361,7 +380,10 @@ async function checkActivity() {
 		const data = result as CheckResult;
 		if (data.code === 'activity') {
 			activity.value = data.activity;
-			Message.success(`检测到签到：${data.typeName}`);
+			// 活动仍在有效期内但本地已签过：直接标注，不再提示签到
+			Message.success(
+				data.activity.signed ? `检测到签到：${data.typeName}（已签到）` : `检测到签到：${data.typeName}`
+			);
 		} else {
 			checkMessage.value = data.message;
 		}
@@ -380,7 +402,14 @@ async function signNow() {
 		const result = await remote.methods.call('signinSign', selectedId.value, activity.value, { type: 'auto' });
 		if (result.ok) {
 			Message.success(result.message);
-			activity.value = null;
+			// 不清空活动卡片：改成「已签到」，让用户看到签到结果，
+			// 之后即使活动仍在有效期内再次检测，也不会再显示成待签到
+			activity.value = {
+				...activity.value,
+				signed: true,
+				signedTime: Date.now(),
+				signedMessage: result.message
+			};
 		} else {
 			Message.warning(result.message);
 		}
@@ -603,6 +632,10 @@ onUnmounted(() => {
 }
 
 .activity-name {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
 	font-size: 15px;
 	font-weight: 600;
 	color: var(--color-text-1);

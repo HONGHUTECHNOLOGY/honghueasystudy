@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { dialog, Notification } from 'electron';
-import { store } from '../store';
+import { store, getDecryptedRenderData } from '../store';
 import { Logger } from '../logger';
 import { decryptRenderString, encryptRenderString } from '../crypto';
 import { AUTH_FAILED, NO_COURSE, getAccountInfo, getCourses, login } from './core/user';
@@ -12,6 +12,7 @@ import {
 	traverseCourseActivity
 } from './core/activity';
 import { performSign, type PerformSignOptions } from './core/sign';
+import { setSpoofClient } from './core/http';
 import type {
 	ChaoxingCookies,
 	Course,
@@ -21,7 +22,7 @@ import type {
 	SigninLog,
 	SigninResult
 } from './core/types';
-import type { SigninStoreState, StoredSigninAccount } from './types';
+import type { SigninRecord, SigninStoreState, StoredSigninAccount } from './types';
 import { getRuntime, getRuntimeSnapshot } from './runtime';
 
 const logger = Logger('signin');
@@ -31,6 +32,10 @@ const log = Logger('signin-core');
 const COURSE_CACHE_TTL = 10 * 60 * 1000;
 /** 日志上限 */
 const MAX_LOGS = 500;
+/** 已签到台账保留时长（7 天，足够覆盖活动结束后仍出现在列表里的时间） */
+const SIGN_RECORD_TTL = 7 * 24 * 60 * 60 * 1000;
+/** 单个账号最多保留的已签到记录数 */
+const MAX_SIGN_RECORDS = 100;
 
 const courseCache = new Map<string, { courses: Course[]; time: number }>();
 /** 同一账号的检测请求合并，避免轮询与手动检测并发打爆接口 */
@@ -57,6 +62,30 @@ export function defaultConfig(): SigninAccountConfig {
 		// 自动签到默认关闭，避免用户误触发；手动签到始终可用
 		autoSign: false
 	};
+}
+
+/** 客户端伪装开关的读取缓存（避免每次签到都解密整份 render 存档） */
+let spoofCache = { value: false, time: 0 };
+
+/**
+ * 同步「客户端特征伪装」开关
+ *
+ * 开关存在渲染进程设置里（render.setting.signin.spoofClient），签到前读一次，
+ * 3 秒内复用结果。解密/解析失败时沿用上次的值，不因一次读取失败就改变请求特征。
+ */
+export function syncSpoofSetting(): void {
+	const now = Date.now();
+	if (now - spoofCache.time < 3000) {
+		setSpoofClient(spoofCache.value);
+		return;
+	}
+	try {
+		const render = getDecryptedRenderData(store);
+		spoofCache = { value: !!render?.setting?.signin?.spoofClient, time: now };
+	} catch (e) {
+		logger.warn('读取客户端伪装设置失败，沿用上次的值', e);
+	}
+	setSpoofClient(spoofCache.value);
 }
 
 export function getState(): SigninStoreState {
@@ -127,6 +156,46 @@ export function clearLogs(accountId?: string): void {
 	const state = getState();
 	state.logs = accountId ? state.logs.filter((item) => item.accountId !== accountId) : [];
 	persist(state);
+}
+
+/** 时分秒文案（日志与界面共用） */
+export function formatSignTime(time: number): string {
+	const date = new Date(time);
+	const pad = (value: number) => (value < 10 ? `0${value}` : `${value}`);
+	return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+/**
+ * 合并一条签到记录
+ *
+ * 同时做过期清理与数量截断，避免台账随使用时长无限膨胀。
+ */
+function mergeSignRecords(
+	existing: Record<string, SigninRecord> | undefined,
+	record: SigninRecord
+): Record<string, SigninRecord> {
+	const source = existing && typeof existing === 'object' ? existing : {};
+	const list = Object.values(source)
+		.filter((item) => item && item.activeId && Date.now() - Number(item.time || 0) <= SIGN_RECORD_TTL)
+		.concat(record)
+		.sort((a, b) => Number(b.time || 0) - Number(a.time || 0))
+		.slice(0, MAX_SIGN_RECORDS);
+
+	const next: Record<string, SigninRecord> = {};
+	for (const item of list) {
+		// list 已按时间倒序，同一个活动 id 保留最新的一条
+		if (!next[item.activeId]) next[item.activeId] = item;
+	}
+	return next;
+}
+
+/** 查询某个活动是否已经签过（过期记录视为未签到） */
+export function findSignRecord(accountId: string, activeId: string): SigninRecord | null {
+	if (!accountId || !activeId) return null;
+	const record = getAccount(accountId)?.signRecords?.[activeId];
+	if (!record) return null;
+	if (Date.now() - Number(record.time || 0) > SIGN_RECORD_TTL) return null;
+	return record;
 }
 
 function notify(title: string, body: string): void {
@@ -282,6 +351,9 @@ export async function checkAccount(id: string, forceCourses = false): Promise<Ch
 	if (existing) return existing;
 
 	const task = (async (): Promise<CheckResult> => {
+		// 检测会走 mobilelearn 接口，先把「客户端伪装」设置同步到 HTTP 层
+		syncSpoofSetting();
+
 		const snapshot = getState();
 		const account = snapshot.accounts.find((item) => item.id === id);
 		if (!account) return { code: 'error', message: '账号不存在' };
@@ -319,6 +391,15 @@ export async function checkAccount(id: string, forceCourses = false): Promise<Ch
 			activity.ifphoto = Number(info?.ifphoto) || 0;
 			activity.typeName = getSignTypeName(info || activity);
 
+			// 本地台账里已有该活动的成功签到：标注「已签到」，
+			// 界面与监听链路据此不再提示签到、也不再重复提交。
+			const record = findSignRecord(id, activity.activeId);
+			if (record) {
+				activity.signed = true;
+				activity.signedTime = Number(record.time) || 0;
+				activity.signedMessage = record.message || '';
+			}
+
 			await preSign(account.cookies, activity);
 
 			return { code: 'activity', activity, typeName: activity.typeName, coursesCount: courses.length };
@@ -349,6 +430,9 @@ export async function signActivity(
 	if (!account) return { ok: false, message: '账号不存在' };
 	if (!activity || !activity.activeId) return { ok: false, message: '无效的签到活动' };
 
+	// 提交签到前同步一次开关，保证 UA / useragent 与设置页保持一致
+	syncSpoofSetting();
+
 	try {
 		const info = activity.info || (activity.courseId ? await getPPTActiveInfo(account.cookies, activity.activeId) : null);
 		if (info) {
@@ -365,12 +449,28 @@ export async function signActivity(
 		});
 
 		// 签到期间账号可能被重新登录/删除，写回最新 state，避免覆盖其他链路的数据
+		const signTime = Date.now();
 		const latest = getState();
 		const latestAccount = latest.accounts.find((item) => item.id === id);
 		if (latestAccount) {
-			latestAccount.lastSignTime = Date.now();
+			latestAccount.lastSignTime = signTime;
 			latestAccount.lastResult = result.message;
+			// 服务端返回 success 或「已签到」都算签上了，写进台账供后续标注与去重
+			if (result.ok) {
+				latestAccount.signRecords = mergeSignRecords(latestAccount.signRecords, {
+					activeId: activity.activeId,
+					name: activity.name || '签到活动',
+					time: signTime,
+					message: result.message
+				});
+			}
 			persist(latest);
+		}
+		// 回填给调用方：远程控制缓存的活动对象、界面展示都靠这几个字段判断「已签到」
+		if (result.ok) {
+			activity.signed = true;
+			activity.signedTime = signTime;
+			activity.signedMessage = result.message;
 		}
 		addLog(account.id, result.ok ? 'success' : 'warn', result.message);
 		notify(`超星签到 - ${account.name}`, result.message);

@@ -132,6 +132,10 @@ export interface RemoteSigninActivity {
 	typeName: string;
 	otherId: number;
 	ifphoto: number;
+	/** 电脑端台账里已有该活动的成功签到 */
+	signed?: boolean;
+	/** 已签到时间 */
+	signedTime?: number;
 }
 
 export interface RemoteSigninCheck {

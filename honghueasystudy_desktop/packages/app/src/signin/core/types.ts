@@ -44,6 +44,12 @@ export interface SigninActivity {
 	info?: any;
 	/** 签到类型中文名 */
 	typeName?: string;
+	/** 本地台账里已有该活动的成功签到记录 */
+	signed?: boolean;
+	/** 已签到时间（毫秒时间戳） */
+	signedTime?: number;
+	/** 已签到的结果文案 */
+	signedMessage?: string;
 }
 
 export type SigninType = 'general' | 'gesture' | 'photo' | 'location' | 'qr' | 'code';
@@ -59,6 +65,12 @@ export interface SigninResult {
 	ok: boolean;
 	/** 面向用户的结果文案 */
 	message: string;
+	/**
+	 * 服务端认为此前已经签过
+	 *
+	 * 这种情况不会重复计入签到，但目标已达成，调用方应按「已签到」处理。
+	 */
+	already?: boolean;
 }
 
 /** 自动监听配置（持久化到账号） */

@@ -1,7 +1,7 @@
 import { BrowserWindow, app, ipcMain } from 'electron';
 import path from 'path';
 import { runtimes, type MonitorRuntime } from './runtime';
-import { addLog, checkAccount, getAccount, signActivity } from './manager';
+import { addLog, checkAccount, findSignRecord, formatSignTime, getAccount, signActivity, syncSpoofSetting } from './manager';
 import { getPPTActiveInfo, getSignTypeName, preSign, preSign2, speculateType } from './core/activity';
 import { getIMParams } from './core/user';
 import { sleep } from './core/http';
@@ -79,6 +79,20 @@ async function handleImMessage(accountId: string, runtime: MonitorRuntime, messa
 	const account = getAccount(accountId);
 	if (!account) return;
 
+	// 本地台账里已有该活动的成功签到：不再重复提交，只提示一次
+	const record = findSignRecord(accountId, parsed.activeId);
+	if (record) {
+		if (!runtime.reportedActivities.has(parsed.activeId)) {
+			runtime.reportedActivities.add(parsed.activeId);
+			addLog(
+				accountId,
+				'info',
+				`IM 检测到签到消息，该活动已签到（${formatSignTime(record.time)}），跳过重复签到`
+			);
+		}
+		return;
+	}
+
 	// 自动签到关闭时只提示，不落任何签到请求；收到消息也不占用 signedActivities，
 	// 这样用户中途打开开关后，后续轮询还能正常签到
 	if (!account.config.autoSign) {
@@ -150,6 +164,8 @@ async function startImWindow(accountId: string, runtime: MonitorRuntime): Promis
 	}
 
 	runtime.imStatus = 'connecting';
+	// IM 参数接口同样属于手机端域名，先同步伪装开关再请求
+	syncSpoofSetting();
 	const params = await getIMParams(account.cookies);
 	if (typeof params === 'string') {
 		runtime.imStatus = 'failed';
@@ -278,15 +294,25 @@ async function pollLoop(runtime: MonitorRuntime): Promise<void> {
 
 			if (result.code === 'activity') {
 				const activeId = result.activity.activeId;
+				const activityName = result.activity.name || activeId;
 				runtime.lastCode = 'activity';
-				if (!config.autoSign) {
+				if (result.activity.signed) {
+					// 台账里已经签过：不再重复提交，只在首次发现时记一条，避免刷屏
+					if (!runtime.reportedActivities.has(activeId)) {
+						runtime.reportedActivities.add(activeId);
+						const signTime = result.activity.signedTime
+							? `（${formatSignTime(result.activity.signedTime)}）`
+							: '';
+						addLog(accountId, 'info', `签到活动「${activityName}」已签到${signTime}，跳过重复签到`);
+					}
+				} else if (!config.autoSign) {
 					// 自动签到关闭：只记录一次，不调用签到接口
 					if (!runtime.reportedActivities.has(activeId)) {
 						runtime.reportedActivities.add(activeId);
 						addLog(
 							accountId,
 							'info',
-							`检测到签到活动「${result.activity.name || activeId}」，自动签到已关闭，请手动签到`
+							`检测到签到活动「${activityName}」，自动签到已关闭，请手动签到`
 						);
 					}
 				} else if (!runtime.signedActivities.has(activeId)) {

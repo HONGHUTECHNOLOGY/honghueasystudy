@@ -120,8 +120,19 @@
 					<div class="activity__head">
 						<strong class="ellipsis">{{ activityName(item) }}</strong>
 						<span class="chip on">{{ activityType(item) }}</span>
+						<span
+							v-if="activitySigned(item)"
+							class="chip chip--state is-on"
+						>
+							已签到
+						</span>
 					</div>
-					<p class="activity__meta faint">活动 ID：{{ activityId(item) }}</p>
+					<p class="activity__meta faint">
+						活动 ID：{{ activityId(item) }}
+						<template v-if="activitySigned(item)">
+							· 签到时间 {{ activitySignedTime(item) }}
+						</template>
+					</p>
 				</div>
 				<p
 					v-else-if="checks[item.id]"
@@ -147,14 +158,14 @@
 					<button
 						type="button"
 						class="btn btn-sm"
-						:disabled="!!busy[item.id]"
+						:disabled="!!busy[item.id] || activitySigned(item)"
 						@click="sign(item)"
 					>
 						<Icon
 							name="check"
 							:size="14"
 						/>
-						{{ busy[item.id] === 'sign' ? '签到中…' : '立即签到' }}
+						{{ busy[item.id] === 'sign' ? '签到中…' : activitySigned(item) ? '已签到' : '立即签到' }}
 					</button>
 					<button
 						type="button"
@@ -532,6 +543,17 @@ function activityId(item: RemoteSigninAccount): string {
 	return activity ? activity.activeId : '';
 }
 
+/** 电脑端台账里是否已有该活动的成功签到 */
+function activitySigned(item: RemoteSigninAccount): boolean {
+	const activity = activityOf(item);
+	return !!(activity && activity.signed);
+}
+
+function activitySignedTime(item: RemoteSigninAccount): string {
+	const activity = activityOf(item);
+	return activity && activity.signedTime ? formatTime(activity.signedTime) : '';
+}
+
 function durationText(item: RemoteSigninAccount): string {
 	return item.config.duration > 0 ? `${item.config.duration} 分钟` : '不限';
 }
@@ -594,13 +616,19 @@ async function sign(item: RemoteSigninAccount) {
 	if (busy[item.id]) return;
 	busy[item.id] = 'sign';
 	try {
+		const activity = activityOf(item);
 		const data = await api.signinSign(item.id);
 		toast(data.result.message, data.result.ok ? 'success' : 'error');
-		/** 签完之后活动已处理，清掉活动卡片，只保留结果文案 */
-		checks[item.id] = {
-			code: data.result.ok ? 'no-activity' : 'error',
-			message: data.result.message
-		};
+		if (data.result.ok && activity) {
+			/** 签完保留活动卡片并标注「已签到」，方便确认结果；活动过期后检测自然消失 */
+			checks[item.id] = {
+				code: 'activity',
+				message: data.result.message,
+				activity: { ...activity, signed: true, signedTime: activity.signedTime || Date.now() }
+			};
+		} else if (!data.result.ok) {
+			checks[item.id] = { code: 'error', message: data.result.message };
+		}
 		await load(true);
 	} catch (e) {
 		toast(errorText(e), 'error');
