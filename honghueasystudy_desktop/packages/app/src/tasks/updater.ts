@@ -1,13 +1,13 @@
 import { app, dialog, clipboard, shell } from 'electron';
 import { gt, rcompare } from 'semver';
 import { Logger } from '../logger';
-import { join, dirname } from 'path';
+import { join, dirname, basename } from 'path';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rm, rmSync, statSync, writeFileSync } from 'fs';
 import * as fsMod from 'fs';
 import { getCurrentWebContents, moveWindowToTop } from '../utils';
 import { downloadFromMirrors, hostOf, normalizeUrls } from '../utils/download-source';
 import { resolveInstallDir, spawnSilentInstaller } from '../utils/installer';
-import { spawnProgressWindow } from '../utils/update-window';
+import { spawnProgressWindow, progressLogPath } from '../utils/update-window';
 import { detectLinuxDistro, pickPlatformInstaller } from '../utils/platform-installer';
 import { HonghuApi, ChangelogVersion, UpdateInformationResource } from '@honghu-desktop/common';
 
@@ -63,6 +63,26 @@ interface PendingMeta {
 }
 
 const PENDING_META_NAME = 'pending.json';
+
+/**
+ * 安装任务留痕。
+ *
+ * 之前 `installUpdate()` 调度成功后不留任何记录，重启后 `restorePendingInstaller()`
+ * 只会说「上次已经下载完成，随时可以安装」——用户根本分不清是没点安装、点了没生效，
+ * 还是装失败了。写一份 job 记录后，重启时能读进度窗口日志，把真实结果告诉用户。
+ */
+interface InstallJob {
+	tag: string;
+	startedAt: number;
+	waitPid: number;
+	logPath: string;
+	mode: 'progress-window' | 'silent';
+}
+
+const INSTALL_JOB_NAME = 'install-job.json';
+
+/** 任务记录超过这个时长还遇到「版本没升上去」，就认为上次安装没成功 */
+const INSTALL_JOB_STALE_MS = 30 * 60 * 1000;
 
 let pendingInstaller: PendingInstaller | null = null;
 
@@ -210,6 +230,46 @@ function pendingMetaPath() {
 	return join(pendingDir(), PENDING_META_NAME);
 }
 
+function installJobPath() {
+	return join(pendingDir(), INSTALL_JOB_NAME);
+}
+
+function writeInstallJob(job: InstallJob) {
+	try {
+		mkdirSync(pendingDir(), { recursive: true });
+		writeFileSync(installJobPath(), JSON.stringify(job, null, 4));
+	} catch (e) {
+		logger.warn('写入安装任务记录失败', e);
+	}
+}
+
+function readInstallJob(): InstallJob | null {
+	try {
+		if (!existsSync(installJobPath())) return null;
+		const job = JSON.parse(readFileSync(installJobPath(), 'utf8')) as InstallJob;
+		return job && typeof job.tag === 'string' ? job : null;
+	} catch {
+		return null;
+	}
+}
+
+/** 读取进度窗口日志的尾部，写进 updater.log —— 下次启动一眼能看出上次卡在哪一步 */
+function reportProgressLog(logPath?: string) {
+	if (!logPath || !existsSync(logPath)) {
+		logger.warn('上次安装没有留下进度窗口日志（进程可能根本没起来）');
+		return '';
+	}
+	try {
+		const lines = readFileSync(logPath, 'utf8').split(/\r?\n/).filter(Boolean);
+		const tail = lines.slice(-30);
+		logger.warn('上次安装进度窗口日志（末 ' + tail.length + ' 行）：\n' + tail.join('\n'));
+		return tail.slice(-8).join(' | ');
+	} catch (e) {
+		logger.warn('读取安装日志失败', e);
+		return '';
+	}
+}
+
 function savePendingMeta(pending: PendingInstaller) {
 	try {
 		mkdirSync(pendingDir(), { recursive: true });
@@ -283,12 +343,26 @@ export async function restorePendingInstaller(): Promise<boolean> {
 			size: meta.size
 		};
 		logger.info(`恢复上次已下载的安装包：${meta.tag}（${meta.exePath}）`);
+
+		/*
+		 * 版本仍然低于待装版本，说明上次那次安装没有落盘。
+		 * 有 job 记录 = 用户点过「立即安装」，此时不要再笼统地说「已下载待安装」，
+		 * 而是把进度窗口日志读出来，并给渲染端一个明确的「上次安装未完成」状态。
+		 */
+		const job = readInstallJob();
+		const attempted = !!job && job.tag === meta.tag && Date.now() - job.startedAt < INSTALL_JOB_STALE_MS;
+		const logTail = attempted ? reportProgressLog(job!.logPath) : '';
+
 		getCurrentWebContents().send('update-downloaded', {
 			tag: meta.tag,
 			size: meta.size,
 			installDir: meta.installDir,
 			runDir: dirname(app.getPath('exe')),
-			restored: true
+			restored: true,
+			failed: attempted,
+			exePath: meta.exePath,
+			logPath: attempted ? job!.logPath : undefined,
+			logTail
 		});
 		return true;
 	} catch (e) {
@@ -588,6 +662,28 @@ export async function updateApp(newVersion: UpdateInformationResource): Promise<
 }
 
 /**
+ * 安装专用退出：先通知渲染端同步保存，再用 `app.exit()` 强制结束。
+ *
+ * 不能用 `app.quit()`：它触发的 `window.on('close')` 会 preventDefault，进程退出
+ * 完全依赖渲染端回执；而 `closeAllBrowser()` 只判断 `processes.length`（不看运行状态），
+ * 一个残留的浏览器对象就会弹确认框把流程挂死。这时安装进度窗口的 `WaitPid`
+ * 永远等不到进程消失，安装器根本不会启动 —— 用户看到的就是「软件退出后没反应」。
+ * `app.exit()` 不触发任何 close/before-quit 事件，是最确定的退出方式。
+ */
+function exitForInstall(delay: number) {
+	try {
+		const wc = getCurrentWebContents();
+		if (wc && !wc.isDestroyed()) wc.send('prepare-exit');
+	} catch (e) {
+		logger.warn('通知渲染端保存配置失败（不影响安装）', e);
+	}
+	setTimeout(() => {
+		logger.info('安装流程：强制退出本进程（app.exit）');
+		app.exit(0);
+	}, delay);
+}
+
+/**
  * 第二步：静默覆盖安装并退出。
  *
  * 用安装包而不是替换 resources/app：安装包会把 Electron 运行时、内置扩展 extension/、
@@ -625,6 +721,10 @@ export async function installUpdate(): Promise<{ ok: boolean }> {
 	 * 窗口是独立的 PowerShell 进程，负责等本进程退出 → 启动安装器 → 装完自动拉起新版本。
 	 * 环境不支持时（找不到 powershell.exe 等）必须回退到原来的静默安装，不能因此放弃更新。
 	 */
+	const logPath = progressLogPath(pendingDir());
+	// 进度窗口按「pid + 进程名」双重判定，PID 被复用时不会一直等一个无关的进程
+	const waitName = basename(app.getPath('exe')).replace(/\.exe$/i, '');
+
 	if (process.platform === 'win32') {
 		const targetExe = resolved.exeName ? join(pending.installDir, resolved.exeName) : app.getPath('exe');
 		const win = spawnProgressWindow({
@@ -632,16 +732,22 @@ export async function installUpdate(): Promise<{ ok: boolean }> {
 			installDir: pending.installDir,
 			appExe: targetExe,
 			waitPid: process.pid,
+			waitName,
 			version: pending.tag,
 			scriptDir: pendingDir(),
 			onLog: (level, msg) => (level === 'warn' ? logger.warn(msg) : logger.info(msg))
 		});
 		if (win.ok) {
+			writeInstallJob({
+				tag: pending.tag,
+				startedAt: Date.now(),
+				waitPid: process.pid,
+				logPath: win.logPath || logPath,
+				mode: 'progress-window'
+			});
 			logger.info('退出以完成安装（进度窗口接管，装完自动启动新版本）');
-			// 给渲染端回执与窗口显示留一点时间；安装器和窗口都是 detached 的，不受影响
-			setTimeout(() => {
-				app.quit();
-			}, 900);
+			// 给渲染端回执与窗口显示留一点时间；窗口是 detached 的，不受影响
+			exitForInstall(1200);
 			return { ok: true };
 		}
 		logger.warn('安装进度窗口不可用，回退为静默安装（安装期间无界面）');
@@ -653,11 +759,15 @@ export async function installUpdate(): Promise<{ ok: boolean }> {
 		onSpawn: (pid) => logger.info('安装程序已接管（pid=' + pid + '），即将退出本程序')
 	});
 
-	logger.info('退出以完成安装');
-	// 给渲染端回执一点时间，再退出；安装器是 detached 的，不受影响
-	setTimeout(() => {
-		app.quit();
-	}, 400);
+	writeInstallJob({
+		tag: pending.tag,
+		startedAt: Date.now(),
+		waitPid: process.pid,
+		logPath,
+		mode: 'silent'
+	});
+	logger.info('退出以完成安装（静默安装，安装期间无界面）');
+	exitForInstall(800);
 
 	return { ok: true };
 }

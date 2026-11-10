@@ -2,7 +2,7 @@ import { UpdateInformationResource } from '@honghu-desktop/common';
 import { store } from '../store';
 import { electron } from '../utils/node';
 import { notify } from './notify';
-import { Message, Modal, Notification, Progress } from '@arco-design/web-vue';
+import { Button, Message, Modal, Notification, Progress } from '@arco-design/web-vue';
 import { defineComponent, h, reactive } from 'vue';
 import { remote } from './remote';
 import { processes } from './process';
@@ -193,7 +193,21 @@ export function activeIpcRenderListener() {
 	 */
 	ipcRenderer.on(
 		'update-downloaded',
-		(e, info: { tag?: string; size?: number; installDir?: string; runDir?: string; restored?: boolean }) => {
+		(
+			e,
+			info: {
+				tag?: string;
+				size?: number;
+				installDir?: string;
+				runDir?: string;
+				restored?: boolean;
+				/** 上次已经点过安装但版本没升上去 */
+				failed?: boolean;
+				exePath?: string;
+				logPath?: string;
+				logTail?: string;
+			}
+		) => {
 			// 下载已结束，先把进度窗口收掉，再弹「立即安装」确认
 			hideDownloadProgress();
 			Notification.remove('updater');
@@ -209,9 +223,19 @@ export function activeIpcRenderListener() {
 			const elsewhere =
 				!!info.runDir && !!info.installDir && info.runDir.toLowerCase() !== info.installDir.toLowerCase();
 
+			/** 打开日志 / 直接运行安装包的最后一条人工兜底 */
+			const openTarget = (p?: string) => {
+				if (!p) return;
+				remote.methods.call('openFolder', p).catch((err) => Message.error('打开失败：' + err));
+			};
+
 			Modal.confirm({
-				title: info.restored ? '已下载的更新待安装' : '安装包已下载完成',
-				okText: '立即安装',
+				title: info.failed
+					? '上次安装未完成'
+					: info.restored
+						? '已下载的更新待安装'
+						: '安装包已下载完成',
+				okText: info.failed ? '重试安装' : '立即安装',
 				cancelText: '稍后安装',
 				maskClosable: false,
 				width: 480,
@@ -227,11 +251,30 @@ export function activeIpcRenderListener() {
 					h('div', [
 						h(
 							'div',
-							info.restored
-								? `新版本 ${info.tag} 的安装包上次已经下载完成，随时可以安装。`
-								: `新版本 ${info.tag} 已下载完成。`
+							info.failed
+								? `上次安装 v${info.tag} 没有生效，软件仍是旧版本。可以重试，也可以直接运行已下载的安装包。`
+								: info.restored
+									? `新版本 ${info.tag} 的安装包上次已经下载完成，随时可以安装。`
+									: `新版本 ${info.tag} 已下载完成。`
 						),
 						h('div', '点击「立即安装」会关闭本软件并开始安装，安装完成后请重新打开软件。'),
+						info.failed && info.logTail
+							? h(
+									'div',
+									{ style: 'margin-top:8px;opacity:.6;font-size:12px;word-break:break-all' },
+									`上次安装日志：${info.logTail}`
+							  )
+							: null,
+						info.failed
+							? h('div', { style: 'margin-top:10px;display:flex;gap:8px' }, [
+									info.logPath
+										? h(Button, { size: 'mini', onClick: () => openTarget(info.logPath) }, () => '查看安装日志')
+										: null,
+									info.exePath
+										? h(Button, { size: 'mini', onClick: () => openTarget(info.exePath) }, () => '手动运行安装包')
+										: null
+							  ])
+							: null,
 						info.installDir
 							? h('div', { style: 'margin-top:8px;opacity:.6;font-size:12px' }, `安装目录：${info.installDir}`)
 							: null,

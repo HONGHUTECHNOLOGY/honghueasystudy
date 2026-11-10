@@ -257,6 +257,8 @@ onMounted(async () => {
 		if (res === false) {
 			isExiting = false;
 			console.log('有浏览器拒绝关闭，取消退出');
+			// 主进程有 4 秒强制退出看门狗，用户选「取消」必须把它撤掉
+			ipcRenderer.send('cancel-exit');
 			return;
 		}
 		console.log('保存数据中...');
@@ -266,6 +268,21 @@ onMounted(async () => {
 		m.close();
 		console.log('数据已保存');
 		remote.app.call('exit', 0);
+	});
+
+	/**
+	 * 安装更新的强制退出通道。
+	 *
+	 * 主进程改用 app.exit(0)，不走 window close → 渲染端回执那条链路（避免被
+	 * 残留浏览器对象的确认框挂死），所以配置必须在这里同步落一次盘。
+	 */
+	ipcRenderer.on('prepare-exit', () => {
+		try {
+			store.render.browser.root = JSON.parse(JSON.stringify(root()));
+			saveStoreToLocalSync(store);
+		} catch (e) {
+			console.error('退出前保存数据失败', e);
+		}
 	});
 });
 

@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, ipcMain } from 'electron';
 import { remoteRegister } from './src/tasks/remote.register';
 import { initStore } from './src/tasks/init.store';
 import { autoLaunch } from './src/tasks/auto.launch';
@@ -27,6 +27,32 @@ const logger = Logger('launch');
  * 收进托盘会让 app.quit 被取消，安装器却已经在改文件。
  */
 let quitRequested = false;
+
+/**
+ * 退出看门狗。
+ *
+ * `window.on('close')` 会无条件 preventDefault，退出完全依赖渲染端回执；
+ * 渲染端一旦卡在确认框、异步保存或 IPC 上，app.quit() 就永远完不成 ——
+ * 安装进度窗口的 `WaitPid` 也就永远等不到进程消失，安装器不会启动。
+ * 这里给一条不依赖渲染端的强制退出口，保证「点了安装」之后本进程一定会消失。
+ */
+let forceExitTimer: NodeJS.Timeout | null = null;
+
+function armForceExit() {
+	if (forceExitTimer) return;
+	forceExitTimer = setTimeout(() => {
+		logger.warn('退出流程超时，强制结束本进程（app.exit）');
+		app.exit(0);
+	}, 4000);
+}
+
+/** 渲染端点了「取消关闭」（还有浏览器在跑）时必须撤销看门狗，否则用户的选择会被 4 秒后强制退出覆盖 */
+ipcMain.on('cancel-exit', () => {
+	if (forceExitTimer) {
+		clearTimeout(forceExitTimer);
+		forceExitTimer = null;
+	}
+});
 
 app.setName('鸿鹄易学');
 
@@ -121,13 +147,13 @@ function bootstrap() {
 					quitRequested = true;
 				});
 
-				app.on('quit', (e) => {
-					e.preventDefault();
-					// 交给渲染层去关闭浏览器
-					if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-						window.webContents.send('close');
-					}
-				});
+			app.on('quit', () => {
+				// quit 事件不可取消，不能在这里 preventDefault：
+				// 真到了这一步就必须让进程结束，否则安装器永远等不到文件解锁。
+				if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+					window.webContents.send('close');
+				}
+			});
 
 				window.on('close', (e) => {
 					e.preventDefault();
@@ -141,6 +167,8 @@ function bootstrap() {
 					if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
 						window.webContents.send('close');
 					}
+					// 渲染端不回执也要退出（尤其安装更新时，进度窗口正等着本进程消失）
+					armForceExit();
 				});
 
 				window.webContents.once('did-finish-load', () => {

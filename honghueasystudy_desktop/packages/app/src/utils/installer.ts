@@ -125,6 +125,14 @@ export function spawnSilentInstaller(opts: SpawnInstallerOptions): Promise<void>
 
 /** 卸载注册表键：electron-builder 由 appId 派生的固定 GUID，perUser 在 HKCU、perMachine 在 HKLM */
 export const UNINSTALL_GUID = '64082d16-5325-5875-8aa5-449a32c87353';
+/**
+ * 历史上换过 appId，机器上可能同时留着新旧两个卸载项：
+ * - `64082d16-...`：3.0.4 时期的残留（DisplayName 仍是 3.0.4）
+ * - `7b3f33f6-...`：当前 5.x 的安装项
+ * 只查第一个会命中过期条目，靠全量搜索兜底虽然也能找对，但慢且容易撞上别的残留目录。
+ * 精确键按「新 → 旧」顺序都查一遍，最先命中的才是权威安装位置。
+ */
+export const UNINSTALL_GUIDS = ['7b3f33f6-c894-54e2-b7dc-f44d510d31cd', UNINSTALL_GUID];
 /** 兜底搜索时用的显示名关键词（安装项的 DisplayName 形如「鸿鹄易学 3.0.4」） */
 const APP_DISPLAY_KEYWORD = '鸿鹄易学';
 const UNINSTALL_ROOTS = [
@@ -371,10 +379,14 @@ async function readUninstallEntries(runReg: RegRunner, force = false): Promise<R
 	const entries: RegEntry[] = [];
 	// 1) 精确键最快（约 30ms），新版本 appId 不变，正常都命中这里
 	for (const root of UNINSTALL_ROOTS) {
-		try {
-			entries.push(...parseRegQueryOutput(await runReg(['query', `${root}\\${UNINSTALL_GUID}`])));
-		} catch {
-			// 该根下没有这个键，继续试下一个
+		for (const guid of UNINSTALL_GUIDS) {
+			try {
+				entries.push(...parseRegQueryOutput(await runReg(['query', `${root}\\${guid}`])));
+				// 同一个根下找到就够，不必再查旧 GUID
+				break;
+			} catch {
+				// 该根下没有这个键，继续试下一个 GUID
+			}
 		}
 	}
 
