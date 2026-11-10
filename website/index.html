@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>鸿鹄易学 - 网课自动学习助手 | 自动刷课 · AI 答题 · 七大平台</title>
-  <meta name="description" content="鸿鹄易学是一款支持超星学习通、知到智慧树、职教云、智慧职教、雨课堂、中国大学MOOC、U校园七大网课平台的浏览器插件与桌面端软件，集自动刷课、AI 自动答题、题库搜题、视频倍速与隐形反检测于一体，MIT 开源。">
-  <meta name="keywords" content="鸿鹄易学,网课助手,自动刷课,AI答题,超星学习通,智慧树,职教云,雨课堂,中国大学MOOC,U校园">
+  <title>鸿鹄易学 - 网课自动学习助手 | 自动刷课 · AI 答题 · 超星签到</title>
+  <meta name="description" content="鸿鹄易学是一款支持超星学习通、知到智慧树、职教云、智慧职教、雨课堂、中国大学MOOC、U校园、实验室安全考试平台八大网课平台的浏览器插件与桌面端软件，集自动刷课、AI 自动答题、视频弹题、题库搜题、超星签到与手机远程控制于一体，MIT 开源。">
+  <meta name="keywords" content="鸿鹄易学,网课助手,自动刷课,AI答题,视频弹题,超星签到,远程控制,超星学习通,智慧树,职教云,雨课堂,中国大学MOOC,U校园,实验室安全考试平台">
   <meta name="author" content="鸿鹄科技">
   <meta property="og:type" content="website">
   <meta property="og:title" content="鸿鹄易学 - 网课自动学习助手">
-  <meta property="og:description" content="自动刷课 · AI 答题 · 覆盖七大网课平台。浏览器插件 × 桌面工作站，MIT 开源。">
+  <meta property="og:description" content="自动刷课 · AI 答题 · 超星签到 · 覆盖八大网课平台。浏览器插件 × 桌面工作站，MIT 开源。">
   <meta property="og:image" content="assets/img/icon.png">
   <meta name="twitter:card" content="summary">
   <meta name="theme-color" content="#1E6FFF">
@@ -26,6 +26,7 @@
   <script src="assets/js/counters.js" defer></script>
   <script src="assets/js/interactions.js" defer></script>
   <script src="assets/js/downloads.js" defer></script>
+  <script src="assets/js/stats.js" defer></script>
 </head>
 <body>
 
@@ -66,18 +67,24 @@
       <div class="hero-glow" aria-hidden="true"></div>
       <div class="container hero-inner">
         <div class="hero-copy">
-          <span class="badge" data-reveal="fade">
-            <i class="dot" aria-hidden="true"></i>
-            v{{VERSION}} · MIT 开源
-          </span>
+          <div class="hero-badges" data-reveal="fade">
+            <span class="badge">
+              <i class="dot" aria-hidden="true"></i>
+              v{{VERSION}} · MIT 开源
+            </span>
+            <a class="hero-dl" href="#download" data-scroll data-dl-hero hidden title="GitHub + GitCode 累计下载量">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+              已下载 <strong data-dl-count="total">0</strong> 次
+            </a>
+          </div>
           <h1 class="hero-title" data-reveal="lines" style="--dl:.1s" aria-label="鸿鹄易学，让网课学习，交给 AI。">
             <span class="hl-mask"><span class="hl">鸿鹄易学</span></span>
             <span class="hl-mask"><span class="hl"><span class="text-grad">让网课学习，</span></span></span>
             <span class="hl-mask"><span class="hl"><span class="text-grad">交给&nbsp;AI。</span></span></span>
           </h1>
           <p class="hero-sub" data-reveal="lines" style="--dl:1.05s">
-            <span class="hl-mask"><span class="hl">自动刷课 · AI 自动答题 · <span class="nowrap">题库搜题 · 隐形反检测。</span></span></span>
-            <span class="hl-mask"><span class="hl">一个插件，覆盖超星、<span class="nowrap">智慧树等七大网课平台。</span></span></span>
+            <span class="hl-mask"><span class="hl">自动刷课 · AI 答题 · 题库搜题 · <span class="nowrap">超星签到 · 隐形反检测。</span></span></span>
+            <span class="hl-mask"><span class="hl">一个插件，覆盖超星、<span class="nowrap">智慧树等八大网课平台。</span></span></span>
           </p>
           <div class="hero-cta">
             <a class="btn btn-primary" data-reveal="pop" style="--i:0" href="#download" data-scroll>
@@ -94,7 +101,7 @@
             </a>
           </div>
           <ul class="hero-stats" data-reveal="fade" style="--dl:1.4s">
-            <li><strong><span class="counter" data-count="7">0</span></strong><span>网课平台</span></li>
+            <li><strong><span class="counter" data-count="8">0</span></strong><span>网课平台</span></li>
             <li><strong><span class="counter" data-count="4">0</span></strong><span>题型自动作答</span></li>
             <li class="stat-text"><strong>自定义</strong><span>AI 大模型接入</span></li>
           </ul>
@@ -140,6 +147,7 @@
                 <span>雨课堂</span><i></i>
                 <span>中国大学MOOC</span><i></i>
                 <span>U校园</span><i></i>
+                <span>实验室安全</span><i></i>
               </div>
               <div class="hps-group" aria-hidden="true">
                 <span>超星学习通</span><i></i>
@@ -149,6 +157,7 @@
                 <span>雨课堂</span><i></i>
                 <span>中国大学MOOC</span><i></i>
                 <span>U校园</span><i></i>
+                <span>实验室安全</span><i></i>
               </div>
             </div>
           </div>
@@ -161,17 +170,18 @@
       <div class="container">
         <div class="section-head" data-reveal="head">
           <span class="section-eyebrow">Platforms</span>
-          <h2 class="section-title"><span class="hl-mask"><span class="hl">一个插件，<span class="text-grad">七大平台</span></span></span></h2>
+          <h2 class="section-title"><span class="hl-mask"><span class="hl">一个插件，<span class="text-grad">八大平台</span></span></span></h2>
           <p class="section-sub">从公共课到专业课，从视频学习到作业考试，主流网课平台一站式覆盖。</p>
         </div>
         <ul class="platform-grid">
-          <li class="platform-card card" data-reveal="card-3d" style="--i:0"><span class="pf-index" aria-hidden="true">01</span><i class="pf-badge" style="--pf:#FF6B35">超</i><strong>超星学习通</strong><span>视频 · 阅读 · 章节任务点 · 作业考试</span></li>
+          <li class="platform-card card" data-reveal="card-3d" style="--i:0"><span class="pf-index" aria-hidden="true">01</span><i class="pf-badge" style="--pf:#FF6B35">超</i><strong>超星学习通</strong><span>视频 · 阅读 · 任务点 · 作业考试 · 签到</span></li>
           <li class="platform-card card" data-reveal="card-3d" style="--i:1"><span class="pf-index" aria-hidden="true">02</span><i class="pf-badge" style="--pf:#22C55E">知</i><strong>知到 · 智慧树</strong><span>共享课 · 翻转课 · AI 智慧课程</span></li>
           <li class="platform-card card" data-reveal="card-3d" style="--i:2"><span class="pf-index" aria-hidden="true">03</span><i class="pf-badge" style="--pf:#8B5CF6">职</i><strong>职教云</strong><span>课程学习 · 资源库 PPT · 作业考试</span></li>
           <li class="platform-card card" data-reveal="card-3d" style="--i:3"><span class="pf-index" aria-hidden="true">04</span><i class="pf-badge" style="--pf:#0EA5E9">智</i><strong>智慧职教 icve</strong><span>MOOC 学院 · AI 课程 · AI 测验</span></li>
           <li class="platform-card card" data-reveal="card-3d" style="--i:4"><span class="pf-index" aria-hidden="true">05</span><i class="pf-badge" style="--pf:#F59E0B">雨</i><strong>雨课堂</strong><span>课程学习 · AI 学伴 · 字体解密</span></li>
           <li class="platform-card card" data-reveal="card-3d" style="--i:5"><span class="pf-index" aria-hidden="true">06</span><i class="pf-badge" style="--pf:#EF4444">慕</i><strong>中国大学MOOC</strong><span>视频 · 富文本 · 讨论 · 作业考试</span></li>
           <li class="platform-card card" data-reveal="card-3d" style="--i:6"><span class="pf-index" aria-hidden="true">07</span><i class="pf-badge" style="--pf:#6366F1">U</i><strong>U校园</strong><span>普通版 · 经典 AI 版 · 新 AI 版</span></li>
+          <li class="platform-card card" data-reveal="card-3d" style="--i:7"><span class="pf-index" aria-hidden="true">08</span><i class="pf-badge" style="--pf:#14B8A6">实</i><strong>实验室安全考试平台</strong><span>课程学习 · 考试自动作答</span></li>
         </ul>
       </div>
     </section>
@@ -225,6 +235,26 @@
             <h3>贴心小细节</h3>
             <p>解除页面复制限制、禁止骚扰弹窗、系统通知提醒、自动检测更新。</p>
           </li>
+          <li class="feature-card card" data-reveal="card-pop" style="--i:8">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/><path d="M9 15.5l2 2 4-4"/></svg></div>
+            <h3>超星签到助手</h3>
+            <p>自动轮询签到活动并监听班级群消息，普通、拍照、二维码、手势、位置、签到码六种类型全支持，人在外面也能远程签到。</p>
+          </li>
+          <li class="feature-card card" data-reveal="card-pop" style="--i:9">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.6 8.6 0 0 1-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0 1 12.5 3 8.4 8.4 0 0 1 21 11.5z"/><path d="M9.7 9.2a2.4 2.4 0 1 1 3.2 2.3c-.6.3-.9.8-.9 1.4v.3"/><path d="M12 16.2h.01"/></svg></div>
+            <h3>视频弹题自动作答</h3>
+            <p>播放中途弹出的题目自动识别并作答，超星、智慧树均已支持，AI 与题库双通道兜底。</p>
+          </li>
+          <li class="feature-card card" data-reveal="card-pop" style="--i:10">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2.6"/><path d="M11 18.5h2"/></svg></div>
+            <h3>手机远程控制台</h3>
+            <p>桌面端扫码接入，在手机上查看实时画面、切换标签页、选课、签到，随时掌握每个账号的进度。</p>
+          </li>
+          <li class="feature-card card" data-reveal="card-pop" style="--i:11">
+            <div class="icon-bubble"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></svg></div>
+            <h3>定时任务 · 无人值守</h3>
+            <p>按实例设定每日执行时间，到点自动拉起浏览器跑刷课方案，跑完自动收尾，支持托盘常驻与开机自启。</p>
+          </li>
         </ul>
       </div>
     </section>
@@ -235,29 +265,29 @@
       <div class="container">
         <div class="section-head" data-reveal="head">
           <span class="section-eyebrow">What's New</span>
-          <h2 class="section-title on-dark"><span class="hl-mask"><span class="hl">v5.0.0</span></span><span class="hl-mask"><span class="hl text-grad">答题引擎，全面进化</span></span></h2>
-          <p class="section-sub on-dark-sub">一次以"答得更准"为核心的大版本更新。</p>
+          <h2 class="section-title on-dark"><span class="hl-mask"><span class="hl">v{{VERSION}}</span></span><span class="hl-mask"><span class="hl text-grad">无人值守，全面进化</span></span></h2>
+          <p class="section-sub on-dark-sub">从「帮你点」到「不用管」：5.x 系列把签到、定时与远程接管补齐了。</p>
         </div>
         <ul class="whatsnew-grid">
           <li class="wn-card" data-reveal="slide-alt" style="--i:0">
             <span class="wn-num">01</span>
-            <h3>全新答题算法</h3>
-            <p>单选 / 多选 / 判断 / 填空匹配逻辑重写，精确匹配、去标点、多片段答案适配，命中率显著提升。</p>
+            <h3>超星签到助手</h3>
+            <p>独立签到模块，自动检测签到活动并监听班级群消息；六种签到类型、位置选点、拍照上传、手机远程签到一应俱全。</p>
           </li>
           <li class="wn-card" data-reveal="slide-alt" style="--i:1">
             <span class="wn-num">02</span>
-            <h3>AI 标注</h3>
-            <p>搜题结果自动标注来源与置信度，AI 答案与题库答案一眼可辨。</p>
+            <h3>手机远程控制台</h3>
+            <p>扫码把控制台装进手机：实时截图、切换标签页、直接选课，还能触发刷课方案、查看下次执行时间。</p>
           </li>
           <li class="wn-card" data-reveal="slide-alt" style="--i:2">
             <span class="wn-num">03</span>
-            <h3>自定义答题器</h3>
-            <p>开放 AnswererWrapper 配置，接入你自己的题库服务，想怎么答，由你定义。</p>
+            <h3>弹题也交给 AI</h3>
+            <p>视频中途弹出的题目自动作答，判断、量表等题型持续加固；超星、智慧树双平台覆盖，AI 与题库双通道。</p>
           </li>
           <li class="wn-card" data-reveal="slide-alt" style="--i:3">
             <span class="wn-num">04</span>
-            <h3>可视化辅助 + 移动端</h3>
-            <p>桌面端软件辅助实现可视化点击、模拟输入填空；悬浮面板全面适配手机屏幕。</p>
+            <h3>更新与下载更省心</h3>
+            <p>更新包支持 GitCode 镜像与多源回退，探速选取可用源后静默覆盖安装，装完即用、无需卸载。</p>
           </li>
         </ul>
       </div>
@@ -274,10 +304,11 @@
           <ul class="desktop-points" style="--dl:.35s">
             <li data-reveal="slide-left" style="--i:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>多账号批量刷课</strong><span>浏览器多开分身，独立登录态、分组、拖拽、标签管理</span></div></li>
             <li data-reveal="slide-left" style="--i:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>自动登录 · 验证码破解</strong><span>OCR 图形验证码 + 滑块自动识别，覆盖四大平台</span></div></li>
-            <li data-reveal="slide-left" style="--i:2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>实时画面监控</strong><span>WebRTC 屏幕共享，每个浏览器实例的运行状态一目了然</span></div></li>
-            <li data-reveal="slide-left" style="--i:3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>无人值守</strong><span>无头模式后台运行，开机自启，自动更新</span></div></li>
-            <li data-reveal="slide-left" style="--i:4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>数据安全</strong><span>配置经 AES-256-GCM 加密，密钥存放于系统密钥链，不出本机</span></div></li>
-            <li data-reveal="slide-left" style="--i:5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>开箱即用</strong><span>内置定制 Chrome，自动安装鸿鹄易学扩展</span></div></li>
+            <li data-reveal="slide-left" style="--i:2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>超星签到助手</strong><span>六种签到类型自动检测，位置选点、拍照上传、远程签到</span></div></li>
+            <li data-reveal="slide-left" style="--i:3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>手机远程控制</strong><span>扫码接入，手机上实时看画面、切标签页、选课、签到</span></div></li>
+            <li data-reveal="slide-left" style="--i:4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>定时任务 · 无人值守</strong><span>按实例定时拉起、跑完自动收尾，后台托盘与开机自启</span></div></li>
+            <li data-reveal="slide-left" style="--i:5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>数据安全</strong><span>配置经 AES-256-GCM 加密，密钥存放于系统密钥链，不出本机</span></div></li>
+            <li data-reveal="slide-left" style="--i:6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><div><strong>开箱即用</strong><span>内置定制 Chrome，自动安装鸿鹄易学扩展</span></div></li>
           </ul>
           <div class="hero-cta">
             <a class="btn btn-primary" data-reveal="pop" style="--dl:.9s" href="#download" data-scroll>
@@ -436,6 +467,21 @@
             </details>
           </div>
         </div>
+        <!-- 下载量统计：数据源与 README 徽章一致，任一源不可达时自动隐藏对应项 -->
+        <div class="dl-stats" data-dl-stats aria-label="下载量统计" hidden>
+          <div class="dl-stat" data-dl-stat-item="github" hidden>
+            <strong class="dl-stat-value" data-dl-stat="github">0</strong>
+            <span class="dl-stat-label">GitHub 下载</span>
+          </div>
+          <div class="dl-stat" data-dl-stat-item="gitcode" hidden>
+            <strong class="dl-stat-value" data-dl-stat="gitcode">0</strong>
+            <span class="dl-stat-label">GitCode 下载</span>
+          </div>
+          <div class="dl-stat is-total" data-dl-stat-item="total" hidden>
+            <strong class="dl-stat-value" data-dl-stat="total">0</strong>
+            <span class="dl-stat-label">累计下载</span>
+          </div>
+        </div>
         <div class="dl-releases" data-reveal="fade">
           <span class="dl-releases-label">全部版本与更新记录</span>
           <div class="dl-releases-links">
@@ -462,7 +508,7 @@
         <div class="faq-list">
           <details class="faq-item" name="faq" data-reveal="faq" style="--i:0">
             <summary>支持哪些网课平台？</summary>
-            <p>目前支持超星学习通、知到·智慧树、职教云、智慧职教（icve）、雨课堂、中国大学MOOC、U校园七大平台，覆盖视频学习、阅读任务、作业与考试等场景。</p>
+            <p>目前支持超星学习通、知到·智慧树、职教云、智慧职教（icve）、雨课堂、中国大学MOOC、U校园、实验室安全考试平台八大平台，覆盖视频学习、阅读任务、作业考试与签到等场景。</p>
           </details>
           <details class="faq-item" name="faq" data-reveal="faq" style="--i:1">
             <summary>AI 答题如何配置？</summary>
@@ -470,17 +516,21 @@
           </details>
           <details class="faq-item" name="faq" data-reveal="faq" style="--i:2">
             <summary>手机上能用吗？</summary>
-            <p>可以。悬浮操作面板已全面适配移动端屏幕，配合支持扩展的移动浏览器即可使用。</p>
+            <p>可以。桌面版内置远程控制台：开启后手机扫码或打开链接即可接入，查看实时画面、切换标签页、选课与签到，脚本本身仍在电脑上运行，手机无需安装扩展。</p>
           </details>
           <details class="faq-item" name="faq" data-reveal="faq" style="--i:3">
+            <summary>签到能自动完成吗？</summary>
+            <p>桌面版内置超星签到助手，可保存多个账号并轮询签到活动，同时监听班级群消息；开启自动签到后检测到活动直接签到，关闭时只提醒不代签。普通、拍照、二维码、手势、位置、签到码六种类型均支持。</p>
+          </details>
+          <details class="faq-item" name="faq" data-reveal="faq" style="--i:4">
             <summary>我的数据安全吗？</summary>
             <p>桌面版所有配置均经 AES-256-GCM 加密存储，加密密钥保存在操作系统密钥链中；所有数据留在本机，不经过任何第三方服务器。</p>
           </details>
-          <details class="faq-item" name="faq" data-reveal="faq" style="--i:4">
+          <details class="faq-item" name="faq" data-reveal="faq" style="--i:5">
             <summary>桌面版和浏览器插件是什么关系？</summary>
             <p>插件是核心功能本体；桌面版是多开管理与无人值守的运行环境，内置了同款插件并自动安装、自动升级。只用浏览器装插件即可，需要多账号批量时再上桌面版。</p>
           </details>
-          <details class="faq-item" name="faq" data-reveal="faq" style="--i:5">
+          <details class="faq-item" name="faq" data-reveal="faq" style="--i:6">
             <summary>它是开源的吗？</summary>
             <p>是。鸿鹄易学由鸿鹄科技开发，以 MIT 协议开源，完整代码托管在 GitCode 与 GitHub，欢迎 Star 与贡献。</p>
           </details>

@@ -330,6 +330,79 @@ html.menu-open {
   min-width: 0;
 }
 
+/* Hero 顶部标签行：版本徽章 + 下载量小胶囊（高度与徽章一致，不额外占垂直空间） */
+.hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.hero-dl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px 6px 11px;
+  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 0 0 1px rgba(13, 26, 60, 0.08), 0 2px 8px -4px rgba(13, 26, 60, 0.18);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+  white-space: nowrap;
+  transition: color 0.3s var(--ease-apple), box-shadow 0.3s var(--ease-apple),
+    transform 0.3s var(--ease-apple);
+}
+
+.hero-dl[hidden] {
+  display: none;
+}
+
+/* 数据到达后轻轻弹出，避免胶囊「凭空闪现」 */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-dl:not([hidden]) {
+    animation: hero-dl-in 0.5s var(--ease-apple) backwards;
+  }
+}
+
+@keyframes hero-dl-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hero-dl svg {
+  width: 13px;
+  height: 13px;
+  color: var(--brand);
+}
+
+.hero-dl strong {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  transition: color 0.3s var(--ease-apple);
+}
+
+.hero-dl:hover {
+  color: var(--brand);
+  box-shadow: inset 0 0 0 1px rgba(30, 111, 255, 0.26), 0 8px 18px -12px rgba(30, 111, 255, 0.55);
+  transform: translateY(-1px);
+}
+
+.hero-dl:hover strong {
+  color: var(--brand);
+}
+
 /* Hero 大标题 */
 .hero-title {
   margin-top: 22px;
@@ -862,16 +935,29 @@ html.menu-open {
   font-style: normal;
   font-weight: 700;
   font-size: 1.14rem;
+  line-height: 1;
   color: #fff;
-  background: linear-gradient(135deg, var(--pf, #1e6fff), #7db4ff);
-  background: linear-gradient(
-    135deg,
-    var(--pf, #1e6fff),
-    color-mix(in srgb, var(--pf, #1e6fff) 58%, #7db4ff)
-  );
+  /* 底色与渐变拆开写：即使渐变在个别浏览器里失效，也还有品牌底色兜底，
+     不会出现「白字 + 无背景」的空白图标 */
+  background-color: var(--pf, #1e6fff);
+  background-image: linear-gradient(135deg, var(--pf, #1e6fff), #7db4ff);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 4px rgba(10, 20, 60, 0.12),
     0 10px 20px -10px rgba(10, 20, 60, 0.4);
   transition: transform 0.5s var(--ease-apple), box-shadow 0.5s var(--ease-apple);
+}
+
+/* color-mix 需要 Chrome 111+ / Safari 16.2+ / Firefox 113+。
+   不支持的浏览器会把它判定为「计算期无效」，覆盖掉整条 background 声明，
+   结果是白字失去底色、图标看起来一片空白。放进 @supports 后，
+   老浏览器继续使用上面那层稳定渐变，新浏览器才启用混色版本。 */
+@supports (background-image: linear-gradient(135deg, color-mix(in srgb, red 58%, blue), blue)) {
+  .pf-badge {
+    background-image: linear-gradient(
+      135deg,
+      var(--pf, #1e6fff),
+      color-mix(in srgb, var(--pf, #1e6fff) 58%, #7db4ff)
+    );
+  }
 }
 
 .platform-card:hover .pf-badge {
@@ -1577,6 +1663,107 @@ html.menu-open {
   color: var(--brand);
   box-shadow: inset 0 0 0 1px rgba(30, 111, 255, 0.32), 0 12px 26px -20px rgba(30, 111, 255, 0.6);
   transform: translateY(-1px);
+}
+
+/* ---------- 下载量统计（数据源与 README 徽章一致） ---------- */
+.dl-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  max-width: 640px;
+  margin: 40px auto 0;
+  padding: 6px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+/* .dl-stats 用了 display:flex，会盖掉 [hidden] 的默认 display:none，需要显式补回 */
+.dl-stats[hidden],
+.dl-stat[hidden] {
+  display: none;
+}
+
+/* 数据到位后才显示，自带淡入（不依赖 reveal.js 的 IntersectionObserver，
+   因为这块内容是异步解除 hidden 的，必须保证解除后一定能看到） */
+@media (prefers-reduced-motion: no-preference) {
+  .dl-stats.is-ready {
+    animation: dl-stats-in 0.6s var(--ease-apple) backwards;
+  }
+}
+
+@keyframes dl-stats-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.dl-stat {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 15px 16px 14px;
+}
+
+.dl-stat + .dl-stat::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: 0;
+  width: 1px;
+  background: var(--line);
+}
+
+.dl-stat-value {
+  font-family: var(--font-mono);
+  font-size: clamp(1.35rem, 2.6vw, 1.7rem);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.dl-stat.is-total .dl-stat-value {
+  color: var(--brand);
+}
+
+.dl-stat-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .dl-stat {
+    padding: 13px 8px 12px;
+  }
+
+  .dl-stat-label {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .dl-stat {
+    padding: 12px 6px 11px;
+  }
+
+  .dl-stat-label {
+    font-size: 0.66rem;
+  }
 }
 
 /* ---------- 桌面端各系统直链 ---------- */
