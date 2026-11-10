@@ -18,9 +18,63 @@ import { SearchInfosElement } from '../elements/search.infos';
 import { RenderScript } from '../render';
 import { dropdownStyle } from '../utils/configs';
 import { trustedClick } from '../utils/safe-click';
-import { OFFICIAL_SITE, GITHUB_REPO, GITCODE_REPO } from '../utils/links';
+import { OFFICIAL_SITE, GITHUB_REPO, GITCODE_REPO, GITHUB_ISSUES, GITCODE_ISSUES } from '../utils/links';
 
 const TAB_WORK_RESULTS_KEY = 'common.work-results.results';
+
+/**
+ * 顶部提示区用的紧凑 Issue 链接片段。
+ * 悬浮窗 container-element 只有 min-width:300px，宽度随内容自适应，
+ * 所以这里必须保持单行短文案，不能放长仓库路径，否则整个面板会被撑宽。
+ */
+function issueLinks(prefix: string) {
+	const link = (label: string, href: string) =>
+		h(
+			'a',
+			{
+				href,
+				target: '_blank',
+				rel: 'noopener noreferrer',
+				style: { color: '#007aff', textDecoration: 'none' }
+			},
+			label
+		);
+	return h('span', [prefix, link('GitHub', GITHUB_ISSUES), ' / ', link('GitCode', GITCODE_ISSUES), ' 提 Issue']);
+}
+
+/**
+ * 两个等宽的 Issue 入口，用 flex 锁死一行。
+ * 不能用 inline-block：它会跟着前面的标题文字挤在同一行，
+ * 宽度不够时第二个按钮就掉到下一行，排版会乱。
+ */
+function issueButtons() {
+	const link = (label: string, href: string) =>
+		h(
+			'a',
+			{
+				href,
+				target: '_blank',
+				rel: 'noopener noreferrer',
+				className: 'base-style-button-secondary',
+				style: {
+					flex: '1',
+					minWidth: '0',
+					margin: '0',
+					padding: '2px 8px',
+					fontSize: '12px',
+					lineHeight: '18px',
+					textAlign: 'center',
+					whiteSpace: 'nowrap',
+					textDecoration: 'none'
+				}
+			},
+			label
+		);
+	return h('div', { style: { display: 'flex', gap: '8px', marginTop: '6px' } }, [
+		link('GitHub 提 Issue', GITHUB_ISSUES),
+		link('GitCode 提 Issue', GITCODE_ISSUES)
+	]);
+}
 
 const state = {
 	workResult: {
@@ -94,15 +148,29 @@ export const CommonProject = Project.create({
 					defaultValue: $ui.notes([
 						'打开任意网课平台，进入视频、作业页面等待脚本运行，',
 						'禁止与其他脚本一起使用（不兼容），也不能开多个相同脚本',
-						'禁止最小化浏览器、切屏，否则可能导致脚本无法运行！'
+						'禁止最小化浏览器、切屏，否则可能导致脚本无法运行！',
+						issueLinks('遇到问题？')
 					]).outerHTML
 				}
 			},
-		onrender({ panel }) {
-			const guide = createGuide();
-			panel.body.replaceChildren(guide);
-		}
-	}),
+			onrender({ panel }) {
+				const guide = createGuide();
+				panel.body.replaceChildren(guide);
+			}
+		}),
+		feedback: new Script({
+			name: '问题反馈',
+			matches: [['所有页面', /.*/]],
+			namespace: 'common.feedback',
+			configs: {
+				notes: {
+					defaultValue: $ui.notes(['欢迎提 Issue，附上「日志」报错能更快定位。']).outerHTML
+				}
+			},
+			onrender({ panel }) {
+				panel.body.replaceChildren(createFeedback());
+			}
+		}),
 		settings: new Script({
 			name: '全局设置',
 			matches: [['所有页面', /.*/]],
@@ -112,7 +180,8 @@ export const CommonProject = Project.create({
 					defaultValue: $ui.notes([
 						'鼠标移动到按钮或者输入框，可以看到提示！',
 						'想要自动答题必须设置 “题库配置” ',
-						'设置后进入章节测试，作业，考试页面即可自动答题。'
+						'设置后进入章节测试，作业，考试页面即可自动答题。',
+						issueLinks('脚本异常？')
 					]).outerHTML
 				},
 				answererWrappers: {
@@ -2408,6 +2477,18 @@ function createAiConfigCard() {
 	]);
 }
 
+/**
+ * 问题反馈面板：欢迎语 + 一整行两个入口 + 提示。
+ * 宽度填满 .script-panel-body，与其他板块（首页各卡片、notes 提示区）保持一致；
+ * 不要单独设固定宽度或 maxWidth，否则面板会被容器撑宽时它仍停在窄宽度上。
+ */
+const createFeedback = () =>
+	h('div', { style: { width: '100%', fontSize: '12px', lineHeight: '1.6' } }, [
+		h('div', {}, '遇到问题或有建议？欢迎到 GitHub 或 GitCode 提 Issue。'),
+		issueButtons(),
+		h('div', { className: 'secondary', style: { marginTop: '6px' } }, '附上平台、现象与「日志」报错能更快定位。')
+	]);
+
 const createGuide = () => {
 	const showProjectDetails = (project: Project) => {
 		$modal.simple({
@@ -2517,6 +2598,17 @@ const createGuide = () => {
 		])
 	]);
 
+	/**
+	 * 首页的问题反馈入口：标题 / 说明 / 按钮各占一行。
+	 * 按钮行单独成块且与文字分离，避免 inline-block 跟标题挤在一行后折行。
+	 * 不设宽度，block 元素会跟平台卡片、aboutCard 一起自动填满 .user-guide。
+	 */
+	const feedbackCard = h('div', { style: { ...cardStyle, marginTop: '8px' } }, [
+		h('div', { style: { marginBottom: '4px', fontWeight: 'bold' } }, '问题反馈'),
+		h('div', { className: 'secondary', style: { fontSize: '12px', lineHeight: '1.6' } }, '脚本不生效、漏题？欢迎到 GitHub 或 GitCode 提 Issue。'),
+		issueButtons()
+	]);
+
 	const aiCfg = CommonProject.scripts.aiSettings.cfg;
 	const aiConfigured = !!(aiCfg.aiEndpoint && aiCfg.aiApiKey && aiCfg.aiModel);
 	const aiGuideCard = !aiConfigured
@@ -2582,7 +2674,8 @@ const createGuide = () => {
 				})
 			])
 		]),
-		aboutCard
+		aboutCard,
+		feedbackCard
 	]);
 };
 

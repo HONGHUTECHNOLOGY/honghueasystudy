@@ -13,3 +13,9 @@ export const GITHUB_REPO = 'https://github.com/HONGHUTECHNOLOGY/honghueasystudy'
 
 /** GitCode 镜像仓库：境内访问与发布包下载 */
 export const GITCODE_REPO = 'https://gitcode.com/honghutech/honghueasystudy';
+
+/** GitHub Issue 反馈入口 */
+export const GITHUB_ISSUES = `${GITHUB_REPO}/issues`;
+
+/** GitCode Issue 反馈入口（境内访问更快） */
+export const GITCODE_ISSUES = `${GITCODE_REPO}/issues`;

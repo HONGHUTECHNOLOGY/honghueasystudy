@@ -927,10 +927,11 @@ export const BackgroundProject = Project.create({
 				await $menu('首页', { scriptPanelLink: CommonProject.scripts.guide });
 				if (currentStudyScript) await $menu('学习', { scriptPanelLink: currentStudyScript });
 				await $menu('结果', { scriptPanelLink: CommonProject.scripts.workResults });
-			await $menu('设置', { scriptPanelLink: CommonProject.scripts.settings });
-			await $menu('AI', { scriptPanelLink: CommonProject.scripts.aiSettings });
-			await $menu('更新', { scriptPanelLink: BackgroundProject.scripts.update });
+				await $menu('设置', { scriptPanelLink: CommonProject.scripts.settings });
+				await $menu('AI', { scriptPanelLink: CommonProject.scripts.aiSettings });
+				await $menu('更新', { scriptPanelLink: BackgroundProject.scripts.update });
 				await $menu('日志', { scriptPanelLink: BackgroundProject.scripts.console });
+				await $menu('反馈', { scriptPanelLink: CommonProject.scripts.feedback });
 			}
 		})
 	}

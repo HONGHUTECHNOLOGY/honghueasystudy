@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-var __HH_BRIDGE_KEY__="7fcbb3c9-6613-4e24-a911-824b2cc7d030";
+var __HH_BRIDGE_KEY__="6078d39a-b4c0-4967-b025-214ac348a296";
 /* 鸿鹄易学 · MAIN world 运行时（ScriptCat 风格）
  *
  * 本文件由 background.js 通过 chrome.userScripts.register({ world: "MAIN" })
@@ -5282,6 +5282,8 @@ try {
   const OFFICIAL_SITE = "https://easystudy.honghutech.eu.org";
   const GITHUB_REPO = "https://github.com/HONGHUTECHNOLOGY/honghueasystudy";
   const GITCODE_REPO = "https://gitcode.com/honghutech/honghueasystudy";
+  const GITHUB_ISSUES = `${GITHUB_REPO}/issues`;
+  const GITCODE_ISSUES = `${GITCODE_REPO}/issues`;
   const $playwright = {
     showError: () => {
       const downloadUrl = OFFICIAL_SITE;
@@ -6729,6 +6731,7 @@ try {
           await lib.$menu("AI", { scriptPanelLink: CommonProject.scripts.aiSettings });
           await lib.$menu("更新", { scriptPanelLink: BackgroundProject.scripts.update });
           await lib.$menu("日志", { scriptPanelLink: BackgroundProject.scripts.console });
+          await lib.$menu("反馈", { scriptPanelLink: CommonProject.scripts.feedback });
         }
       })
     }
@@ -7170,6 +7173,46 @@ try {
     }
   };
   const TAB_WORK_RESULTS_KEY = "common.work-results.results";
+  function issueLinks(prefix) {
+    const link = (label, href) => lib.h(
+      "a",
+      {
+        href,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        style: { color: "#007aff", textDecoration: "none" }
+      },
+      label
+    );
+    return lib.h("span", [prefix, link("GitHub", GITHUB_ISSUES), " / ", link("GitCode", GITCODE_ISSUES), " 提 Issue"]);
+  }
+  function issueButtons() {
+    const link = (label, href) => lib.h(
+      "a",
+      {
+        href,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        className: "base-style-button-secondary",
+        style: {
+          flex: "1",
+          minWidth: "0",
+          margin: "0",
+          padding: "2px 8px",
+          fontSize: "12px",
+          lineHeight: "18px",
+          textAlign: "center",
+          whiteSpace: "nowrap",
+          textDecoration: "none"
+        }
+      },
+      label
+    );
+    return lib.h("div", { style: { display: "flex", gap: "8px", marginTop: "6px" } }, [
+      link("GitHub 提 Issue", GITHUB_ISSUES),
+      link("GitCode 提 Issue", GITCODE_ISSUES)
+    ]);
+  }
   const state$8 = {
     workResult: {
       questionPositionSyncHandler: {
@@ -7230,13 +7273,27 @@ try {
             defaultValue: lib.$ui.notes([
               "打开任意网课平台，进入视频、作业页面等待脚本运行，",
               "禁止与其他脚本一起使用（不兼容），也不能开多个相同脚本",
-              "禁止最小化浏览器、切屏，否则可能导致脚本无法运行！"
+              "禁止最小化浏览器、切屏，否则可能导致脚本无法运行！",
+              issueLinks("遇到问题？")
             ]).outerHTML
           }
         },
         onrender({ panel }) {
           const guide = createGuide();
           panel.body.replaceChildren(guide);
+        }
+      }),
+      feedback: new lib.Script({
+        name: "问题反馈",
+        matches: [["所有页面", /.*/]],
+        namespace: "common.feedback",
+        configs: {
+          notes: {
+            defaultValue: lib.$ui.notes(["欢迎提 Issue，附上「日志」报错能更快定位。"]).outerHTML
+          }
+        },
+        onrender({ panel }) {
+          panel.body.replaceChildren(createFeedback());
         }
       }),
       settings: new lib.Script({
@@ -7248,7 +7305,8 @@ try {
             defaultValue: lib.$ui.notes([
               "鼠标移动到按钮或者输入框，可以看到提示！",
               "想要自动答题必须设置 “题库配置” ",
-              "设置后进入章节测试，作业，考试页面即可自动答题。"
+              "设置后进入章节测试，作业，考试页面即可自动答题。",
+              issueLinks("脚本异常？")
             ]).outerHTML
           },
           answererWrappers: {
@@ -9246,6 +9304,11 @@ try {
       refArea
     ]);
   }
+  const createFeedback = () => lib.h("div", { style: { width: "100%", fontSize: "12px", lineHeight: "1.6" } }, [
+    lib.h("div", {}, "遇到问题或有建议？欢迎到 GitHub 或 GitCode 提 Issue。"),
+    issueButtons(),
+    lib.h("div", { className: "secondary", style: { marginTop: "6px" } }, "附上平台、现象与「日志」报错能更快定位。")
+  ]);
   const createGuide = () => {
     const showProjectDetails = (project2) => {
       lib.$modal.simple({
@@ -9344,6 +9407,11 @@ try {
         linkChip("GitCode 镜像", GITCODE_REPO)
       ])
     ]);
+    const feedbackCard = lib.h("div", { style: { ...cardStyle, marginTop: "8px" } }, [
+      lib.h("div", { style: { marginBottom: "4px", fontWeight: "bold" } }, "问题反馈"),
+      lib.h("div", { className: "secondary", style: { fontSize: "12px", lineHeight: "1.6" } }, "脚本不生效、漏题？欢迎到 GitHub 或 GitCode 提 Issue。"),
+      issueButtons()
+    ]);
     const aiCfg = CommonProject.scripts.aiSettings.cfg;
     const aiConfigured = !!(aiCfg.aiEndpoint && aiCfg.aiApiKey && aiCfg.aiModel);
     const aiGuideCard = !aiConfigured ? lib.h(
@@ -9405,7 +9473,8 @@ try {
           })
         ])
       ]),
-      aboutCard
+      aboutCard,
+      feedbackCard
     ]);
   };
   function createSearchResultAlertElement(result) {
