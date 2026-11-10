@@ -216,17 +216,18 @@
     return list;
   }
 
-  /* 浏览器直连（本地预览没有 Functions、或代理整体挂掉时的兜底） */
+  /* 浏览器直连；成功返回 true，失败静默（单个来源不可达时保持隐藏） */
   function fetchDirect(key) {
     var req = key === 'github' ? fetchGithub() : fetchGitcode();
-    req.then(
+    return req.then(
       function (n) {
         var data = {};
         data[key] = n;
         update(data);
+        return true;
       },
       function () {
-        /* 单个来源不可达时保持隐藏，静默失败 */
+        return false;
       }
     );
   }
@@ -245,16 +246,28 @@
     });
   }
 
-  if (missing().length) {
-    fetchProxy().then(
-      function (data) {
-        update(data);
-        /* 代理只拿到一半时，缺的那个再试一次直连 */
-        missing().forEach(fetchDirect);
-      },
-      function () {
-        missing().forEach(fetchDirect);
+  var pending = missing();
+  if (pending.length) {
+    /* 直连优先：两个来源都能直连时完全不依赖同源代理（本地预览、代理未部署也能用） */
+    Promise.all(pending.map(fetchDirect)).then(function (results) {
+      var failed = [];
+      for (var i = 0; i < pending.length; i++) {
+        if (!results[i]) failed.push(pending[i]);
       }
-    );
+      if (!failed.length) return;
+      /* 直连失败（GitHub 不通 / 限流）再走同源代理，只为失败的那几个来源补数 */
+      fetchProxy().then(
+        function (data) {
+          var patch = {};
+          for (var j = 0; j < failed.length; j++) {
+            if (typeof data[failed[j]] === 'number') patch[failed[j]] = data[failed[j]];
+          }
+          if (patch.github !== undefined || patch.gitcode !== undefined) update(patch);
+        },
+        function () {
+          /* 代理也不可用：保持隐藏，静默失败 */
+        }
+      );
+    });
   }
 })();
