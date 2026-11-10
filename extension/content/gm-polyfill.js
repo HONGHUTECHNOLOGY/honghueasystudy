@@ -150,7 +150,16 @@ var GM = (function () {
 			if (bridgeReady) return;
 			fire(__ocsBridgeKey, { action: 'requestEventFlag' });
 			attempts += 1;
-			if (attempts < 50) setTimeout(request, 100);
+			/**
+			 * 重试 30 秒（原来 5 秒）
+			 *
+			 * ISOLATED 与 MAIN 都在 document_start 执行，但顺序不保证：
+			 * 扩展刚重载、页面很重、或浏览器在加载高峰时，ISOLATED 侧的监听
+			 * 可能晚于这里的首次请求。5 秒内没等到回执就永久放弃，
+			 * 表现是「页面完全没反应、刷新一次又好了」——典型的时序竞态。
+			 * 只要这里持续请求，对方一旦就绪就会广播回执。
+			 */
+			if (attempts < 300) setTimeout(request, 100);
 		}
 		request();
 	})();
