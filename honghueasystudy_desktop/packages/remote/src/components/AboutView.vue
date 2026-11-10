@@ -2,7 +2,11 @@
 	<div class="settings">
 		<!-- 设备 -->
 		<section class="device card fade-up">
-			<img class="device__mark" src="/logo.png" alt="鸿鹄易学" />
+			<img
+				class="device__mark"
+				src="/logo.png"
+				alt="鸿鹄易学"
+			/>
 			<span class="device__text">
 				<strong class="ellipsis">{{ state.deviceName || '鸿鹄易学' }}</strong>
 				<small class="faint">

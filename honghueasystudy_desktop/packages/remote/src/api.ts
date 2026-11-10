@@ -501,9 +501,7 @@ export const api = {
 
 	/** 最近签到日志 */
 	signinLogs: (id: string, limit = 30) =>
-		request<{ ok: boolean; logs: RemoteSigninLog[] }>(
-			`/api/signin/logs/${encodeURIComponent(id)}?limit=${limit}`
-		)
+		request<{ ok: boolean; logs: RemoteSigninLog[] }>(`/api/signin/logs/${encodeURIComponent(id)}?limit=${limit}`)
 };
 
 /**

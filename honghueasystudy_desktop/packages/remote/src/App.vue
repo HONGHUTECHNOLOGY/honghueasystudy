@@ -5,7 +5,11 @@
 			v-if="!state.ready"
 			class="boot"
 		>
-			<img class="boot__mark" src="/logo.png" alt="鸿鹄易学" />
+			<img
+				class="boot__mark"
+				src="/logo.png"
+				alt="鸿鹄易学"
+			/>
 			<div class="boot__bar"><i></i></div>
 			<p class="boot__text faint">正在连接电脑端…</p>
 		</div>
@@ -16,111 +20,119 @@
 			<div class="shell">
 				<!-- 桌面端：左侧竖栏 -->
 				<aside class="rail">
-				<div class="rail__brand">
-					<img class="mark" src="/logo.png" alt="鸿鹄易学" />
-					<span class="rail__brand-text">
-						<strong>鸿鹄易学</strong>
-						<small>远程控制台</small>
-					</span>
-				</div>
-
-				<nav
-					class="rail__nav"
-					aria-label="主导航"
-				>
-					<button
-						v-for="item in NAV_ITEMS"
-						:key="item.key"
-						type="button"
-						class="rail__item"
-						:class="{ active: ui.tab === item.key }"
-						@click="ui.tab = item.key"
-					>
-						<Icon
-							:name="item.icon"
-							:size="18"
+					<div class="rail__brand">
+						<img
+							class="mark"
+							src="/logo.png"
+							alt="鸿鹄易学"
 						/>
-						<span class="rail__label">{{ item.label }}</span>
-						<em
-							v-if="item.key === 'home' && state.browsers.length"
-							class="rail__count num"
-							:class="{ live: runningCount > 0 }"
-							>{{ runningCount }}</em
+						<span class="rail__brand-text">
+							<strong>鸿鹄易学</strong>
+							<small>远程控制台</small>
+						</span>
+					</div>
+
+					<nav
+						class="rail__nav"
+						aria-label="主导航"
+					>
+						<button
+							v-for="item in NAV_ITEMS"
+							:key="item.key"
+							type="button"
+							class="rail__item"
+							:class="{ active: ui.tab === item.key }"
+							@click="ui.tab = item.key"
 						>
-					</button>
-				</nav>
+							<Icon
+								:name="item.icon"
+								:size="18"
+							/>
+							<span class="rail__label">{{ item.label }}</span>
+							<em
+								v-if="item.key === 'home' && state.browsers.length"
+								class="rail__count num"
+								:class="{ live: runningCount > 0 }"
+								>{{ runningCount }}</em
+							>
+						</button>
+					</nav>
 
-				<div class="rail__foot">
-					<div class="rail__conn">
-						<span
-							class="dot"
-							:class="state.connected ? 'ok' : 'warn'"
-						></span>
-						<span class="rail__conn-text">
-							<strong>{{ state.connected ? '实时连接' : '正在重连' }}</strong>
-							<small class="faint ellipsis">{{ state.deviceName || '鸿鹄易学' }}</small>
-						</span>
-					</div>
-				</div>
-			</aside>
-
-			<div class="body">
-				<header class="head">
-					<!-- 移动端展示品牌，桌面端展示页标题 -->
-					<div class="head__brand">
-						<img class="mark mark--sm" src="/logo.png" alt="鸿鹄易学" />
-						<span class="head__brand-text">
-							<strong>远程控制台</strong>
-							<small class="faint ellipsis">{{ state.deviceName || '鸿鹄易学' }}</small>
-						</span>
-					</div>
-
-					<div class="head__title">
-						<h1>{{ meta.label }}</h1>
-						<p class="faint ellipsis">{{ meta.desc }}</p>
-					</div>
-
-					<div class="head__side">
-						<span class="pill pill--brand">
+					<div class="rail__foot">
+						<div class="rail__conn">
 							<span
 								class="dot"
 								:class="state.connected ? 'ok' : 'warn'"
 							></span>
-							<span class="num">{{ runningCount }}</span>
-							<span class="faint">/{{ state.browsers.length }}</span>
-						</span>
-						<span
-							v-if="state.lastUpdate"
-							class="head__time faint num"
-						>
-							{{ agoText }}
-						</span>
-						<button
-							type="button"
-							class="btn btn-icon head__refresh"
-							:class="{ spinning: refreshing }"
-							title="刷新状态"
-							aria-label="刷新状态"
-							@click="doRefresh"
-						>
-							<Icon
-								name="refresh"
-								:size="16"
-							/>
-						</button>
+							<span class="rail__conn-text">
+								<strong>{{ state.connected ? '实时连接' : '正在重连' }}</strong>
+								<small class="faint ellipsis">{{ state.deviceName || '鸿鹄易学' }}</small>
+							</span>
+						</div>
 					</div>
-				</header>
+				</aside>
 
-				<main class="main">
-					<OverviewView v-if="ui.tab === 'home'" />
-					<PlansView v-else-if="ui.tab === 'plans'" />
-					<SigninView v-else-if="ui.tab === 'signin'" />
-					<LogsView v-else-if="ui.tab === 'logs'" />
-					<AboutView v-else />
-				</main>
-			</div>
+				<div class="body">
+					<header class="head">
+						<!-- 移动端展示品牌，桌面端展示页标题 -->
+						<div class="head__brand">
+							<img
+								class="mark mark--sm"
+								src="/logo.png"
+								alt="鸿鹄易学"
+							/>
+							<span class="head__brand-text">
+								<strong>远程控制台</strong>
+								<small class="faint ellipsis">{{ state.deviceName || '鸿鹄易学' }}</small>
+							</span>
+						</div>
 
-			<TabBar />
+						<div class="head__title">
+							<h1>{{ meta.label }}</h1>
+							<p class="faint ellipsis">{{ meta.desc }}</p>
+						</div>
+
+						<div class="head__side">
+							<span class="pill pill--brand">
+								<span
+									class="dot"
+									:class="state.connected ? 'ok' : 'warn'"
+								></span>
+								<span class="num">{{ runningCount }}</span>
+								<span class="faint">/{{ state.browsers.length }}</span>
+							</span>
+							<span
+								v-if="state.lastUpdate"
+								class="head__time faint num"
+							>
+								{{ agoText }}
+							</span>
+							<button
+								type="button"
+								class="btn btn-icon head__refresh"
+								:class="{ spinning: refreshing }"
+								title="刷新状态"
+								aria-label="刷新状态"
+								@click="doRefresh"
+							>
+								<Icon
+									name="refresh"
+									:size="16"
+								/>
+							</button>
+						</div>
+					</header>
+
+					<main class="main">
+						<OverviewView v-if="ui.tab === 'home'" />
+						<PlansView v-else-if="ui.tab === 'plans'" />
+						<SigninView v-else-if="ui.tab === 'signin'" />
+						<LogsView v-else-if="ui.tab === 'logs'" />
+						<AboutView v-else />
+					</main>
+				</div>
+
+				<TabBar />
 			</div>
 		</template>
 

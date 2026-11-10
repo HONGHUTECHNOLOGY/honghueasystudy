@@ -278,7 +278,17 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Icon from './Icon.vue';
 import { BrowserSnapshot, snapshotUrl } from '../api';
-import { closeBrowser, isPinned, isSnapshotStale, launchBrowser, refresh, requestSync, state, toast, togglePin } from '../store';
+import {
+	closeBrowser,
+	isPinned,
+	isSnapshotStale,
+	launchBrowser,
+	refresh,
+	requestSync,
+	state,
+	toast,
+	togglePin
+} from '../store';
 
 const props = defineProps<{ browser: BrowserSnapshot }>();
 const emit = defineEmits<{ (e: 'open'): void }>();

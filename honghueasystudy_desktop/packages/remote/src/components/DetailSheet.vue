@@ -172,7 +172,9 @@
 							/>
 						</span>
 						<span class="automate__text">
-							<b>{{ browser.status === 'launched' ? '登录/选课脚本 · 定时刷课 · 临时控制' : '定时刷课 · 启动时脚本' }}</b>
+							<b>{{
+								browser.status === 'launched' ? '登录/选课脚本 · 定时刷课 · 临时控制' : '定时刷课 · 启动时脚本'
+							}}</b>
 							<small class="faint">{{
 								browser.status === 'launched'
 									? '手机遥控电脑：临时点一次，或按方案自动跑'
@@ -194,7 +196,9 @@
 					>
 						<p class="block__title">
 							<span>任务进度</span>
-							<span class="faint">{{ progress?.finished ? '已完成' : playing ? '播放中' : isStale ? '无输出' : '进行中' }}</span>
+							<span class="faint">{{
+								progress?.finished ? '已完成' : playing ? '播放中' : isStale ? '无输出' : '进行中'
+							}}</span>
 						</p>
 
 						<p
@@ -275,14 +279,14 @@
 							>
 								<span class="page-index num">{{ index + 1 }}</span>
 								<span class="page-text">
-								<span class="page-title ellipsis">
-									{{ page.title || '（无标题）' }}
-									<span
-										v-if="index === activeIndex"
-										class="page-now"
-										>当前</span
-									>
-								</span>
+									<span class="page-title ellipsis">
+										{{ page.title || '（无标题）' }}
+										<span
+											v-if="index === activeIndex"
+											class="page-now"
+											>当前</span
+										>
+									</span>
 									<span class="page-url faint ellipsis">{{ page.url }}</span>
 								</span>
 								<span
@@ -751,7 +755,8 @@ function pin() {
 	if (!target) return;
 	const next = togglePin(target.uid);
 	toast(next ? '已固定到列表顶部' : '已取消固定', next ? 'success' : 'info');
-}</script>
+}
+</script>
 
 <style scoped>
 .mask {

@@ -72,4 +72,3 @@ export function formatDuration(ms: number): string {
 	const hours = Math.floor(minutes / 60);
 	return `${hours} 小时 ${pad(minutes % 60)} 分`;
 }
-

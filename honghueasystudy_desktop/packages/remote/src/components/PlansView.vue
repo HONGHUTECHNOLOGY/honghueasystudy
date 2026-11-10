@@ -11,9 +11,7 @@
 					<strong class="num">{{ enabledCount }}</strong>
 					<span class="num">/ {{ state.browsers.length || 0 }}</span>
 				</div>
-				<p class="lead__desc faint">
-					个实例已开启定时。这里看的是电脑端的配置，浏览器没启动也能改，到点会自动拉起。
-				</p>
+				<p class="lead__desc faint">个实例已开启定时。这里看的是电脑端的配置，浏览器没启动也能改，到点会自动拉起。</p>
 
 				<div class="lead__metrics">
 					<div class="metric">
@@ -156,9 +154,7 @@
 			<p class="empty__desc faint">定时是「每个浏览器一套」的配置，先在电脑端新建一个实例，这里就会出现它的方案。</p>
 		</div>
 
-		<p class="foot faint">
-			定时、启动时脚本、自动刷课都在「配置方案」里；保存的是电脑端存档，关掉手机页面也不会丢。
-		</p>
+		<p class="foot faint">定时、启动时脚本、自动刷课都在「配置方案」里；保存的是电脑端存档，关掉手机页面也不会丢。</p>
 	</div>
 </template>
 
@@ -176,8 +172,9 @@ const enabledCount = computed(
 
 const studyCount = computed(
 	() =>
-		state.browsers.filter((item) => item.automation && item.automation.study.enabled && item.automation.study.courseName)
-			.length
+		state.browsers.filter(
+			(item) => item.automation && item.automation.study.enabled && item.automation.study.courseName
+		).length
 );
 
 /** 最近的一次自动启动：让人一眼知道「下次什么时候会自己动」 */
@@ -231,10 +228,7 @@ function nextText(item: BrowserSnapshot): string {
 	const date = new Date(plan.schedule.nextRunAt);
 	const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 	const today = new Date();
-	const day =
-		date.toDateString() === today.toDateString()
-			? '今天'
-			: `${date.getMonth() + 1} 月 ${date.getDate()} 日`;
+	const day = date.toDateString() === today.toDateString() ? '今天' : `${date.getMonth() + 1} 月 ${date.getDate()} 日`;
 	/** 星期几一并带上：只写日期时，跨周的计划很难核对 */
 	return `下次自动启动：${day} ${time}（周${WEEK_LABELS[date.getDay()]}）`;
 }

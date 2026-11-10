@@ -59,9 +59,7 @@
 			<div class="body">
 				<!-- ============================ 自动执行（落盘） ============================ -->
 				<template v-if="tab === 'auto'">
-					<p class="note">
-						这里的配置会保存到桌面端，<b>每次启动浏览器都会自动执行</b>；关掉应用也仍然有效。
-					</p>
+					<p class="note">这里的配置会保存到桌面端，<b>每次启动浏览器都会自动执行</b>；关掉应用也仍然有效。</p>
 					<p
 						v-if="!browserReady"
 						class="note note--warn"
@@ -449,9 +447,7 @@
 								{{ formSchedule.catchUp ? '补执行' : '不补' }}
 							</button>
 						</div>
-						<p class="line-note faint">
-							关闭时只在开始后 10 分钟内启动，再晚跳过当天
-						</p>
+						<p class="line-note faint">关闭时只在开始后 10 分钟内启动，再晚跳过当天</p>
 
 						<!-- 三句摘要分行、各有各的语气：挤在一个 <p> 里用 <br> 断，读起来像一坨灰字 -->
 						<div class="schedule-tip">
@@ -1170,8 +1166,7 @@ async function doAdvance(): Promise<void> {
 		catalogKind.value = 'chapter';
 		const result = await advanceCatalog(uid.value);
 		advanceNote.value =
-			(result && result.message) ||
-			(result && result.entered ? '已进入下一节' : '没有可以继续的章节了');
+			(result && result.message) || (result && result.entered ? '已进入下一节' : '没有可以继续的章节了');
 	} catch (e) {
 		catalogError.value = e instanceof Error ? e.message : String(e);
 	} finally {
@@ -1256,7 +1251,9 @@ const browserReady = computed(() => {
 });
 
 /** 正在执行登录脚本（临时操作页） */
-const running = computed(() => state.automationBusy[uid.value] === 'run' || !!(job.value && job.value.state === 'running'));
+const running = computed(
+	() => state.automationBusy[uid.value] === 'run' || !!(job.value && job.value.state === 'running')
+);
 
 const canRun = computed(
 	() => !!current.value && !running.value && !state.automationBusy[uid.value] && browserReady.value
@@ -1299,10 +1296,10 @@ const scheduleTail = computed(() => {
 		schedule.endAction === 'pause'
 			? '暂停刷课'
 			: schedule.endAction === 'pause-close'
-				? '暂停并关闭浏览器'
-				: schedule.endAction === 'close'
-					? '关闭浏览器'
-					: '不做处理';
+			? '暂停并关闭浏览器'
+			: schedule.endAction === 'close'
+			? '关闭浏览器'
+			: '不做处理';
 	return schedule.maxMinutes > 0
 		? `学习 ${schedule.maxMinutes} 分钟后${action}`
 		: `不限时长，不会自动收尾（要自动${action}请填写单次最长）`;
@@ -1341,7 +1338,7 @@ function normalizePlan(plan: AutomationPlan): AutomationPlan {
 						label: plan.study.course.label || '',
 						platform: plan.study.course.platform || '',
 						savedAt: plan.study.course.savedAt || Date.now()
-					}
+				  }
 				: null
 		},
 		schedule: {
@@ -1535,7 +1532,6 @@ const form = reactive<Record<string, any>>({});
 const entering = ref('');
 const probing = ref(false);
 
-
 const FORM_CACHE_PREFIX = 'hh-remote:auto:';
 
 function readCache(name: string): Record<string, any> {
@@ -1578,7 +1574,8 @@ function pickScript(script: RemoteScript): void {
 }
 
 const emptyText = computed(() => {
-	if (!browser.value || browser.value.status !== 'launched') return '浏览器未运行。先点上面的「启动浏览器」，就绪后这里会显示课程列表。';
+	if (!browser.value || browser.value.status !== 'launched')
+		return '浏览器未运行。先点上面的「启动浏览器」，就绪后这里会显示课程列表。';
 	if (running.value) return '登录完成后会自动读取课程列表…';
 	if (probing.value) return '正在读取课程列表…';
 	if (job.value && job.value.state === 'error') return '登录未完成，课程列表暂不可用';
@@ -2237,9 +2234,7 @@ onBeforeUnmount(() => {
 	color: var(--text);
 	font-size: 13px;
 	outline: none;
-	transition:
-		border-color 0.16s var(--ease),
-		box-shadow 0.16s var(--ease);
+	transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
 }
 
 .input:focus {

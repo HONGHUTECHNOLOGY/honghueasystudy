@@ -10,9 +10,7 @@
 					<strong class="num">{{ accounts.length }}</strong>
 					<span class="num">个账号</span>
 				</div>
-				<p class="lead__desc faint">
-					自动签到默认关闭：关闭后只检测提醒，不会自动提交；手动签到随时可用。
-				</p>
+				<p class="lead__desc faint">自动签到默认关闭：关闭后只检测提醒，不会自动提交；手动签到随时可用。</p>
 
 				<div class="lead__metrics">
 					<div class="metric">
@@ -65,9 +63,7 @@
 				/>
 			</span>
 			<p class="empty__title">还没有签到账号</p>
-			<p class="empty__desc faint">
-				先在电脑端「签到助手」里添加超星账号，这里就能远程检测与签到。
-			</p>
+			<p class="empty__desc faint">先在电脑端「签到助手」里添加超星账号，这里就能远程检测与签到。</p>
 		</div>
 
 		<div
@@ -129,9 +125,7 @@
 					</div>
 					<p class="activity__meta faint">
 						活动 ID：{{ activityId(item) }}
-						<template v-if="activitySigned(item)">
-							· 签到时间 {{ activitySignedTime(item) }}
-						</template>
+						<template v-if="activitySigned(item)"> · 签到时间 {{ activitySignedTime(item) }} </template>
 					</p>
 				</div>
 				<p
@@ -438,9 +432,7 @@
 			</article>
 		</div>
 
-		<p class="foot faint">
-			检测与签到都在电脑端执行，手机页面只负责下发指令；账号密码与登录凭证不会传到手机。
-		</p>
+		<p class="foot faint">检测与签到都在电脑端执行，手机页面只负责下发指令；账号密码与登录凭证不会传到手机。</p>
 
 		<LocationPicker
 			v-if="picker.visible"
