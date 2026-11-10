@@ -193,7 +193,7 @@ function buildSnapshot(): RemoteSnapshotPayload {
 							answered: 0,
 							errors: 0,
 							finished: false
-						},
+					  },
 				/** 同样逐字段拷贝：running.media 读出来是响应式代理，直接进 IPC 会克隆失败 */
 				media:
 					running && running.media
@@ -201,7 +201,7 @@ function buildSnapshot(): RemoteSnapshotPayload {
 								playing: !!running.media.playing,
 								currentTime: Number(running.media.currentTime) || 0,
 								duration: Number(running.media.duration) || 0
-							}
+						  }
 						: null,
 				/** 方案摘要是纯对象，但内部的 course/schedule 来自响应式实体，仍走一次 JSON 归一 */
 				automation: JSON.parse(JSON.stringify(automationSummary(browser)))
@@ -282,9 +282,9 @@ function fingerprint(): string {
 				/** 日志数组到上限（300）后长度恒定，改用最后一条的长度兜底 */
 				const tail = (p.logs || []).length ? String(p.logs[p.logs.length - 1]).length : 0;
 				const progress = p.progress || ({} as any);
-				return `${p.uid}:${p.status}:${(p.logs || []).length}:${tail}:${pageUrls}:${
-					progress.currentTask || ''
-				}:${progress.completed || 0}:${progress.answered || 0}:${progress.errors || 0}`;
+				return `${p.uid}:${p.status}:${(p.logs || []).length}:${tail}:${pageUrls}:${progress.currentTask || ''}:${
+					progress.completed || 0
+				}:${progress.answered || 0}:${progress.errors || 0}`;
 			})
 			.join(',');
 	} catch {

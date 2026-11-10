@@ -57,20 +57,16 @@ const DownloadProgressBody = defineComponent({
 		const labelStyle = 'font-size:12px;color:var(--color-text-3);';
 		return () =>
 			h('div', { style: 'padding:2px 0 4px' }, [
-				h(
-					'div',
-					{ style: 'display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px' },
-					[
-						h(
-							'div',
-							{ style: 'font-size:13px' },
-							downloadState.connecting
-								? '正在连接下载服务器…'
-								: `正在下载：${fmtSize(downloadState.received)} / ${fmtSize(downloadState.total)}`
-						),
-						h('div', { style: 'font-size:12px;color:var(--color-text-3)' }, fmtEta(downloadState.eta))
-					]
-				),
+				h('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px' }, [
+					h(
+						'div',
+						{ style: 'font-size:13px' },
+						downloadState.connecting
+							? '正在连接下载服务器…'
+							: `正在下载：${fmtSize(downloadState.received)} / ${fmtSize(downloadState.total)}`
+					),
+					h('div', { style: 'font-size:12px;color:var(--color-text-3)' }, fmtEta(downloadState.eta))
+				]),
 				h(Progress, {
 					percent: Math.min(1, Math.max(0, downloadState.percent / 100)),
 					showText: false,
@@ -113,7 +109,6 @@ export function hideDownloadProgress() {
 	resetDownloadState();
 }
 
-
 /**
  * 安装包静默覆盖安装前必须关掉浏览器实例。
  *
@@ -132,11 +127,7 @@ async function closeBrowsersForUpdate() {
 		close: false
 	});
 
-	await Promise.all(
-		running.map((p) =>
-			Promise.race([p.close().catch(() => undefined), sleep(10000)])
-		)
-	);
+	await Promise.all(running.map((p) => Promise.race([p.close().catch(() => undefined), sleep(10000)])));
 
 	// 关不掉的实例交给主进程报错提示，这里不阻塞
 	Notification.remove(CLOSING_NOTIFY_KEY);
@@ -234,7 +225,12 @@ export function activeIpcRenderListener() {
 				},
 				content: () =>
 					h('div', [
-						h('div', info.restored ? `新版本 ${info.tag} 的安装包上次已经下载完成，随时可以安装。` : `新版本 ${info.tag} 已下载完成。`),
+						h(
+							'div',
+							info.restored
+								? `新版本 ${info.tag} 的安装包上次已经下载完成，随时可以安装。`
+								: `新版本 ${info.tag} 已下载完成。`
+						),
 						h('div', '点击「立即安装」会关闭本软件并开始安装，安装完成后请重新打开软件。'),
 						info.installDir
 							? h('div', { style: 'margin-top:8px;opacity:.6;font-size:12px' }, `安装目录：${info.installDir}`)

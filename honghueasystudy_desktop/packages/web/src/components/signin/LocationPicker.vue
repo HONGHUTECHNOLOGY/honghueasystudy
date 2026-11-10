@@ -107,7 +107,11 @@
 					class="map-mask failed"
 				>
 					<span>{{ tileLabel }}加载失败，请检查网络</span>
-					<a-button size="mini" @click="reloadTiles">重试</a-button>
+					<a-button
+						size="mini"
+						@click="reloadTiles"
+						>重试</a-button
+					>
 					<a-button
 						v-if="tileSource !== 'esri'"
 						size="mini"
@@ -141,12 +145,16 @@
 						<span>{{ reverseLoading ? '识别中…' : pickedAddress }}</span>
 					</div>
 					<div class="line sub">
-						点地图任意位置或拖动标记选点；坐标会按上方类型换算后回填到签到设置。
-						若签到提示「不在签到范围」，优先在 BD-09 / GCJ-02 之间切换后重试。
+						点地图任意位置或拖动标记选点；坐标会按上方类型换算后回填到签到设置。 若签到提示「不在签到范围」，优先在
+						BD-09 / GCJ-02 之间切换后重试。
 					</div>
 				</div>
 				<div class="actions">
-					<a-button size="small" @click="innerVisible = false">取消</a-button>
+					<a-button
+						size="small"
+						@click="innerVisible = false"
+						>取消</a-button
+					>
 					<a-button
 						size="small"
 						type="primary"

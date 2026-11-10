@@ -151,9 +151,7 @@ export function feedProgress(progress: TaskProgress, line: string, now = Date.no
 	const doneMatch = text.match(RE_TASK_DONE);
 	const finishMatch = doneMatch ? null : text.match(RE_TASK_FINISH);
 	if (doneMatch || finishMatch) {
-		const raw = doneMatch
-			? doneMatch[1] || text
-			: (finishMatch && finishMatch[1]) || progress.currentTask || text;
+		const raw = doneMatch ? doneMatch[1] || text : (finishMatch && finishMatch[1]) || progress.currentTask || text;
 		const name = normalizeTask(raw);
 		if (remember(progress, `done:${name}`)) {
 			progress.completed += 1;

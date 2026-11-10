@@ -52,7 +52,8 @@
 						<span
 							class="course-name"
 							:title="plan.study.course?.name"
-						>{{ plan.study.course?.name }}</span>
+							>{{ plan.study.course?.name }}</span
+						>
 						<a-button
 							size="mini"
 							type="text"
@@ -295,53 +296,53 @@
 				{{ catalogSummary }}
 			</p>
 
-		<div
-			v-if="courseReady && catalogRows.length"
-			class="catalog"
-		>
 			<div
-				v-for="row in catalogRows"
-				:key="row.key"
-				class="catalog-row"
-				:class="[row.status, { group: row.status === 'group' }]"
-				:style="{ paddingLeft: 8 + Math.max(0, row.depth - 1) * 12 + 'px' }"
-				:title="row.hint"
+				v-if="courseReady && catalogRows.length"
+				class="catalog"
 			>
-				<span class="catalog-no">{{ row.no }}</span>
-				<span class="catalog-title">{{ row.title }}</span>
-				<a-tag
-					v-if="row.badge"
-					size="small"
-					:color="row.tagColor"
+				<div
+					v-for="row in catalogRows"
+					:key="row.key"
+					class="catalog-row"
+					:class="[row.status, { group: row.status === 'group' }]"
+					:style="{ paddingLeft: 8 + Math.max(0, row.depth - 1) * 12 + 'px' }"
+					:title="row.hint"
 				>
-					{{ row.badge }}
-				</a-tag>
-				<a-button
-					v-if="row.openable"
-					size="mini"
-					type="text"
-					:loading="opening === row.id"
-					@click="openItem(row)"
-				>
-					{{ row.action }}
-				</a-button>
+					<span class="catalog-no">{{ row.no }}</span>
+					<span class="catalog-title">{{ row.title }}</span>
+					<a-tag
+						v-if="row.badge"
+						size="small"
+						:color="row.tagColor"
+					>
+						{{ row.badge }}
+					</a-tag>
+					<a-button
+						v-if="row.openable"
+						size="mini"
+						type="text"
+						:loading="opening === row.id"
+						@click="openItem(row)"
+					>
+						{{ row.action }}
+					</a-button>
+				</div>
 			</div>
-		</div>
-		<p
-			v-else-if="courseReady"
-			class="text-secondary"
-			style="font-size: 12px; margin: 8px 0 0"
-		>
-			{{ catalogNote }}
-		</p>
-		<!-- 推进成功后课程页已被学习页顶掉，这时再点「读取」必然报错，所以直说 -->
-		<p
-			v-if="advanceNote && !catalog"
-			class="text-secondary"
-			style="font-size: 12px; margin: 4px 0 0"
-		>
-			刷课脚本正在接着往下推。想看最新进度，先在浏览器里回到课程页，再点「读取」。
-		</p>
+			<p
+				v-else-if="courseReady"
+				class="text-secondary"
+				style="font-size: 12px; margin: 8px 0 0"
+			>
+				{{ catalogNote }}
+			</p>
+			<!-- 推进成功后课程页已被学习页顶掉，这时再点「读取」必然报错，所以直说 -->
+			<p
+				v-if="advanceNote && !catalog"
+				class="text-secondary"
+				style="font-size: 12px; margin: 4px 0 0"
+			>
+				刷课脚本正在接着往下推。想看最新进度，先在浏览器里回到课程页，再点「读取」。
+			</p>
 		</template>
 
 		<!-- ④ 状态 -->
@@ -497,7 +498,14 @@ const picking = computed(() => busyState.picking);
 const launching = computed(() => busyState.launching);
 
 const status = computed(
-	() => studyStatus[props.browser.uid] || { state: 'idle' as const, message: '', courseName: '', updatedAt: 0, enteredAt: 0 }
+	() =>
+		studyStatus[props.browser.uid] || {
+			state: 'idle' as const,
+			message: '',
+			courseName: '',
+			updatedAt: 0,
+			enteredAt: 0
+		}
 );
 
 const running = computed(() => {

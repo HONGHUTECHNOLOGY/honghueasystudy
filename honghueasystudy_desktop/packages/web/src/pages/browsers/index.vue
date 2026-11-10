@@ -19,10 +19,18 @@
 				v-else-if="currentSearchedEntities === undefined && currentFolder.type === 'root'"
 				class="stats-bar"
 			>
-				<span class="stat"><IconDesktop /> <b>{{ stats.browsers }}</b> 浏览器</span>
-				<span class="stat"><IconCode /> <b>{{ stats.scripts }}</b> 脚本</span>
-				<span class="stat"><IconFolder /> <b>{{ stats.folders }}</b> 文件夹</span>
-				<span class="stat"><IconTag /> <b>{{ stats.tags }}</b> 标签</span>
+				<span class="stat"
+					><IconDesktop /> <b>{{ stats.browsers }}</b> 浏览器</span
+				>
+				<span class="stat"
+					><IconCode /> <b>{{ stats.scripts }}</b> 脚本</span
+				>
+				<span class="stat"
+					><IconFolder /> <b>{{ stats.folders }}</b> 文件夹</span
+				>
+				<span class="stat"
+					><IconTag /> <b>{{ stats.tags }}</b> 标签</span
+				>
 			</div>
 
 			<div class="flex-grow-1"></div>
@@ -159,8 +167,7 @@ const stats = computed(() => {
 	flex: 1 1 auto;
 	padding: 12px 20px 28px;
 	/* 与简洁模式一致：顶部一层极淡品牌色环境光，避免大面积纯色底显得平 */
-	background: radial-gradient(ellipse 90% 30% at 50% 0%, var(--surface-glow), transparent 70%),
-		var(--surface-page);
+	background: radial-gradient(ellipse 90% 30% at 50% 0%, var(--surface-glow), transparent 70%), var(--surface-page);
 }
 
 /* ============================================================ 统计 */
@@ -202,8 +209,7 @@ const stats = computed(() => {
 
 /* 列表切换过渡：只动 opacity 与 transform */
 .entities-slide-enter-active {
-	transition: opacity var(--dur-3) var(--ease-dec) var(--dur-1),
-		transform var(--dur-3) var(--ease-dec) var(--dur-1);
+	transition: opacity var(--dur-3) var(--ease-dec) var(--dur-1), transform var(--dur-3) var(--ease-dec) var(--dur-1);
 }
 
 .entities-slide-leave-active {

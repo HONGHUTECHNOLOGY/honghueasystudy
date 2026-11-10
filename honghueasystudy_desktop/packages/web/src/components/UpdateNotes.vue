@@ -6,29 +6,60 @@
 		发版这类工程条目），这里只负责排版：按版本分组、区域内滚动。
 	-->
 	<div class="update-notes">
-		<div v-if="!versions.length" class="update-notes__empty">
+		<div
+			v-if="!versions.length"
+			class="update-notes__empty"
+		>
 			本次更新包含若干体验改进，完整记录见官网「更新日志」。
 		</div>
 
-		<div v-else class="update-notes__box" :class="{ 'is-more': hasMore }">
-			<div ref="scrollEl" class="update-notes__scroll" @scroll="onScroll">
-				<section v-for="v in versions" :key="v.version" class="ver">
+		<div
+			v-else
+			class="update-notes__box"
+			:class="{ 'is-more': hasMore }"
+		>
+			<div
+				ref="scrollEl"
+				class="update-notes__scroll"
+				@scroll="onScroll"
+			>
+				<section
+					v-for="v in versions"
+					:key="v.version"
+					class="ver"
+				>
 					<div class="ver__head">
 						<span class="ver__tag">v{{ v.version }}</span>
-						<span v-if="v.date" class="ver__date">{{ v.date }}</span>
+						<span
+							v-if="v.date"
+							class="ver__date"
+							>{{ v.date }}</span
+						>
 					</div>
 
-					<div v-for="s in v.sections" :key="s.title" class="sec">
+					<div
+						v-for="s in v.sections"
+						:key="s.title"
+						class="sec"
+					>
 						<div class="sec__title">{{ s.title }}</div>
 						<ul class="sec__list">
-							<li v-for="(item, i) in s.items" :key="i">{{ item }}</li>
+							<li
+								v-for="(item, i) in s.items"
+								:key="i"
+							>
+								{{ item }}
+							</li>
 						</ul>
 					</div>
 				</section>
 			</div>
 		</div>
 
-		<div v-if="versions.length" class="update-notes__foot">
+		<div
+			v-if="versions.length"
+			class="update-notes__foot"
+		>
 			更新不会影响已保存的配置与脚本
 		</div>
 	</div>

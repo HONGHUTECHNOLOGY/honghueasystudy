@@ -83,7 +83,12 @@ export async function fetchRemoteLangs() {
 				}
 			});
 			// 站点对未知路径会回退返回 index.html（状态码 200），必须校验响应形状
-			if (infos.data && typeof infos.data === 'object' && !Array.isArray(infos.data) && Object.keys(infos.data).length > 0) {
+			if (
+				infos.data &&
+				typeof infos.data === 'object' &&
+				!Array.isArray(infos.data) &&
+				Object.keys(infos.data).length > 0
+			) {
 				store.render.langs = infos.data;
 				return;
 			}
@@ -175,7 +180,9 @@ export async function changeTheme() {
 /** 开机自启开关：落盘并立即注册/取消系统登录启动项 */
 export function setAutoLaunch() {
 	/** 失败（系统拒绝写入启动项）时保留用户选择，下次启动主进程还会按存档重试一次 */
-	remote.methods.call('setAutoLaunch', store.window.autoLaunch !== false).catch((e) => console.error('设置开机自启失败', e));
+	remote.methods
+		.call('setAutoLaunch', store.window.autoLaunch !== false)
+		.catch((e) => console.error('设置开机自启失败', e));
 }
 
 /**

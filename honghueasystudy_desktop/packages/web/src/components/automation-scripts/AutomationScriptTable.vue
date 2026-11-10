@@ -237,7 +237,8 @@ function onConfirm() {
 		])[0];
 		if (!script) continue;
 
-		const finalBrowserName = browserName || state.browserNameFields.map((f) => script.configs[f]?.value || '').join(' ');
+		const finalBrowserName =
+			browserName || state.browserNameFields.map((f) => script.configs[f]?.value || '').join(' ');
 		configsList.push({ browserName: finalBrowserName, configs: script.configs });
 	}
 

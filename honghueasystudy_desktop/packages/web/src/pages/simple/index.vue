@@ -298,9 +298,7 @@ onMounted(() => {
 	 * 纯色底（#F7F8FA）在 1120×720 的窗口里会显得很平，
 	 * 加一层 4% 的径向渐变就有了「空气感」——说不出哪里不一样，但去掉会觉得闷。
 	 */
-	background:
-		radial-gradient(ellipse 90% 32% at 50% 0%, var(--surface-glow), transparent 70%),
-		var(--surface-page);
+	background: radial-gradient(ellipse 90% 32% at 50% 0%, var(--surface-glow), transparent 70%), var(--surface-page);
 }
 
 /* ============================================================== 页签 */

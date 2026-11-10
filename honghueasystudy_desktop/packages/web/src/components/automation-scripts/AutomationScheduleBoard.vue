@@ -62,7 +62,8 @@
 					<span
 						class="name"
 						:title="browser.name"
-					>{{ browser.name }}</span>
+						>{{ browser.name }}</span
+					>
 					<a-tag
 						v-if="planOf(browser).schedule.enabled"
 						size="small"

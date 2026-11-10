@@ -415,10 +415,14 @@ async function ensureLaunched(browser: Browser): Promise<Process> {
 
 	if (!proc) throw new Error('浏览器启动失败，请检查浏览器路径与设置');
 
-	const ok = await waitFor(() => {
-		const current = Process.from(browser.uid);
-		return !!current && current.status === 'launched';
-	}, LAUNCH_TIMEOUT, 1000);
+	const ok = await waitFor(
+		() => {
+			const current = Process.from(browser.uid);
+			return !!current && current.status === 'launched';
+		},
+		LAUNCH_TIMEOUT,
+		1000
+	);
 
 	if (!ok) throw new Error('等待浏览器启动超时');
 	return Process.from(browser.uid) as Process;
@@ -480,7 +484,10 @@ async function listCoursesWithRetry(
 		});
 		last = await proc.callWorkerTimeout('listCourses', [{ refresh: index === 0 }], COURSE_LIST_TIMEOUT);
 		const count = last && Array.isArray(last.courses) ? last.courses.length : 0;
-		planLog(uid, `第 ${index + 1} 次读课程列表：${count} 门${last && last.platform ? '（' + last.platform + '）' : ''}`);
+		planLog(
+			uid,
+			`第 ${index + 1} 次读课程列表：${count} 门${last && last.platform ? '（' + last.platform + '）' : ''}`
+		);
 		if (count > 0) return last;
 		if (index < attempts - 1) await sleep(8000);
 	}
@@ -507,7 +514,10 @@ export async function runStudy(uid: string, opts?: { silent?: boolean }): Promis
 	studyLocks[uid] = true;
 
 	setStatus(uid, { state: 'waiting', message: '等待浏览器就绪…', courseName: course.name });
-	planLog(uid, `开始：目标课程「${course.name}」${course.label ? '（' + course.label + '）' : ''}，进课后 ${plan.study.target}`);
+	planLog(
+		uid,
+		`开始：目标课程「${course.name}」${course.label ? '（' + course.label + '）' : ''}，进课后 ${plan.study.target}`
+	);
 
 	try {
 		const proc = await ensureLaunched(browser);
@@ -536,8 +546,10 @@ export async function runStudy(uid: string, opts?: { silent?: boolean }): Promis
 		 * 用户看到的就是「登录完成了，却压根没进课」。宁可报错，让人能一眼看出卡在哪。
 		 */
 		if (result && result.moved === false) {
-			throw new Error(`点开了课程卡片，但页面没有跳转（当前仍是：${result.url || '课程列表页'}）。` +
-				'可能是站点改了入口，请在浏览器里手动进入一次，或点面板里的「执行一次」重试。');
+			throw new Error(
+				`点开了课程卡片，但页面没有跳转（当前仍是：${result.url || '课程列表页'}）。` +
+					'可能是站点改了入口，请在浏览器里手动进入一次，或点面板里的「执行一次」重试。'
+			);
 		}
 
 		/** 记住这门课属于哪套体系：只有超星有「章节 / 作业 / 考试」三栏，其它平台不该显示那套菜单 */

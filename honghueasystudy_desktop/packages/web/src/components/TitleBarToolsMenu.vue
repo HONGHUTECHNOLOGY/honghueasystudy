@@ -8,7 +8,7 @@
 
 		<template #content>
 			<!--
-				13 个操作按「用途」分 4 组，而不是原来平铺一长列 + 靠 border-bottom 硬分隔。
+				按「用途」分 4 组，而不是原来平铺一长列 + 靠 border-bottom 硬分隔。
 				分组标题本身就是分隔线，既省像素又能被扫读；破坏性操作（清除缓存）
 				被夹在「数据」组里，不会紧挨着「重启软件」被误点。
 			-->
@@ -47,7 +47,7 @@
 				</a-doption>
 			</a-dgroup>
 
-			<a-dgroup title="关于">
+			<a-dgroup title="关于与反馈">
 				<a-doption @click="openExternal(OFFICIAL_SITE)">
 					<Icon type="public">官方网站</Icon>
 				</a-doption>
@@ -56,6 +56,21 @@
 				</a-doption>
 				<a-doption @click="openExternal(GITCODE_REPO)">
 					<Icon type="hub">GitCode 镜像</Icon>
+				</a-doption>
+				<!-- 遇到问题直接可达 Issue 列表，不用先去仓库里找入口 -->
+				<a-doption @click="openExternal(GITHUB_ISSUES)">
+					<Icon
+						type="bug_report"
+						title="欢迎前往 GitHub 提 Issue 反馈问题或建议"
+						>GitHub 提 Issue</Icon
+					>
+				</a-doption>
+				<a-doption @click="openExternal(GITCODE_ISSUES)">
+					<Icon
+						type="feedback"
+						title="境内访问更快，欢迎前往 GitCode 提 Issue 反馈"
+						>GitCode 提 Issue</Icon
+					>
 				</a-doption>
 			</a-dgroup>
 		</template>
@@ -70,8 +85,7 @@ import { remote } from '../utils/remote';
 import { electron } from '../utils/node';
 import { date } from '../utils';
 import { currentBrowser, currentFolder, currentEntities, currentSearchedEntities } from '../fs/index';
-import { root } from '../fs/folder';
-import { Folder } from '../fs/folder';
+import { root , Folder } from '../fs/folder';
 import { FolderOptions, FolderType } from '../fs/interface';
 import { Browser } from '../fs/browser';
 import { checkBrowserCaches } from '../utils/browser';
@@ -84,6 +98,9 @@ const { shell } = electron;
 const OFFICIAL_SITE = 'https://easystudy.honghutech.eu.org';
 const GITHUB_REPO = 'https://github.com/HONGHUTECHNOLOGY/honghueasystudy';
 const GITCODE_REPO = 'https://gitcode.com/honghutech/honghueasystudy';
+/** Issue 反馈入口：与扩展「反馈」面板里的地址保持一致 */
+const GITHUB_ISSUES = `${GITHUB_REPO}/issues`;
+const GITCODE_ISSUES = `${GITCODE_REPO}/issues`;
 
 function openExternal(url: string) {
 	shell.openExternal(url);

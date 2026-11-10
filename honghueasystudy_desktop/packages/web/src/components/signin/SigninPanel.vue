@@ -8,18 +8,39 @@
 				class="account-select"
 				@change="selectAccount"
 			>
-				<a-option v-for="item in accounts" :key="item.id" :value="item.id">
+				<a-option
+					v-for="item in accounts"
+					:key="item.id"
+					:value="item.id"
+				>
 					{{ item.name }}（{{ item.phone }}）
 				</a-option>
 			</a-select>
-			<a-button size="small" type="primary" @click="showAdd = true">添加账号</a-button>
-			<a-button v-if="selected" size="small" status="danger" @click="removeSelected">删除账号</a-button>
-			<a-tag v-if="selected" :color="selected.monitoring ? 'green' : 'gray'">
+			<a-button
+				size="small"
+				type="primary"
+				@click="showAdd = true"
+				>添加账号</a-button
+			>
+			<a-button
+				v-if="selected"
+				size="small"
+				status="danger"
+				@click="removeSelected"
+				>删除账号</a-button
+			>
+			<a-tag
+				v-if="selected"
+				:color="selected.monitoring ? 'green' : 'gray'"
+			>
 				{{ selected.monitoring ? '监听中' : '未监听' }}
 			</a-tag>
 		</div>
 
-		<div v-if="!accounts.length" class="panel-card">
+		<div
+			v-if="!accounts.length"
+			class="panel-card"
+		>
 			<a-empty description="还没有签到账号，先添加一个超星手机号账号" />
 		</div>
 
@@ -27,24 +48,42 @@
 			<div class="panel-card">
 				<div class="card-title">签到检测</div>
 				<div class="card-row">
-					<a-button type="primary" size="small" :loading="checking" @click="checkActivity">
+					<a-button
+						type="primary"
+						size="small"
+						:loading="checking"
+						@click="checkActivity"
+					>
 						检测签到活动
 					</a-button>
-					<a-button v-if="!selected.monitoring" size="small" @click="toggleMonitor(true)">
+					<a-button
+						v-if="!selected.monitoring"
+						size="small"
+						@click="toggleMonitor(true)"
+					>
 						开始监听
 					</a-button>
-					<a-button v-else size="small" status="warning" @click="toggleMonitor(false)">
+					<a-button
+						v-else
+						size="small"
+						status="warning"
+						@click="toggleMonitor(false)"
+					>
 						停止监听
 					</a-button>
-					<span class="hint">
-						监听中每 {{ selected.config.interval }} 秒检测一次；IM：{{ imText }}
-					</span>
+					<span class="hint"> 监听中每 {{ selected.config.interval }} 秒检测一次；IM：{{ imText }} </span>
 				</div>
 
-				<div v-if="activity" class="activity-box">
+				<div
+					v-if="activity"
+					class="activity-box"
+				>
 					<div class="activity-name">
 						<span>{{ activity.name }}</span>
-						<a-tag v-if="activity.signed" color="green">
+						<a-tag
+							v-if="activity.signed"
+							color="green"
+						>
 							已签到{{ activity.signedTime ? ` ${timeText(activity.signedTime)}` : '' }}
 						</a-tag>
 					</div>
@@ -62,16 +101,28 @@
 						>
 							立即签到
 						</a-button>
-						<a-button v-else size="small" :loading="signing" @click="signNow">重新签到</a-button>
-						<span v-if="activity.signed" class="hint">
+						<a-button
+							v-else
+							size="small"
+							:loading="signing"
+							@click="signNow"
+							>重新签到</a-button
+						>
+						<span
+							v-if="activity.signed"
+							class="hint"
+						>
 							{{ activity.signedMessage || '该活动已完成签到' }}
 						</span>
 					</div>
-					<div class="hint">
-						位置/拍照/二维码签到会使用下方「自动签到设置」中的坐标、图片和 enc。
-					</div>
+					<div class="hint">位置/拍照/二维码签到会使用下方「自动签到设置」中的坐标、图片和 enc。</div>
 				</div>
-				<div v-else-if="checkMessage" class="hint">{{ checkMessage }}</div>
+				<div
+					v-else-if="checkMessage"
+					class="hint"
+				>
+					{{ checkMessage }}
+				</div>
 			</div>
 
 			<div class="panel-card">
@@ -92,19 +143,37 @@
 					</div>
 					<div class="form-item">
 						<label>轮询间隔（秒）</label>
-						<a-input-number v-model="settings.interval" :min="10" :max="600" size="small" />
+						<a-input-number
+							v-model="settings.interval"
+							:min="10"
+							:max="600"
+							size="small"
+						/>
 					</div>
 					<div class="form-item">
 						<label>监听时长（分钟，0 为不限）</label>
-						<a-input-number v-model="settings.duration" :min="0" :max="1440" size="small" />
+						<a-input-number
+							v-model="settings.duration"
+							:min="0"
+							:max="1440"
+							size="small"
+						/>
 					</div>
 					<div class="form-item">
 						<label>检测后延迟（秒）</label>
-						<a-input-number v-model="settings.delay" :min="0" :max="60" size="small" />
+						<a-input-number
+							v-model="settings.delay"
+							:min="0"
+							:max="60"
+							size="small"
+						/>
 					</div>
 					<div class="form-item">
 						<label>IM 实时监听</label>
-						<a-switch v-model="settings.im" size="small" />
+						<a-switch
+							v-model="settings.im"
+							size="small"
+						/>
 					</div>
 					<div class="form-item span-2">
 						<label>位置地址（位置/二维码签到必填）</label>
@@ -126,27 +195,59 @@
 					</div>
 					<div class="form-item">
 						<label>经度</label>
-						<a-input v-model="settings.lon" size="small" placeholder="116.397428" />
+						<a-input
+							v-model="settings.lon"
+							size="small"
+							placeholder="116.397428"
+						/>
 					</div>
 					<div class="form-item">
 						<label>纬度</label>
-						<a-input v-model="settings.lat" size="small" placeholder="39.90923" />
+						<a-input
+							v-model="settings.lat"
+							size="small"
+							placeholder="39.90923"
+						/>
 					</div>
 					<div class="form-item span-2">
 						<div class="hint">
-							位置签到不是只报一个地址：超星服务端会按经纬度与老师设置的签到点算距离，坐标必须落在允许范围内。建议用「地图选点」，默认 BD-09；若签到提示超出范围，可换 GCJ-02 / WGS-84 再试。上报的坐标就是地图上选中的位点，不做任何偏移。
+							位置签到不是只报一个地址：超星服务端会按经纬度与老师设置的签到点算距离，坐标必须落在允许范围内。建议用「地图选点」，默认
+							BD-09；若签到提示超出范围，可换 GCJ-02 / WGS-84 再试。上报的坐标就是地图上选中的位点，不做任何偏移。
 						</div>
 					</div>
 					<div class="form-item span-2">
 						<label>二维码 enc（二维码签到必填）</label>
-						<a-input v-model="settings.qrcodeEnc" size="small" placeholder="从二维码链接中提取 enc 参数" />
+						<a-input
+							v-model="settings.qrcodeEnc"
+							size="small"
+							placeholder="从二维码链接中提取 enc 参数"
+						/>
 					</div>
 					<div class="form-item span-2">
 						<label>备用位置（上方单地址留空时，依次尝试这些坐标）</label>
-						<div v-for="(item, index) in settings.presetAddress" :key="index" class="preset-row">
-							<a-input v-model="item.lon" size="small" placeholder="经度" class="coord" />
-							<a-input v-model="item.lat" size="small" placeholder="纬度" class="coord" />
-							<a-input v-model="item.address" size="small" placeholder="详细地址" class="grow" />
+						<div
+							v-for="(item, index) in settings.presetAddress"
+							:key="index"
+							class="preset-row"
+						>
+							<a-input
+								v-model="item.lon"
+								size="small"
+								placeholder="经度"
+								class="coord"
+							/>
+							<a-input
+								v-model="item.lat"
+								size="small"
+								placeholder="纬度"
+								class="coord"
+							/>
+							<a-input
+								v-model="item.address"
+								size="small"
+								placeholder="详细地址"
+								class="grow"
+							/>
 							<a-button
 								size="mini"
 								type="primary"
@@ -154,9 +255,19 @@
 							>
 								地图选点
 							</a-button>
-							<a-button size="mini" status="danger" @click="removePreset(index)">删除</a-button>
+							<a-button
+								size="mini"
+								status="danger"
+								@click="removePreset(index)"
+								>删除</a-button
+							>
 						</div>
-						<a-button size="mini" class="preset-add" @click="addPreset">添加位置</a-button>
+						<a-button
+							size="mini"
+							class="preset-add"
+							@click="addPreset"
+							>添加位置</a-button
+						>
 					</div>
 					<div class="form-item span-2">
 						<label>拍照签到图片</label>
@@ -167,12 +278,22 @@
 								placeholder="本地图片绝对路径"
 								class="grow"
 							/>
-							<a-button size="small" @click="choosePhoto">选择图片</a-button>
+							<a-button
+								size="small"
+								@click="choosePhoto"
+								>选择图片</a-button
+							>
 						</div>
 					</div>
 				</div>
 				<div class="card-row">
-					<a-button size="small" type="primary" :loading="saving" @click="saveSettings">保存设置</a-button>
+					<a-button
+						size="small"
+						type="primary"
+						:loading="saving"
+						@click="saveSettings"
+						>保存设置</a-button
+					>
 					<span class="hint">密码已加密保存在本机；凭证过期时会自动重新登录。</span>
 				</div>
 			</div>
@@ -180,14 +301,27 @@
 			<div class="panel-card">
 				<div class="card-title">
 					<span>签到日志</span>
-					<a-button size="mini" @click="clearLogs">清空</a-button>
+					<a-button
+						size="mini"
+						@click="clearLogs"
+						>清空</a-button
+					>
 				</div>
 				<div class="log-list">
-					<div v-for="item in logs" :key="item.id" :class="['log-item', item.level]">
+					<div
+						v-for="item in logs"
+						:key="item.id"
+						:class="['log-item', item.level]"
+					>
 						<span class="log-time">{{ timeText(item.time) }}</span>
 						<span class="log-message">{{ item.message }}</span>
 					</div>
-					<div v-if="!logs.length" class="hint">暂无日志</div>
+					<div
+						v-if="!logs.length"
+						class="hint"
+					>
+						暂无日志
+					</div>
 				</div>
 			</div>
 		</template>
@@ -201,11 +335,19 @@
 		>
 			<div class="form-item">
 				<label>手机号</label>
-				<a-input v-model="loginForm.phone" size="small" placeholder="超星绑定的手机号" />
+				<a-input
+					v-model="loginForm.phone"
+					size="small"
+					placeholder="超星绑定的手机号"
+				/>
 			</div>
 			<div class="form-item mt-8">
 				<label>密码</label>
-				<a-input-password v-model="loginForm.password" size="small" placeholder="超星登录密码" />
+				<a-input-password
+					v-model="loginForm.password"
+					size="small"
+					placeholder="超星登录密码"
+				/>
 			</div>
 			<div class="hint mt-8">
 				密码会使用本机密钥加密保存，用于登录凭证过期后自动重新登录。若账号需要验证码，请到网页端手动登录。
@@ -226,12 +368,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { Message, Modal } from '@arco-design/web-vue';
-import type {
-	CheckResult,
-	SigninAccountView,
-	SigninActivity,
-	SigninLog
-} from '@honghu-desktop/app';
+import type { CheckResult, SigninAccountView, SigninActivity, SigninLog } from '@honghu-desktop/app';
 import { remote } from '../../utils/remote';
 import type { CoordSystem } from '../../utils/coord';
 import LocationPicker from './LocationPicker.vue';
@@ -381,9 +518,7 @@ async function checkActivity() {
 		if (data.code === 'activity') {
 			activity.value = data.activity;
 			// 活动仍在有效期内但本地已签过：直接标注，不再提示签到
-			Message.success(
-				data.activity.signed ? `检测到签到：${data.typeName}（已签到）` : `检测到签到：${data.typeName}`
-			);
+			Message.success(data.activity.signed ? `检测到签到：${data.typeName}（已签到）` : `检测到签到：${data.typeName}`);
 		} else {
 			checkMessage.value = data.message;
 		}

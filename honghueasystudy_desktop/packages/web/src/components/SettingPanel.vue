@@ -105,7 +105,10 @@
 					<span class="text-secondary">http://127.0.0.1:{{ store.render.setting.dev.port }}/json</span>
 				</Description>
 				<Description label="说明">
-					<span class="text-secondary" style="font-size: 12px">
+					<span
+						class="text-secondary"
+						style="font-size: 12px"
+					>
 						只监听本机，不会暴露到局域网。修改端口后需重启浏览器生效；关闭开关同样需要重启浏览器才会收回端口。
 					</span>
 				</Description>
@@ -264,6 +267,57 @@
 				<a-button status="danger"> 重置设置 </a-button>
 			</a-popconfirm>
 		</div>
+
+		<!-- 设置页最底部：与 README 同款横幅 + 徽章 + 反馈入口 -->
+		<a-card
+			class="setting-about"
+			title="关于与反馈"
+		>
+			<div class="setting-about__header">
+				<img
+					:src="headerSrc"
+					alt="鸿鹄易学 · 自动刷课 / AI 答题 / 题库搜题 / 超星签到"
+				/>
+			</div>
+
+			<div class="setting-about__badges">
+				<a
+					v-for="badge in badges"
+					:key="badge.src"
+					:href="badge.href"
+					:title="badge.alt"
+					@click.prevent="openExternal(badge.href)"
+				>
+					<img
+						:src="badge.src"
+						:alt="badge.alt"
+					/>
+				</a>
+			</div>
+
+			<div class="setting-about__feedback">
+				<p>
+					脚本不生效、漏题、平台改版或有功能建议，欢迎到 GitHub 或 GitCode 提 Issue
+					反馈，两边我们都会看。附上使用的平台、具体现象和「日志」菜单里的报错，能更快定位。
+				</p>
+				<div class="setting-about__links">
+					<a
+						class="setting-about__link"
+						:href="GITHUB_ISSUES"
+						@click.prevent="openExternal(GITHUB_ISSUES)"
+					>
+						GitHub 提 Issue <span aria-hidden="true">↗</span>
+					</a>
+					<a
+						class="setting-about__link"
+						:href="GITCODE_ISSUES"
+						@click.prevent="openExternal(GITCODE_ISSUES)"
+					>
+						GitCode 提 Issue <span aria-hidden="true">↗</span>
+					</a>
+				</div>
+			</div>
+		</a-card>
 	</div>
 </template>
 
@@ -275,7 +329,8 @@ import { remote } from '../utils/remote';
 import BrowserPath from './setting/BrowserPath.vue';
 import RemoteControl from './setting/RemoteControl.vue';
 import HonghuConfigs from './HonghuConfigs.vue';
-import { reactive } from 'vue';
+import { computed, reactive } from 'vue';
+import { electron } from '../utils/node';
 import { changeTheme } from '../utils';
 import Icon from './Icon.vue';
 import { forceClearBrowserCache } from '../utils/browser';
@@ -290,6 +345,62 @@ interface SettingPanelProps {
 withDefaults(defineProps<SettingPanelProps>(), {
 	simple: false
 });
+
+/** 与 README 顶部保持同一套链接，避免仓库地址在两端漂移 */
+const GITHUB_REPO = 'https://github.com/HONGHUTECHNOLOGY/honghueasystudy';
+const GITCODE_REPO = 'https://gitcode.com/honghutech/honghueasystudy';
+const GITHUB_ISSUES = `${GITHUB_REPO}/issues`;
+const GITCODE_ISSUES = `${GITCODE_REPO}/issues`;
+
+/**
+ * README 的 grid 横幅。桌面端主题是应用内切换（body[arco-theme]），
+ * 不是系统 prefers-color-scheme，所以不能用 README 的 <picture media=...>，
+ * 改为跟随 store 里的明暗设置动态拼 mode。
+ */
+const HEADER_QUERY =
+	'title=%E9%B8%BF%E9%B9%84%E6%98%93%E5%AD%A6' +
+	'&subtitle=%E8%87%AA%E5%8A%A8%E5%88%B7%E8%AF%BE%20%C2%B7%20AI%20%E7%AD%94%E9%A2%98%20%C2%B7%20%E9%A2%98%E5%BA%93%E6%90%9C%E9%A2%98%20%C2%B7%20%E8%B6%85%E6%98%9F%E7%AD%BE%E5%88%B0' +
+	'&logo=https%3A%2F%2Fraw.githubusercontent.com%2FHONGHUTECHNOLOGY%2Fhonghueasystudy%2Fmain%2Ficon%2Ficon.png' +
+	'&theme=blue&radius=28&mode=';
+const headerSrc = computed(
+	() => `https://shieldcn.dev/header/grid.svg?${HEADER_QUERY}${store.render.setting.theme.dark ? 'dark' : 'light'}`
+);
+
+/** 五枚徽章，参数与 README 完全一致（size=xs 防止在设置页宽度内换行） */
+const badges = [
+	{
+		alt: '最新版本',
+		src: 'https://shieldcn.dev/github/release/HONGHUTECHNOLOGY/honghueasystudy.svg?size=xs&color=%231E6FFF',
+		href: `${GITHUB_REPO}/releases`
+	},
+	{
+		alt: 'GitHub 累计下载量',
+		src: 'https://shieldcn.dev/github/downloads/HONGHUTECHNOLOGY/honghueasystudy.svg?size=xs&label=GitHub&color=%2318181B',
+		href: `${GITHUB_REPO}/releases`
+	},
+	{
+		alt: 'GitCode 累计下载量',
+		src: 'https://shieldcn.dev/badge/dynamic/json.svg?url=https%3A%2F%2Fgitcode.com%2Fapi%2Fv5%2Frepos%2Fhonghutech%2Fhonghueasystudy%2Fdownload_statistics&query=download_statistics_history_total&label=GitCode&color=orange&size=xs&logo=ri:GoDownload',
+		href: `${GITCODE_REPO}/releases`
+	},
+	{
+		alt: 'MIT 开源协议',
+		src: 'https://shieldcn.dev/github/license/HONGHUTECHNOLOGY/honghueasystudy.svg?size=xs&color=%238E8E93',
+		href: `${GITHUB_REPO}/blob/main/LICENSE`
+	},
+	{
+		alt: '支持 Windows / macOS / Linux',
+		src: 'https://shieldcn.dev/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-%238E8E93.svg?size=xs',
+		href: GITHUB_REPO
+	}
+];
+
+const { shell } = electron;
+
+/** 桌面端点击外链走系统浏览器，不要在 Electron 窗口里新开一个页面 */
+function openExternal(url: string) {
+	shell.openExternal(url);
+}
 
 const state = reactive({
 	show: false,
@@ -395,5 +506,107 @@ function syncNote() {
  */
 .arco-card + .arco-card {
 	margin-top: 14px;
+}
+
+/* ---------------------------------------------- 底部「关于与反馈」卡片 */
+/* 前一个是「重置设置」的 div，吃不到 .arco-card + .arco-card，单独补间距 */
+.setting-about {
+	margin-top: 14px;
+}
+
+.setting-about__header img {
+	display: block;
+	width: 100%;
+	height: auto;
+	border-radius: 14px;
+}
+
+/**
+ * 徽章是远程 SVG，深色背景下纯黑/深灰的徽章会糊成一片，
+ * 给整排垫一层跟随主题的表面色，和卡片白底分开。
+ */
+.setting-about__badges {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	margin: 16px 0;
+	padding: 10px;
+	border-radius: 10px;
+	background: var(--surface-hover);
+}
+
+.setting-about__badges a {
+	display: inline-flex;
+	line-height: 0;
+	transition: opacity var(--dur-2) var(--ease-std);
+
+	&:hover {
+		opacity: 0.75;
+	}
+}
+
+.setting-about__badges img {
+	height: 20px;
+	width: auto;
+}
+
+.setting-about__feedback {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+	padding: 16px 18px;
+	border: 1px solid var(--border-subtle);
+	border-radius: 12px;
+}
+
+.setting-about__feedback p {
+	flex: 1 1 260px;
+	margin: 0;
+	color: var(--text-secondary);
+	font-size: var(--fs-12);
+	line-height: 1.75;
+}
+
+.setting-about__links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.setting-about__link {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	white-space: nowrap;
+	padding: 8px 12px;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--r-sm);
+	background: var(--surface-panel);
+	color: var(--text-primary);
+	font-size: var(--fs-12);
+	font-weight: var(--fw-medium);
+	text-decoration: none;
+	transition: border-color var(--dur-2) var(--ease-std), color var(--dur-2) var(--ease-std);
+
+	&:hover {
+		border-color: rgba(99, 91, 255, 0.45);
+		color: #635bff;
+	}
+
+	span {
+		font-size: 13px;
+		line-height: 1;
+	}
+}
+
+@media (max-width: 720px) {
+	.setting-about__feedback {
+		flex-direction: column;
+		align-items: stretch;
+	}
 }
 </style>

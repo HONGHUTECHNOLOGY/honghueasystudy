@@ -39,7 +39,12 @@ function applyShellMetrics() {
 	const style = document.body.style;
 	style.setProperty('--title-height', '40px');
 	style.setProperty('--title-inset-right', currentPlatform === 'win32' ? '138px' : '0px');
-	style.setProperty('--title-inset-left', currentPlatform === 'darwin' ? '76px' : '0px');
+	/**
+	 * 左侧：macOS 红绿灯占 76px；Win/Linux 没有原生按钮，
+	 * 但仍留 10px 呼吸间距，否则左上角品牌图标几乎贴着窗口边缘。
+	 * 这里统一控制整条标题栏的左留白，比只给品牌元素加 padding 更一致。
+	 */
+	style.setProperty('--title-inset-left', currentPlatform === 'darwin' ? '76px' : '10px');
 }
 
 /**

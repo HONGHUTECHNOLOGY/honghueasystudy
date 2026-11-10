@@ -195,7 +195,5 @@ function formatExtensionArguments(extensionPaths: string[]) {
 		.filter((f) => f.includes('.DS_Store') === false)
 		.map((p) => p.replace(/\\/g, '/'))
 		.join(',');
-	return paths.length === 0
-		? []
-		: [`--disable-extensions-except="${paths}"`, `--load-extension="${paths}"`];
+	return paths.length === 0 ? [] : [`--disable-extensions-except="${paths}"`, `--load-extension="${paths}"`];
 }

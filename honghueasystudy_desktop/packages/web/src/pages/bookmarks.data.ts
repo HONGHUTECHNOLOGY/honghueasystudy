@@ -91,7 +91,11 @@ function normalizedUrl(url: string): string {
 		const parsed = new URL(url);
 		return `${parsed.hostname.replace(/^www\./i, '')}${parsed.pathname}`.replace(/\/+$/, '').toLowerCase();
 	} catch {
-		return url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '').toLowerCase();
+		return url
+			.replace(/^https?:\/\//i, '')
+			.replace(/^www\./i, '')
+			.replace(/\/+$/, '')
+			.toLowerCase();
 	}
 }
 
@@ -121,7 +125,10 @@ function mergeEntry(target: CatalogEntry[], incoming: CatalogEntry) {
  * 以本地基线为骨架合并云端数据：
  * 离线时保持完整；在线配置存在时更新旧入口，并补充新平台。
  */
-export function buildCatalog(groups: RemoteBookmarkGroup[]): { platforms: CatalogEntry[]; officialSites: CatalogEntry[] } {
+export function buildCatalog(groups: RemoteBookmarkGroup[]): {
+	platforms: CatalogEntry[];
+	officialSites: CatalogEntry[];
+} {
 	const platforms = OFFLINE_PLATFORMS.map((entry) => ({ ...entry }));
 	const officialSites = OFFLINE_OFFICIAL_SITES.map((entry) => ({ ...entry }));
 

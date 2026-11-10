@@ -456,7 +456,6 @@ export class Process extends EventEmitter {
 			});
 	}
 
-
 	async launchPreCheck() {
 		// 只检查浏览器路径；鸿鹄易学扩展随软件打包，不再检查/安装用户脚本
 		if (!this.launchOptions.executablePath) {
@@ -542,9 +541,7 @@ export class Process extends EventEmitter {
 							 * 开发者调试端口：>0 时 worker 会额外拼上 --remote-debugging-port。
 							 * 关闭开关传 0，保证不会因为历史参数继续对外开放端口。
 							 */
-							devToolsPort: store.render.setting.dev?.enabled
-								? Number(store.render.setting.dev?.port) || 0
-								: 0
+							devToolsPort: store.render.setting.dev?.enabled ? Number(store.render.setting.dev?.port) || 0 : 0
 						});
 					} else {
 						// preCheck 失败（浏览器路径缺失等）：原实现 promise 永不落定，状态永久卡在 launching

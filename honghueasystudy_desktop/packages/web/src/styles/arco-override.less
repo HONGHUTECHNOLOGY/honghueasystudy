@@ -408,6 +408,14 @@ body[arco-theme='dark'] .arco-btn-primary:not(.arco-btn-disabled):hover {
 .arco-dropdown-option,
 .arco-select-option {
 	border-radius: var(--r-xs);
+	/**
+	 * Arco 默认给选项写了 width: 100%，其百分比按父容器的 content-box 解析，
+	 * 这里再补左右各 4px 外边距，等于每个菜单项比滚动容器宽 8px。
+	 * 菜单外层是 Arco 的 Scrollbar（overflow-y: auto），横向一旦溢出就会
+	 * 在底部画一条横向滚动条。
+	 * 改成 auto：块级盒自己撑满「父宽 - 外边距」，观感不变但没有溢出。
+	 */
+	width: auto;
 	margin: 1px 4px;
 	padding: 0 8px;
 	height: 30px;
@@ -415,6 +423,14 @@ body[arco-theme='dark'] .arco-btn-primary:not(.arco-btn-disabled):hover {
 	font-size: var(--fs-12);
 	color: var(--text-secondary);
 	transition: background-color var(--dur-1) var(--ease-std), color var(--dur-1) var(--ease-std);
+}
+
+/**
+ * 选择器下拉的选项，Arco 用的是 `.arco-select-dropdown .arco-select-option`
+ * 这个更具体的选择器，上面那行 width: auto 压不住它，这里补同优先级覆盖。
+ */
+.arco-select-dropdown .arco-select-option {
+	width: auto;
 }
 
 /**

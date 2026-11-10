@@ -159,8 +159,8 @@ body {
 
 	/* ----------------------------------------------------------- 壳层几何 */
 	--title-height: 40px;
-	/** 原生窗口按钮避让，由 utils/theme.ts 按平台注入（Win 138px / mac 0） */
-	--title-inset-left: 0px;
+	/** 原生窗口按钮避让 + 左侧呼吸间距，由 utils/theme.ts 按平台注入（Win right 138px / mac left 76px） */
+	--title-inset-left: 10px;
 	--title-inset-right: 0px;
 	--sidebar-w: 216px;
 	--sidebar-w-collapsed: 60px;

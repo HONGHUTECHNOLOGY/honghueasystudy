@@ -163,7 +163,9 @@ async function dumpPageInfo() {
 		const result = await current.dumpPage();
 		loading.close();
 		Message.success({
-			content: `已导出 ${result.files.map((item) => item.name).join(' / ')}（${result.containerCount} 组候选容器）到：${result.dir}`,
+			content: `已导出 ${result.files.map((item) => item.name).join(' / ')}（${result.containerCount} 组候选容器）到：${
+				result.dir
+			}`,
 			duration: 10 * 1000,
 			closable: true
 		});

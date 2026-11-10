@@ -19,15 +19,11 @@
 				</div>
 
 				<div class="env-alert__reason">
-					<template v-if="!envState.isCurrentBrowserSupported">
-						当前浏览器版本不受支持
-					</template>
+					<template v-if="!envState.isCurrentBrowserSupported"> 当前浏览器版本不受支持 </template>
 					<template v-else-if="!envState.supportedBrowser">
 						{{ lang('browser_page_environment_error_no_browser_detected', '未检测到可用的浏览器') }}
 					</template>
-					<template v-else-if="!envState.supportedExtension">
-						未检测到鸿鹄易学扩展，请重新启动软件
-					</template>
+					<template v-else-if="!envState.supportedExtension"> 未检测到鸿鹄易学扩展，请重新启动软件 </template>
 				</div>
 
 				<!--
