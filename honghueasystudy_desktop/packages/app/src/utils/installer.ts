@@ -43,13 +43,31 @@ export function assertSafeInstallDir(dir: string | undefined) {
 }
 
 /**
+ * 归一化 Windows 安装路径，供 NSIS 的 `/D=` 使用。
+ *
+ * 为什么必须做：
+ * - **正斜杠会被吃掉一个字符**。实测把 `/D=D:/hh-wiz` 交给安装器，`$INSTDIR` 变成
+ *   `D:hh-wiz`（缺反斜杠），写进注册表和卸载项的路径就成了相对路径。多数情况下
+ *   `D:hh-wiz` 恰好等价于 `D:\hh-wiz`，一旦装的是二级目录（`D:/a/b` → `D:ab`）就会装错。
+ *   来源可能是注册表里别的安装器写的正斜杠路径，不能假定一定是反斜杠。
+ * - 尾部分隔符会让 `$INSTDIR` 以 `\` 结尾，拼出来的 exe 路径带双斜杠。
+ * - 引号是 NSIS 的硬性禁忌（会装出一个名字带引号的目录）。
+ */
+export function normalizeInstallDir(dir: string): string {
+	return String(dir || '')
+		.replace(/"/g, '')
+		.replace(/\//g, '\\')
+		.replace(/\\+$/, '');
+}
+
+/**
  * 构造 NSIS 静默安装参数。
  *
  * `/D=` 放最后且不加引号是 NSIS 的硬性要求；这里顺手去掉路径里可能的引号，
  * 避免调用方误传带引号的字符串后装出一个怪目录。
  */
 export function buildSilentInstallArgs(installDir: string): string[] {
-	return ['/S', `/D=${installDir.replace(/"/g, '')}`];
+	return ['/S', `/D=${normalizeInstallDir(installDir)}`];
 }
 
 export interface SpawnInstallerOptions {
@@ -114,26 +132,39 @@ export function spawnSilentInstaller(opts: SpawnInstallerOptions): Promise<void>
 /**
  * 以「可见安装向导」方式启动安装包（Windows）。
  *
- * 与 `spawnSilentInstaller` 的唯一区别：**不传 `/S`**。
- * 本项目是 assisted installer（`oneClick: false`），去掉 `/S` 后会显示
- * 「选择安装目录 → 安装 → 完成」向导，完成页还能勾选直接运行新版本。
+ * 与静默安装的区别：**不传 `/S`**。本项目是 assisted installer（`oneClick: false`），
+ * 去掉 `/S` 后至少会显示进度页，用户能看见「正在安装 / 安装完成」。
  *
  * 为什么不再默认静默：静默安装期间界面为零，安装器必须靠「应用退出之后」的外部进程接力；
  * 一旦接力进程被应用退出带走（实测 ps1 启动后没活过应用退出），就变成彻底的黑盒——
  * 用户只知道软件退出了，装没装上完全靠猜。向导模式把这段过程交还给用户可见的界面。
  *
- * 参数规范与静默安装一致：`/D=` 必须是最后一个参数且不能加引号。
- * 只给 `/D=` 只是设置向导里的默认目录（用户仍可改），和 `/S` 放一起才是静默安装。
+ * 三个参数各解决一件事：
+ * - `/D=<dir>`：覆盖安装目标目录。**必须最后一个、且不加引号**（NSIS 规范，写了引号会装出
+ *   一个名字带引号的目录；配合 `windowsVerbatimArguments` 防止 Node 替我们加引号）。
+ *   构建配置里已去掉 `allowToChangeInstallationDirectory`，安装包**没有目录页**，
+ *   所以这个目录不再可能被用户改掉，也不会触发 electron-builder 的
+ *   「目标目录非空且不含应用名就追加一层子目录」兜底逻辑（那个逻辑会把 D:\HH 装成
+ *   D:\HH\鸿鹄易学，导致旧目录残留、桌面快捷方式指向新目录）。
+ * - `/updated`：声明这是更新。安装器的 `_CHECK_APP_RUNNING` 会走 isUpdated 分支——
+ *   不再弹「应用正在运行，是否关闭」的确认框，直接等应用退出；完成页的启动按钮
+ *   也会把 `--updated` 传给新进程。
+ * - `/currentuser`：跳过「为所有用户 / 仅为我安装」选择页，强制按当前用户安装。
+ *   更新必须沿用原安装位置，让用户在这里改选「所有用户」会装到 Program Files 形成第二份。
  */
 export function spawnInstallerWizard(opts: SpawnInstallerOptions): { ok: boolean; pid?: number; error?: string } {
 	try {
 		assertSafeInstallDir(opts.installDir);
-		const child = spawn(opts.exePath, [`/D=${opts.installDir.replace(/"/g, '')}`], {
-			detached: true,
-			stdio: 'ignore' as const,
-			windowsHide: false,
-			windowsVerbatimArguments: true
-		});
+		const child = spawn(
+			opts.exePath,
+			['/updated', '/currentuser', `/D=${normalizeInstallDir(opts.installDir)}`],
+			{
+				detached: true,
+				stdio: 'ignore' as const,
+				windowsHide: false,
+				windowsVerbatimArguments: true
+			}
+		);
 		// 进程独立后不再持有引用，父进程随后退出也不会拖住它
 		child.unref();
 		opts.onSpawn?.(child.pid);
