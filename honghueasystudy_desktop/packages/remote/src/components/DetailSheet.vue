@@ -74,6 +74,20 @@
 					</div>
 
 					<div class="actions">
+						<!-- 固定到顶部只影响手机端排序，所以不管实例跑没跑都能点 -->
+						<button
+							type="button"
+							class="btn"
+							:class="{ 'btn-pinned': pinned }"
+							@click="pin"
+						>
+							<Icon
+								name="pin"
+								:size="15"
+							/>
+							{{ pinned ? '取消固定' : '固定到顶部' }}
+						</button>
+
 						<button
 							v-if="browser.status === 'closed'"
 							type="button"
@@ -118,18 +132,6 @@
 						</button>
 
 						<template v-else>
-							<button
-								type="button"
-								class="btn"
-								:disabled="!!pending || browser.status !== 'launched'"
-								@click="bringToFront"
-							>
-								<Icon
-									name="top"
-									:size="15"
-								/>
-								置于最前
-							</button>
 							<button
 								type="button"
 								class="btn btn-danger"
@@ -362,13 +364,14 @@ import Icon from './Icon.vue';
 import { snapshotUrl } from '../api';
 import {
 	closeBrowser as closeBrowserAction,
+	isPinned,
 	isSnapshotStale,
 	launchBrowser,
 	refresh,
 	requestSync,
-	runCommand,
 	state,
 	toast,
+	togglePin,
 	ui
 } from '../store';
 import { formatAgo, formatDuration } from '../utils';
@@ -740,14 +743,15 @@ async function closeBrowser() {
 	} catch {}
 }
 
-async function bringToFront() {
+const pinned = computed(() => (browser.value ? isPinned(browser.value.uid) : false));
+
+/** 固定到列表顶部（纯手机端排序，不向电脑端发命令） */
+function pin() {
 	const target = browser.value;
 	if (!target) return;
-	try {
-		await runCommand('browser.bringToFront', { uid: target.uid }, target.uid);
-	} catch {}
-}
-</script>
+	const next = togglePin(target.uid);
+	toast(next ? '已固定到列表顶部' : '已取消固定', next ? 'success' : 'info');
+}</script>
 
 <style scoped>
 .mask {
@@ -930,10 +934,18 @@ async function bringToFront() {
 	display: flex;
 	gap: 9px;
 	align-items: center;
+	flex-wrap: wrap;
 }
 
 .actions .btn {
 	flex: 1;
+}
+
+/* 已固定的按钮用品牌色，和「启动/关闭」区分开 */
+.btn-pinned {
+	color: var(--brand-text);
+	border-color: var(--line-brand);
+	background: var(--brand-soft);
 }
 
 /* 远程自动化入口：视觉上比普通按钮更「入口」，引导用户点进登录/选课 */

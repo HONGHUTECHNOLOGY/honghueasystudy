@@ -2,7 +2,7 @@
 	<article
 		ref="cardEl"
 		class="browser-card card"
-		:class="browser.status"
+		:class="[browser.status, { pinned }]"
 		role="button"
 		tabindex="0"
 		@click="emit('open')"
@@ -19,6 +19,14 @@
 				:class="statusMeta.tone"
 			>
 				{{ statusMeta.label }}
+			</span>
+			<!-- 固定到顶部的实例加个角标，一眼看出它为什么不跟随启动/关闭顺序 -->
+			<span
+				v-if="pinned"
+				class="chip chip--pin"
+				title="已固定到列表顶部"
+			>
+				置顶
 			</span>
 			<!-- 方案角标：一眼能看出这台机器配了自动刷课/定时，不用进详情翻 -->
 			<span
@@ -180,6 +188,20 @@
 			class="actions"
 			@click.stop
 		>
+			<!-- 固定到顶部是纯本地排序，跟实例跑没跑无关，所以始终可点 -->
+			<button
+				type="button"
+				class="btn btn-sm"
+				:class="{ 'btn-pinned': pinned }"
+				@click.stop="pin"
+			>
+				<Icon
+					name="pin"
+					:size="14"
+				/>
+				{{ pinned ? '取消固定' : '固定到顶部' }}
+			</button>
+
 			<button
 				v-if="browser.status === 'closed'"
 				type="button"
@@ -226,18 +248,6 @@
 			<template v-else>
 				<button
 					type="button"
-					class="btn btn-sm"
-					:disabled="!!pending || browser.status !== 'launched'"
-					@click="bringToFront"
-				>
-					<Icon
-						name="top"
-						:size="14"
-					/>
-					置顶
-				</button>
-				<button
-					type="button"
 					class="btn btn-sm btn-danger"
 					:class="{ 'btn-busy': browser.status === 'closing' }"
 					:disabled="!!pending || browser.status === 'closing'"
@@ -268,7 +278,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Icon from './Icon.vue';
 import { BrowserSnapshot, snapshotUrl } from '../api';
-import { closeBrowser, isSnapshotStale, launchBrowser, refresh, requestSync, runCommand, state } from '../store';
+import { closeBrowser, isPinned, isSnapshotStale, launchBrowser, refresh, requestSync, state, toast, togglePin } from '../store';
 
 const props = defineProps<{ browser: BrowserSnapshot }>();
 const emit = defineEmits<{ (e: 'open'): void }>();
@@ -589,10 +599,16 @@ async function close() {
 	} catch {}
 }
 
-async function bringToFront() {
-	try {
-		await runCommand('browser.bringToFront', { uid: props.browser.uid }, props.browser.uid);
-	} catch {}
+const pinned = computed(() => isPinned(props.browser.uid));
+
+/**
+ * 固定到列表顶部（纯手机端排序，不向电脑端发命令）
+ *
+ * 纯本地操作，因此不参与 pending，也不受实例运行状态限制：没启动也能先固定。
+ */
+function pin() {
+	const next = togglePin(props.browser.uid);
+	toast(next ? '已固定到列表顶部' : '已取消固定', next ? 'success' : 'info');
 }
 </script>
 
@@ -617,6 +633,24 @@ async function bringToFront() {
 
 .browser-card.launched {
 	border-color: rgba(124, 108, 255, 0.22);
+}
+
+/* 置顶：左侧品牌色竖条，一眼区分「我手动固定过」和「它正好在运行」 */
+.browser-card.pinned::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: 12px;
+	bottom: 12px;
+	width: 3px;
+	border-radius: 0 3px 3px 0;
+	background: var(--brand);
+}
+
+.btn-pinned {
+	color: var(--brand-text);
+	border-color: var(--line-brand);
+	background: var(--brand-soft);
 }
 
 html[data-theme='light'] .browser-card.launched {
@@ -671,6 +705,13 @@ html[data-theme='light'] .browser-card.launched {
 .chip--plan {
 	color: var(--brand-text);
 	border-color: var(--line-brand);
+	background: var(--brand-soft);
+}
+
+/* 置顶角标：比方案角标更克制，避免两个角标抢视线 */
+.chip--pin {
+	color: var(--brand-text);
+	border-color: transparent;
 	background: var(--brand-soft);
 }
 
@@ -976,6 +1017,8 @@ html[data-theme='light'] .browser-card.launched {
 	display: flex;
 	gap: 7px;
 	align-items: center;
+	/* 三个按钮（固定 / 启动或关闭）在窄屏放不下时换行，别把文字挤成竖排 */
+	flex-wrap: wrap;
 	margin-top: auto;
 	padding-top: 2px;
 }

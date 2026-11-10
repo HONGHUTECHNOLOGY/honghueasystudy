@@ -12,7 +12,7 @@
 					<strong class="num">{{ runningCount }}</strong>
 					<span class="num">/ {{ state.browsers.length || 0 }}</span>
 				</div>
-				<p class="hero__desc faint">实例正在运行，可在此启动、置顶或关闭</p>
+				<p class="hero__desc faint">实例正在运行，可在此启动、固定到顶部或关闭</p>
 
 				<div class="hero__metrics">
 					<div class="metric">
@@ -123,7 +123,7 @@
 			class="list"
 		>
 			<BrowserCard
-				v-for="browser in state.browsers"
+				v-for="browser in orderedBrowsers"
 				:key="browser.uid"
 				:browser="browser"
 				@open="ui.detailUid = browser.uid"
@@ -156,7 +156,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import BrowserCard from './BrowserCard.vue';
 import Icon from './Icon.vue';
-import { closeAllBrowsers, copyWithToast, launchAllBrowsers, refresh, state, ui } from '../store';
+import { closeAllBrowsers, copyWithToast, launchAllBrowsers, orderedBrowsers, refresh, state, ui } from '../store';
 import { formatAgo } from '../utils';
 
 const runningCount = computed(

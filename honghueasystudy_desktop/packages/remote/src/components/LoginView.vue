@@ -172,7 +172,7 @@ import { authenticate, state } from '../store';
 
 const FEATURES = [
 	{ icon: 'monitor', title: '实时画面', desc: '每 2 秒同步一次截图，进度随时可见' },
-	{ icon: 'play', title: '一键启停', desc: '启动、置顶、关闭，不必回到电脑前' },
+	{ icon: 'play', title: '一键启停', desc: '启动、关闭、固定到顶部，不必回到电脑前' },
 	{ icon: 'logs', title: '日志同看', desc: '运行日志实时推送，异常第一时间发现' }
 ];
 

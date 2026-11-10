@@ -1,4 +1,4 @@
-import { reactive } from 'vue';
+import { computed, reactive } from 'vue';
 import {
 	api,
 	AuthError,
@@ -36,6 +36,8 @@ interface State {
 	authMode: 'pair' | 'password' | 'none';
 	hasPassword: boolean;
 	browsers: BrowserSnapshot[];
+	/** 置顶（固定在列表最前）的实例 uid，仅本机存储、只影响这台设备的顺序 */
+	pinned: string[];
 	logs: { [uid: string]: string[] };
 	service: ServiceInfo | null;
 	tunnel: TunnelStatus | null;
@@ -100,6 +102,7 @@ export const state = reactive<State>({
 	authMode: 'pair',
 	hasPassword: false,
 	browsers: [],
+	pinned: [],
 	logs: {},
 	service: null,
 	tunnel: null,
@@ -136,6 +139,70 @@ export const ui = reactive({
 	theme: 'auto' as ThemeMode
 });
 
+// ------------------------------------------------------------------ 列表置顶
+
+const PINNED_KEY = 'hh-remote:pinned';
+/** 最多记住多少台，避免本地存储被无限堆数据 */
+const MAX_PINNED = 50;
+
+/** 读取本地置顶列表（数组顺序即优先顺序） */
+function readPinned(): string[] {
+	try {
+		const raw = localStorage.getItem(PINNED_KEY);
+		if (!raw) return [];
+		const value = JSON.parse(raw);
+		if (!Array.isArray(value)) return [];
+		return value.filter((item) => typeof item === 'string').slice(0, MAX_PINNED);
+	} catch {
+		/* 隐私模式或旧数据损坏，按未置顶处理 */
+		return [];
+	}
+}
+
+/** 启动时载入置顶列表 */
+export function initPinned(): void {
+	state.pinned = readPinned();
+}
+
+/**
+ * 实例列表的显示顺序
+ *
+ * 置顶的按「置顶先后」排在最前，其余保持后端给的顺序（Array.sort 稳定）。
+ * 只影响显示，不动 `state.browsers`，避免污染快照合并逻辑。
+ */
+export const orderedBrowsers = computed(() => {
+	const pinned = state.pinned;
+	if (!pinned.length) return state.browsers;
+	const rank = new Map(pinned.map((uid, index) => [uid, index]));
+	return state.browsers.slice().sort((a, b) => {
+		const ra = rank.has(a.uid) ? (rank.get(a.uid) as number) : Number.MAX_SAFE_INTEGER;
+		const rb = rank.has(b.uid) ? (rank.get(b.uid) as number) : Number.MAX_SAFE_INTEGER;
+		return ra - rb;
+	});
+});
+
+export function isPinned(uid: string): boolean {
+	return state.pinned.indexOf(uid) !== -1;
+}
+
+/** 切换置顶，返回切换后是否处于置顶状态 */
+export function togglePin(uid: string): boolean {
+	const index = state.pinned.indexOf(uid);
+	if (index === -1) {
+		/** 新置顶的排最前，符合「刚固定的最想先看到」 */
+		state.pinned.unshift(uid);
+		state.pinned = state.pinned.slice(0, MAX_PINNED);
+	} else {
+		state.pinned.splice(index, 1);
+	}
+	try {
+		localStorage.setItem(PINNED_KEY, JSON.stringify(state.pinned));
+	} catch {
+		/* 忽略写入失败，仅本次会话生效 */
+	}
+	return index === -1;
+}
+
 /**
  * 远程端时钟
  *
@@ -143,7 +210,6 @@ export const ui = reactive({
  * 页面里的时间不能只靠一次性计算，否则卡片会一直停留在旧的判断上。
  */
 export const clock = reactive({ now: Date.now() });
-
 /**
  * 状态停滞的判断阈值
  *
