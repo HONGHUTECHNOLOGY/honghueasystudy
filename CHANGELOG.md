@@ -1,49 +1,5 @@
 # Changelog
 
-## [5.5.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.4.0...v5.5.0) (2026-11-10)
-
-
-### ✨ 新功能
-
-* **changelog:** 更新弹窗显示可滚动的更新日志，官网构建产出 changelog.json ([8aaddae](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/8aaddae7d2ed1d69a18a1925616ea205b9cc7b03))
-* **desktop:** 启用 GPU 硬件加速，连续崩溃后自动回退 ([948762d](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/948762d5036587431666d6cef5bc4237bd098a94))
-* **desktop:** 完善签到、自动更新与远程控制主流程 ([91e6c72](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/91e6c727fbed18e83a788ed1f45ea9f80b359c3d))
-* **desktop:** 开机自启静默启动，直接驻留托盘不弹界面 ([d58a16e](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/d58a16e6430e0787ab5357596915c60d01de0a7c))
-* **desktop:** 更新流程补安装进度窗、下载进度弹窗与检查更新入口 ([fe2aa7d](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/fe2aa7d0cb8c9c52443e31309bd7d8c2b3e17f07))
-* **remote:** 优化远程控制台界面与交互 ([a023692](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/a023692208b5140f8dbaa69f28a027afd2b39404))
-* **remote:** 手机端支持把实例固定到列表顶部 ([f9bda1f](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/f9bda1fe8f9532b5d68461c05b22f99c568f800a))
-* **scripts:** 新增 GitHub/GitCode Issue 反馈入口并优化悬浮窗布局 ([63cc461](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/63cc461b7b738f0a04e70075b9f378f7e47f826a))
-* **signin:** 新增超星签到助手，支持自动检测与远程签到 ([b7905c9](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/b7905c99169306abb18824c70f20ad351d8311ad))
-* **signin:** 签到请求支持客户端特征伪装，并新增已签到台账去重 ([0d55bda](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/0d55bda72e93de7f320022ec802a468286f5e929))
-* **website:** 接入下载量统计与同源代理，补齐 5.x 新功能 ([4e1e375](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/4e1e3759212da988be0b51f789a0a8214c392263))
-* **web:** 设置页新增反馈入口与徽章横幅，重构文档页与签到/自动化界面 ([bc95b94](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/bc95b94838ddce4cbcf0f57b80b07cd48924f520))
-
-
-### 🐛 问题修复
-
-* **build:** 打包排除嵌套层级的 dist-* 目录 ([425c3bc](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/425c3bc6f420d4a45a56b298c7c071c6bbc7b07f))
-* **desktop:** 修复开机自启写不进启动文件夹，改用 create 语义 ([afad0a9](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/afad0a9818ad6fbf3eff06306a9546c7b9ba9e8a))
-* **desktop:** 应用改为普通权限，修复开机自启被系统静默跳过 ([07061d8](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/07061d8a10f49238b47d7d092dc4dbe90ca68e8b))
-* **desktop:** 开机静默启动后主窗口仍会自己弹出 ([54e7c8c](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/54e7c8caedbae23060a3d3277a1acf578cd88801))
-* **desktop:** 每次启动强制同步内置扩展，不再按版本号跳过 ([d1ace22](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/d1ace22edd94f5049033f7618b27f7d79ecd6c5d))
-* **desktop:** 自启项命令行给 exe 路径加引号，兼容含空格的安装目录 ([1d2b40c](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/1d2b40c524724cbb1be1522d61f7b3400ebef186))
-* **extension:** 主世界注入改用 chrome.scripting，不再依赖「允许用户脚本」开关 ([53e4b89](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/53e4b890231a10f8efa1da62ffeee7e8c4347377))
-* **scripts:** U 校园页签切换与漏题补答，core 增加搜题重试 ([5c778a3](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/5c778a3491e0fb5f3937cdd44dfc3880642cf573))
-* **scripts:** 修复智慧树登录与超星滑块的验证码取图失败 ([6cabf16](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/6cabf16f34758672a60eef7d244d9d9dfca503f4))
-* **website:** 下载量改为直连优先、失败再走同源代理；Hero 胶囊图标固定尺寸 ([25b7543](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/25b75436025a8a15c2e6c5067b9c527185e197b5))
-* **web:** 修复列表图标错位与首页无法滚动 ([d43c96a](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/d43c96a8284ba751b241afef90259ba360283c9c))
-
-
-### 📝 文档
-
-* **readme:** 重构 README——桌面端置顶、补充新功能、接入 shieldcn 徽章与横幅 ([f7f00eb](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/f7f00eb951c74c96348c171af9551fa959745c0d))
-* **spec:** 补充 Linux OCR 纯内置分发的功能规格与任务拆解 ([c1feec2](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/c1feec2dafb9c26129b2faffe193ba047bbef153))
-
-
-### ♻️ 代码重构
-
-* **changelog:** 更新日志与清单并行拉取，弹窗不再等它 ([8e258d1](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/8e258d10fd9f9bb5878e9808d2c97e717e123c95))
-* **desktop:** 开机自启只保留注册表一条通道 ([7a0f951](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/7a0f951fa71624d2c3998424eef26ad07440b771))
 
 ## [5.4.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.3.0...v5.4.0) (2026-11-04)
 
