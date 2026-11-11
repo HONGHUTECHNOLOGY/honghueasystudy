@@ -31,7 +31,8 @@
   ],
   "copyright": "Copyright © 2021 ${author}",
   "nsis": {
-    "oneClick": false
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
   },
   "win": {
     "icon": "public/favicon.png",
