@@ -1,0 +1,84 @@
+name: Publish to Gitee
+
+# 在 Gitee 生成/更新发布页（只放说明 + 指向 GitCode 的下载链接，不放附件）。
+#
+# 正常发版由 desktop-build.yml 的 publish-gitee job 自动执行（排在 GitCode 镜像成功之后）。
+# 本 workflow 用于：
+#   - 老版本补建 Gitee 发布页（例如 5.5.0 及更早）
+#   - 自动步骤失败后单独重跑，不必重走三平台构建
+#
+# Gitee 限制：单附件 ≤ 100 MB、整仓库附件 ≤ 1 GB，安装包 325~582 MB 放不进去，
+# 所以这里只写页面，文件仍托管在 GitCode（国内）与 GitHub（源站）。
+#
+# 前置：仓库 Secrets 需配置 GITEE_TOKEN（Gitee 私人令牌，projects 权限即可）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag（如 v5.5.1），留空取最新一次发布'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-gitee-${{ inputs.tag || 'latest' }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      INPUT_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Check out scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts
+          sparse-checkout-cone-mode: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.14'
+
+      - name: Check token
+        run: |
+          if [ -z "$GITEE_TOKEN" ]; then
+            echo "::error::缺少 GITEE_TOKEN，请在 Settings → Secrets and variables → Actions 中添加"
+            exit 1
+          fi
+          echo "::add-mask::$GITEE_TOKEN"
+
+      - name: Resolve tag
+        run: |
+          TAG="$INPUT_TAG"
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release view --json tagName -q .tagName)
+            echo "未指定 tag，取最新发布：$TAG"
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      # 与 GitHub Release 同源，避免两套文案
+      - name: Download release notes
+        run: |
+          mkdir -p notes
+          gh release download "$TAG" --pattern release-notes.md --dir notes --clobber
+          wc -l notes/release-notes.md
+
+      # 脚本自带探链：GitCode 上附件没就绪（404）会拒绝发布，不会写出死链页面
+      - name: Publish Gitee release page
+        run: |
+          node scripts/publish-to-gitee.js \
+            --tag "$TAG" \
+            --notes-file notes/release-notes.md \
+            --purge-assets \
+            --require-token
+          echo "已发布：https://gitee.com/honghutechnology/honghueasystudy/releases/tag/$TAG"
