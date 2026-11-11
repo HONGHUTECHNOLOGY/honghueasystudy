@@ -1,6 +1,13 @@
 # Changelog
 
 
+## [5.5.1](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.5.0...v5.5.1) (2026-11-11)
+
+
+### 🐛 问题修复
+
+* **desktop:** 恢复首次安装的目录选择页 ([66e92f8](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/66e92f8f1297e109b0d59f7223f56dac7008cf26))
+
 ## [5.5.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.4.0...v5.5.0) (2026-11-10)
 
 
