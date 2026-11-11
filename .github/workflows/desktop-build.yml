@@ -578,3 +578,56 @@ jobs:
           TAG="${TAG_RAW#refs/tags/}"
           gh workflow run update-manifest.yml --ref main -f tag="$TAG"
           echo "已派发 update-manifest（tag=$TAG）→ 探链通过后写清单 → CF 重建"
+
+  # Gitee 发布页：只放说明 + 指向 GitCode 的下载链接，**不放附件**。
+  # 平台限制：单附件 ≤ 100 MB、整仓库附件 ≤ 1 GB（API 实测 105 MB 直接 400），
+  # 本项目安装包 325~582 MB、单次发版 ~2.7 GB，装不进去。
+  # 必须排在 dispatch-cnb 之后：GitCode 附件没传完时链接是 404，
+  # 脚本会逐条 Range GET 探链，任一失败就拒绝发布（fail-closed）。
+  publish-gitee:
+    needs: [upload-release, dispatch-cnb]
+    if: ${{ needs.dispatch-cnb.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TAG_RAW: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Check out scripts
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          sparse-checkout: |
+            scripts
+          sparse-checkout-cone-mode: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.14"
+
+      # 正文与 GitHub Release 完全同源（upload-release 写进去的那份），
+      # 这里只做「GitHub 链接 → GitCode 链接」的改写，避免两处维护两套文案。
+      - name: Download release notes
+        run: |
+          TAG="${TAG_RAW#refs/tags/}"
+          mkdir -p notes
+          gh release download "$TAG" --pattern release-notes.md --dir notes --clobber
+          wc -l notes/release-notes.md
+
+      - name: Publish Gitee release page
+        run: |
+          TAG="${TAG_RAW#refs/tags/}"
+          if [ -z "$GITEE_TOKEN" ]; then
+            echo "::warning::缺少 GITEE_TOKEN，跳过 Gitee 发布页（GitHub/GitCode 不受影响）"
+            exit 0
+          fi
+          echo "::add-mask::$GITEE_TOKEN"
+          node scripts/publish-to-gitee.js \
+            --tag "$TAG" \
+            --notes-file notes/release-notes.md \
+            --purge-assets \
+            --require-token
+          echo "Gitee 发布页已更新：https://gitee.com/honghutechnology/honghueasystudy/releases/tag/$TAG"
