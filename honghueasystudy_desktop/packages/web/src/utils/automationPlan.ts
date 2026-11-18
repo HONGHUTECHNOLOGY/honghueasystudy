@@ -34,6 +34,7 @@ import { Folder } from '../fs/folder';
 import { Process, processEvents } from './process';
 import { notify } from './notify';
 import { remote } from './remote';
+import { planPlatformStarts, platformKeyFrom, type PlatformCandidate } from './platformQueue';
 
 /** 自动刷课的执行状态 */
 export interface StudyStatus {
@@ -147,6 +148,23 @@ const studyLocks: Record<string, boolean> = {};
 const studyTriggered: Record<string, boolean> = {};
 /** 本次启动的自动刷课失败次数（避免无限重试把页面刷爆） */
 const studyAttempts: Record<string, number> = {};
+/**
+ * 同平台排队的提示去重
+ *
+ * 调度器 20 秒一拍，被挡住的那一台每拍都会重新判断一次；同一句话反复写日志、
+ * 反复推到远程台没有意义，只在「排队原因变了」的时候更新一次。
+ */
+const queueNote: Record<string, string> = {};
+
+/**
+ * 被「暂停刷课」停下来的实例
+ *
+ * 暂停必须真的停住：`pauseStudy` 会把 `studyTriggered` 清掉（好让下一场定时
+ * 还能重新进课），而调度器每 20 秒会调一次 `triggerStudy` —— 只清标记的话，
+ * 暂停 20 秒后就被自己拉起来了。同理，被暂停的实例不该继续占着平台，
+ * 否则同平台排队的下一门永远轮不到。
+ */
+const studyPaused: Record<string, boolean> = {};
 
 const MAX_STUDY_ATTEMPTS = 3;
 /** 等浏览器就绪的上限：用户可能同时点定时启动和手动启动 */
@@ -226,6 +244,8 @@ export function writePlan(browser: Browser, plan: any): BrowserAutomation {
 	 * 保存这一刻是最可靠的重试时机，顺手补一次比让用户干等 20 秒 tick 更符合直觉。
 	 */
 	if (studyChanged && next.study.enabled && next.study.course) {
+		/** 用户刚改了要刷的课/目标：这是明确要它跑，把上一轮的暂停解掉 */
+		delete studyPaused[browser.uid];
 		queueMicrotask(() => triggerStudy(browser.uid, '保存方案'));
 	}
 
@@ -299,6 +319,8 @@ function triggerStudy(uid: string, why: string): void {
 	if (!proc || proc.status !== 'launched') return;
 
 	if (studyTriggered[uid] || studyLocks[uid]) return;
+	/** 用户/定时刚暂停过：别在这时候又把它拉起来 */
+	if (studyPaused[uid]) return;
 
 	studyTriggered[uid] = true;
 	studyAttempts[uid] = (studyAttempts[uid] || 0) + 1;
@@ -512,6 +534,8 @@ export async function runStudy(uid: string, opts?: { silent?: boolean }): Promis
 
 	if (studyLocks[uid]) return getStatus(uid);
 	studyLocks[uid] = true;
+	/** 新一轮真的开始了：解除暂停，之后 `triggerStudy` 才能正常重试 */
+	delete studyPaused[uid];
 
 	setStatus(uid, { state: 'waiting', message: '等待浏览器就绪…', courseName: course.name });
 	planLog(
@@ -618,7 +642,8 @@ export async function pauseStudy(uid: string, opts?: { keepTab?: boolean }): Pro
 	const result = await proc.callWorkerTimeout('stopStudy', [{ keepTab: !!(opts && opts.keepTab) }], 60 * 1000);
 	const message = (result && result.message) || '已暂停刷课';
 	setStatus(uid, { state: 'idle', message });
-	/** 暂停后允许再次触发自动刷课（否则下一次定时不会重新进课） */
+	/** 暂停要停住：清掉触发标记的同时记下「别自动拉起」，也让出同平台排队的位置 */
+	studyPaused[uid] = true;
 	studyTriggered[uid] = false;
 	studyAttempts[uid] = 0;
 	return message;
@@ -774,6 +799,138 @@ async function openStudyTarget(uid: string, target: AutomationTarget): Promise<{
 	return { entered: true, message: `已打开${label}：${(landed && landed.title) || hit.title}` };
 }
 
+// ---------------------------------------------------------------- 同平台排队
+
+/** 这台实例配的第一个自动程序的图标地址（登录脚本图标通常就是平台域名） */
+function firstScriptIcon(browser: Browser): string {
+	const scripts = ((browser as unknown as { automationScripts?: any[] }).automationScripts || []) as any[];
+	for (const script of scripts) {
+		const icon = String((script && script.icon) || '');
+		if (icon) return icon;
+	}
+	return '';
+}
+
+/**
+ * 一台实例属于哪个平台
+ *
+ * 依次取：选课时记下的平台 id → 课程直链域名 → 登录脚本图标域名。
+ * 三个都拿不到时返回空串 —— 宁可不排队（保持原来的并行），
+ * 也不要凭空把两台不相干的机器归成一组、把用户的学习卡住。
+ */
+export function platformKeyOf(browser: Browser): string {
+	const plan = readPlan(browser);
+	return platformKeyFrom(plan.study.course, firstScriptIcon(browser));
+}
+
+/** 本次定时真正该收尾的时刻（算不出来返回 null） */
+function runDeadline(schedule: AutomationSchedule, now: Date): number | null {
+	const session = activeSession(schedule, now);
+	/** 已经不在自己那一场会话里：这一趟事实上结束了 */
+	if (!session || schedule.lastRunDate !== session.id) return null;
+
+	let deadline = session.end;
+	if (schedule.maxMinutes > 0) {
+		deadline = Math.min(deadline, schedule.runStartedAt + schedule.maxMinutes * 60 * 1000);
+	}
+	return deadline;
+}
+
+/**
+ * 这一台此刻是不是正占着平台在刷课
+ *
+ * 三个阶段都算占用：
+ *   1. 正在启动 / 等登录脚本 / 进课（`waiting`、`running`）—— 这时候另一门课挤进来，
+ *      平台看到的就是两个会话同时在线，正是「不允许同时刷多节课」要避免的；
+ *   2. 已经进课（`done`）之后由扩展接着刷，桌面端收不到「刷完了」的事件，
+ *      只能按方案算出的收尾时刻判断（单次时长到点、或本场会话结束）；
+ *   3. 被「暂停刷课」停下来的 —— `pauseStudy` 会打上 `studyPaused`，那台已经
+ *      不在刷了，不该继续占着平台，否则后面排队的永远轮不到。
+ */
+function holdsPlatform(browser: Browser, now: Date): boolean {
+	const proc = Process.from(browser.uid);
+	if (!proc || (proc.status !== 'launched' && proc.status !== 'launching')) return false;
+
+	const plan = readPlan(browser);
+	if (!plan.study.enabled || !plan.study.course) return false;
+
+	const state = getStatus(browser.uid).state;
+	if (state === 'waiting' || state === 'running') return true;
+	/**
+	 * 进课失败（课程被删、登录掉线）：它并没有在刷，不能把整条队堵到收尾时刻。
+	 * 这类失败本来就会在几分钟内重试，真重试成功的话下一拍又会重新占住平台。
+	 */
+	if (state === 'error') return false;
+	/** 被「暂停刷课」停下的实例已经让出平台，后面排队的可以接上 */
+	if (studyPaused[browser.uid]) return false;
+
+	if (plan.schedule.runStartedAt > 0) {
+		const deadline = runDeadline(plan.schedule, now);
+		/** deadline 为 null：不在本场会话里了，收尾逻辑下一拍会补做，这里先不占位 */
+		return deadline === null ? false : now.getTime() < deadline;
+	}
+	return false;
+}
+
+/** 一拍之内的排队名单 */
+interface PlatformQueue {
+	/** 被挡住、这一拍不能启动的实例 → 谁占着平台 */
+	blocked: Record<string, { uid: string; name: string; course: string; unlimited: boolean }>;
+}
+
+/**
+ * 算出「这一拍谁可以先启动」
+ *
+ * 只对开了「错过补执行」的方案生效：补执行会在软件刚打开时把几门错过的课
+ * 同时判成「该跑了」，而平台往往不允许同时刷多节课。规则放在
+ * `platformQueue.ts` 的纯函数里（可单测），这里只负责把浏览器实体翻译成
+ * 「哪个平台 / 是否占着 / 会话什么时候开始的」三件事。
+ *
+ * 被挡住的实例**不写 `lastRunDate`** —— 排队不等于「今天跑过了」，
+ * 前一台收尾后的下一拍还要再试。没开补执行的方案完全不参与排队。
+ *
+ * 导出是为了单测能直接验「平台识别 + 是否占用 + 排队」这一整条映射，
+ * 纯逻辑本身在 `platformQueue.ts`。
+ */
+export function buildPlatformQueue(browsers: Browser[], now: Date): PlatformQueue {
+	const candidates: PlatformCandidate[] = browsers.map((browser) => {
+		const plan = readPlan(browser);
+		const session = plan.schedule.enabled ? activeSession(plan.schedule, now) : null;
+		/** 这一拍真的想启动：开关开着、在窗口里、今天还没跑过、而且来得及 */
+		const wants =
+			!!session &&
+			plan.schedule.catchUp &&
+			plan.schedule.lastRunDate !== session.id &&
+			canStartSession(plan.schedule, session, now);
+
+		return {
+			uid: browser.uid,
+			platform: platformKeyOf(browser),
+			holds: holdsPlatform(browser, now),
+			dueAt: wants && session ? session.start : null
+		};
+	});
+
+	const { blocked: owners } = planPlatformStarts(candidates);
+
+	const blocked: PlatformQueue['blocked'] = {};
+	for (const uid of Object.keys(owners)) {
+		const holder = browsers.find((item) => item.uid === owners[uid]);
+		const plan = holder ? readPlan(holder) : null;
+		blocked[uid] = {
+			uid: owners[uid],
+			name: (holder && holder.name) || '另一台实例',
+			course: (plan && plan.study.course && plan.study.course.name) || '',
+			/**
+			 * 占着平台的那门课没设单次时长：它不会自己收尾，后面排队的只能干等。
+			 * 面板上要把这句说出来，否则用户看到的就是「一直排队中」。
+			 */
+			unlimited: !plan || plan.schedule.maxMinutes <= 0
+		};
+	}
+	return { blocked };
+}
+
 // ---------------------------------------------------------------- 定时器
 
 let tickTimer: ReturnType<typeof setInterval> | undefined;
@@ -797,6 +954,13 @@ async function tick(): Promise<void> {
 
 	try {
 		const browsers = allBrowsers();
+		/**
+		 * 同平台排队名单每拍重算一次
+		 *
+		 * 放在循环外：判定要看「这一拍整体谁在跑、谁想跑」，逐台现算会出现
+		 * 后一台看不到前一台刚被放行的情况，几门课照样一起冲出去。
+		 */
+		const queue = buildPlatformQueue(browsers, new Date());
 
 		for (const browser of browsers) {
 			const plan = readPlan(browser);
@@ -829,7 +993,7 @@ async function tick(): Promise<void> {
 
 			/** ② 定时：到点启动 / 到点收尾 */
 			if (!plan.schedule.enabled) continue;
-			await handleSchedule(browser, plan.schedule);
+			await handleSchedule(browser, plan.schedule, queue);
 		}
 	} catch (e) {
 		console.error('自动化定时任务执行失败', e);
@@ -839,7 +1003,11 @@ async function tick(): Promise<void> {
 }
 
 /** 单台实例的定时逻辑 */
-async function handleSchedule(browser: Browser, schedule: AutomationSchedule): Promise<void> {
+async function handleSchedule(
+	browser: Browser,
+	schedule: AutomationSchedule,
+	queue?: PlatformQueue
+): Promise<void> {
 	const uid = browser.uid;
 	const now = new Date();
 	const session = activeSession(schedule, now);
@@ -865,11 +1033,43 @@ async function handleSchedule(browser: Browser, schedule: AutomationSchedule): P
 				return;
 			}
 
+			/**
+			 * 同平台排队：前一门课还没跑完，这一门先不启动。
+			 *
+			 * 补执行会在软件刚打开时把几门错过的课同时判成「该跑了」，而不少平台
+			 * 不允许同一账号同时刷多节课（会互相顶号、判异常）。这里让它等一等：
+			 * **不写 `lastRunDate`** —— 排队不等于「今天跑过了」，前一台收尾后
+			 * 下一拍还要再试；也不能只写日志，面板/手机上要能看到「在排队」，
+			 * 否则用户看到的就是「到点了却什么都没发生」。
+			 */
+			const blockedBy = queue && queue.blocked[uid];
+			if (blockedBy) {
+				const who = blockedBy.course ? `「${blockedBy.course}」` : `「${blockedBy.name}」`;
+				const message = blockedBy.unlimited
+					? `同平台排队中：等 ${who} 结束 —— 它未设单次时长，可能一直占用（同平台不同时刷多门课）`
+					: `同平台排队中：等 ${who} 本次学习结束后再开始（同平台不同时刷多门课）`;
+				if (queueNote[uid] !== message) {
+					queueNote[uid] = message;
+					planLog(uid, message);
+					setStatus(uid, { state: 'waiting', message });
+				}
+				return;
+			}
+
 			const proc = Process.from(uid);
 			const alive = !!proc && (proc.status === 'launched' || proc.status === 'launching');
 
 			/** 记下「这一场已经处理过」，先写再启动：启动失败也不该每 20 秒重试一次 */
 			patchSchedule(browser, { lastRunDate: session.id, runStartedAt: Date.now() });
+			/** 新的一场定时开始：解除上一场留下的暂停，否则启动后不会被拉去进课 */
+			delete studyPaused[uid];
+			/** 轮到了：把上一拍挂着的「排队中」擦掉，后面由刷课流程接管状态 */
+			if (queueNote[uid]) {
+				delete queueNote[uid];
+				if (getStatus(uid).state === 'waiting') {
+					setStatus(uid, { state: 'idle', message: '同平台排队结束，已轮到本门课' });
+				}
+			}
 			/**
 			 * 记账字段刚变化，立刻重算一次覆盖。
 			 *
@@ -939,6 +1139,19 @@ async function handleSchedule(browser: Browser, schedule: AutomationSchedule): P
 		schedule.runStartedAt > 0
 	) {
 		await applyEndAction(browser, schedule, 'schedule-end', finished.id);
+	}
+
+	/**
+	 * 还在排队就过了窗口：这一场作废
+	 *
+	 * 不清理的话面板会一直挂着「同平台排队中」，用户以为还在等，
+	 * 实际上今天已经不会再启动了。
+	 */
+	if (queueNote[uid]) {
+		delete queueNote[uid];
+		if (getStatus(uid).state === 'waiting') {
+			setStatus(uid, { state: 'idle', message: '本次定时窗口已结束，排队取消' });
+		}
 	}
 }
 
@@ -1049,6 +1262,9 @@ function handleProcessStatus(uid: string): void {
 	if (!proc) {
 		studyTriggered[uid] = false;
 		studyAttempts[uid] = 0;
+		/** 浏览器都没了，排队提示和暂停标记也跟着作废，免得下次打开还挂着上一轮的状态 */
+		delete queueNote[uid];
+		delete studyPaused[uid];
 		/** 浏览器没了，课程页自然也没了：三个目录要立刻变灰 */
 		markCourseReady(uid, false);
 		if (studyStatus[uid] && studyStatus[uid].state !== 'idle') {

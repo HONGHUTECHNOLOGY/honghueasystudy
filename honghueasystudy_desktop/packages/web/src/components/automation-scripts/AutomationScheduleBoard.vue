@@ -168,7 +168,7 @@
 						>
 							过了开始时间也补跑
 						</a-checkbox>
-						<span class="field__hint">关闭时只在开始后 {{ SCHEDULE_GRACE_MINUTES }} 分钟内启动，再晚跳过当天</span>
+						<span class="field__hint">关闭时只在开始后 {{ SCHEDULE_GRACE_MINUTES }} 分钟内启动，再晚跳过当天；同平台多门课排队依次跑</span>
 					</div>
 
 					<div

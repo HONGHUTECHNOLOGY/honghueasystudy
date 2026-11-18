@@ -448,6 +448,7 @@
 							</button>
 						</div>
 						<p class="line-note faint">关闭时只在开始后 10 分钟内启动，再晚跳过当天</p>
+						<p class="line-note faint">同平台的多门课会排队依次跑，不会同时启动</p>
 
 						<!-- 三句摘要分行、各有各的语气：挤在一个 <p> 里用 <br> 断，读起来像一坨灰字 -->
 						<div class="schedule-tip">
