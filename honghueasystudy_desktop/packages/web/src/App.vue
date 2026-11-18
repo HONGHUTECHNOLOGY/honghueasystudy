@@ -48,10 +48,21 @@
 				@cancel="store.render.browser.currentBrowserUid = ''"
 			>
 				<div v-if="panelBrowser">
-					<BrowserPanelOperators :browser="panelBrowser"></BrowserPanelOperators>
+					<!--
+						key 绑 uid：切换浏览器时强制重建两个面板。
+						否则内部 state（展开的折叠项、脚本选择器开关、xterm 实例）会残留上一个浏览器的。
+					-->
+					<BrowserPanelOperators
+						:key="'ops-' + panelBrowser.uid"
+						:browser="panelBrowser"
+						@close="store.render.browser.currentBrowserUid = ''"
+					></BrowserPanelOperators>
 					<a-divider class="mt-2 mb-1" />
 					<div style="max-height: 80vh; overflow: auto">
-						<BrowserPanel :browser="panelBrowser"></BrowserPanel>
+						<BrowserPanel
+							:key="'panel-' + panelBrowser.uid"
+							:browser="panelBrowser"
+						></BrowserPanel>
 					</div>
 				</div>
 			</a-modal>

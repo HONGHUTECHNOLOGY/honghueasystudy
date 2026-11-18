@@ -79,7 +79,10 @@
 				根据不同配置运行例如：自动登录、自动点击等。
 			</UsageAlertCollapse>
 
-			<AutomationScripts v-model:automation-scripts="instance.automationScripts"></AutomationScripts>
+			<AutomationScripts
+				v-model:automation-scripts="instance.automationScripts"
+				@add="state.showAutomationScriptSelector = true"
+			></AutomationScripts>
 
 			<div class="mt-2">
 				<AutomationPlan :browser="instance" />
@@ -298,7 +301,7 @@ import Icon from '../Icon.vue';
 import { BrowserOptions, Tag } from '../../fs/interface';
 import { Folder } from '../../fs/folder';
 import { currentBrowser } from '../../fs/index';
-import { reactive, onMounted, nextTick } from 'vue';
+import { computed, reactive, onMounted, nextTick, watch } from 'vue';
 import AutomationScriptSelector from '../automation-scripts/AutomationScriptSelector.vue';
 import AutomationScripts from '../automation-scripts/AutomationScriptList.vue';
 import AutomationPlan from '../automation-scripts/AutomationPlan.vue';
@@ -312,8 +315,29 @@ const props = defineProps<{
 	browser: BrowserOptions;
 }>();
 
-// 这里因为 BrowserPanel 使用的是侧边栏，侧边栏关闭时会自动销毁对象，所以不用做 compute 计算处理
-const instance = Browser.from(props.browser.uid);
+/**
+ * 当前要展示的浏览器实例
+ *
+ * **必须是 computed**：这个面板挂在全局弹窗里，切换浏览器时 Vue 会复用同一个组件实例，
+ * 只在 setup 里算一次会永远停在「第一次打开的那个浏览器」——
+ * 表现就是所有浏览器的设置页看起来一模一样，改一个等于改另一个。
+ */
+const instance = computed(() => Browser.from(props.browser.uid));
+
+/**
+ * 脚本按当前声明归一化后再渲染
+ *
+ * 旧存档、远程台保存、批量创建留下的 configs 可能缺 type/options，
+ * 直接渲染会让密码框退化成明文输入框。归一化走的是和远程台同一套转换。
+ * 用 watch + immediate 而不是 onMounted：切换浏览器时也要对新实例跑一遍。
+ */
+watch(
+	instance,
+	(browser) => {
+		if (browser) browser.automationScripts = normalizeBrowserScripts(browser.automationScripts);
+	},
+	{ immediate: true }
+);
 
 const state = reactive({
 	showCode: false,
@@ -355,18 +379,19 @@ function clearHistory() {
 
 /** 渲染侧边toc跳转栏 */
 onMounted(() => {
-	/**
-	 * 脚本按当前声明归一化后再渲染。
-	 *
-	 * 旧存档、远程台保存、批量创建留下的 configs 可能缺 type/options，
-	 * 直接渲染会让密码框退化成明文输入框。归一化走的是和远程台同一套转换。
-	 */
-	if (instance) instance.automationScripts = normalizeBrowserScripts(instance.automationScripts);
-
+	/** 缓存目录是否存在：切换浏览器同样要重算，所以单独 watch 路径 */
 	nextTick(async () => {
 		state.cachePathExists = await remote.fs.call('existsSync', props.browser.cachePath);
 	});
 });
+
+/** 切换浏览器时重新判断缓存目录 */
+watch(
+	() => props.browser.cachePath,
+	async (p) => {
+		state.cachePathExists = p ? await remote.fs.call('existsSync', p) : false;
+	}
+);
 
 async function open(p: string) {
 	if (await remote.fs.call('existsSync', p)) {

@@ -102,6 +102,21 @@
 													:browser="browser"
 													icon-class="fs-5"
 												/>
+												<a-tooltip
+													content="设置"
+													mini
+												>
+													<a-button
+														type="text"
+														size="mini"
+														@click.stop="selectBrowser(browser)"
+													>
+														<Icon
+															type="settings"
+															class="fs-5"
+														/>
+													</a-button>
+												</a-tooltip>
 											</div>
 										</div>
 
@@ -529,15 +544,12 @@ onMounted(() => {
 	font-weight: var(--fw-medium);
 }
 
-/** 操作按钮平时不抢视线，hover 卡片才浮现 */
+/** 操作按钮（启动/设置等）常显：不靠 hover 才浮出来，避免用户找不到入口 */
 .browser-card__ops {
 	flex: 0 0 auto;
-	opacity: 0;
-	transition: opacity var(--dur-2) var(--ease-std);
-}
-
-.browser-card:hover .browser-card__ops {
-	opacity: 1;
+	display: flex;
+	align-items: center;
+	gap: 2px;
 }
 
 .browser-card__tags {

@@ -77,12 +77,35 @@
 								type="primary"
 								class="delete-browser-btn"
 							>
-								<Icon type="delete" />
-							</a-button>
-						</a-popconfirm>
-					</a-tooltip>
-				</template>
-			</BrowserOperators>
+							<Icon type="delete" />
+						</a-button>
+					</a-popconfirm>
+				</a-tooltip>
+
+				<!--
+					关闭设置面板
+					这个弹窗没有 header、也没有原生 X，只能点遮罩或按 Esc 才能关；
+					放在整条操作栏最右端，与「关闭浏览器」区分：图标用 close 而不是 cancel。
+				-->
+				<a-divider direction="vertical" />
+				<a-tooltip
+					content="关闭设置"
+					position="br"
+				>
+					<a-button
+						size="mini"
+						type="text"
+						class="close-panel-btn"
+						@click="emits('close')"
+					>
+						<Icon
+							type="close"
+							class="fs-5"
+						/>
+					</a-button>
+				</a-tooltip>
+			</template>
+		</BrowserOperators>
 		</div>
 	</div>
 </template>
@@ -96,6 +119,11 @@ import { nextTick } from 'process';
 
 const props = defineProps<{
 	browser: Browser;
+}>();
+
+/** 关闭设置面板：由 App.vue 清空 currentBrowserUid 触发弹窗关闭 */
+const emits = defineEmits<{
+	(e: 'close'): void;
 }>();
 
 const name = defineModel<string>({ default: '' });
@@ -121,6 +149,22 @@ function onBlur() {
 </script>
 
 <style scoped lang="less">
+/**
+ * 关闭设置按钮
+ *
+ * 和旁边一排彩色图标按钮不同：它是「退出这个面板」而不是对浏览器做操作，
+ * 所以保持中性色，只在 hover/聚焦时浮出浅底，避免和「关闭浏览器」（红色 cancel）混淆。
+ */
+.close-panel-btn {
+	transition: background-color var(--dur-2) var(--ease-std), color var(--dur-2) var(--ease-std);
+
+	&:hover,
+	&:focus-visible {
+		background: var(--surface-hover);
+		color: var(--text-primary);
+	}
+}
+
 /**
  * 删除按钮：实心危险色
  *
