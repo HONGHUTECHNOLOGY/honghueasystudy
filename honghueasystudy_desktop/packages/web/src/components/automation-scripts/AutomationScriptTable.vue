@@ -35,7 +35,18 @@
 				</template>
 
 				<template #data="{ record, rowIndex, column }">
+					<!-- 下拉字段不能退化成文本框：否则用户得手打 password / auto 这种内部值 -->
+					<a-select
+						v-if="isSelectColumn(column)"
+						v-model="record[column.dataIndex]"
+						size="mini"
+						allow-clear
+						:options="columnOptions(column)"
+						:placeholder="`默认：${columnDefaultLabel(column)}`"
+						@change="() => onRecordInput(rowIndex)"
+					/>
 					<a-input
+						v-else
 						v-model="record[column.dataIndex]"
 						size="mini"
 						@input="() => onRecordInput(rowIndex)"
@@ -195,6 +206,32 @@ function initColumns() {
 	}
 }
 
+/** 按列回查配置声明：不依赖 Arco 把自定义属性透传到插槽 */
+function configFor(column: any) {
+	const key = column && column.dataIndex;
+	return arrayLikeConfigs.value.find((item) => item.key === key);
+}
+
+function isSelectColumn(column: any) {
+	const config = configFor(column);
+	return !!config && config.type === 'select';
+}
+
+function columnOptions(column: any) {
+	const config = configFor(column);
+	return (config && config.options) || [];
+}
+
+/** 下拉列的默认值文案：占位提示里告诉用户「不选会走哪个」 */
+function columnDefaultLabel(column: any) {
+	const config = configFor(column);
+	if (!config) return '';
+
+	const options = Array.isArray(config.options) ? config.options : [];
+	const hit = options.find((opt: any) => opt.value === config.value);
+	return hit ? String(hit.label) : '';
+}
+
 function createData() {
 	return new Array(1000).fill(1).map((item, index) => {
 		item = Object.create({});
@@ -305,7 +342,12 @@ function importTemplateExcel() {
 							const val = String(item[key] || '');
 							const config = arrayLikeConfigs.value.find((c) => c.label === key);
 							if (config) {
-								Reflect.set(row, config.key, val);
+								/** 表格里下拉列写的是选项标签，存回去必须换成选项值（password / school 这种） */
+								const optionValue =
+									config.type === 'select' && Array.isArray(config.options)
+										? config.options.find((opt: any) => String(opt.label) === val)?.value
+										: undefined;
+								Reflect.set(row, config.key, optionValue !== undefined ? optionValue : val);
 							}
 							if (key === '浏览器名') {
 								Reflect.set(row, 'browserName', val);
