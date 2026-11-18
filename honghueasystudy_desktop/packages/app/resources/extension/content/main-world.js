@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-var __HH_BRIDGE_KEY__="6078d39a-b4c0-4967-b025-214ac348a296";
+var __HH_BRIDGE_KEY__="a9739423-b6f9-4d41-9af5-002c79eaee3a";
 /* 鸿鹄易学 · MAIN world 运行时（ScriptCat 风格）
  *
  * 本文件由 background.js 通过 chrome.userScripts.register({ world: "MAIN" })
@@ -265,7 +265,7 @@ var __ocs_sandbox__=__ocsCreateSandbox();
 	'use strict';
 
 	/* ===== 1/4 resources（构建生成） ===== */
-var __HH_RESOURCES__ = {"version":"5.4.0","metadata":{"name":"鸿鹄易学","version":"5.4.0","description":"鸿鹄易学 - 在线网络课程辅助工具","author":"enncy","license":"MIT","namespace":"https://honghueasystudy","homepage":"https://easystudy.honghutech.eu.org","source":"https://easystudy.honghutech.eu.org","icon":"https://easystudy.honghutech.eu.org/assets/img/icon.png","run-at":"document-start"},"resources":{"STYLE":"/** 默认字体 */\n/** 输入框默认边距 */\nul,\nol {\n  line-height: 26px;\n  padding-left: 22px;\n  margin: 0px;\n}\na {\n  color: #1890ff;\n}\nhr {\n  border-style: solid;\n  border-color: #63636346;\n  border-width: 0px;\n  border-bottom: 1px solid #63636346;\n  margin-block-start: 1em;\n  margin-block-end: 1em;\n}\n.base-style-active-form-control {\n  border: 1px solid #ffffff00;\n}\n.base-style-active-form-control:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.base-style-active-form-control:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.base-style-active-form-control:hover {\n  background-color: #ebeef4;\n}\n.base-style-input {\n  outline: none;\n  border: 1px solid #ffffff00;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n}\n.base-style-input::placeholder {\n  color: #bababa;\n}\n.base-style-switch {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.base-style-switch:checked {\n  background: #1890ff;\n}\n.base-style-switch:disabled {\n  background-color: #f7f7f78b;\n}\n.base-style-switch:checked::before {\n  transform: translate(24px, 0px);\n}\n.base-style-switch::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.base-style-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.base-style-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button + .base-style-button {\n  margin-left: 12px;\n}\n.base-style-button:hover {\n  background-color: #7abbff24;\n}\n.base-style-button.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button:disabled:active {\n  box-shadow: none;\n}\n.base-style-button-secondary {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\n.base-style-button-secondary:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button-secondary + .base-style-button-secondary {\n  margin-left: 12px;\n}\n.base-style-button-secondary:hover {\n  background-color: #7abbff24;\n}\n.base-style-button-secondary.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button-secondary:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button-secondary.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button-secondary:disabled:active {\n  box-shadow: none;\n}\ncontainer-element.hidden {\n  display: none;\n}\ncontainer-element.minimize {\n  min-width: unset;\n}\ncontainer-element {\n  position: fixed;\n  top: 10%;\n  left: 10%;\n  z-index: 99999;\n  text-align: left;\n  min-width: 300px;\n  -webkit-font-smoothing: antialiased;\n  -moz-osx-font-smoothing: grayscale;\n  color: #636363;\n  box-shadow: 0 0 24px -12px #3f3f3f;\n  border-radius: 8px;\n  letter-spacing: 0.5px;\n  border: 1px solid #c1c1c1;\n}\nheader-element {\n  display: flex;\n  align-items: center;\n  background-color: white;\n  border-radius: 8px 8px 0px 0px;\n  user-select: none;\n  padding: 4px;\n  padding-bottom: 0px;\n}\nheader-element .extra-menu-bar {\n  width: 100%;\n  padding: 4px;\n  padding-bottom: 0px;\n  margin-top: 4px;\n  border-top: 1px solid #e8e8e8;\n  /** 默认隐藏，一直到需要激活的时候再更改 */\n  display: none;\n}\nheader-element .extra-menu-bar .script-panel-link {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n  padding-bottom: 2px;\n  margin-bottom: 0px;\n}\nheader-element .extra-menu-bar .script-panel-link:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nheader-element .extra-menu-bar .script-panel-link + header-element .extra-menu-bar .script-panel-link {\n  margin-left: 12px;\n}\nheader-element .extra-menu-bar .script-panel-link:hover {\n  background-color: #7abbff24;\n}\nheader-element .extra-menu-bar .script-panel-link.danger:hover {\n  background-color: #ffdede86;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nheader-element .extra-menu-bar .script-panel-link.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled:active {\n  box-shadow: none;\n}\nheader-element .extra-menu-bar .script-panel-link.active {\n  background-color: #1890ff1a;\n  border-color: #1890ff;\n  color: #1890ff;\n}\nheader-element .extra-menu-bar .script-panel-link + .script-panel-link {\n  margin-left: 4px;\n}\nheader-element .profile {\n  flex: 1;\n  cursor: move;\n}\nheader-element .switch:hover,\nheader-element .dropdown:hover {\n  background-color: #f3f3f3;\n}\nheader-element .close:hover {\n  background-color: #ff000038;\n}\nheader-element .switch,\nheader-element .close {\n  cursor: pointer;\n}\nheader-element .dropdown {\n  line-height: 24px;\n  text-decoration: underline;\n}\nheader-element .switch,\nheader-element .close,\nheader-element .profile {\n  display: inline-flex;\n  align-items: center;\n  padding: 0px 8px;\n}\n.logo {\n  width: 18px;\n  height: 18px;\n  cursor: pointer;\n}\n.project-selector {\n  display: flex;\n  align-items: center;\n}\n.project-selector select {\n  background: #ffffff00;\n  border-radius: 4px;\n  border: 1px solid #63636346;\n  padding: 4px;\n}\n.project-selector.expand-all {\n  display: none;\n}\n.body {\n  overflow: auto;\n  width: auto;\n  height: 100%;\n}\nscript-panel-element {\n  display: block;\n  background-color: white;\n  border-radius: 0px 0px 8px 8px;\n  padding: 0px 8px 12px 8px;\n  overflow: auto;\n}\nscript-panel-element .script-panel-body {\n  padding: 0px 8px;\n}\nscript-panel-element + script-panel-element {\n  margin-top: 12px;\n}\n.card + .card {\n  margin-top: 12px;\n}\n.card {\n  background-color: white;\n  border-radius: 2px;\n  padding: 0px 8px;\n}\n.notes {\n  background: #0099ff0e;\n  border-left: 4px solid #0099ff65;\n  width: -webkit-fill-available;\n  margin: 0px 8px;\n  line-height: 26px;\n  letter-spacing: 1px;\n}\n.secondary {\n  font-size: 12px;\n  color: #8b8b8b;\n}\n.tooltip-container {\n  z-index: 99999999999999;\n  margin: 12px 0px 0px 12px;\n  padding: 4px;\n  color: black;\n  background: #f0f0f0;\n  box-shadow: 0px 0px 4px #949494;\n  position: fixed;\n  white-space: normal;\n  max-width: 200px;\n  height: auto;\n  border-radius: 2px;\n  line-height: 18px;\n}\n.configs-container.lock {\n  filter: blur(1px);\n  user-select: none;\n  -webkit-user-select: none;\n  -moz-user-select: none;\n  -ms-user-select: none;\n}\n.configs-container .lock-wrapper {\n  cursor: not-allowed !important;\n  border-radius: 4px;\n  position: absolute;\n  left: 0px;\n  z-index: 1;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n}\n.configs-container .lock-message {\n  background-color: #ffffff7d;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #6a6a6a98;\n  padding: 2px;\n}\n.configs {\n  display: table;\n  background: #e1e1e107;\n  width: -webkit-fill-available;\n}\n.configs .configs-body {\n  display: table-row-group;\n}\n.configs .configs-body config-element + config-element label {\n  padding-top: 4px;\n}\n.configs .configs-body config-element + config-element .config-wrapper {\n  padding-top: 4px;\n}\n.configs .configs-body config-element {\n  width: 100%;\n  display: table-row;\n  line-height: 26px;\n}\n.configs .configs-body config-element label {\n  white-space: nowrap;\n  color: #4e5969;\n  display: table-cell;\n  padding-right: 12px;\n  text-align: left;\n  vertical-align: top;\n  margin-right: 12px;\n}\n.configs .configs-body config-element .config-wrapper {\n  display: table-cell;\n  vertical-align: middle;\n  /** check box 的样式 */\n}\n.configs .configs-body config-element .config-wrapper select {\n  outline: none;\n  border: none;\n  border: 1px solid #e4e4e4;\n  border-radius: 4px;\n  padding: 2px 8px;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper select:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper select:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper select:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper textarea {\n  padding: 2px 8px;\n  outline: none;\n  border: none;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper textarea:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']) {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button'])::placeholder {\n  color: #bababa;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  padding: 0px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] + .configs .configs-body config-element .config-wrapper input[type='button'] {\n  margin-left: 12px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:hover {\n  background-color: #7abbff24;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger:hover {\n  background-color: #ffdede86;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled:active {\n  box-shadow: none;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked {\n  background: #1890ff;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:disabled {\n  background-color: #f7f7f78b;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked::before {\n  transform: translate(24px, 0px);\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.configs .configs-body config-element .config-wrapper input:not([type='checkbox'], [type='radio']),\n.configs .configs-body config-element .config-wrapper textarea,\n.configs .configs-body config-element .config-wrapper select {\n  width: -webkit-fill-available;\n  font-size: inherit;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'],\n.configs .configs-body config-element .config-wrapper input[type='radio'],\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  accent-color: #0e8ee2;\n}\n.configs .configs-body config-element .config-wrapper > *:not(.tooltip) {\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  float: right;\n}\n.configs .configs-body config-element .config-wrapper > *:disabled {\n  cursor: not-allowed;\n  background-color: #f7f7f78b;\n}\n.message-container {\n  margin-bottom: 4px;\n  position: absolute;\n  bottom: 100%;\n  left: 50%;\n  width: 100%;\n  transform: translate(-50%, 0px);\n  min-width: 300px;\n}\n.message-container message-element {\n  display: flex;\n  border-radius: 4px;\n  padding: 4px 12px;\n  margin-bottom: 4px;\n}\n.message-container message-element .message-content-container {\n  margin-right: 8px;\n  flex: auto;\n}\n.message-container message-element .message-text {\n  letter-spacing: 1px;\n  font-weight: bold;\n}\n.message-container message-element .message-closer {\n  width: 18px;\n  min-width: 18px;\n  cursor: pointer;\n  background-color: #ffffffb3;\n  color: #a1a1a1;\n  border-radius: 100%;\n  text-align: center;\n  height: 18px;\n  vertical-align: middle;\n  font-size: 12px;\n}\n.message-container message-element.error {\n  background-color: #ffe6e6;\n  color: #c70208;\n  border: 1px solid #ff6b6ded;\n}\n.message-container message-element.info {\n  background-color: #c9e7ff;\n  color: #004d95;\n  border: 1px solid #1890ff69;\n}\n.message-container message-element.success {\n  background-color: #e8ffe0;\n  color: #3e8d0d;\n  border: 1px solid #6fd91d;\n}\n.message-container message-element.warn {\n  background-color: #ffefc8;\n  color: #9b7400;\n  border: 1px solid #ffc107;\n}\nmodal-element {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  background-color: white;\n  border-radius: 4px;\n  box-shadow: 0px 0px 24px -12px black;\n  border: 1px solid #929292;\n  height: fit-content;\n  transform: translate(-50%, -50%);\n  padding: 12px 18px 18px 18px;\n  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;\n  z-index: 99999999999;\n  line-height: 24px;\n}\nmodal-element .modal-profile {\n  zoom: 0.9;\n  color: #969696;\n  user-select: none;\n  margin-bottom: 4px;\n}\nmodal-element .modal-title {\n  font-size: 18px;\n  font-weight: bold;\n  user-select: none;\n}\nmodal-element .modal-body {\n  margin: 12px 0px;\n  overflow: auto;\n}\nmodal-element .modal-footer {\n  display: flex;\n  white-space: nowrap;\n  justify-content: end;\n  align-items: end;\n}\nmodal-element .modal-footer > * + * {\n  margin-left: 12px;\n}\nmodal-element .modal-input {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n  width: -webkit-fill-available;\n}\nmodal-element .modal-input::placeholder {\n  color: #bababa;\n}\nmodal-element .modal-input:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\nmodal-element .modal-input:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\nmodal-element .modal-input:hover {\n  background-color: #ebeef4;\n}\nmodal-element .modal-cancel-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\nmodal-element .modal-cancel-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-cancel-button + modal-element .modal-cancel-button {\n  margin-left: 12px;\n}\nmodal-element .modal-cancel-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-cancel-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-cancel-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-cancel-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-cancel-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element .modal-confirm-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\nmodal-element .modal-confirm-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-confirm-button + modal-element .modal-confirm-button {\n  margin-left: 12px;\n}\nmodal-element .modal-confirm-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-confirm-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-confirm-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-confirm-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-confirm-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element.alert .modal-input,\nmodal-element.alert .modal-cancel-button {\n  display: none;\n}\nmodal-element.alert .modal-confirm-button {\n  margin: 0;\n}\nmodal-element.prompt .modal-input,\nmodal-element.prompt .modal-cancel-button,\nmodal-element.prompt .modal-confirm-button {\n  display: block;\n}\nmodal-element.confirm .modal-input {\n  display: none;\n}\n.modal-wrapper {\n  width: 100%;\n  height: 100%;\n  z-index: 9999;\n  position: fixed;\n  top: 0px;\n  left: 0px;\n  z-index: 9999999;\n  background-color: rgba(0, 0, 0, 0.265);\n  color: #636363;\n  font: 14px Menlo, Monaco, Consolas, 'Courier New', monospace;\n}\n.pointer {\n  cursor: pointer;\n}\n.separator {\n  display: flex;\n  align-items: center;\n  text-align: center;\n  padding: 4px 0px 8px 0px;\n}\n.separator::before,\n.separator::after {\n  content: '';\n  flex: 1;\n  border-bottom: 1px solid #63636346;\n}\n.separator:not(:empty)::before {\n  margin-right: 0.25em;\n}\n.separator:not(:empty)::after {\n  margin-left: 0.25em;\n}\ncontainer-element.minimize .body,\ncontainer-element.minimize header-element .dropdown,\ncontainer-element.minimize .footer {\n  display: none;\n}\ncontainer-element.minimize header-element {\n  padding: 8px;\n  border-radius: 8px;\n  box-shadow: 0px 0px 24px -12px black;\n}\n.user-guide > li {\n  padding: 4px 0px;\n}\n.search-infos-num {\n  width: 26px;\n  margin: 2px;\n  height: 20px;\n  border-radius: 4px;\n  display: inline-block;\n  background-color: white;\n  text-align: center;\n  cursor: pointer;\n  border: 1px solid #b6b6b6;\n}\n.search-infos-num.requested {\n  border: 1px solid #63b4ff;\n  color: #63b4ff;\n}\n.search-infos-num.active {\n  background-color: #127de1 !important;\n  color: white;\n}\n.search-infos-num.error {\n  border: 1px solid #ff8789ed;\n  background-color: #ff6b6ded;\n  color: white;\n}\n.search-infos-num.finish {\n  background-color: #63b4ff;\n  border: 1px solid #63b4ff;\n  color: white;\n}\nsearch-infos-element {\n  display: block;\n  overflow: auto;\n}\nsearch-infos-element .search-result {\n  margin-bottom: 12px;\n  padding-left: 12px;\n}\nsearch-infos-element .search-result .question {\n  font-weight: bold;\n  max-height: 200px;\n  overflow: auto;\n}\nsearch-infos-element .search-result .answer {\n  color: #7c7c7c;\n}\nsearch-infos-element .search-result .answer code {\n  border-bottom: 1px solid #dcdcdc;\n  padding: 2px 0px;\n  border-radius: 2px;\n  margin: 4px;\n  line-height: 22px;\n}\nsearch-infos-element .search-result .answer code + code {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag {\n  padding: 2px 6px;\n  border-radius: 2px;\n  font-size: 12px;\n  cursor: pointer;\n  margin-right: 6px;\n}\nsearch-infos-element .search-result .search-result-answer-tag + .search-result-answer-tag {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag.blue {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n}\nsearch-infos-element .search-result .search-result-answer-tag.green {\n  background-color: #f6ffed;\n  border: 1px solid #b7eb8f;\n  color: #52c41a;\n}\nsearch-infos-element .search-result .search-result-answer-tag.gray {\n  background-color: #fafafa;\n  border: 1px solid #d9d9d9;\n  color: #595959;\n}\nsearch-infos-element .search-result .search-result-answer-tag.red {\n  background-color: #fff1f0;\n  border: 1px solid #ffa39e;\n  color: #ff4d4f;\n}\nsearch-infos-element .search-result .search-result-answer-tag.yellow {\n  background-color: #fffbe6;\n  border: 1px solid #ffe58f;\n  color: #faad14;\n}\nsearch-infos-element .search-result-question-type {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n  margin-right: 8px;\n  padding: 0px 4px;\n  border-radius: 4px;\n}\nsearch-infos-element .error {\n  color: #ff6b6ded;\n  display: inline-block;\n  padding-left: 12px;\n}\n.copy,\n.question-title-extra-btn {\n  margin-left: 4px;\n  padding: 2px 4px;\n  border-radius: 2px;\n  box-shadow: 0 0 4px #b1b1b1;\n  cursor: pointer !important;\n  font-weight: normal;\n  font-size: 12px;\n}\n.work-result-question-container {\n  position: absolute;\n  width: 400px;\n  left: -100%;\n  top: 0px;\n  background: white;\n  border: 1px solid #cbcbcb;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #d1cfcf;\n  padding: 12px;\n}\n.work-result-question-container .close-search-result {\n  font-size: 12px;\n  margin-left: 8px;\n  text-decoration: underline;\n  color: gray;\n  cursor: pointer;\n}\n.work-result-list {\n  max-height: 400px;\n  overflow: auto;\n  margin: 12px 0px;\n  padding: 6px;\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n}\n.search-info-title {\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  margin-bottom: 12px;\n  line-height: 20px;\n  overflow: auto;\n}\n.search-info-title .title-content {\n  max-height: 200px;\n  overflow: auto;\n}\n.search-info-details {\n  margin-left: 4px;\n}\n.console {\n  max-height: 300px;\n  max-width: 400px;\n  overflow: auto;\n  background-color: #292929;\n  padding: 12px 6px;\n  color: #ececec;\n  font-size: 12px;\n}\n.console .item {\n  padding: 3px 0px;\n  border-radius: 2px;\n}\n.console .item .time {\n  color: #757575;\n}\n.console .item .info {\n  background-color: #2196f3a3;\n}\n.console .item .warn {\n  background-color: #ffc107db;\n}\n.console .item .error {\n  background-color: #f36c71cc;\n}\n.console .item .debug,\n.console .item .log {\n  background-color: #9e9e9ec4;\n}\n.console *::selection {\n  background-color: #ffffff6b;\n}\n.markdown {\n  max-width: 400px;\n  max-height: 50vh;\n  overflow: auto;\n}\n.markdown code {\n  padding: 2px 4px;\n  background-color: #f0f0f0;\n  border-radius: 6px;\n  font-size: 12px;\n}\n.markdown blockquote {\n  padding: 4px 4px 4px 12px;\n  margin: 0px;\n  color: #b5b5b5;\n  border-left: #ababab 2px solid;\n}\n.markdown blockquote p {\n  margin: 0px;\n}\n.markdown h1,\n.markdown h2,\n.markdown h3,\n.markdown h4,\n.markdown h5,\n.markdown h6,\n.markdown p {\n  margin: 8px 0px;\n}\n.dropdown {\n  position: relative;\n  display: inline-block;\n}\n.dropdown.active .dropdown-trigger-element {\n  color: #1890ff;\n}\n.dropdown-trigger-element {\n  cursor: pointer;\n}\n.dropdown-content {\n  display: none;\n  position: absolute;\n  background-color: #ffffff;\n  overflow: auto;\n  box-shadow: 0px 8px 16px 0px #00000033;\n  z-index: 1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  min-width: 120px;\n}\n.dropdown-content.show {\n  display: block;\n}\n.dropdown-content {\n  cursor: pointer;\n  z-index: 999;\n}\n.dropdown-content .dropdown-option {\n  padding-left: 4px;\n  white-space: nowrap;\n}\n.dropdown-content .dropdown-option:hover {\n  background-color: #f3f3f3;\n}\n.dropdown-content .dropdown-option.active {\n  background-color: #1890ff1a;\n  color: #1890ff;\n}\n.space {\n  display: inline-flex;\n}\n.config-details {\n  animation: fade-in 0.5s;\n}\n.config-details label {\n  padding-left: 12px;\n}\n.alert-info-wrapper {\n  margin-bottom: 8px;\n}\n.alert-info-wrapper .result-info {\n  padding: 12px;\n  text-align: center;\n  border-radius: 6px;\n}\n.alert-info-wrapper .unresolved {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .no-answer {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .error {\n  color: #ff4d4f;\n  background-color: #fff1f0;\n}\nmessage-element {\n  animation: show 0.5s;\n}\nscript-panel-element > div,\nscript-panel-link,\ncontainer-element,\nmodal-element {\n  animation: fade-in 0.3s;\n}\n@keyframes show {\n  0% {\n    transform: translateY(20px);\n    opacity: 0;\n  }\n  100% {\n    transform: translateY(0);\n    opacity: 1;\n  }\n}\n@keyframes fade-in {\n  0% {\n    opacity: 0;\n  }\n  100% {\n    opacity: 1;\n  }\n}\n@keyframes fade-out {\n  0% {\n    opacity: 1;\n  }\n  100% {\n    opacity: 0;\n  }\n}\n.checkbox-label {\n  display: inline-block !important;\n  position: relative;\n  cursor: pointer;\n  font-size: 16px;\n  color: #2c3e50;\n}\n/* 隐藏原始复选框 */\n.checkbox-input {\n  position: absolute;\n  opacity: 0;\n  width: 0;\n  height: 0;\n}\n/* 自定义按钮样式 */\n.checkbox-label::after {\n  content: '';\n  display: inline-block;\n  border-radius: 50%;\n  transition: all 0.1s ease;\n  position: relative;\n  margin-left: 4px;\n  vertical-align: middle;\n}\n/* 向下箭头（未选中状态） */\n.checkbox-label::before {\n  content: '🔽';\n  position: absolute;\n  width: 0;\n  height: 0;\n  right: 8px;\n  transition: all 0.1s ease;\n  z-index: 2;\n}\n/* 向上箭头（选中状态） */\n.checked .checkbox-label::before {\n  content: '🔼';\n}\n/* ==================== Apple Design Style Override ==================== */\ncontainer-element,\ncontainer-element * {\n  font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"SF Pro Display\",\n    \"Helvetica Neue\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif !important;\n  letter-spacing: 0 !important;\n}\ncontainer-element {\n  background: rgba(255, 255, 255, 0.86) !important;\n  backdrop-filter: saturate(180%) blur(24px) !important;\n  -webkit-backdrop-filter: saturate(180%) blur(24px) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 14px !important;\n  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06) !important;\n  color: #1d1d1f !important;\n}\nheader-element {\n  background: transparent !important;\n  border-radius: 14px 14px 0 0 !important;\n  padding: 10px 12px 8px !important;\n  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar {\n  gap: 4px !important;\n}\nheader-element .extra-menu-bar button {\n  background: transparent !important;\n  border: none !important;\n  border-radius: 7px !important;\n  padding: 5px 12px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  color: #1d1d1f !important;\n  transition: background 0.15s ease !important;\n}\nheader-element .extra-menu-bar button:hover {\n  background: rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar button.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\nheader-element .profile {\n  font-weight: 600 !important;\n  font-size: 14px !important;\n  color: #1d1d1f !important;\n}\n.base-style-button {\n  background: #007aff !important;\n  color: #fff !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 7px 16px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease, transform 0.1s ease !important;\n}\n.base-style-button:hover {\n  background: #0066d6 !important;\n}\n.base-style-button:active {\n  transform: scale(0.97) !important;\n}\n.base-style-button-secondary {\n  background: rgba(0, 0, 0, 0.05) !important;\n  color: #1d1d1f !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 6px 14px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease !important;\n}\n.base-style-button-secondary:hover {\n  background: rgba(0, 0, 0, 0.1) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  border: 1px solid rgba(0, 0, 0, 0.1) !important;\n  border-radius: 8px !important;\n  background: #fff !important;\n  padding: 7px 10px !important;\n  font-size: 13px !important;\n  color: #1d1d1f !important;\n  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;\n  outline: none !important;\n}\n.base-style-active-form-control:focus,\n.base-style-input:focus {\n  border-color: #007aff !important;\n  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.16) !important;\n  background: #fff !important;\n}\n.base-style-active-form-control:hover,\n.base-style-input:hover {\n  background: #fff !important;\n}\n.card {\n  background: #fff !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 12px !important;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;\n}\n.configs-container {\n  border: none !important;\n  box-shadow: none !important;\n}\n.notes {\n  color: #6e6e73 !important;\n  line-height: 1.6 !important;\n}\n.secondary {\n  color: #6e6e73 !important;\n}\n.separator {\n  border-color: rgba(0, 0, 0, 0.06) !important;\n}\n.dropdown-content {\n  border-radius: 10px !important;\n  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  overflow: hidden !important;\n}\n.dropdown-option {\n  border-radius: 6px !important;\n  transition: background 0.12s ease !important;\n}\n.dropdown-option:hover {\n  background: rgba(0, 0, 0, 0.05) !important;\n}\n.dropdown-option.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\n.modal-wrapper {\n  border-radius: 14px !important;\n  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\n.message-container {\n  gap: 6px !important;\n}\n/* 面板留白 */\nscript-panel-element {\n  padding: 4px 2px !important;\n}\n/* 滚动条苹果风格 */\ncontainer-element ::-webkit-scrollbar {\n  width: 8px !important;\n  height: 8px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb {\n  background: rgba(0, 0, 0, 0.18) !important;\n  border-radius: 4px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb:hover {\n  background: rgba(0, 0, 0, 0.3) !important;\n}\ncontainer-element ::-webkit-scrollbar-track {\n  background: transparent !important;\n}\n/* ==================== Silky Animations ==================== */\ncontainer-element {\n  scroll-behavior: smooth !important;\n}\ncontainer-element * {\n  scroll-behavior: smooth !important;\n}\n@keyframes hh-panel-in {\n  from {\n    opacity: 0;\n    transform: translateY(10px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\n@keyframes hh-card-in {\n  from {\n    opacity: 0;\n    transform: translateY(8px) scale(0.99);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0) scale(1);\n  }\n}\n@keyframes hh-modal-in {\n  from {\n    opacity: 0;\n    transform: scale(0.9) translateY(12px);\n  }\n  to {\n    opacity: 1;\n    transform: scale(1) translateY(0);\n  }\n}\n@keyframes hh-dropdown-in {\n  from {\n    opacity: 0;\n    transform: scaleY(0.92) translateY(-6px);\n  }\n  to {\n    opacity: 1;\n    transform: scaleY(1) translateY(0);\n  }\n}\n@keyframes hh-msg-in {\n  from {\n    opacity: 0;\n    transform: translateX(24px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n@keyframes hh-cfg-in {\n  from {\n    opacity: 0;\n    transform: translateY(6px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\nscript-panel-element {\n  animation: hh-panel-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.base-style-button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease !important;\n  will-change: transform !important;\n}\n.base-style-button:hover {\n  transform: translateY(-1px) !important;\n  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.28) !important;\n}\n.base-style-button:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\n.base-style-button-secondary {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  will-change: transform !important;\n}\n.base-style-button-secondary:hover {\n  transform: translateY(-1px) !important;\n}\n.base-style-button-secondary:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\nheader-element .extra-menu-bar button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease,\n    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\nheader-element .extra-menu-bar button:active {\n  transform: scale(0.92) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),\n    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease !important;\n}\n.card {\n  animation: hh-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.modal-wrapper {\n  animation: hh-modal-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\n.dropdown-content {\n  animation: hh-dropdown-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  transform-origin: top center !important;\n}\n.message-container > * {\n  animation: hh-msg-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.configs-container > * {\n  animation: hh-cfg-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.configs-container > *:nth-child(1) {\n  animation-delay: 0s !important;\n}\n.configs-container > *:nth-child(2) {\n  animation-delay: 0.05s !important;\n}\n.configs-container > *:nth-child(3) {\n  animation-delay: 0.1s !important;\n}\n.configs-container > *:nth-child(4) {\n  animation-delay: 0.15s !important;\n}\n.configs-container > *:nth-child(5) {\n  animation-delay: 0.2s !important;\n}\n.configs-container > *:nth-child(6) {\n  animation-delay: 0.25s !important;\n}\n.configs-container > *:nth-child(7) {\n  animation-delay: 0.3s !important;\n}\n.configs-container > *:nth-child(8) {\n  animation-delay: 0.35s !important;\n}\n.base-style-switch {\n  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n.base-style-switch::before {\n  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\na {\n  transition: color 0.2s ease, opacity 0.2s ease !important;\n}\n.dropdown-option {\n  transition: background 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n"}};
+var __HH_RESOURCES__ = {"version":"5.5.1","metadata":{"name":"鸿鹄易学","version":"5.5.1","description":"鸿鹄易学 - 在线网络课程辅助工具","author":"enncy","license":"MIT","namespace":"https://honghueasystudy","homepage":"https://easystudy.honghutech.eu.org","source":"https://easystudy.honghutech.eu.org","icon":"https://easystudy.honghutech.eu.org/assets/img/icon.png","run-at":"document-start"},"resources":{"STYLE":"/** 默认字体 */\n/** 输入框默认边距 */\nul,\nol {\n  line-height: 26px;\n  padding-left: 22px;\n  margin: 0px;\n}\na {\n  color: #1890ff;\n}\nhr {\n  border-style: solid;\n  border-color: #63636346;\n  border-width: 0px;\n  border-bottom: 1px solid #63636346;\n  margin-block-start: 1em;\n  margin-block-end: 1em;\n}\n.base-style-active-form-control {\n  border: 1px solid #ffffff00;\n}\n.base-style-active-form-control:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.base-style-active-form-control:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.base-style-active-form-control:hover {\n  background-color: #ebeef4;\n}\n.base-style-input {\n  outline: none;\n  border: 1px solid #ffffff00;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n}\n.base-style-input::placeholder {\n  color: #bababa;\n}\n.base-style-switch {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.base-style-switch:checked {\n  background: #1890ff;\n}\n.base-style-switch:disabled {\n  background-color: #f7f7f78b;\n}\n.base-style-switch:checked::before {\n  transform: translate(24px, 0px);\n}\n.base-style-switch::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.base-style-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.base-style-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button + .base-style-button {\n  margin-left: 12px;\n}\n.base-style-button:hover {\n  background-color: #7abbff24;\n}\n.base-style-button.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button:disabled:active {\n  box-shadow: none;\n}\n.base-style-button-secondary {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\n.base-style-button-secondary:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button-secondary + .base-style-button-secondary {\n  margin-left: 12px;\n}\n.base-style-button-secondary:hover {\n  background-color: #7abbff24;\n}\n.base-style-button-secondary.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button-secondary:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button-secondary.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button-secondary:disabled:active {\n  box-shadow: none;\n}\ncontainer-element.hidden {\n  display: none;\n}\ncontainer-element.minimize {\n  min-width: unset;\n}\ncontainer-element {\n  position: fixed;\n  top: 10%;\n  left: 10%;\n  z-index: 99999;\n  text-align: left;\n  min-width: 300px;\n  -webkit-font-smoothing: antialiased;\n  -moz-osx-font-smoothing: grayscale;\n  color: #636363;\n  box-shadow: 0 0 24px -12px #3f3f3f;\n  border-radius: 8px;\n  letter-spacing: 0.5px;\n  border: 1px solid #c1c1c1;\n}\nheader-element {\n  display: flex;\n  align-items: center;\n  background-color: white;\n  border-radius: 8px 8px 0px 0px;\n  user-select: none;\n  padding: 4px;\n  padding-bottom: 0px;\n}\nheader-element .extra-menu-bar {\n  width: 100%;\n  padding: 4px;\n  padding-bottom: 0px;\n  margin-top: 4px;\n  border-top: 1px solid #e8e8e8;\n  /** 默认隐藏，一直到需要激活的时候再更改 */\n  display: none;\n}\nheader-element .extra-menu-bar .script-panel-link {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n  padding-bottom: 2px;\n  margin-bottom: 0px;\n}\nheader-element .extra-menu-bar .script-panel-link:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nheader-element .extra-menu-bar .script-panel-link + header-element .extra-menu-bar .script-panel-link {\n  margin-left: 12px;\n}\nheader-element .extra-menu-bar .script-panel-link:hover {\n  background-color: #7abbff24;\n}\nheader-element .extra-menu-bar .script-panel-link.danger:hover {\n  background-color: #ffdede86;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nheader-element .extra-menu-bar .script-panel-link.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled:active {\n  box-shadow: none;\n}\nheader-element .extra-menu-bar .script-panel-link.active {\n  background-color: #1890ff1a;\n  border-color: #1890ff;\n  color: #1890ff;\n}\nheader-element .extra-menu-bar .script-panel-link + .script-panel-link {\n  margin-left: 4px;\n}\nheader-element .profile {\n  flex: 1;\n  cursor: move;\n}\nheader-element .switch:hover,\nheader-element .dropdown:hover {\n  background-color: #f3f3f3;\n}\nheader-element .close:hover {\n  background-color: #ff000038;\n}\nheader-element .switch,\nheader-element .close {\n  cursor: pointer;\n}\nheader-element .dropdown {\n  line-height: 24px;\n  text-decoration: underline;\n}\nheader-element .switch,\nheader-element .close,\nheader-element .profile {\n  display: inline-flex;\n  align-items: center;\n  padding: 0px 8px;\n}\n.logo {\n  width: 18px;\n  height: 18px;\n  cursor: pointer;\n}\n.project-selector {\n  display: flex;\n  align-items: center;\n}\n.project-selector select {\n  background: #ffffff00;\n  border-radius: 4px;\n  border: 1px solid #63636346;\n  padding: 4px;\n}\n.project-selector.expand-all {\n  display: none;\n}\n.body {\n  overflow: auto;\n  width: auto;\n  height: 100%;\n}\nscript-panel-element {\n  display: block;\n  background-color: white;\n  border-radius: 0px 0px 8px 8px;\n  padding: 0px 8px 12px 8px;\n  overflow: auto;\n}\nscript-panel-element .script-panel-body {\n  padding: 0px 8px;\n}\nscript-panel-element + script-panel-element {\n  margin-top: 12px;\n}\n.card + .card {\n  margin-top: 12px;\n}\n.card {\n  background-color: white;\n  border-radius: 2px;\n  padding: 0px 8px;\n}\n.notes {\n  background: #0099ff0e;\n  border-left: 4px solid #0099ff65;\n  width: -webkit-fill-available;\n  margin: 0px 8px;\n  line-height: 26px;\n  letter-spacing: 1px;\n}\n.secondary {\n  font-size: 12px;\n  color: #8b8b8b;\n}\n.tooltip-container {\n  z-index: 99999999999999;\n  margin: 12px 0px 0px 12px;\n  padding: 4px;\n  color: black;\n  background: #f0f0f0;\n  box-shadow: 0px 0px 4px #949494;\n  position: fixed;\n  white-space: normal;\n  max-width: 200px;\n  height: auto;\n  border-radius: 2px;\n  line-height: 18px;\n}\n.configs-container.lock {\n  filter: blur(1px);\n  user-select: none;\n  -webkit-user-select: none;\n  -moz-user-select: none;\n  -ms-user-select: none;\n}\n.configs-container .lock-wrapper {\n  cursor: not-allowed !important;\n  border-radius: 4px;\n  position: absolute;\n  left: 0px;\n  z-index: 1;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n}\n.configs-container .lock-message {\n  background-color: #ffffff7d;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #6a6a6a98;\n  padding: 2px;\n}\n.configs {\n  display: table;\n  background: #e1e1e107;\n  width: -webkit-fill-available;\n}\n.configs .configs-body {\n  display: table-row-group;\n}\n.configs .configs-body config-element + config-element label {\n  padding-top: 4px;\n}\n.configs .configs-body config-element + config-element .config-wrapper {\n  padding-top: 4px;\n}\n.configs .configs-body config-element {\n  width: 100%;\n  display: table-row;\n  line-height: 26px;\n}\n.configs .configs-body config-element label {\n  white-space: nowrap;\n  color: #4e5969;\n  display: table-cell;\n  padding-right: 12px;\n  text-align: left;\n  vertical-align: top;\n  margin-right: 12px;\n}\n.configs .configs-body config-element .config-wrapper {\n  display: table-cell;\n  vertical-align: middle;\n  /** check box 的样式 */\n}\n.configs .configs-body config-element .config-wrapper select {\n  outline: none;\n  border: none;\n  border: 1px solid #e4e4e4;\n  border-radius: 4px;\n  padding: 2px 8px;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper select:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper select:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper select:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper textarea {\n  padding: 2px 8px;\n  outline: none;\n  border: none;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper textarea:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']) {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button'])::placeholder {\n  color: #bababa;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  padding: 0px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] + .configs .configs-body config-element .config-wrapper input[type='button'] {\n  margin-left: 12px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:hover {\n  background-color: #7abbff24;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger:hover {\n  background-color: #ffdede86;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled:active {\n  box-shadow: none;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked {\n  background: #1890ff;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:disabled {\n  background-color: #f7f7f78b;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked::before {\n  transform: translate(24px, 0px);\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.configs .configs-body config-element .config-wrapper input:not([type='checkbox'], [type='radio']),\n.configs .configs-body config-element .config-wrapper textarea,\n.configs .configs-body config-element .config-wrapper select {\n  width: -webkit-fill-available;\n  font-size: inherit;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'],\n.configs .configs-body config-element .config-wrapper input[type='radio'],\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  accent-color: #0e8ee2;\n}\n.configs .configs-body config-element .config-wrapper > *:not(.tooltip) {\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  float: right;\n}\n.configs .configs-body config-element .config-wrapper > *:disabled {\n  cursor: not-allowed;\n  background-color: #f7f7f78b;\n}\n.message-container {\n  margin-bottom: 4px;\n  position: absolute;\n  bottom: 100%;\n  left: 50%;\n  width: 100%;\n  transform: translate(-50%, 0px);\n  min-width: 300px;\n}\n.message-container message-element {\n  display: flex;\n  border-radius: 4px;\n  padding: 4px 12px;\n  margin-bottom: 4px;\n}\n.message-container message-element .message-content-container {\n  margin-right: 8px;\n  flex: auto;\n}\n.message-container message-element .message-text {\n  letter-spacing: 1px;\n  font-weight: bold;\n}\n.message-container message-element .message-closer {\n  width: 18px;\n  min-width: 18px;\n  cursor: pointer;\n  background-color: #ffffffb3;\n  color: #a1a1a1;\n  border-radius: 100%;\n  text-align: center;\n  height: 18px;\n  vertical-align: middle;\n  font-size: 12px;\n}\n.message-container message-element.error {\n  background-color: #ffe6e6;\n  color: #c70208;\n  border: 1px solid #ff6b6ded;\n}\n.message-container message-element.info {\n  background-color: #c9e7ff;\n  color: #004d95;\n  border: 1px solid #1890ff69;\n}\n.message-container message-element.success {\n  background-color: #e8ffe0;\n  color: #3e8d0d;\n  border: 1px solid #6fd91d;\n}\n.message-container message-element.warn {\n  background-color: #ffefc8;\n  color: #9b7400;\n  border: 1px solid #ffc107;\n}\nmodal-element {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  background-color: white;\n  border-radius: 4px;\n  box-shadow: 0px 0px 24px -12px black;\n  border: 1px solid #929292;\n  height: fit-content;\n  transform: translate(-50%, -50%);\n  padding: 12px 18px 18px 18px;\n  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;\n  z-index: 99999999999;\n  line-height: 24px;\n}\nmodal-element .modal-profile {\n  zoom: 0.9;\n  color: #969696;\n  user-select: none;\n  margin-bottom: 4px;\n}\nmodal-element .modal-title {\n  font-size: 18px;\n  font-weight: bold;\n  user-select: none;\n}\nmodal-element .modal-body {\n  margin: 12px 0px;\n  overflow: auto;\n}\nmodal-element .modal-footer {\n  display: flex;\n  white-space: nowrap;\n  justify-content: end;\n  align-items: end;\n}\nmodal-element .modal-footer > * + * {\n  margin-left: 12px;\n}\nmodal-element .modal-input {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n  width: -webkit-fill-available;\n}\nmodal-element .modal-input::placeholder {\n  color: #bababa;\n}\nmodal-element .modal-input:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\nmodal-element .modal-input:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\nmodal-element .modal-input:hover {\n  background-color: #ebeef4;\n}\nmodal-element .modal-cancel-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\nmodal-element .modal-cancel-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-cancel-button + modal-element .modal-cancel-button {\n  margin-left: 12px;\n}\nmodal-element .modal-cancel-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-cancel-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-cancel-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-cancel-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-cancel-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element .modal-confirm-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\nmodal-element .modal-confirm-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-confirm-button + modal-element .modal-confirm-button {\n  margin-left: 12px;\n}\nmodal-element .modal-confirm-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-confirm-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-confirm-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-confirm-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-confirm-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element.alert .modal-input,\nmodal-element.alert .modal-cancel-button {\n  display: none;\n}\nmodal-element.alert .modal-confirm-button {\n  margin: 0;\n}\nmodal-element.prompt .modal-input,\nmodal-element.prompt .modal-cancel-button,\nmodal-element.prompt .modal-confirm-button {\n  display: block;\n}\nmodal-element.confirm .modal-input {\n  display: none;\n}\n.modal-wrapper {\n  width: 100%;\n  height: 100%;\n  z-index: 9999;\n  position: fixed;\n  top: 0px;\n  left: 0px;\n  z-index: 9999999;\n  background-color: rgba(0, 0, 0, 0.265);\n  color: #636363;\n  font: 14px Menlo, Monaco, Consolas, 'Courier New', monospace;\n}\n.pointer {\n  cursor: pointer;\n}\n.separator {\n  display: flex;\n  align-items: center;\n  text-align: center;\n  padding: 4px 0px 8px 0px;\n}\n.separator::before,\n.separator::after {\n  content: '';\n  flex: 1;\n  border-bottom: 1px solid #63636346;\n}\n.separator:not(:empty)::before {\n  margin-right: 0.25em;\n}\n.separator:not(:empty)::after {\n  margin-left: 0.25em;\n}\ncontainer-element.minimize .body,\ncontainer-element.minimize header-element .dropdown,\ncontainer-element.minimize .footer {\n  display: none;\n}\ncontainer-element.minimize header-element {\n  padding: 8px;\n  border-radius: 8px;\n  box-shadow: 0px 0px 24px -12px black;\n}\n.user-guide > li {\n  padding: 4px 0px;\n}\n.search-infos-num {\n  width: 26px;\n  margin: 2px;\n  height: 20px;\n  border-radius: 4px;\n  display: inline-block;\n  background-color: white;\n  text-align: center;\n  cursor: pointer;\n  border: 1px solid #b6b6b6;\n}\n.search-infos-num.requested {\n  border: 1px solid #63b4ff;\n  color: #63b4ff;\n}\n.search-infos-num.active {\n  background-color: #127de1 !important;\n  color: white;\n}\n.search-infos-num.error {\n  border: 1px solid #ff8789ed;\n  background-color: #ff6b6ded;\n  color: white;\n}\n.search-infos-num.finish {\n  background-color: #63b4ff;\n  border: 1px solid #63b4ff;\n  color: white;\n}\nsearch-infos-element {\n  display: block;\n  overflow: auto;\n}\nsearch-infos-element .search-result {\n  margin-bottom: 12px;\n  padding-left: 12px;\n}\nsearch-infos-element .search-result .question {\n  font-weight: bold;\n  max-height: 200px;\n  overflow: auto;\n}\nsearch-infos-element .search-result .answer {\n  color: #7c7c7c;\n}\nsearch-infos-element .search-result .answer code {\n  border-bottom: 1px solid #dcdcdc;\n  padding: 2px 0px;\n  border-radius: 2px;\n  margin: 4px;\n  line-height: 22px;\n}\nsearch-infos-element .search-result .answer code + code {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag {\n  padding: 2px 6px;\n  border-radius: 2px;\n  font-size: 12px;\n  cursor: pointer;\n  margin-right: 6px;\n}\nsearch-infos-element .search-result .search-result-answer-tag + .search-result-answer-tag {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag.blue {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n}\nsearch-infos-element .search-result .search-result-answer-tag.green {\n  background-color: #f6ffed;\n  border: 1px solid #b7eb8f;\n  color: #52c41a;\n}\nsearch-infos-element .search-result .search-result-answer-tag.gray {\n  background-color: #fafafa;\n  border: 1px solid #d9d9d9;\n  color: #595959;\n}\nsearch-infos-element .search-result .search-result-answer-tag.red {\n  background-color: #fff1f0;\n  border: 1px solid #ffa39e;\n  color: #ff4d4f;\n}\nsearch-infos-element .search-result .search-result-answer-tag.yellow {\n  background-color: #fffbe6;\n  border: 1px solid #ffe58f;\n  color: #faad14;\n}\nsearch-infos-element .search-result-question-type {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n  margin-right: 8px;\n  padding: 0px 4px;\n  border-radius: 4px;\n}\nsearch-infos-element .error {\n  color: #ff6b6ded;\n  display: inline-block;\n  padding-left: 12px;\n}\n.copy,\n.question-title-extra-btn {\n  margin-left: 4px;\n  padding: 2px 4px;\n  border-radius: 2px;\n  box-shadow: 0 0 4px #b1b1b1;\n  cursor: pointer !important;\n  font-weight: normal;\n  font-size: 12px;\n}\n.work-result-question-container {\n  position: absolute;\n  width: 400px;\n  left: -100%;\n  top: 0px;\n  background: white;\n  border: 1px solid #cbcbcb;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #d1cfcf;\n  padding: 12px;\n}\n.work-result-question-container .close-search-result {\n  font-size: 12px;\n  margin-left: 8px;\n  text-decoration: underline;\n  color: gray;\n  cursor: pointer;\n}\n.work-result-list {\n  max-height: 400px;\n  overflow: auto;\n  margin: 12px 0px;\n  padding: 6px;\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n}\n.search-info-title {\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  margin-bottom: 12px;\n  line-height: 20px;\n  overflow: auto;\n}\n.search-info-title .title-content {\n  max-height: 200px;\n  overflow: auto;\n}\n.search-info-details {\n  margin-left: 4px;\n}\n.console {\n  max-height: 300px;\n  max-width: 400px;\n  overflow: auto;\n  background-color: #292929;\n  padding: 12px 6px;\n  color: #ececec;\n  font-size: 12px;\n}\n.console .item {\n  padding: 3px 0px;\n  border-radius: 2px;\n}\n.console .item .time {\n  color: #757575;\n}\n.console .item .info {\n  background-color: #2196f3a3;\n}\n.console .item .warn {\n  background-color: #ffc107db;\n}\n.console .item .error {\n  background-color: #f36c71cc;\n}\n.console .item .debug,\n.console .item .log {\n  background-color: #9e9e9ec4;\n}\n.console *::selection {\n  background-color: #ffffff6b;\n}\n.markdown {\n  max-width: 400px;\n  max-height: 50vh;\n  overflow: auto;\n}\n.markdown code {\n  padding: 2px 4px;\n  background-color: #f0f0f0;\n  border-radius: 6px;\n  font-size: 12px;\n}\n.markdown blockquote {\n  padding: 4px 4px 4px 12px;\n  margin: 0px;\n  color: #b5b5b5;\n  border-left: #ababab 2px solid;\n}\n.markdown blockquote p {\n  margin: 0px;\n}\n.markdown h1,\n.markdown h2,\n.markdown h3,\n.markdown h4,\n.markdown h5,\n.markdown h6,\n.markdown p {\n  margin: 8px 0px;\n}\n.dropdown {\n  position: relative;\n  display: inline-block;\n}\n.dropdown.active .dropdown-trigger-element {\n  color: #1890ff;\n}\n.dropdown-trigger-element {\n  cursor: pointer;\n}\n.dropdown-content {\n  display: none;\n  position: absolute;\n  background-color: #ffffff;\n  overflow: auto;\n  box-shadow: 0px 8px 16px 0px #00000033;\n  z-index: 1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  min-width: 120px;\n}\n.dropdown-content.show {\n  display: block;\n}\n.dropdown-content {\n  cursor: pointer;\n  z-index: 999;\n}\n.dropdown-content .dropdown-option {\n  padding-left: 4px;\n  white-space: nowrap;\n}\n.dropdown-content .dropdown-option:hover {\n  background-color: #f3f3f3;\n}\n.dropdown-content .dropdown-option.active {\n  background-color: #1890ff1a;\n  color: #1890ff;\n}\n.space {\n  display: inline-flex;\n}\n.config-details {\n  animation: fade-in 0.5s;\n}\n.config-details label {\n  padding-left: 12px;\n}\n.alert-info-wrapper {\n  margin-bottom: 8px;\n}\n.alert-info-wrapper .result-info {\n  padding: 12px;\n  text-align: center;\n  border-radius: 6px;\n}\n.alert-info-wrapper .unresolved {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .no-answer {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .error {\n  color: #ff4d4f;\n  background-color: #fff1f0;\n}\nmessage-element {\n  animation: show 0.5s;\n}\nscript-panel-element > div,\nscript-panel-link,\ncontainer-element,\nmodal-element {\n  animation: fade-in 0.3s;\n}\n@keyframes show {\n  0% {\n    transform: translateY(20px);\n    opacity: 0;\n  }\n  100% {\n    transform: translateY(0);\n    opacity: 1;\n  }\n}\n@keyframes fade-in {\n  0% {\n    opacity: 0;\n  }\n  100% {\n    opacity: 1;\n  }\n}\n@keyframes fade-out {\n  0% {\n    opacity: 1;\n  }\n  100% {\n    opacity: 0;\n  }\n}\n.checkbox-label {\n  display: inline-block !important;\n  position: relative;\n  cursor: pointer;\n  font-size: 16px;\n  color: #2c3e50;\n}\n/* 隐藏原始复选框 */\n.checkbox-input {\n  position: absolute;\n  opacity: 0;\n  width: 0;\n  height: 0;\n}\n/* 自定义按钮样式 */\n.checkbox-label::after {\n  content: '';\n  display: inline-block;\n  border-radius: 50%;\n  transition: all 0.1s ease;\n  position: relative;\n  margin-left: 4px;\n  vertical-align: middle;\n}\n/* 向下箭头（未选中状态） */\n.checkbox-label::before {\n  content: '🔽';\n  position: absolute;\n  width: 0;\n  height: 0;\n  right: 8px;\n  transition: all 0.1s ease;\n  z-index: 2;\n}\n/* 向上箭头（选中状态） */\n.checked .checkbox-label::before {\n  content: '🔼';\n}\n/* ==================== Apple Design Style Override ==================== */\ncontainer-element,\ncontainer-element * {\n  font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"SF Pro Display\",\n    \"Helvetica Neue\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif !important;\n  letter-spacing: 0 !important;\n}\ncontainer-element {\n  background: rgba(255, 255, 255, 0.86) !important;\n  backdrop-filter: saturate(180%) blur(24px) !important;\n  -webkit-backdrop-filter: saturate(180%) blur(24px) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 14px !important;\n  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06) !important;\n  color: #1d1d1f !important;\n}\nheader-element {\n  background: transparent !important;\n  border-radius: 14px 14px 0 0 !important;\n  padding: 10px 12px 8px !important;\n  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar {\n  gap: 4px !important;\n}\nheader-element .extra-menu-bar button {\n  background: transparent !important;\n  border: none !important;\n  border-radius: 7px !important;\n  padding: 5px 12px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  color: #1d1d1f !important;\n  transition: background 0.15s ease !important;\n}\nheader-element .extra-menu-bar button:hover {\n  background: rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar button.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\nheader-element .profile {\n  font-weight: 600 !important;\n  font-size: 14px !important;\n  color: #1d1d1f !important;\n}\n.base-style-button {\n  background: #007aff !important;\n  color: #fff !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 7px 16px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease, transform 0.1s ease !important;\n}\n.base-style-button:hover {\n  background: #0066d6 !important;\n}\n.base-style-button:active {\n  transform: scale(0.97) !important;\n}\n.base-style-button-secondary {\n  background: rgba(0, 0, 0, 0.05) !important;\n  color: #1d1d1f !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 6px 14px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease !important;\n}\n.base-style-button-secondary:hover {\n  background: rgba(0, 0, 0, 0.1) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  border: 1px solid rgba(0, 0, 0, 0.1) !important;\n  border-radius: 8px !important;\n  background: #fff !important;\n  padding: 7px 10px !important;\n  font-size: 13px !important;\n  color: #1d1d1f !important;\n  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;\n  outline: none !important;\n}\n.base-style-active-form-control:focus,\n.base-style-input:focus {\n  border-color: #007aff !important;\n  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.16) !important;\n  background: #fff !important;\n}\n.base-style-active-form-control:hover,\n.base-style-input:hover {\n  background: #fff !important;\n}\n.card {\n  background: #fff !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 12px !important;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;\n}\n.configs-container {\n  border: none !important;\n  box-shadow: none !important;\n}\n.notes {\n  color: #6e6e73 !important;\n  line-height: 1.6 !important;\n}\n.secondary {\n  color: #6e6e73 !important;\n}\n.separator {\n  border-color: rgba(0, 0, 0, 0.06) !important;\n}\n.dropdown-content {\n  border-radius: 10px !important;\n  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  overflow: hidden !important;\n}\n.dropdown-option {\n  border-radius: 6px !important;\n  transition: background 0.12s ease !important;\n}\n.dropdown-option:hover {\n  background: rgba(0, 0, 0, 0.05) !important;\n}\n.dropdown-option.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\n.modal-wrapper {\n  border-radius: 14px !important;\n  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\n.message-container {\n  gap: 6px !important;\n}\n/* 面板留白 */\nscript-panel-element {\n  padding: 4px 2px !important;\n}\n/* 滚动条苹果风格 */\ncontainer-element ::-webkit-scrollbar {\n  width: 8px !important;\n  height: 8px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb {\n  background: rgba(0, 0, 0, 0.18) !important;\n  border-radius: 4px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb:hover {\n  background: rgba(0, 0, 0, 0.3) !important;\n}\ncontainer-element ::-webkit-scrollbar-track {\n  background: transparent !important;\n}\n/* ==================== Silky Animations ==================== */\ncontainer-element {\n  scroll-behavior: smooth !important;\n}\ncontainer-element * {\n  scroll-behavior: smooth !important;\n}\n@keyframes hh-panel-in {\n  from {\n    opacity: 0;\n    transform: translateY(10px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\n@keyframes hh-card-in {\n  from {\n    opacity: 0;\n    transform: translateY(8px) scale(0.99);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0) scale(1);\n  }\n}\n@keyframes hh-modal-in {\n  from {\n    opacity: 0;\n    transform: scale(0.9) translateY(12px);\n  }\n  to {\n    opacity: 1;\n    transform: scale(1) translateY(0);\n  }\n}\n@keyframes hh-dropdown-in {\n  from {\n    opacity: 0;\n    transform: scaleY(0.92) translateY(-6px);\n  }\n  to {\n    opacity: 1;\n    transform: scaleY(1) translateY(0);\n  }\n}\n@keyframes hh-msg-in {\n  from {\n    opacity: 0;\n    transform: translateX(24px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n@keyframes hh-cfg-in {\n  from {\n    opacity: 0;\n    transform: translateY(6px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\nscript-panel-element {\n  animation: hh-panel-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.base-style-button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease !important;\n  will-change: transform !important;\n}\n.base-style-button:hover {\n  transform: translateY(-1px) !important;\n  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.28) !important;\n}\n.base-style-button:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\n.base-style-button-secondary {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  will-change: transform !important;\n}\n.base-style-button-secondary:hover {\n  transform: translateY(-1px) !important;\n}\n.base-style-button-secondary:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\nheader-element .extra-menu-bar button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease,\n    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\nheader-element .extra-menu-bar button:active {\n  transform: scale(0.92) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),\n    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease !important;\n}\n.card {\n  animation: hh-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.modal-wrapper {\n  animation: hh-modal-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\n.dropdown-content {\n  animation: hh-dropdown-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  transform-origin: top center !important;\n}\n.message-container > * {\n  animation: hh-msg-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.configs-container > * {\n  animation: hh-cfg-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.configs-container > *:nth-child(1) {\n  animation-delay: 0s !important;\n}\n.configs-container > *:nth-child(2) {\n  animation-delay: 0.05s !important;\n}\n.configs-container > *:nth-child(3) {\n  animation-delay: 0.1s !important;\n}\n.configs-container > *:nth-child(4) {\n  animation-delay: 0.15s !important;\n}\n.configs-container > *:nth-child(5) {\n  animation-delay: 0.2s !important;\n}\n.configs-container > *:nth-child(6) {\n  animation-delay: 0.25s !important;\n}\n.configs-container > *:nth-child(7) {\n  animation-delay: 0.3s !important;\n}\n.configs-container > *:nth-child(8) {\n  animation-delay: 0.35s !important;\n}\n.base-style-switch {\n  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n.base-style-switch::before {\n  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\na {\n  transition: color 0.2s ease, opacity 0.2s ease !important;\n}\n.dropdown-option {\n  transition: background 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n"}};
 
 	/* ===== 2/4 GM API polyfill ===== */
 /* 鸿鹄易学 · GM API polyfill
@@ -5951,7 +5951,7 @@ try {
       installAntiDetection();
     }
   });
-  const state$9 = {
+  const state$a = {
     console: {
       listenerIds: {
         logs: 0
@@ -6033,8 +6033,8 @@ try {
             return scrollTop + clientHeight + 50 > scrollHeight;
           };
           const { div, logs } = showLogs();
-          this.offConfigChange(state$9.console.listenerIds.logs);
-          state$9.console.listenerIds.logs = this.onConfigChange("logs", (logs2) => {
+          this.offConfigChange(state$a.console.listenerIds.logs);
+          state$a.console.listenerIds.logs = this.onConfigChange("logs", (logs2) => {
             const log = createLog(logs2[logs2.length - 1]);
             div.append(log);
             setTimeout(() => {
@@ -6108,11 +6108,11 @@ try {
             }
           };
           update();
-          this.offConfigChange(state$9.app.listenerIds.sync);
-          this.offConfigChange(state$9.app.listenerIds.connected);
-          this.offConfigChange(state$9.app.listenerIds.closeSync);
-          state$9.app.listenerIds.connected = this.onConfigChange("sync_status", update);
-          state$9.app.listenerIds.closeSync = this.onConfigChange("closeSync", (closeSync) => {
+          this.offConfigChange(state$a.app.listenerIds.sync);
+          this.offConfigChange(state$a.app.listenerIds.connected);
+          this.offConfigChange(state$a.app.listenerIds.closeSync);
+          state$a.app.listenerIds.connected = this.onConfigChange("sync_status", update);
+          state$a.app.listenerIds.closeSync = this.onConfigChange("closeSync", (closeSync) => {
             if (closeSync) {
               this.cfg.sync_status = "not_open_sync";
               lib.$message.success({ content: "已关闭同步，刷新页面后生效" });
@@ -6653,7 +6653,8 @@ try {
             ICourseProject.scripts.study.matches,
             IcveMoocProject.scripts.study.matches,
             ZJYProject.scripts.study.matches,
-            LabsafeProject.scripts.study.matches
+            LabsafeProject.scripts.study.matches,
+            FIFProject.scripts.study.matches
           ].flat().map((m) => Array.isArray(m) ? m[1] : m);
           const url = window.location.href;
           const match = matches2.some((regex) => {
@@ -6686,6 +6687,7 @@ try {
         async onactive() {
           const currentStudyScript = [
             LabsafeProject.scripts.study,
+            FIFProject.scripts.study,
             [CXProject.scripts.studyDispatcher, CXProject.scripts.study],
             CXProject.scripts.work,
             CXProject.scripts.autoRead,
@@ -7213,7 +7215,7 @@ try {
       link("GitCode 提 Issue", GITCODE_ISSUES)
     ]);
   }
-  const state$8 = {
+  const state$9 = {
     workResult: {
       questionPositionSyncHandler: {
         cx: (index) => {
@@ -7996,8 +7998,8 @@ try {
               }
             };
             updateState();
-            this.offConfigChange(state$8.setting.listenerIds.aw);
-            state$8.setting.listenerIds.aw = this.onConfigChange("answererWrappers", (_, __, remote) => {
+            this.offConfigChange(state$9.setting.listenerIds.aw);
+            state$9.setting.listenerIds.aw = this.onConfigChange("answererWrappers", (_, __, remote) => {
               if (remote === false) {
                 updateState();
               }
@@ -8155,7 +8157,7 @@ try {
                           this.cfg.currentResultIndex = index;
                           resultContainer.replaceChildren(createResult(result));
                           if (this.cfg.questionPositionSyncHandlerType) {
-                            (_b = (_a = state$8.workResult.questionPositionSyncHandler)[this.cfg.questionPositionSyncHandlerType]) == null ? void 0 : _b.call(
+                            (_b = (_a = state$9.workResult.questionPositionSyncHandler)[this.cfg.questionPositionSyncHandlerType]) == null ? void 0 : _b.call(
                               _a,
                               index
                             );
@@ -8210,7 +8212,7 @@ try {
                             this.cfg.currentResultIndex = index;
                             resultContainer.replaceChildren(createResult(result));
                             if (this.cfg.questionPositionSyncHandlerType) {
-                              (_b = (_a = state$8.workResult.questionPositionSyncHandler)[this.cfg.questionPositionSyncHandlerType]) == null ? void 0 : _b.call(
+                              (_b = (_a = state$9.workResult.questionPositionSyncHandler)[this.cfg.questionPositionSyncHandlerType]) == null ? void 0 : _b.call(
                                 _a,
                                 index
                               );
@@ -9811,7 +9813,7 @@ try {
     }
     return { ok: true, title, answers: picked.map(getQuizOptionText) };
   }
-  const state$7 = {
+  const state$8 = {
     study: {
       stop: false,
       currentMedia: void 0,
@@ -10049,17 +10051,17 @@ try {
     }
     getNext(opts) {
       const videoItems = Array.from(document.querySelectorAll(".clearfix.video"));
-      const isFinished = (el) => el.querySelector(".time_icofinish") !== null || textSaysFinished(el);
+      const isFinished2 = (el) => el.querySelector(".time_icofinish") !== null || textSaysFinished(el);
       const currentIndex = videoItems.findIndex((el) => el.classList.contains("current_play"));
       if (currentIndex !== -1) {
         for (let i = currentIndex + (opts.next ? 1 : 0); i < videoItems.length; i++) {
-          if (opts.restudy || isFinished(videoItems[i]) === false) {
+          if (opts.restudy || isFinished2(videoItems[i]) === false) {
             return videoItems[i];
           }
         }
         return void 0;
       }
-      return opts.restudy ? videoItems[0] : videoItems.find((el) => isFinished(el) === false);
+      return opts.restudy ? videoItems[0] : videoItems.find((el) => isFinished2(el) === false);
     }
     async switchPlaybackRate(rate) {
       const controlsBar = lib.$el(".controlsBar");
@@ -10107,7 +10109,7 @@ try {
         return;
       this.quizDialogLoopRunning = true;
       try {
-        while (state$7.study.stop === false) {
+        while (state$8.study.stop === false) {
           try {
             await this.answerTestDialogOnce();
           } catch (error) {
@@ -10285,7 +10287,7 @@ try {
         return true;
       });
       console.log(videoItems);
-      const isFinished = (el) => {
+      const isFinished2 = (el) => {
         var _a;
         if (is_resource_box_mode) {
           const text = ((_a = el.querySelector(".resource-text")) == null ? void 0 : _a.textContent) || "";
@@ -10306,13 +10308,13 @@ try {
       );
       if (currentIndex !== -1) {
         for (let i = currentIndex + (opts.next ? 1 : 0); i < videoItems.length; i++) {
-          if (opts.restudy || isFinished(videoItems[i]) === false) {
+          if (opts.restudy || isFinished2(videoItems[i]) === false) {
             return videoItems[i];
           }
         }
         return void 0;
       }
-      return opts.restudy ? videoItems[0] : videoItems.find((el) => isFinished(el) === false);
+      return opts.restudy ? videoItems[0] : videoItems.find((el) => isFinished2(el) === false);
     }
   }
   class StudyPlusH5 extends StudyVideoH5 {
@@ -10336,20 +10338,20 @@ try {
         }
       );
       console.log(videoItems);
-      const isFinished = (el) => {
+      const isFinished2 = (el) => {
         var _a;
         return !!((_a = el.parentElement) == null ? void 0 : _a.querySelector(".finish-icon")) || textSaysFinished(el);
       };
       const currentIndex = videoItems.findIndex((el) => el.classList.contains("current"));
       if (currentIndex !== -1) {
         for (let i = currentIndex + (opts.next ? 1 : 0); i < videoItems.length; i++) {
-          if (opts.restudy || isFinished(videoItems[i]) === false) {
+          if (opts.restudy || isFinished2(videoItems[i]) === false) {
             return videoItems[i];
           }
         }
         return void 0;
       }
-      return opts.restudy ? videoItems[0] : videoItems.find((el) => isFinished(el) === false);
+      return opts.restudy ? videoItems[0] : videoItems.find((el) => isFinished2(el) === false);
     }
     hideDialog() {
       lib.$$el(".el-overlay,.el-dialog").forEach((dialog) => {
@@ -10429,17 +10431,17 @@ try {
         }
       }).flat();
       console.log(jobs);
-      const isFinished = (el) => !!el.querySelector(".finish-icon") || textSaysFinished(el);
+      const isFinished2 = (el) => !!el.querySelector(".finish-icon") || textSaysFinished(el);
       const currentIndex = jobs.findIndex((el) => el.classList.contains("current"));
       if (currentIndex !== -1) {
         for (let i = currentIndex + (opts.next ? 1 : 0); i < jobs.length; i++) {
-          if (opts.restudy || isFinished(jobs[i]) === false) {
+          if (opts.restudy || isFinished2(jobs[i]) === false) {
             return jobs[i];
           }
         }
         return void 0;
       }
-      return opts.restudy ? jobs[0] : jobs.find((el) => isFinished(el) === false);
+      return opts.restudy ? jobs[0] : jobs.find((el) => isFinished2(el) === false);
     }
     hideDialog() {
       lib.$$el(".el-overlay,.el-dialog").forEach((dialog) => {
@@ -10798,7 +10800,7 @@ try {
             }
           });
           this.onConfigChange("volume", (curr) => {
-            state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
+            state$8.study.currentMedia && (state$8.study.currentMedia.volume = curr);
           });
           this.onConfigChange("playbackRate", (curr) => {
             if (typeof curr === "string") {
@@ -10816,9 +10818,9 @@ try {
           closeDialogRead();
           recordStudyTimeLoop();
           applyAutoStop(this.cfg.stopTimeMinutes);
-          clearInterval(state$7.study.stopRefreshTimer);
-          state$7.study.stopRefreshTimer = setInterval(() => {
-            if (state$7.study.stop)
+          clearInterval(state$8.study.stopRefreshTimer);
+          state$8.study.stopRefreshTimer = setInterval(() => {
+            if (state$8.study.stop)
               return;
             applyAutoStop(this.cfg.stopTimeMinutes);
           }, 20 * 1e3);
@@ -10833,7 +10835,7 @@ try {
           lib.$message.info({ content: "3秒后开始学习", duration: 3 });
           const remotePage = processor.remotePage;
           const study2 = async (opts) => {
-            if (state$7.study.stop === false) {
+            if (state$8.study.stop === false) {
               if (!opts.next)
                 await waitJobListSettled();
               let item = processor.getNext({ next: opts.next, restudy: this.cfg.restudy });
@@ -11132,7 +11134,7 @@ try {
                 return (_b = works[0]) == null ? void 0 : _b.info;
               };
               this.onConfigChange("volume", (curr) => {
-                state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
+                state$8.study.currentMedia && (state$8.study.currentMedia.volume = curr);
               });
               this.onConfigChange("playbackRate", (curr) => {
                 if (typeof curr === "string") {
@@ -11203,12 +11205,12 @@ try {
                     await lib.$.sleep(1e3);
                     const media = await waitForMedia({ timeout: 5 * 1e3, filter: (m) => m.src.length !== 0 });
                     await lib.$.sleep(1e3);
-                    state$7.study.currentMedia = media;
+                    state$8.study.currentMedia = media;
                     if (media) {
                       media.currentTime = 1;
                       media.volume = this.cfg.volume;
                     }
-                    return state$7.study.currentMedia;
+                    return state$8.study.currentMedia;
                   } catch (e) {
                     $console.log("视频加载失败，请尝试刷新页面！：" + e);
                     lib.$message.error({ content: "视频加载失败，请尝试刷新页面！：" + e, duration: 0 });
@@ -11224,7 +11226,7 @@ try {
                   $console.log("正在学习：" + cn);
                 });
                 video.onpause = async () => {
-                  if (!(video == null ? void 0 : video.ended) && state$7.study.stop === false) {
+                  if (!(video == null ? void 0 : video.ended) && state$8.study.stop === false) {
                     await lib.$.sleep(1e3);
                     video == null ? void 0 : video.play();
                   }
@@ -11363,7 +11365,7 @@ try {
             );
           };
           this.onConfigChange("volume", (curr) => {
-            state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
+            state$8.study.currentMedia && (state$8.study.currentMedia.volume = curr);
           });
           const nextElement = () => {
             const list = document.querySelectorAll(".file-item");
@@ -11510,7 +11512,7 @@ try {
             $console.log(`视频内题目策略已切换：${processor.quizStrategy === "ai" ? "AI题库答题" : "随机答题"}`);
           });
           this.onConfigChange("volume", (curr) => {
-            state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
+            state$8.study.currentMedia && (state$8.study.currentMedia.volume = curr);
           });
           this.onConfigChange("playbackRate", async (curr) => {
             if (typeof curr === "string") {
@@ -11673,12 +11675,12 @@ try {
                 await lib.$.sleep(1e3);
                 const media = await waitForMedia({ timeout: 5 * 1e3, filter: (m) => m.src.length !== 0 });
                 await lib.$.sleep(1e3);
-                state$7.study.currentMedia = media;
+                state$8.study.currentMedia = media;
                 if (media) {
                   media.currentTime = 1;
                   media.volume = this.cfg.volume;
                 }
-                return state$7.study.currentMedia;
+                return state$8.study.currentMedia;
               } catch (e) {
                 reload(e);
               }
@@ -11718,7 +11720,7 @@ try {
             video.onpause = async () => {
               if (!(video == null ? void 0 : video.isConnected))
                 return;
-              if (!(video == null ? void 0 : video.ended) && state$7.study.stop === false) {
+              if (!(video == null ? void 0 : video.ended) && state$8.study.stop === false) {
                 await lib.$.sleep(1e3);
                 video == null ? void 0 : video.play();
               }
@@ -11775,7 +11777,7 @@ try {
           }
           const processor = new Hike();
           this.onConfigChange("volume", (curr) => {
-            state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
+            state$8.study.currentMedia && (state$8.study.currentMedia.volume = curr);
           });
           this.onConfigChange("playbackRate", async (curr) => {
             if (typeof curr === "string") {
@@ -11866,12 +11868,12 @@ try {
                 await lib.$.sleep(1e3);
                 const media = await waitForMedia({ timeout: 5 * 1e3, filter: (m) => m.src.length !== 0 });
                 await lib.$.sleep(1e3);
-                state$7.study.currentMedia = media;
+                state$8.study.currentMedia = media;
                 if (media) {
                   media.currentTime = 1;
                   media.volume = this.cfg.volume;
                 }
-                return state$7.study.currentMedia;
+                return state$8.study.currentMedia;
               } catch (e) {
                 reload(e);
               }
@@ -11908,7 +11910,7 @@ try {
             video.onpause = async () => {
               if (!(video == null ? void 0 : video.isConnected))
                 return;
-              if (!(video == null ? void 0 : video.ended) && state$7.study.stop === false) {
+              if (!(video == null ? void 0 : video.ended) && state$8.study.stop === false) {
                 await lib.$.sleep(1e3);
                 video == null ? void 0 : video.play();
               }
@@ -11959,7 +11961,7 @@ try {
           }
           const processor = new HikeV2();
           this.onConfigChange("volume", (curr) => {
-            state$7.study.currentMedia && (state$7.study.currentMedia.volume = curr);
+            state$8.study.currentMedia && (state$8.study.currentMedia.volume = curr);
           });
           const next2 = async () => {
             var _a;
@@ -12032,12 +12034,12 @@ try {
                 await lib.$.sleep(1e3);
                 const media = await waitForMedia({ timeout: 5 * 1e3, filter: (m) => m.src.length !== 0 });
                 await lib.$.sleep(1e3);
-                state$7.study.currentMedia = media;
+                state$8.study.currentMedia = media;
                 if (media) {
                   media.currentTime = 1;
                   media.volume = this.cfg.volume;
                 }
-                return state$7.study.currentMedia;
+                return state$8.study.currentMedia;
               } catch (e) {
                 reload(e);
               }
@@ -12064,7 +12066,7 @@ try {
             video.onpause = async () => {
               if (!(video == null ? void 0 : video.isConnected))
                 return;
-              if (!(video == null ? void 0 : video.ended) && state$7.study.stop === false) {
+              if (!(video == null ? void 0 : video.ended) && state$8.study.stop === false) {
                 await lib.$.sleep(1e3);
                 video == null ? void 0 : video.play();
               }
@@ -12197,12 +12199,12 @@ try {
         await lib.$.sleep(1e3);
         const media = await waitForMedia({ timeout: 10 * 1e3 });
         await lib.$.sleep(1e3);
-        state$7.study.currentMedia = media;
+        state$8.study.currentMedia = media;
         if (media) {
           media.currentTime = 1;
           media.volume = options.volume;
         }
-        return state$7.study.currentMedia;
+        return state$8.study.currentMedia;
       } catch (e) {
         return await reload(e);
       }
@@ -12230,7 +12232,7 @@ try {
     }, 3e3);
     playMedia(() => video == null ? void 0 : video.play());
     video.onpause = async () => {
-      if (!(video == null ? void 0 : video.ended) && state$7.study.stop === false) {
+      if (!(video == null ? void 0 : video.ended) && state$8.study.stop === false) {
         await waitForCaptcha();
         await lib.$.sleep(1e3);
         video == null ? void 0 : video.play();
@@ -12245,7 +12247,7 @@ try {
     const media = await waitForMedia();
     media.volume = options.volume;
     media.currentTime = 1;
-    state$7.study.currentMedia = media;
+    state$8.study.currentMedia = media;
     playMedia(() => media == null ? void 0 : media.play());
     media.onpause = async () => {
       if (!(media == null ? void 0 : media.ended)) {
@@ -13368,7 +13370,7 @@ try {
         autoStop(minutes);
       } else if (!override.pause) {
         autoStop(0);
-        state$7.study.stopMessage = lib.$message.info({
+        state$8.study.stopMessage = lib.$message.info({
           duration: 0,
           content: "桌面定时任务进行中：方案设置了到点不处理，本页的定时停止已关闭"
         });
@@ -13382,28 +13384,28 @@ try {
   }
   function autoStop(stopTime, opts) {
     var _a;
-    clearInterval(state$7.study.stopInterval);
-    (_a = state$7.study.stopMessage) == null ? void 0 : _a.remove();
+    clearInterval(state$8.study.stopInterval);
+    (_a = state$8.study.stopMessage) == null ? void 0 : _a.remove();
     const minutes = parseFloat(String(stopTime));
     if (!isFinite(minutes) || minutes <= 0)
       return;
     let stopCount = Math.round(minutes * 60);
-    state$7.study.stopInterval = setInterval(() => {
+    state$8.study.stopInterval = setInterval(() => {
       var _a2;
       if (stopCount > 0) {
         if (getPopupCaptcha() === null) {
           stopCount--;
         }
       } else {
-        clearInterval(state$7.study.stopInterval);
-        state$7.study.stop = true;
+        clearInterval(state$8.study.stopInterval);
+        state$8.study.stop = true;
         (_a2 = lib.$el("video")) == null ? void 0 : _a2.pause();
         lib.$modal.alert({ content: "脚本暂停，已获得今日平时分，如需继续观看，请刷新页面。" });
       }
     }, 1e3);
     const date = new Date();
     date.setSeconds(date.getSeconds() + Math.round(minutes * 60));
-    state$7.study.stopMessage = lib.$message.info({
+    state$8.study.stopMessage = lib.$message.info({
       duration: 0,
       content: (opts == null ? void 0 : opts.desktop) ? `桌面定时任务将在 ${date.toLocaleTimeString()} 暂停（${formatStopDuration(minutes)}后）` : `在 ${date.toLocaleTimeString()} 脚本将自动暂停（${formatStopDuration(minutes)}后）`
     });
@@ -16109,7 +16111,7 @@ try {
     top$1.currentMedia = top$1.currentMedia || void 0;
   } catch {
   }
-  const state$6 = {
+  const state$7 = {
     study: {
       videojs: /* @__PURE__ */ Object.create({}),
       hacked: false,
@@ -16313,8 +16315,8 @@ try {
           if (!((_a = CommonProject.scripts.settings.cfg.answererWrappers) == null ? void 0 : _a.length)) {
             answerWrapperEmptyWarning(10);
           }
-          this.offConfigChange(state$6.study.playbackRateWarningListenerId);
-          state$6.study.playbackRateWarningListenerId = this.onConfigChange("playbackRate", (playbackRate2) => {
+          this.offConfigChange(state$7.study.playbackRateWarningListenerId);
+          state$7.study.playbackRateWarningListenerId = this.onConfigChange("playbackRate", (playbackRate2) => {
             if (playbackRate2 > 2) {
               lib.$modal.alert({
                 title: "高倍速警告",
@@ -17011,7 +17013,7 @@ try {
     }
   };
   function rateHack() {
-    state$6.study.hacked = false;
+    state$7.study.hacked = false;
     let dragCount = 0;
     try {
       hack();
@@ -17024,10 +17026,10 @@ try {
       const videojs = lib.$gm.unsafeWindow.videojs;
       const Ext = lib.$gm.unsafeWindow.Ext;
       if (typeof videojs !== "undefined" && typeof Ext !== "undefined") {
-        if (state$6.study.hacked) {
+        if (state$7.study.hacked) {
           return;
         }
-        state$6.study.hacked = true;
+        state$7.study.hacked = true;
         const _origin = videojs.getPlugin("seekBarControl");
         const plugin = videojs.extend(videojs.getPlugin("plugin"), {
           constructor: function(videoExt, data) {
@@ -17357,8 +17359,8 @@ try {
     return job2;
   }
   function fixedVideoProgress() {
-    if (state$6.study.videojs) {
-      const { bar } = domSearch({ bar: ".vjs-control-bar" }, state$6.study.videojs);
+    if (state$7.study.videojs) {
+      const { bar } = domSearch({ bar: ".vjs-control-bar" }, state$7.study.videojs);
       if (bar) {
         bar.style.opacity = "1";
       }
@@ -17373,7 +17375,7 @@ try {
         $console.error("视频检测不到，请尝试刷新或者手动切换下一章。");
         return;
       }
-      state$6.study.videojs = videojs;
+      state$7.study.videojs = videojs;
       top$1.currentMedia = media;
       fixedVideoProgress();
       if (setting.videoQuizStrategy === "random" || setting.videoQuizStrategy === "ai") {
@@ -17869,7 +17871,7 @@ try {
       CommonProject.scripts.render.methods.minimize();
     })
   };
-  const state$5 = {
+  const state$6 = {
     study: {
       currentMedia: void 0,
       currentStudyLockId: 0,
@@ -17885,10 +17887,10 @@ try {
     constructor() {
       _StudyLock.auto_inc++;
       this.id = _StudyLock.auto_inc;
-      state$5.study.currentStudyLockId = this.id;
+      state$6.study.currentStudyLockId = this.id;
     }
     canStudy() {
-      return this.id === state$5.study.currentStudyLockId;
+      return this.id === state$6.study.currentStudyLockId;
     }
     static getLock() {
       return new _StudyLock();
@@ -17962,9 +17964,9 @@ try {
           }
           CommonProject.scripts.render.methods.pin(this);
           this.onConfigChange("playbackRate", (playbackRate2) => {
-            state$5.study.currentMedia && (state$5.study.currentMedia.playbackRate = parseFloat(playbackRate2.toString()));
+            state$6.study.currentMedia && (state$6.study.currentMedia.playbackRate = parseFloat(playbackRate2.toString()));
           });
-          this.onConfigChange("volume", (v) => state$5.study.currentMedia && (state$5.study.currentMedia.volume = v));
+          this.onConfigChange("volume", (v) => state$6.study.currentMedia && (state$6.study.currentMedia.volume = v));
           const study2 = async () => {
             var _a;
             const res = await Promise.race([waitForElement("video, audio"), waitForElement(".docBox")]);
@@ -17974,7 +17976,7 @@ try {
               $console.log(`任务 ${jobName} 开始。`);
               if (document.querySelector("video, audio")) {
                 const media = await waitForMedia();
-                state$5.study.currentMedia = media;
+                state$6.study.currentMedia = media;
                 media.volume = this.cfg.volume;
                 await new Promise((resolve, reject) => {
                   try {
@@ -18068,8 +18070,8 @@ try {
           }
         },
         onrender() {
-          this.offConfigChange(state$5.study.playbackRateWarningListenerId);
-          state$5.study.playbackRateWarningListenerId = this.onConfigChange("playbackRate", (playbackRate2) => {
+          this.offConfigChange(state$6.study.playbackRateWarningListenerId);
+          state$6.study.playbackRateWarningListenerId = this.onConfigChange("playbackRate", (playbackRate2) => {
             if (playbackRate2 > 4) {
               lib.$modal.alert({
                 title: "高倍速警告",
@@ -18082,10 +18084,10 @@ try {
           var _a;
           CommonProject.scripts.render.methods.pin(this);
           await $.sleep(3e3);
-          this.onConfigChange("volume", (v) => state$5.study.currentMedia && (state$5.study.currentMedia.volume = v));
+          this.onConfigChange("volume", (v) => state$6.study.currentMedia && (state$6.study.currentMedia.volume = v));
           this.onConfigChange(
             "playbackRate",
-            (r) => state$5.study.currentMedia && (state$5.study.currentMedia.playbackRate = parseFloat(r.toString()))
+            (r) => state$6.study.currentMedia && (state$6.study.currentMedia.playbackRate = parseFloat(r.toString()))
           );
           const mainContentWin = (_a = lib.$el("#mainContent")) == null ? void 0 : _a.contentWindow;
           if (mainContentWin) {
@@ -18142,7 +18144,7 @@ try {
                 $console.log("视频/音频播放中...");
                 try {
                   const media = await waitForMedia({ root: doc });
-                  state$5.study.currentMedia = media;
+                  state$6.study.currentMedia = media;
                   media.playbackRate = parseFloat(this.cfg.playbackRate.toString());
                   media.volume = this.cfg.volume;
                   media.currentTime = 0;
@@ -18306,13 +18308,13 @@ try {
         async oncomplete(type) {
           CommonProject.scripts.render.methods.pin(this);
           this.onConfigChange("volume", (val) => {
-            if (state$5.study.currentMedia) {
-              state$5.study.currentMedia.volume = parseFloat(val.toString());
+            if (state$6.study.currentMedia) {
+              state$6.study.currentMedia.volume = parseFloat(val.toString());
             }
           });
           this.onConfigChange("playbackRate", (val) => {
-            if (state$5.study.currentMedia) {
-              state$5.study.currentMedia.playbackRate = parseFloat(val.toString());
+            if (state$6.study.currentMedia) {
+              state$6.study.currentMedia.playbackRate = parseFloat(val.toString());
             }
           });
           const waitForLoad2 = () => {
@@ -18509,7 +18511,7 @@ try {
     const media = await waitForMedia();
     media.volume = parseFloat(IcveMoocProject.scripts["ai-study"].cfg.volume.toString());
     media.playbackRate = parseFloat(IcveMoocProject.scripts["ai-study"].cfg.playbackRate.toString());
-    state$5.study.currentMedia = media;
+    state$6.study.currentMedia = media;
     const success = await playMedia(() => media.play());
     if (!success) {
       return;
@@ -18830,7 +18832,7 @@ try {
       }, 60 * 1e3);
     });
   }
-  const state$4 = {
+  const state$5 = {
     studying: false,
     studyingId: "",
     media: null
@@ -18976,20 +18978,20 @@ try {
               if (!id) {
                 return;
               }
-              if (state$4.studying && id === state$4.studyingId) {
+              if (state$5.studying && id === state$5.studyingId) {
                 return;
               }
-              state$4.studyingId = id;
-              state$4.studying = true;
+              state$5.studyingId = id;
+              state$5.studying = true;
               CommonProject.scripts.render.methods.pin(this);
               this.onConfigChange("volume", (val) => {
-                if (state$4.media) {
-                  state$4.media.volume = parseFloat(val.toString());
+                if (state$5.media) {
+                  state$5.media.volume = parseFloat(val.toString());
                 }
               });
               this.onConfigChange("playbackRate", (val) => {
-                if (state$4.media) {
-                  state$4.media.playbackRate = parseFloat(val.toString());
+                if (state$5.media) {
+                  state$5.media.playbackRate = parseFloat(val.toString());
                 }
               });
               await waitForLoad();
@@ -19111,7 +19113,7 @@ try {
     const media = await waitForMedia();
     media.volume = parseFloat(ZJYProject.scripts.study.cfg.volume.toString());
     media.playbackRate = parseFloat(ZJYProject.scripts.study.cfg.playbackRate.toString());
-    state$4.media = media;
+    state$5.media = media;
     const success = await playMedia(() => media.play());
     if (!success) {
       return;
@@ -19211,7 +19213,7 @@ try {
         duration: 0,
         extraTitle: "职教云学习脚本"
       });
-      state$4.studying = false;
+      state$5.studying = false;
     }
   }
   function getCourseDataInClassroomNowPage() {
@@ -19418,7 +19420,7 @@ try {
     lib.$message[type](msg2);
     $console[type](msg2);
   };
-  const state$3 = {
+  const state$4 = {
     currentMedia: void 0,
     currentUrlHash: "",
     currentRunningScriptName: "",
@@ -19436,23 +19438,23 @@ try {
           setInterval(() => {
             var _a, _b;
             const hash = new URL(window.location.href).hash;
-            if (state$3.currentUrlHash !== hash) {
-              state$3.currentRunningScriptName = "";
+            if (state$4.currentUrlHash !== hash) {
+              state$4.currentRunningScriptName = "";
             }
-            state$3.currentUrlHash = hash;
+            state$4.currentUrlHash = hash;
             for (const key in ICourseProject.scripts) {
               if (Object.prototype.hasOwnProperty.call(ICourseProject.scripts, key)) {
                 const script2 = ICourseProject.scripts[key];
                 const runAtHash = Array.isArray(script2.cfg.runAtHash) ? script2.cfg.runAtHash : [script2.cfg.runAtHash];
-                if (runAtHash.length && runAtHash.some((h2) => state$3.currentUrlHash.includes(h2))) {
-                  if (state$3.currentRunningScriptName !== script2.name) {
-                    state$3.currentRunningScriptName = script2.name;
-                    state$3.current_job_id = Math.random().toString(16).slice(2);
+                if (runAtHash.length && runAtHash.some((h2) => state$4.currentUrlHash.includes(h2))) {
+                  if (state$4.currentRunningScriptName !== script2.name) {
+                    state$4.currentRunningScriptName = script2.name;
+                    state$4.current_job_id = Math.random().toString(16).slice(2);
                     (_b = (_a = script2.methods) == null ? void 0 : _a.main) == null ? void 0 : _b.call(_a, {
                       canRun: () => {
-                        return state$3.currentUrlHash && runAtHash.some((h2) => state$3.currentUrlHash.includes(h2));
+                        return state$4.currentUrlHash && runAtHash.some((h2) => state$4.currentUrlHash.includes(h2));
                       },
-                      job_id: state$3.current_job_id
+                      job_id: state$4.current_job_id
                     });
                   }
                   break;
@@ -19477,7 +19479,7 @@ try {
         methods() {
           return {
             main: async () => {
-              console.log(state$3, this.cfg.runAtHash);
+              console.log(state$4, this.cfg.runAtHash);
               CommonProject.scripts.render.methods.pin(this);
             }
           };
@@ -19530,9 +19532,9 @@ try {
         },
         oncomplete() {
           this.onConfigChange("playbackRate", (playbackRate2) => {
-            state$3.currentMedia && (state$3.currentMedia.playbackRate = parseFloat(playbackRate2.toString()));
+            state$4.currentMedia && (state$4.currentMedia.playbackRate = parseFloat(playbackRate2.toString()));
           });
-          this.onConfigChange("volume", (v) => state$3.currentMedia && (state$3.currentMedia.volume = v));
+          this.onConfigChange("volume", (v) => state$4.currentMedia && (state$4.currentMedia.volume = v));
         },
         methods() {
           return {
@@ -19544,7 +19546,7 @@ try {
               }
               $render.moveToEdge();
               const handleVideoTest = async () => {
-                if (!canRun() || job_id !== state$3.current_job_id)
+                if (!canRun() || job_id !== state$4.current_job_id)
                   return;
                 setTimeout(async () => {
                   const question = document.querySelector(".u-questionItem");
@@ -19957,7 +19959,7 @@ try {
       waitForMedia().then((video) => {
         video.playbackRate = playbackRate2;
         video.volume = volume2;
-        state$3.currentMedia = video;
+        state$4.currentMedia = video;
         playMedia(() => video == null ? void 0 : video.play());
         video.onpause = async () => {
           if (!(video == null ? void 0 : video.ended)) {
@@ -20062,7 +20064,7 @@ try {
     }
   }
   var yuketangFontMapRaw = '{\n  "一": "母",\n  "万": "度",\n  "三": "损",\n  "上": "合",\n  "下": "两",\n  "不": "先",\n  "与": "里",\n  "专": "售",\n  "且": "断",\n  "世": "气",\n  "业": "施",\n  "东": "面",\n  "两": "回",\n  "严": "通",\n  "个": "封",\n  "中": "工",\n  "临": "极",\n  "为": "场",\n  "主": "创",\n  "么": "扩",\n  "义": "提",\n  "之": "全",\n  "乐": "验",\n  "乙": "估",\n  "也": "变",\n  "习": "故",\n  "书": "难",\n  "买": "以",\n  "乳": "员",\n  "了": "轮",\n  "予": "备",\n  "争": "产",\n  "事": "须",\n  "二": "格",\n  "于": "马",\n  "互": "理",\n  "五": "退",\n  "亚": "温",\n  "些": "在",\n  "交": "币",\n  "产": "申",\n  "人": "他",\n  "什": "直",\n  "介": "釆",\n  "从": "研",\n  "他": "们",\n  "付": "杂",\n  "代": "记",\n  "令": "免",\n  "以": "仿",\n  "仪": "固",\n  "们": "石",\n  "件": "用",\n  "价": "酸",\n  "任": "元",\n  "份": "海",\n  "仿": "养",\n  "企": "乐",\n  "众": "阳",\n  "优": "可",\n  "会": "呼",\n  "传": "慢",\n  "伤": "天",\n  "估": "于",\n  "但": "状",\n  "位": "密",\n  "低": "维",\n  "住": "完",\n  "体": "足",\n  "何": "花",\n  "余": "描",\n  "作": "形",\n  "你": "低",\n  "使": "南",\n  "例": "率",\n  "供": "圆",\n  "依": "升",\n  "侧": "充",\n  "便": "循",\n  "促": "打",\n  "保": "急",\n  "信": "运",\n  "修": "外",\n  "借": "事",\n  "债": "织",\n  "值": "围",\n  "假": "我",\n  "偏": "软",\n  "做": "衡",\n  "停": "旅",\n  "健": "择",\n  "储": "符",\n  "像": "内",\n  "儿": "社",\n  "元": "死",\n  "充": "支",\n  "先": "张",\n  "光": "段",\n  "克": "初",\n  "免": "费",\n  "党": "普",\n  "入": "践",\n  "全": "益",\n  "公": "括",\n  "共": "女",\n  "关": "规",\n  "兴": "况",\n  "其": "银",\n  "具": "布",\n  "养": "之",\n  "内": "训",\n  "再": "质",\n  "写": "脂",\n  "军": "前",\n  "农": "真",\n  "冲": "某",\n  "决": "泽",\n  "况": "材",\n  "冷": "食",\n  "准": "首",\n  "减": "每",\n  "凝": "器",\n  "几": "建",\n  "出": "折",\n  "击": "反",\n  "函": "诊",\n  "分": "释",\n  "切": "票",\n  "划": "名",\n  "列": "住",\n  "则": "敏",\n  "创": "着",\n  "初": "视",\n  "判": "照",\n  "利": "容",\n  "别": "三",\n  "到": "日",\n  "制": "筑",\n  "剂": "余",\n  "前": "模",\n  "力": "作",\n  "办": "频",\n  "功": "差",\n  "加": "终",\n  "务": "家",\n  "动": "毛",\n  "助": "监",\n  "劳": "胎",\n  "势": "手",\n  "包": "叶",\n  "化": "降",\n  "北": "公",\n  "区": "负",\n  "医": "门",\n  "十": "什",\n  "升": "长",\n  "半": "距",\n  "华": "取",\n  "协": "正",\n  "单": "换",\n  "南": "适",\n  "卡": "引",\n  "卫": "疾",\n  "印": "王",\n  "危": "总",\n  "即": "位",\n  "历": "药",\n  "压": "战",\n  "原": "配",\n  "去": "十",\n  "参": "书",\n  "又": "投",\n  "及": "静",\n  "双": "自",\n  "反": "被",\n  "发": "法",\n  "取": "去",\n  "受": "甲",\n  "变": "高",\n  "叙": "要",\n  "口": "假",\n  "古": "非",\n  "句": "重",\n  "只": "优",\n  "可": "势",\n  "台": "机",\n  "史": "职",\n  "右": "表",\n  "叶": "爱",\n  "号": "超",\n  "司": "承",\n  "各": "空",\n  "合": "买",\n  "同": "列",\n  "名": "律",\n  "后": "脑",\n  "向": "纤",\n  "否": "审",\n  "含": "件",\n  "吸": "起",\n  "告": "伤",\n  "员": "缺",\n  "周": "溶",\n  "呼": "突",\n  "命": "右",\n  "和": "那",\n  "品": "函",\n  "响": "革",\n  "哪": "或",\n  "售": "种",\n  "商": "线",\n  "善": "议",\n  "器": "违",\n  "四": "美",\n  "回": "思",\n  "因": "和",\n  "团": "象",\n  "围": "借",\n  "固": "续",\n  "国": "输",\n  "图": "眼",\n  "圆": "调",\n  "土": "身",\n  "在": "校",\n  "地": "束",\n  "场": "此",\n  "址": "共",\n  "均": "式",\n  "坏": "办",\n  "块": "当",\n  "坚": "更",\n  "型": "糖",\n  "城": "者",\n  "域": "细",\n  "培": "始",\n  "基": "弹",\n  "塞": "化",\n  "填": "你",\n  "境": "个",\n  "增": "尿",\n  "士": "得",\n  "声": "营",\n  "处": "分",\n  "备": "动",\n  "复": "幼",\n  "外": "严",\n  "多": "端",\n  "够": "疗",\n  "大": "约",\n  "天": "并",\n  "太": "址",\n  "央": "成",\n  "失": "将",\n  "头": "测",\n  "女": "融",\n  "好": "活",\n  "如": "兴",\n  "始": "需",\n  "委": "情",\n  "子": "碱",\n  "孔": "协",\n  "字": "粒",\n  "存": "司",\n  "学": "点",\n  "它": "院",\n  "安": "持",\n  "宋": "果",\n  "完": "签",\n  "定": "太",\n  "宜": "发",\n  "实": "何",\n  "审": "信",\n  "客": "话",\n  "室": "改",\n  "宫": "如",\n  "害": "定",\n  "家": "系",\n  "容": "黑",\n  "密": "该",\n  "富": "侧",\n  "察": "饮",\n  "对": "国",\n  "导": "排",\n  "封": "载",\n  "射": "务",\n  "将": "腺",\n  "小": "语",\n  "少": "救",\n  "尔": "清",\n  "就": "间",\n  "尺": "子",\n  "尿": "交",\n  "局": "水",\n  "层": "修",\n  "展": "闭",\n  "属": "有",\n  "山": "网",\n  "岁": "头",\n  "工": "青",\n  "左": "好",\n  "差": "米",\n  "己": "助",\n  "已": "辑",\n  "巴": "习",\n  "币": "际",\n  "市": "很",\n  "布": "杆",\n  "师": "划",\n  "带": "已",\n  "常": "到",\n  "干": "账",\n  "平": "息",\n  "年": "写",\n  "并": "则",\n  "幼": "层",\n  "广": "安",\n  "床": "古",\n  "序": "破",\n  "库": "论",\n  "应": "所",\n  "底": "念",\n  "府": "牙",\n  "度": "若",\n  "康": "程",\n  "延": "周",\n  "建": "次",\n  "开": "强",\n  "异": "评",\n  "式": "深",\n  "引": "级",\n  "张": "稳",\n  "弹": "时",\n  "强": "早",\n  "当": "磁",\n  "录": "算",\n  "形": "肺",\n  "影": "介",\n  "往": "予",\n  "征": "血",\n  "径": "灭",\n  "很": "再",\n  "律": "尔",\n  "得": "整",\n  "循": "画",\n  "微": "病",\n  "德": "略",\n  "心": "的",\n  "必": "角",\n  "志": "复",\n  "快": "文",\n  "念": "临",\n  "态": "意",\n  "思": "都",\n  "急": "剂",\n  "性": "士",\n  "总": "附",\n  "息": "劳",\n  "患": "育",\n  "情": "功",\n  "想": "压",\n  "意": "教",\n  "感": "亚",\n  "慢": "标",\n  "成": "导",\n  "我": "皮",\n  "或": "微",\n  "战": "氧",\n  "户": "针",\n  "房": "库",\n  "所": "说",\n  "手": "阴",\n  "才": "考",\n  "打": "究",\n  "托": "富",\n  "执": "障",\n  "扩": "属",\n  "批": "群",\n  "承": "景",\n  "技": "一",\n  "把": "坚",\n  "投": "致",\n  "抗": "操",\n  "折": "阻",\n  "护": "染",\n  "报": "炎",\n  "抽": "款",\n  "担": "期",\n  "拉": "裂",\n  "择": "二",\n  "括": "检",\n  "持": "展",\n  "指": "集",\n  "按": "塞",\n  "损": "字",\n  "换": "范",\n  "据": "然",\n  "排": "互",\n  "接": "义",\n  "控": "装",\n  "推": "德",\n  "措": "笞",\n  "描": "疫",\n  "提": "使",\n  "播": "响",\n  "操": "胸",\n  "支": "激",\n  "收": "人",\n  "改": "命",\n  "放": "凝",\n  "政": "球",\n  "故": "相",\n  "效": "序",\n  "敏": "么",\n  "救": "性",\n  "教": "连",\n  "散": "近",\n  "数": "停",\n  "整": "车",\n  "文": "基",\n  "斗": "干",\n  "料": "样",\n  "断": "品",\n  "斯": "因",\n  "新": "联",\n  "方": "大",\n  "施": "察",\n  "旅": "轻",\n  "旋": "告",\n  "族": "股",\n  "无": "缩",\n  "日": "拉",\n  "早": "队",\n  "时": "据",\n  "明": "岁",\n  "易": "肿",\n  "映": "供",\n  "是": "双",\n  "显": "后",\n  "普": "胃",\n  "景": "其",\n  "曲": "能",\n  "更": "选",\n  "最": "填",\n  "月": "城",\n  "有": "开",\n  "服": "措",\n  "期": "少",\n  "未": "量",\n  "本": "中",\n  "术": "加",\n  "机": "史",\n  "杂": "观",\n  "权": "入",\n  "杆": "西",\n  "李": "移",\n  "材": "卫",\n  "束": "混",\n  "条": "称",\n  "来": "径",\n  "板": "肌",\n  "极": "货",\n  "构": "处",\n  "析": "离",\n  "果": "世",\n  "某": "获",\n  "染": "月",\n  "查": "销",\n  "标": "由",\n  "校": "团",\n  "样": "项",\n  "核": "胞",\n  "根": "板",\n  "格": "判",\n  "案": "识",\n  "档": "防",\n  "检": "偏",\n  "楷": "报",\n  "概": "液",\n  "模": "土",\n  "次": "构",\n  "款": "案",\n  "止": "包",\n  "正": "脉",\n  "此": "力",\n  "步": "击",\n  "死": "特",\n  "段": "多",\n  "母": "对",\n  "每": "斗",\n  "毒": "万",\n  "比": "做",\n  "毛": "图",\n  "民": "传",\n  "气": "决",\n  "氧": "这",\n  "氨": "流",\n  "水": "盘",\n  "求": "章",\n  "汽": "孔",\n  "没": "够",\n  "油": "但",\n  "治": "关",\n  "法": "实",\n  "波": "常",\n  "注": "镜",\n  "泽": "游",\n  "活": "生",\n  "流": "单",\n  "测": "良",\n  "济": "氨",\n  "浓": "脏",\n  "海": "走",\n  "消": "置",\n  "润": "客",\n  "液": "广",\n  "深": "切",\n  "混": "便",\n  "清": "别",\n  "温": "心",\n  "游": "录",\n  "湿": "就",\n  "源": "现",\n  "溶": "矛",\n  "滑": "纳",\n  "满": "族",\n  "激": "制",\n  "火": "四",\n  "灭": "培",\n  "灯": "计",\n  "炎": "注",\n  "点": "税",\n  "热": "远",\n  "然": "财",\n  "照": "环",\n  "燃": "易",\n  "爱": "技",\n  "片": "增",\n  "牙": "控",\n  "物": "治",\n  "特": "农",\n  "状": "达",\n  "独": "艺",\n  "率": "向",\n  "王": "乙",\n  "环": "按",\n  "现": "解",\n  "班": "平",\n  "球": "康",\n  "理": "冲",\n  "生": "浓",\n  "用": "往",\n  "由": "宜",\n  "甲": "各",\n  "申": "言",\n  "电": "见",\n  "男": "问",\n  "画": "患",\n  "界": "指",\n  "留": "委",\n  "略": "上",\n  "疗": "进",\n  "疫": "等",\n  "疾": "即",\n  "病": "局",\n  "症": "播",\n  "痛": "界",\n  "瘤": "效",\n  "癌": "最",\n  "白": "光",\n  "的": "肝",\n  "皮": "接",\n  "益": "责",\n  "监": "盾",\n  "盘": "域",\n  "目": "析",\n  "直": "步",\n  "相": "示",\n  "盾": "路",\n  "看": "继",\n  "真": "根",\n  "眼": "山",\n  "着": "才",\n  "矛": "比",\n  "知": "健",\n  "短": "编",\n  "石": "越",\n  "码": "原",\n  "研": "汽",\n  "破": "异",\n  "础": "确",\n  "硬": "脱",\n  "确": "医",\n  "碱": "本",\n  "磁": "课",\n  "示": "储",\n  "社": "吸",\n  "神": "准",\n  "票": "还",\n  "离": "军",\n  "种": "蛋",\n  "科": "膜",\n  "积": "小",\n  "称": "风",\n  "移": "第",\n  "程": "误",\n  "税": "概",\n  "稳": "又",\n  "究": "铁",\n  "空": "黄",\n  "突": "许",\n  "立": "任",\n  "站": "价",\n  "章": "络",\n  "端": "征",\n  "符": "菌",\n  "第": "滑",\n  "等": "旋",\n  "筑": "查",\n  "答": "键",\n  "策": "抗",\n  "签": "纪",\n  "简": "简",\n  "算": "类",\n  "管": "燃",\n  "米": "领",\n  "类": "护",\n  "粒": "付",\n  "精": "留",\n  "糖": "认",\n  "系": "经",\n  "素": "企",\n  "索": "主",\n  "紧": "胆",\n  "红": "科",\n  "纤": "错",\n  "约": "随",\n  "级": "地",\n  "纪": "冷",\n  "纳": "组",\n  "线": "源",\n  "组": "止",\n  "细": "华",\n  "织": "资",\n  "终": "独",\n  "经": "波",\n  "结": "也",\n  "给": "红",\n  "络": "政",\n  "绝": "为",\n  "统": "火",\n  "继": "预",\n  "续": "了",\n  "维": "善",\n  "综": "知",\n  "编": "片",\n  "缩": "础",\n  "缺": "湿",\n  "网": "句",\n  "置": "术",\n  "美": "斯",\n  "群": "给",\n  "老": "室",\n  "考": "及",\n  "者": "英",\n  "而": "市",\n  "职": "落",\n  "联": "必",\n  "肌": "依",\n  "肝": "房",\n  "肠": "积",\n  "股": "众",\n  "肢": "存",\n  "育": "卡",\n  "肺": "物",\n  "肾": "些",\n  "肿": "管",\n  "胃": "读",\n  "胆": "区",\n  "胎": "散",\n  "胞": "轴",\n  "胸": "腹",\n  "能": "声",\n  "脂": "是",\n  "脉": "金",\n  "脏": "至",\n  "脑": "台",\n  "脱": "未",\n  "腔": "船",\n  "腹": "央",\n  "腺": "失",\n  "膜": "神",\n  "自": "统",\n  "至": "硬",\n  "致": "站",\n  "航": "尺",\n  "般": "利",\n  "船": "短",\n  "良": "坏",\n  "色": "仪",\n  "艺": "从",\n  "节": "服",\n  "花": "透",\n  "若": "宫",\n  "英": "让",\n  "范": "且",\n  "药": "顺",\n  "获": "延",\n  "菌": "减",\n  "营": "肠",\n  "落": "放",\n  "虑": "虫",\n  "虫": "补",\n  "蛋": "速",\n  "融": "历",\n  "血": "电",\n  "行": "绝",\n  "衡": "边",\n  "补": "快",\n  "表": "儿",\n  "被": "府",\n  "裂": "来",\n  "装": "应",\n  "西": "不",\n  "要": "李",\n  "见": "影",\n  "观": "色",\n  "规": "道",\n  "视": "癌",\n  "觉": "而",\n  "角": "限",\n  "解": "触",\n  "触": "巴",\n  "言": "托",\n  "警": "业",\n  "计": "航",\n  "认": "境",\n  "让": "额",\n  "训": "新",\n  "议": "求",\n  "记": "无",\n  "许": "执",\n  "论": "党",\n  "设": "消",\n  "证": "条",\n  "评": "把",\n  "识": "过",\n  "诊": "同",\n  "词": "乳",\n  "试": "送",\n  "话": "印",\n  "该": "否",\n  "语": "警",\n  "误": "曲",\n  "说": "例",\n  "请": "精",\n  "读": "音",\n  "课": "参",\n  "调": "己",\n  "象": "看",\n  "负": "份",\n  "财": "师",\n  "责": "词",\n  "账": "与",\n  "货": "痛",\n  "质": "造",\n  "购": "几",\n  "费": "紧",\n  "资": "带",\n  "走": "节",\n  "起": "没",\n  "超": "宋",\n  "越": "综",\n  "足": "油",\n  "距": "肢",\n  "路": "除",\n  "践": "代",\n  "身": "志",\n  "车": "底",\n  "转": "题",\n  "轮": "白",\n  "软": "料",\n  "轴": "险",\n  "轻": "页",\n  "载": "民",\n  "较": "瘤",\n  "辑": "北",\n  "输": "债",\n  "边": "索",\n  "达": "转",\n  "过": "哪",\n  "运": "映",\n  "近": "商",\n  "还": "行",\n  "这": "左",\n  "进": "均",\n  "远": "担",\n  "违": "床",\n  "连": "收",\n  "述": "权",\n  "退": "证",\n  "送": "它",\n  "适": "射",\n  "选": "毒",\n  "透": "酒",\n  "通": "请",\n  "速": "症",\n  "造": "批",\n  "道": "令",\n  "避": "目",\n  "那": "结",\n  "部": "下",\n  "都": "会",\n  "配": "述",\n  "酒": "策",\n  "酶": "码",\n  "酸": "型",\n  "采": "老",\n  "释": "零",\n  "里": "态",\n  "重": "显",\n  "量": "抽",\n  "金": "含",\n  "针": "想",\n  "钟": "钟",\n  "铁": "害",\n  "银": "口",\n  "链": "只",\n  "销": "觉",\n  "错": "保",\n  "键": "五",\n  "镜": "像",\n  "长": "感",\n  "门": "润",\n  "闭": "楷",\n  "问": "试",\n  "间": "值",\n  "队": "明",\n  "防": "虑",\n  "阳": "专",\n  "阴": "年",\n  "阶": "出",\n  "阻": "促",\n  "附": "阶",\n  "际": "济",\n  "降": "酶",\n  "限": "素",\n  "院": "户",\n  "除": "热",\n  "险": "核",\n  "随": "灯",\n  "隔": "体",\n  "障": "数",\n  "难": "半",\n  "雅": "设",\n  "集": "购",\n  "零": "档",\n  "需": "学",\n  "青": "隔",\n  "静": "叙",\n  "非": "满",\n  "面": "避",\n  "革": "雅",\n  "音": "骨",\n  "页": "部",\n  "项": "争",\n  "顺": "立",\n  "须": "肾",\n  "预": "般",\n  "领": "方",\n  "频": "具",\n  "题": "克",\n  "额": "男",\n  "风": "推",\n  "食": "较",\n  "饮": "东",\n  "首": "班",\n  "马": "链",\n  "验": "号",\n  "骨": "腔",\n  "高": "受",\n  "黄": "块",\n  "黑": "危"\n}';
-  const state$2 = {
+  const state$3 = {
     study: {
       currentMedia: void 0
     }
@@ -20364,10 +20366,10 @@ try {
           await lib.$.sleep(3e3);
           CommonProject.scripts.render.methods.pin(this);
           this.onConfigChange("volume", (curr) => {
-            state$2.study.currentMedia && (state$2.study.currentMedia.volume = curr);
+            state$3.study.currentMedia && (state$3.study.currentMedia.volume = curr);
           });
           this.onConfigChange("playbackRate", (curr) => {
-            state$2.study.currentMedia && (state$2.study.currentMedia.playbackRate = curr);
+            state$3.study.currentMedia && (state$3.study.currentMedia.playbackRate = curr);
           });
           const max_level = 5;
           for (let i = 0; i < max_level; i++) {
@@ -20470,13 +20472,13 @@ try {
       });
       console.log("media", media);
       await lib.$.sleep(1e3);
-      state$2.study.currentMedia = media;
+      state$3.study.currentMedia = media;
       if (media) {
         media.currentTime = 1;
         media.volume = options.volume;
         media.playbackRate = options.playbackRate;
       }
-      return state$2.study.currentMedia;
+      return state$3.study.currentMedia;
     };
     lib.$message.info("开始播放");
     const video = await set();
@@ -20521,9 +20523,9 @@ try {
       });
       console.log("media", media);
       await lib.$.sleep(1e3);
-      state$2.study.currentMedia = media;
+      state$3.study.currentMedia = media;
       media.currentTime = 1;
-      return state$2.study.currentMedia;
+      return state$3.study.currentMedia;
     };
     lib.$message.info("开始播放");
     const video = await set();
@@ -21330,7 +21332,7 @@ try {
     }
     return hours * 3600 + minutes * 60 + seconds;
   }
-  const state$1 = {
+  const state$2 = {
     current_media: null,
     starting: true
   };
@@ -21435,13 +21437,13 @@ try {
       CommonProject.scripts.render.methods.pin(this);
       const rp = createLocalRemotePage();
       this.onConfigChange("playbackRate", (value) => {
-        if (state$1.current_media) {
-          state$1.current_media.playbackRate = value;
+        if (state$2.current_media) {
+          state$2.current_media.playbackRate = value;
         }
       });
       this.onConfigChange("volume", (value) => {
-        if (state$1.current_media) {
-          state$1.current_media.volume = value;
+        if (state$2.current_media) {
+          state$2.current_media.volume = value;
         }
       });
       const pickConfirmButton = () => {
@@ -21511,8 +21513,8 @@ try {
         "开始学习"
       );
       translateBtn.onclick = () => {
-        state$1.starting = !state$1.starting;
-        if (!state$1.starting) {
+        state$2.starting = !state$2.starting;
+        if (!state$2.starting) {
           translateBtn.textContent = "开始学习";
         } else {
           translateBtn.textContent = "学习中...（点击暂停）";
@@ -21564,7 +21566,7 @@ try {
     const wrap = await waitForElement(".question-wrap", { check_period_ms: 3e3 });
     const wrap_content = wrap == null ? void 0 : wrap.childNodes[0];
     const canRun = () => !!(wrap_content == null ? void 0 : wrap_content.isConnected);
-    await waitFor$1(() => state$1.starting);
+    await waitFor$1(() => state$2.starting);
     const matches2 = (...selectors) => {
       return selectors.every((selector) => {
         return !!document.querySelector(selector);
@@ -21609,7 +21611,7 @@ try {
         media.playbackRate = cfg.playbackRate;
         return await new Promise((resolve, reject) => {
           playMedia(() => media.play()).then(() => {
-            state$1.current_media = media;
+            state$2.current_media = media;
             media.volume = cfg.volume;
             media.playbackRate = cfg.playbackRate;
             media.addEventListener("pause", async () => {
@@ -21666,7 +21668,7 @@ try {
         media.playbackRate = cfg.audioPlaybackRate;
         return await new Promise((resolve, reject) => {
           playMedia(() => media.play()).then(() => {
-            state$1.current_media = media;
+            state$2.current_media = media;
             media.addEventListener("pause", async () => {
               if (!canRun())
                 return;
@@ -22055,7 +22057,7 @@ try {
     }
     $msg.success("任务完成，即将进入下一个任务");
     await lib.$.sleep(3 * 1e3);
-    await waitFor$1(() => state$1.starting);
+    await waitFor$1(() => state$2.starting);
     if (!await next(rp)) {
       $msg.success("已完成所有任务");
       CommonProject.scripts.settings.methods.notificationBySetting("已完成所有任务", {
@@ -23044,7 +23046,7 @@ try {
     });
   }
   const API_BASE = "/exam/api/";
-  const state = {
+  const state$1 = {
     running: false,
     media: null
   };
@@ -23308,13 +23310,13 @@ try {
         },
         oncomplete() {
           this.onConfigChange("playbackRate", (rate) => {
-            if (state.media)
-              state.media.playbackRate = parseFloat(rate.toString());
+            if (state$1.media)
+              state$1.media.playbackRate = parseFloat(rate.toString());
           });
           this.onConfigChange("volume", (v) => {
-            if (state.media) {
-              state.media.volume = parseFloat(v.toString());
-              state.media.muted = parseFloat(v.toString()) === 0;
+            if (state$1.media) {
+              state$1.media.volume = parseFloat(v.toString());
+              state$1.media.muted = parseFloat(v.toString()) === 0;
             }
           });
         },
@@ -23328,13 +23330,13 @@ try {
                 lib.$message.error("未找到视频播放器，请确认当前页面已加载完成");
                 return false;
               }
-              state.media = media;
+              state$1.media = media;
               media.muted = vol === 0;
               media.volume = vol;
               media.playbackRate = rate;
               await playMedia(() => media.play());
               const start2 = Date.now();
-              while (state.running) {
+              while (state$1.running) {
                 if (getChapterId() !== id)
                   return true;
                 if (media.ended)
@@ -23352,7 +23354,7 @@ try {
               const vol = parseFloat(this.cfg.volume.toString());
               const autoNext = Boolean(this.cfg.autoNext);
               let guard = 0;
-              while (state.running && guard++ < 500) {
+              while (state$1.running && guard++ < 500) {
                 const id = getChapterId();
                 if (!id) {
                   lib.$message.error("当前不在视频播放页面，请进入课程视频后再运行");
@@ -23360,7 +23362,7 @@ try {
                 }
                 lib.$message.info("正在学习当前小节…");
                 const done = await this.methods.playOne(id, rate, vol);
-                if (!done || !state.running)
+                if (!done || !state$1.running)
                   return;
                 if (!autoNext) {
                   lib.$message.success("当前小节已播放完毕");
@@ -23404,7 +23406,7 @@ try {
               }
               const batch = Math.max(60, Math.min(7200, Math.round(Number(this.cfg.batchMinutes) * 60)));
               lib.$message.info(`需补 ${Math.ceil(remain / 60)} 分钟，开始提交…`);
-              while (remain > 0 && state.running) {
+              while (remain > 0 && state$1.running) {
                 const duration = Math.min(batch, remain);
                 await api("app/user-exam-task/student-learning-duration", {
                   method: "POST",
@@ -23421,14 +23423,14 @@ try {
               }
             },
             main: async () => {
-              if (state.running) {
-                state.running = false;
-                if (state.media && !state.media.paused)
-                  state.media.pause();
+              if (state$1.running) {
+                state$1.running = false;
+                if (state$1.media && !state$1.media.paused)
+                  state$1.media.pause();
                 lib.$message.warn("已停止");
                 return;
               }
-              state.running = true;
+              state$1.running = true;
               CommonProject.scripts.render.methods.pin(this);
               try {
                 if (this.cfg.mode === "fast") {
@@ -23439,7 +23441,7 @@ try {
               } catch (err) {
                 lib.$message.error("运行出错：" + String(err));
               } finally {
-                state.running = false;
+                state$1.running = false;
               }
             }
           };
@@ -23467,8 +23469,8 @@ try {
               clearInterval(timer);
               return;
             }
-            btn.textContent = state.running ? "停止" : "开始学习";
-            tip.textContent = !state.running ? "未运行" : this.cfg.mode === "fast" ? "正在提交学习时长…" : "正在学习中…";
+            btn.textContent = state$1.running ? "停止" : "开始学习";
+            tip.textContent = !state$1.running ? "未运行" : this.cfg.mode === "fast" ? "正在提交学习时长…" : "正在学习中…";
           }, 500);
         }
       }),
@@ -23509,6 +23511,661 @@ try {
       })
     }
   });
+  const MAX_PDF_PAGES = 300;
+  const state = {
+    running: false,
+    media: null,
+    activityKey: "",
+    stuck: 0,
+    handled: /* @__PURE__ */ new WeakSet(),
+    autoStartedKey: ""
+  };
+  function activeItem() {
+    return document.querySelector(".activity-list-item.is-active");
+  }
+  function activityItems() {
+    return Array.from(document.querySelectorAll(".activity-list-item"));
+  }
+  function statusOf(item) {
+    var _a;
+    if (!item)
+      return "";
+    const list = Array.from(item.querySelectorAll(".activityStatus"));
+    return (((_a = list[list.length - 1]) == null ? void 0 : _a.textContent) || "").trim();
+  }
+  function activeStatus() {
+    return statusOf(activeItem());
+  }
+  function itemFinished(item) {
+    const text = statusOf(item);
+    return text.includes("已完成") || /已学\s*100\s*%/.test(text);
+  }
+  function activeName() {
+    const item = activeItem();
+    if (!item)
+      return "";
+    return (item.innerText || "").replace(/\s+/g, " ").trim();
+  }
+  function isFinished() {
+    const item = activeItem();
+    return item ? itemFinished(item) : false;
+  }
+  function activeKind() {
+    const name = activeName();
+    if (/视频/.test(name))
+      return "video";
+    if (/\bPPT\b|PPTX?/i.test(name))
+      return "ppt";
+    if (/PDF|Word|Excel/i.test(name))
+      return "pdf";
+    if (document.querySelector(".xgplayer"))
+      return "video";
+    if (pptFrame())
+      return "ppt";
+    if (pdfFrame())
+      return "pdf";
+    return "other";
+  }
+  function currentKey() {
+    const activityId = new URLSearchParams(location.search).get("activityId") || "";
+    return `${activityId}|${activeName()}`;
+  }
+  function nextButton() {
+    return Array.from(document.querySelectorAll("button, div")).find(
+      (el) => (el.innerText || "").trim() === "继续学习下一节" && el.offsetParent !== null
+    ) || null;
+  }
+  function isStudyPage() {
+    return /\/istp-learning-center\/pattern\/chapter/i.test(location.href);
+  }
+  async function waitForActivityList(timeout) {
+    const start2 = Date.now();
+    while (Date.now() - start2 < timeout) {
+      if (activityItems().length)
+        return true;
+      await lib.$.sleep(400);
+    }
+    return activityItems().length > 0;
+  }
+  function nextChapterRow() {
+    const rows = Array.from(document.querySelectorAll(".aside-row"));
+    const current = rows.findIndex((row) => row.classList.contains("is-active"));
+    if (current < 0)
+      return null;
+    for (let i = current + 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.offsetParent === null)
+        continue;
+      const name = row.querySelector(".tree-node-name");
+      if (!name || !name.classList.contains("no-child"))
+        continue;
+      if (!(name.textContent || "").trim())
+        continue;
+      return row;
+    }
+    return null;
+  }
+  async function gotoNextChapter() {
+    let row = nextChapterRow();
+    for (let i = 0; i < 10 && !row; i++) {
+      await lib.$.sleep(600);
+      row = nextChapterRow();
+    }
+    if (!row)
+      return false;
+    const before = location.search;
+    row.click();
+    const start2 = Date.now();
+    while (Date.now() - start2 < 2e4) {
+      await lib.$.sleep(700);
+      if (location.search !== before) {
+        await lib.$.sleep(1200);
+        return true;
+      }
+    }
+    return false;
+  }
+  function pdfFrame() {
+    return Array.from(document.querySelectorAll("iframe")).find(
+      (f) => /pdfv-resource/.test(f.getAttribute("src") || f.src || "")
+    ) || null;
+  }
+  function pptFrame() {
+    return Array.from(document.querySelectorAll("iframe")).find(
+      (f) => /ow365\.cn/.test(f.getAttribute("src") || f.src || "")
+    ) || null;
+  }
+  const PPT_NEXT = "hh-fifedu:ppt-next";
+  const PPT_PAGE = "hh-fifedu:ppt-page";
+  async function waitActivityReady(timeout = 15e3) {
+    const start2 = Date.now();
+    while (Date.now() - start2 < timeout) {
+      if (document.querySelector(".xgplayer") || pdfFrame() || pptFrame())
+        return true;
+      await lib.$.sleep(500);
+    }
+    return false;
+  }
+  async function waitVideo(timeout = 25e3) {
+    const start2 = Date.now();
+    while (Date.now() - start2 < timeout) {
+      const media = document.querySelector("video");
+      if (media && media.readyState >= 1)
+        return media;
+      await lib.$.sleep(500);
+    }
+    return null;
+  }
+  async function startPlayback(media) {
+    if (!media.paused)
+      return;
+    const startBtn = document.querySelector(".xgplayer-start");
+    const playBtn = document.querySelector(".xgplayer-play");
+    if (startBtn && startBtn.offsetParent !== null) {
+      startBtn.click();
+    } else if (playBtn) {
+      playBtn.click();
+    } else {
+      await playMedia(() => media.play());
+    }
+    await lib.$.sleep(500);
+    if (media.paused)
+      await playMedia(() => media.play());
+  }
+  async function playOneVideo(rate, vol, mode) {
+    const media = await waitVideo();
+    if (!media) {
+      lib.$message.error("未找到视频播放器，请确认当前资源已加载完成");
+      return false;
+    }
+    state.media = media;
+    media.muted = vol === 0;
+    media.volume = vol;
+    if (mode === "seek") {
+      await startPlayback(media);
+      media.playbackRate = rate;
+      if (!isFinite(media.duration) || media.duration <= 0)
+        await lib.$.sleep(1500);
+      media.currentTime = Math.max(0, media.duration - 0.5);
+      await playMedia(() => media.play());
+    } else {
+      media.playbackRate = rate;
+      await startPlayback(media);
+    }
+    const start2 = Date.now();
+    while (state.running) {
+      if (isFinished())
+        return true;
+      if (media.ended)
+        break;
+      if (media.paused && Date.now() - start2 > 3e3)
+        await startPlayback(media);
+      if (mode === "seek" && media.duration > 0) {
+        const tail = media.duration - media.currentTime;
+        if (!media.paused && tail > 1.5)
+          media.currentTime = Math.max(0, media.duration - 0.5);
+      }
+      await lib.$.sleep(1e3);
+    }
+    const waitStart = Date.now();
+    while (state.running && Date.now() - waitStart < 15e3) {
+      if (isFinished())
+        return true;
+      await lib.$.sleep(1e3);
+    }
+    return media.ended || isFinished();
+  }
+  function jumpPdfPage(page) {
+    const frame = pdfFrame();
+    if (!frame)
+      return false;
+    const base = (frame.getAttribute("src") || frame.src || "").split("#")[0];
+    if (!base)
+      return false;
+    frame.setAttribute("src", `${base}#page=${page}`);
+    return true;
+  }
+  async function readPdf() {
+    const frame = pdfFrame();
+    if (!frame) {
+      lib.$message.warn("未找到文档阅读器，跳过当前资源");
+      return false;
+    }
+    jumpPdfPage(9999);
+    await lib.$.sleep(1500);
+    if (isFinished())
+      return true;
+    let last = "";
+    let same = 0;
+    for (let page = 1; page <= MAX_PDF_PAGES && state.running; page++) {
+      if (!pdfFrame())
+        return isFinished();
+      jumpPdfPage(page);
+      await lib.$.sleep(900);
+      if (isFinished())
+        return true;
+      const now2 = activeStatus();
+      if (now2 === last) {
+        same++;
+        if (same >= (/\d+\s*%/.test(now2) ? 2 : 12))
+          return isFinished();
+      } else {
+        same = 0;
+        last = now2;
+      }
+    }
+    return isFinished();
+  }
+  function askPptNext(frame) {
+    return new Promise((resolve) => {
+      var _a;
+      let done = false;
+      const finish = (page) => {
+        if (done)
+          return;
+        done = true;
+        window.removeEventListener("message", onMessage);
+        resolve(page);
+      };
+      const onMessage = (event) => {
+        var _a2;
+        const data = event.data;
+        if (!data || typeof data !== "object" || data.type !== PPT_PAGE)
+          return;
+        finish(String((_a2 = data.page) != null ? _a2 : ""));
+      };
+      window.addEventListener("message", onMessage);
+      (_a = frame.contentWindow) == null ? void 0 : _a.postMessage(PPT_NEXT, "*");
+      window.setTimeout(() => finish(""), 3e3);
+    });
+  }
+  async function readPpt() {
+    if (!pptFrame()) {
+      lib.$message.warn("未找到 PPT 预览器，跳过当前资源");
+      return false;
+    }
+    let lastPage = "";
+    let same = 0;
+    for (let i = 0; i < MAX_PDF_PAGES && state.running; i++) {
+      const frame = pptFrame();
+      if (!frame)
+        return isFinished();
+      const page = await askPptNext(frame);
+      await lib.$.sleep(400);
+      if (isFinished())
+        return true;
+      if (!page || page === lastPage) {
+        same++;
+        if (same >= 6)
+          return isFinished();
+      } else {
+        same = 0;
+        lastPage = page;
+      }
+    }
+    return isFinished();
+  }
+  function nextPendingItem() {
+    const items = activityItems();
+    const cur = activeItem();
+    const start2 = cur ? items.indexOf(cur) + 1 : 0;
+    for (let i = start2; i < items.length; i++) {
+      if (state.handled.has(items[i]))
+        continue;
+      if (itemFinished(items[i]))
+        continue;
+      return items[i];
+    }
+    return null;
+  }
+  async function gotoPending() {
+    const target = nextPendingItem();
+    if (!target)
+      return false;
+    const fromIdx = activityItems().indexOf(activeItem());
+    state.media = null;
+    target.click();
+    const start2 = Date.now();
+    while (Date.now() - start2 < 2e4) {
+      await lib.$.sleep(700);
+      const nowIdx = activityItems().indexOf(activeItem());
+      if (nowIdx >= 0 && nowIdx !== fromIdx) {
+        await lib.$.sleep(1200);
+        return true;
+      }
+    }
+    return true;
+  }
+  async function gotoNext() {
+    const from = currentKey();
+    const btn = nextButton();
+    if (!btn)
+      return false;
+    state.media = null;
+    btn.click();
+    const start2 = Date.now();
+    while (Date.now() - start2 < 2e4) {
+      await lib.$.sleep(800);
+      const now2 = currentKey();
+      if (now2 && now2 !== from) {
+        await lib.$.sleep(1200);
+        return true;
+      }
+    }
+    return false;
+  }
+  const FIFProject = lib.Project.create({
+    name: "讯飞智慧课程平台",
+    domains: ["icourse.fifedu.com", "ow365.cn"],
+    scripts: {
+      pptHelper: new lib.Script({
+        name: "PPT 预览器",
+        namespace: "fifedu.pptHelper",
+        hideInPanel: true,
+        matches: [["永中预览器", "ow365.cn"]],
+        oncomplete() {
+          window.addEventListener("message", (event) => {
+            if (event.data !== PPT_NEXT)
+              return;
+            const source = event.source;
+            const sn = document.querySelector("#sn");
+            const before = sn ? sn.value : "";
+            const next2 = window.nextPage;
+            if (typeof next2 === "function") {
+              next2();
+            } else {
+              for (const target of [document, document.body, document.querySelector("#ppt")]) {
+                if (!target)
+                  continue;
+                target.dispatchEvent(
+                  new KeyboardEvent("keydown", {
+                    key: "ArrowRight",
+                    code: "ArrowRight",
+                    keyCode: 39,
+                    which: 39,
+                    bubbles: true,
+                    cancelable: true
+                  })
+                );
+              }
+            }
+            window.setTimeout(() => {
+              source == null ? void 0 : source.postMessage({ type: PPT_PAGE, page: sn ? sn.value : "", before }, "*");
+            }, 600);
+          });
+        }
+      }),
+      study: new lib.Script({
+        name: "在线学习",
+        namespace: "fifedu.study",
+        matches: [["讯飞智慧课程平台", "icourse.fifedu.com"]],
+        notes: ["进入课程学习页（章节页面，右侧能看到本节资源列表）即自动开始。"],
+        configs: {
+          notes: {
+            defaultValue: lib.$ui.notes([
+              "自动播放本节视频，播完自动进入下一节，跨知识点、跨章节连续推进。",
+              "PDF / PPT / Word 资源会自动翻页，翻到末页即记为完成。",
+              "作业、讨论等非视频资源会直接跳过。",
+              ["「跳到结尾」会一次性把视频进度报满，", "属于伪造学习记录，请自行评估风险。"]
+            ]).outerHTML
+          },
+          playbackRate: {
+            ...playbackRate,
+            defaultValue: "2"
+          },
+          volume,
+          videoMode: {
+            label: "视频处理方式",
+            tag: "select",
+            defaultValue: "play",
+            options: [
+              ["play", "正常播放（可倍速）"],
+              ["seek", "跳到结尾（快速）"]
+            ]
+          },
+          autoNext: {
+            label: "完成后自动下一节",
+            attrs: { type: "checkbox" },
+            defaultValue: true
+          },
+          skipPdf: {
+            label: "跳过文档资源",
+            attrs: { type: "checkbox", title: "开启后 PDF / PPT / Word 不翻页，直接进入下一节" },
+            defaultValue: false
+          }
+        },
+        oncomplete() {
+          this.onConfigChange("playbackRate", (rate) => {
+            if (state.media)
+              state.media.playbackRate = parseFloat(rate.toString());
+          });
+          this.onConfigChange("volume", (v) => {
+            if (!state.media)
+              return;
+            const vol = parseFloat(v.toString());
+            state.media.volume = vol;
+            state.media.muted = vol === 0;
+          });
+          void this.methods.autoStart();
+        },
+        onhistorychanged() {
+          void this.methods.autoStart();
+        },
+        methods() {
+          return {
+            handleCurrent: async (rate, vol) => {
+              const mode = this.cfg.videoMode === "seek" ? "seek" : "play";
+              const kind = activeKind();
+              if (kind === "other") {
+                lib.$message.info(`跳过不支持的资源：${activeName()}`);
+                return true;
+              }
+              if (!await waitActivityReady()) {
+                lib.$message.warn(`资源加载较慢，继续等待：${activeName()}`);
+                await lib.$.sleep(3e3);
+                if (!await waitActivityReady(15e3)) {
+                  lib.$message.warn(`资源始终没加载出来，跳过：${activeName()}`);
+                  return false;
+                }
+              }
+              if (kind === "video") {
+                lib.$message.info(`播放视频：${activeName()}`);
+                return this.methods.playVideo(rate, vol, mode);
+              }
+              if (kind === "pdf") {
+                if (this.cfg.skipPdf) {
+                  lib.$message.info(`跳过文档：${activeName()}`);
+                  return true;
+                }
+                lib.$message.info(`阅读文档：${activeName()}`);
+                return this.methods.readDoc();
+              }
+              if (kind === "ppt") {
+                if (this.cfg.skipPdf) {
+                  lib.$message.info(`跳过 PPT：${activeName()}`);
+                  return true;
+                }
+                lib.$message.info(`放映 PPT：${activeName()}`);
+                return this.methods.readPpt();
+              }
+              lib.$message.info(`跳过不支持的资源：${activeName()}`);
+              return true;
+            },
+            playVideo: async (rate, vol, mode) => {
+              return playOneVideo(rate, vol, mode);
+            },
+            readDoc: async () => {
+              return readPdf();
+            },
+            readPpt: async () => {
+              return readPpt();
+            },
+            autoStart: async () => {
+              if (state.running)
+                return;
+              if (!isStudyPage())
+                return;
+              const key = location.href;
+              if (state.autoStartedKey === key)
+                return;
+              state.autoStartedKey = key;
+              for (let i = 0; i < 20; i++) {
+                if (!isStudyPage())
+                  return;
+                if (activityItems().length || nextButton())
+                  break;
+                await lib.$.sleep(500);
+              }
+              if (state.running || !isStudyPage())
+                return;
+              lib.$message.success("已进入学习页面，开始自动学习…");
+              await this.methods.main();
+            },
+            run: async () => {
+              const rate = parseFloat(this.cfg.playbackRate.toString());
+              const vol = parseFloat(this.cfg.volume.toString());
+              const autoNext = Boolean(this.cfg.autoNext);
+              if (!isStudyPage()) {
+                lib.$message.error("请先进入课程学习页（章节页面，右侧能看到本节资源列表）");
+                return;
+              }
+              state.stuck = 0;
+              let index = 0;
+              let noActive = 0;
+              while (state.running) {
+                index++;
+                if (!activityItems().length) {
+                  const ready = await waitForActivityList(6e3);
+                  if (!ready && state.running) {
+                    lib.$message.info("本章节没有可学习的资源，进入下一节");
+                    if (!autoNext)
+                      break;
+                    let btn = nextButton();
+                    for (let i = 0; i < 8 && !btn && state.running; i++) {
+                      await lib.$.sleep(700);
+                      btn = nextButton();
+                    }
+                    let moved2 = btn ? await gotoNext() : false;
+                    if (!moved2)
+                      moved2 = await gotoNextChapter();
+                    if (!moved2) {
+                      lib.$message.success("后面没有下一节了，学习结束");
+                      break;
+                    }
+                    await lib.$.sleep(1200);
+                    continue;
+                  }
+                }
+                if (!activeItem() && activityItems().length) {
+                  if (++noActive > 3) {
+                    lib.$message.error("资源列表里没有可进入的项，已停止，请手动检查页面状态");
+                    break;
+                  }
+                  await gotoPending();
+                  await lib.$.sleep(1200);
+                  continue;
+                }
+                noActive = 0;
+                const item = activeItem();
+                const key = currentKey();
+                const beforeIdx = item ? activityItems().indexOf(item) : -1;
+                state.activityKey = key;
+                if (isFinished()) {
+                  lib.$message.info(`已完成，跳过：${activeName()}`);
+                } else {
+                  const ok = await this.methods.handleCurrent(rate, vol);
+                  if (!ok && state.running) {
+                    lib.$message.warn(`未能完成：${activeName()}，继续下一个资源`);
+                  }
+                }
+                if (item)
+                  state.handled.add(item);
+                if (!state.running || !autoNext)
+                  break;
+                let moved = await this.methods.nextInSection();
+                if (!moved)
+                  moved = await this.methods.next();
+                if (!moved)
+                  moved = await this.methods.nextChapter();
+                if (!moved) {
+                  lib.$message.success("本节资源已全部处理，且没有下一节了，学习结束");
+                  break;
+                }
+                const afterIdx = activityItems().indexOf(activeItem());
+                if (currentKey() === key && afterIdx === beforeIdx) {
+                  state.stuck++;
+                  if (state.stuck >= 3) {
+                    lib.$message.error("连续三次未能推进到下一个资源，已停止，请手动检查页面状态");
+                    break;
+                  }
+                } else {
+                  state.stuck = 0;
+                }
+                if (index > 800) {
+                  lib.$message.warn("已连续处理 800 个资源，自动停止");
+                  break;
+                }
+              }
+            },
+            nextInSection: async () => {
+              return gotoPending();
+            },
+            next: async () => {
+              return gotoNext();
+            },
+            nextChapter: async () => {
+              return gotoNextChapter();
+            },
+            main: async () => {
+              if (state.running) {
+                state.running = false;
+                if (state.media && !state.media.paused)
+                  state.media.pause();
+                lib.$message.warn("已停止");
+                return;
+              }
+              state.running = true;
+              CommonProject.scripts.render.methods.pin(this);
+              try {
+                await this.methods.run();
+              } catch (err) {
+                lib.$message.error("运行出错：" + String(err));
+              } finally {
+                state.running = false;
+              }
+            }
+          };
+        },
+        onrender({ panel }) {
+          const body = panel.body;
+          if (!body)
+            return;
+          const btn = lib.h(
+            "button",
+            { className: "base-style-button", style: { width: "100%" } },
+            "开始学习"
+          );
+          const tip = lib.h(
+            "div",
+            { className: "secondary", style: { marginTop: "8px", textAlign: "center" } },
+            "未运行"
+          );
+          btn.onclick = () => {
+            void this.methods.main();
+          };
+          body.replaceChildren(lib.h("div", { className: "card" }, [btn, tip]));
+          const timer = setInterval(() => {
+            if (!tip.isConnected) {
+              clearInterval(timer);
+              return;
+            }
+            btn.textContent = state.running ? "停止" : "开始学习";
+            tip.textContent = state.running ? `正在处理：${activeName() || "加载中…"}` : "未运行";
+          }, 1e3);
+        }
+      })
+    }
+  });
   function definedProjects() {
     return [
       ZHSProject,
@@ -23519,6 +24176,7 @@ try {
       YKTProject,
       UnipusProject,
       LabsafeProject,
+      FIFProject,
       CommonProject,
       BackgroundProject
     ];
@@ -23534,6 +24192,7 @@ try {
   exports2.CXProject = CXProject;
   exports2.CommonProject = CommonProject;
   exports2.CustomHonghuWorker = CustomHonghuWorker;
+  exports2.FIFProject = FIFProject;
   exports2.HonghuWorker = HonghuWorker;
   exports2.ICourseProject = ICourseProject;
   exports2.IcveMoocProject = IcveMoocProject;

@@ -1,7 +1,7 @@
 {
 	"manifest_version": 3,
 	"name": "鸿鹄易学",
-	"version": "5.4.0",
+	"version": "5.5.1",
 	"description": "鸿鹄易学，支持超星学习通、智慧树、职教云、雨课堂等主流网课平台的自动刷课学习与作业辅助，内置 AI 答题。",
 	"default_locale": "zh_CN",
 	"minimum_chrome_version": "120",
@@ -82,7 +82,9 @@
 		"*://*.lingyiwanwu.com/*",
 		"*://*.1api.net/*",
 		"*://*.chatanywhere.tech/*",
-		"*://*.shiep.edu.cn/*"
+		"*://*.shiep.edu.cn/*",
+		"*://*.fifedu.com/*",
+		"*://*.ow365.cn/*"
 	],
 	"content_scripts": [
 		{
@@ -120,7 +122,9 @@
 				"*://*.jnzyjsxy.cn/*",
 				"*://*.sslibrary.com/*",
 				"*://*.xuexi365.com/*",
-				"*://*.shiep.edu.cn/*"
+				"*://*.shiep.edu.cn/*",
+				"*://*.fifedu.com/*",
+				"*://*.ow365.cn/*"
 			],
 			"js": [
 				"content/bridge-key.js",

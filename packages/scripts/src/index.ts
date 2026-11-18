@@ -9,6 +9,7 @@ import { ICourseProject } from './projects/icourse';
 import { YKTProject } from './projects/yuketang';
 import { UnipusProject } from './projects/unipus';
 import { LabsafeProject } from './projects/labsafe';
+import { FIFProject } from './projects/fifedu';
 
 /** 导出所有的鸿鹄易学核心模块 */
 export * from '@honghu/core';
@@ -25,6 +26,7 @@ export { ICourseProject } from './projects/icourse';
 export { YKTProject } from './projects/yuketang';
 export { UnipusProject } from './projects/unipus';
 export { LabsafeProject } from './projects/labsafe';
+export { FIFProject } from './projects/fifedu';
 export { RenderScript } from './render';
 
 export function definedProjects(): Project[] {
@@ -37,6 +39,7 @@ export function definedProjects(): Project[] {
 		YKTProject,
 		UnipusProject,
 		LabsafeProject,
+		FIFProject,
 		CommonProject,
 		BackgroundProject
 	];
