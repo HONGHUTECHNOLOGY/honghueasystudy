@@ -8,6 +8,13 @@ export interface ScriptOptions<Run extends RunFunction = RunFunction> {
 	run: Run;
 	/** 图标 URL（网站地址或图片地址，经本地服务 /icon 代理解析） */
 	icon?: string;
+	/**
+	 * 旧名字
+	 *
+	 * 脚本改名后，用户机器上已经存着的旧条目还叫老名字：
+	 * 靠这个列表仍能匹配到同一个脚本，不会被当成「目录里没有的脚本」晾在那里跑不起来。
+	 */
+	aliases?: string[];
 }
 
 export abstract class Script<Run extends RunFunction = RunFunction, E extends EventsRecord = EventsRecord>
@@ -17,12 +24,14 @@ export abstract class Script<Run extends RunFunction = RunFunction, E extends Ev
 	name: string;
 	run: Run;
 	icon?: string;
+	aliases?: string[];
 
 	constructor(opts: ScriptOptions<Run>) {
 		super();
 		this.name = opts.name;
 		this.run = opts.run;
 		this.icon = opts.icon;
+		this.aliases = opts.aliases;
 	}
 }
 

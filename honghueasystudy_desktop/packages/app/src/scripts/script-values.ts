@@ -18,6 +18,8 @@ import type { Config, ConfigType } from './interface';
 export interface ScriptDef {
 	name: string;
 	icon?: string;
+	/** 旧名字：改名后仍认得已保存的配置，保存时会被改回新名字 */
+	aliases?: string[];
 	configs?: Record<string, Config>;
 }
 
@@ -64,11 +66,48 @@ export interface WriteScriptOptions {
 }
 
 function findDef(defs: ScriptDef[], name: string): ScriptDef | undefined {
-	return defs.find((item) => item && item.name === name);
+	return defs.find((item) => item && (item.name === name || (item.aliases || []).includes(name)));
 }
 
 function configsOf(def?: ScriptDef): Record<string, Config> {
 	return (def && def.configs) || {};
+}
+
+/**
+ * 字段是否该出现 / 参与必填校验
+ *
+ * `showIf` 只做「下拉切分支」这一种判断：值取自同脚本另一个字段。
+ * 传值映射（key → 值）而不是 configs 对象，主进程的运行时校验和渲染端的表单能用同一套规则；
+ * 也不做深比较，`value` 是可序列化的标量或标量数组，严格相等足够。
+ */
+export function isFieldVisible(
+	defs: Record<string, Config> | undefined,
+	key: string,
+	values: Record<string, any> | undefined
+): boolean {
+	const field = defs ? defs[key] : undefined;
+	if (!field) return true;
+	if (field.hide) return false;
+
+	const rule = field.showIf;
+	if (!rule || !rule.key) return true;
+
+	const current = values ? values[rule.key] : undefined;
+	const want = Array.isArray(rule.value) ? rule.value : [rule.value];
+	return want.some((item) => item === current);
+}
+
+/** configs（可能是对象或旧存档的数组）→ 值映射 */
+function valueMapOf(configs: any): Record<string, any> {
+	const map: Record<string, any> = {};
+	if (!configs) return map;
+
+	if (Array.isArray(configs)) {
+		configs.forEach((cfg, index) => (map[String(index)] = cfg ? cfg.value : undefined));
+		return map;
+	}
+	for (const key of Object.keys(configs)) map[key] = configs[key] ? configs[key].value : undefined;
+	return map;
 }
 
 /** 声明 → 表单字段（远程台与桌面端共用同一套展示规则） */
@@ -171,7 +210,8 @@ export function writeScriptValues(values: any, existing: any, defs: ScriptDef[],
 		}
 
 		seen.add(name);
-		submitted.add(name);
+		/** 校验以「脚本清单里的名字」为集合，改过名的旧条目也要落到新名字上 */
+		submitted.add(def.name);
 		const incoming = ((item && item.values) || {}) as Record<string, any>;
 		const configs: Record<string, Config> = {};
 
@@ -196,6 +236,9 @@ export function writeScriptValues(values: any, existing: any, defs: ScriptDef[],
 				value = value === '' || value === null || value === undefined || !Number.isFinite(num) ? field.value : num;
 			} else if (field.type === 'switch') {
 				value = !!value;
+			} else if (field.type === 'select' && (value === '' || value === null || value === undefined)) {
+				/** 下拉留空＝用默认分支：批量创建 / 远程台没这一列时不能把值写成空串 */
+				value = field.value;
 			} else if (value === undefined || value === null) {
 				value = '';
 			}
@@ -203,7 +246,11 @@ export function writeScriptValues(values: any, existing: any, defs: ScriptDef[],
 			configs[key] = { ...field, value };
 		}
 
-		result.push({ name, icon: def.icon || String((item && item.icon) || ''), configs });
+		/**
+		 * 名字以声明为准：命中 `aliases` 的旧条目在这里顺手改成新名字，
+		 * 用户不用为了「脚本改了个名」重新配一遍账号密码。
+		 */
+		result.push({ name: def.name, icon: def.icon || String((item && item.icon) || ''), configs });
 	});
 
 	/**
@@ -225,9 +272,12 @@ export function writeScriptValues(values: any, existing: any, defs: ScriptDef[],
 			if (!submitted.has(script.name)) continue;
 			if (scoped && !scoped.has(script.name)) continue;
 			const fields = configsOf(findDef(defs, script.name));
+			const values = valueMapOf(script.configs);
 			for (const key of Object.keys(fields)) {
 				const field = fields[key];
 				if (field.hide || !field.required) continue;
+				/** 被下拉分支藏起来的字段不算缺项，否则「用户名密码」模式永远存不进去 */
+				if (!isFieldVisible(fields, key, values)) continue;
 				const value = script.configs[key] ? script.configs[key].value : undefined;
 				const current = String(value === undefined || value === null ? '' : value).trim();
 				if (!current) throw new Error(`「${script.name}」的「${field.label || key}」不能为空`);

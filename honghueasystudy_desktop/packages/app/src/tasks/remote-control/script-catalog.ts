@@ -30,6 +30,8 @@ export interface RemoteScriptInfo {
 const SCRIPT_DEFS: ScriptDef[] = AutomationScripts.map((script) => ({
 	name: script.name,
 	icon: script.icon || '',
+	/** 改过名的脚本要带上旧名字，否则远程台会把用户已存的旧条目当成未知脚本丢掉 */
+	aliases: script.aliases,
 	configs: ((script as any).configs || {}) as ScriptDef['configs']
 }));
 
@@ -41,9 +43,15 @@ export function listRemoteScripts(): RemoteScriptInfo[] {
 	}));
 }
 
+/** 脚本名归一化：旧名字映射回目录里的新名字 */
+function canonicalScriptName(name: string): string {
+	const def = SCRIPT_DEFS.find((item) => item.name === name || (item.aliases || []).includes(name));
+	return def ? def.name : name;
+}
+
 /** 是否是可执行的自动化脚本（远程只能执行这里列出的） */
 export function isKnownScript(name: string): boolean {
-	return SCRIPT_DEFS.some((script) => script.name === name);
+	return SCRIPT_DEFS.some((item) => item.name === name || (item.aliases || []).includes(name));
 }
 
 /** 自动化脚本的「配置值」视图：远程台只收发值，不碰 label/hide 等展示属性 */
@@ -96,7 +104,10 @@ export function buildAutomationScripts(incoming: any[], existing: any[], baselin
 	});
 }
 
-/** 是否已配置该脚本（供方案校验用） */
+/** 是否已配置该脚本（供方案校验用；旧名字也算，方案里写哪个都能对上） */
 export function hasAutomationScript(scripts: any[], name: string): boolean {
-	return (Array.isArray(scripts) ? scripts : []).some((item) => item && item.name === name);
+	const want = canonicalScriptName(name);
+	return (Array.isArray(scripts) ? scripts : []).some(
+		(item) => item && canonicalScriptName(String(item.name || '')) === want
+	);
 }

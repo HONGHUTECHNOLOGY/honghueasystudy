@@ -59,10 +59,26 @@ export interface ConfigOption {
 	value: any;
 }
 
+/**
+ * 条件显示规则
+ *
+ * 用于「一个下拉切两套表单」：例如讯飞账号登录选「用户名密码」时，
+ * 学校/学号两项既不该出现，也不该被必填校验拦住。
+ * 只认同脚本内的另一个字段，且必须可 JSON 序列化——脚本声明要过 IPC 给渲染端。
+ */
+export interface ConfigShowIf {
+	/** 依赖的同脚本字段 key */
+	key: string;
+	/** 命中其中任一值时该字段才显示（单值等价于一元素数组） */
+	value: any | any[];
+}
+
 export interface Config {
 	label: string;
 	value: any;
 	hide?: boolean;
+	/** 条件显示：仅当同脚本内 `showIf.key` 的当前值命中 `showIf.value` 时展示并参与必填校验 */
+	showIf?: ConfigShowIf;
 	/** 输入类型，默认 text */
 	type?: ConfigType;
 	/** 是否必填 */

@@ -3,6 +3,7 @@ import { SigninAutoScript } from './automation/wk/signin';
 import { ZHSPhoneLoginScript, ZHSUnitLoginScript } from './automation/wk/zhs';
 import { ICVELoginScript } from './automation/wk/icve';
 import { ZJYLoginScript } from './automation/wk/zjy';
+import { FIFLoginScript } from './automation/wk/fifedu';
 import { NewPageScript } from './automation/common';
 
 export const AutomationScripts = [
@@ -13,5 +14,6 @@ export const AutomationScripts = [
 	ZHSUnitLoginScript,
 	ZJYLoginScript,
 	ICVELoginScript,
+	FIFLoginScript,
 	NewPageScript
 ];

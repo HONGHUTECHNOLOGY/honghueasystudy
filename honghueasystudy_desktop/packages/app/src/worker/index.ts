@@ -15,6 +15,7 @@ import {
 import { AppStore } from '../../types';
 import { AutomationScripts } from '../scripts/index';
 import { Config } from '../scripts/interface';
+import { isFieldVisible } from '../scripts/script-values';
 import _get from 'lodash/get';
 import child_process from 'child_process';
 import { getBrowserMajorVersion, getBuiltinExtensionPaths } from '../utils/browser';
@@ -1253,7 +1254,9 @@ export class ScriptWorker {
 		const name = String((options && options.name) || '').trim();
 		if (!name) throw new Error('缺少脚本名称');
 
-		const script = AutomationScripts.find((item) => item.name === name);
+		const script = AutomationScripts.find(
+			(item) => item.name === name || (item.aliases || []).includes(name)
+		);
 		if (!script) throw new Error('未知的自动化脚本：' + name);
 
 		const configs = this.buildAutomationConfig(script, (options && options.configs) || {});
@@ -2056,8 +2059,8 @@ export class ScriptWorker {
 	): Record<string, any> {
 		const defs = ((script as any).configs || {}) as Record<string, Config>;
 		const configs: Record<string, any> = {};
-		const missing: string[] = [];
 
+		/** 第一遍只归一化：showIf 依赖同脚本另一个字段，值得先全部拿到手再判可见性 */
 		for (const key of Object.keys(defs)) {
 			const def = defs[key] || ({} as Config);
 			const hasInput = Object.prototype.hasOwnProperty.call(input || {}, key);
@@ -2068,14 +2071,30 @@ export class ScriptWorker {
 				if (value !== '' && !Number.isFinite(value)) value = '';
 			} else if (def.type === 'switch') {
 				value = !!value;
-			} else if (typeof value === 'string') {
-				value = value.trim();
+			} else {
+				/** 下拉留空＝默认分支（远程台没传这一项时也一样） */
+				if (def.type === 'select' && (value === '' || value === undefined || value === null)) value = def.value;
+				if (typeof value === 'string') value = value.trim();
 			}
 
+			configs[key] = value;
+		}
+
+		/**
+		 * 第二遍校验必填
+		 *
+		 * 被 showIf 藏起来的分支不算缺项：讯飞登录选「用户名密码」时，
+		 * 学校/学号输入框根本不在界面上，不能反过来把它当成必填拦住启动。
+		 */
+		const missing: string[] = [];
+		for (const key of Object.keys(defs)) {
+			const def = defs[key] || ({} as Config);
+			if (!isFieldVisible(defs, key, configs)) continue;
+
+			const value = configs[key];
 			if (def.required && (value === '' || value === undefined || value === null)) {
 				missing.push(def.label || key);
 			}
-			configs[key] = value;
 		}
 
 		if (missing.length) throw new Error('请填写完整：' + missing.join('、'));
@@ -3429,7 +3448,8 @@ export async function runAutomationScripts(opts: {
 		const configs = transformScriptConfigToRaw(ps.configs);
 
 		for (const script of AutomationScripts) {
-			if (script.name !== ps.name) continue;
+			/** 改过名的脚本：旧条目还叫老名字，靠 aliases 认回来，别让它在启动时被静默跳过 */
+			if (script.name !== ps.name && !(script.aliases || []).includes(ps.name)) continue;
 
 			script.on('script-data', (...msg) => console.log(...msg));
 			script.on('script-error', (...msg) =>
