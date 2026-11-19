@@ -34,6 +34,7 @@ import { $console, BackgroundProject } from './background';
 import { CommonWorkOptions, playMedia } from '../utils';
 import { answerVideoQuiz, VideoQuizStrategy } from '../utils/video-quiz';
 import { waitForElement, waitForMedia } from '../utils/study';
+import { setExtensionAutomation } from '../utils/automation-state';
 
 // @ts-ignore
 let top: Window = globalThis.top;
@@ -403,11 +404,16 @@ export const CXProject = Project.create({
 					this.onConfigChange('playbackRate', updateMediaState);
 					this.onConfigChange('volume', updateMediaState);
 
-					await study({
-						...this.cfg,
-						playbackRate: parseFloat(this.cfg.playbackRate.toString()),
-						workOptions: CommonProject.scripts.settings.methods.getWorkOptions()
-					});
+					setExtensionAutomation(true, '超星课程学习');
+					try {
+						await study({
+							...this.cfg,
+							playbackRate: parseFloat(this.cfg.playbackRate.toString()),
+							workOptions: CommonProject.scripts.settings.methods.getWorkOptions()
+						});
+					} finally {
+						setExtensionAutomation(false, '超星课程学习');
+					}
 				}
 			}
 		}),

@@ -85,6 +85,8 @@ export type WebStore = {
 			forceUpdateScript: boolean;
 			/** 点击「新建浏览器」时是否自动打开初始化弹窗并执行初始化 */
 			autoInitNewBrowser: boolean;
+			/** 自动操作时是否在页面四周显示流光提示与「正在自动操作中」 */
+			autoGlow: boolean;
 		};
 	};
 
@@ -194,7 +196,8 @@ const APP_DEFAULTS = {
 				cachesSizeWarningPoint: 10,
 				enableDialog: false,
 				forceUpdateScript: false,
-				autoInitNewBrowser: true
+				autoInitNewBrowser: true,
+				autoGlow: true
 			}
 		},
 		langs: { ...DEFAULT_LANGS },

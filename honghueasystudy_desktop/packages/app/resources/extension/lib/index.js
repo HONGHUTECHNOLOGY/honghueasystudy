@@ -6141,6 +6141,69 @@
       };
     }
   });
+  const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const HEARTBEAT_MS = 2e4;
+  const runningLabels = /* @__PURE__ */ new Set();
+  let heartbeat;
+  let supported = true;
+  function stopHeartbeat() {
+    if (heartbeat)
+      clearInterval(heartbeat);
+    heartbeat = void 0;
+  }
+  function disableBridge() {
+    supported = false;
+    stopHeartbeat();
+  }
+  async function report(label, active, keepalive = false) {
+    if (!supported)
+      return;
+    try {
+      const res = await fetch("/hh-automation-state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: `${SESSION_ID}:${label}`,
+          label,
+          active
+        }),
+        cache: "no-store",
+        keepalive
+      });
+      const data = await res.json();
+      if (!res.ok || data.environment !== "playwright") {
+        console.warn(`[鸿鹄] 流光桥接关闭：status=${res.status} env=${data.environment}`);
+        disableBridge();
+      } else if (!keepalive) {
+        console.warn(`[鸿鹄] 流光${active ? "点亮" : "熄灭"}：${label}`);
+      }
+    } catch (e) {
+      console.warn(`[鸿鹄] 流光上报失败（桥接关闭）：${label} ${e == null ? void 0 : e.message}`);
+      disableBridge();
+    }
+  }
+  function reportAll(active, keepalive = false) {
+    for (const label of runningLabels)
+      void report(label, active, keepalive);
+  }
+  function setExtensionAutomation(active, label = "扩展自动任务") {
+    if (active) {
+      if (runningLabels.has(label))
+        return;
+      runningLabels.add(label);
+      void report(label, true);
+      if (supported && !heartbeat) {
+        heartbeat = setInterval(() => reportAll(true), HEARTBEAT_MS);
+      }
+      return;
+    }
+    if (!runningLabels.delete(label))
+      return;
+    void report(label, false);
+    if (runningLabels.size === 0)
+      stopHeartbeat();
+  }
+  window.addEventListener("pagehide", () => reportAll(false, true));
   let globalControlPanel = null;
   function commonWork(script2, options) {
     CommonProject.scripts.render.methods.pin(script2);
@@ -6224,9 +6287,12 @@
       var _a, _b, _c, _d;
       await ((_a = options.beforeRunning) == null ? void 0 : _a.call(options));
       running = true;
+      setExtensionAutomation(true, script2.fullName());
       worker = options.workerProvider(workOptions);
       if (worker) {
         (_b = options.onWorkerCreated) == null ? void 0 : _b.call(options, worker);
+      } else {
+        setExtensionAutomation(false, script2.fullName());
       }
       const { container: container2, controlBtn } = createWorkControlPanel();
       (_d = (_c = script2.panel) == null ? void 0 : _c.body) == null ? void 0 : _d.replaceChildren(container2, workResultPanel());
@@ -10440,180 +10506,188 @@
                 lib.$message.info({ content: "请点击任意章节开始进行自动学习", duration: 60 });
                 return;
               }
-              CommonProject.scripts.render.methods.pin(this);
-              const processor = new StudyVideoH5();
-              const getInfos = () => Array.from(document.querySelectorAll(".section-item-collapse-info"));
-              const getChapterName = () => {
-                var _a, _b;
-                return (((_a = document.querySelector(".point-title-text")) == null ? void 0 : _a.textContent) || "未知章节") + "-" + (((_b = document.querySelector('[class*="card-container"].active .video-title')) == null ? void 0 : _b.textContent) || "未知小节");
-              };
-              const include_jobs = ["video", "book", "other", "text"];
-              const getNextJob = () => {
-                var _a, _b;
-                const cards = Array.from(document.querySelectorAll('[class*="card-container"]'));
-                if (cards.some((card) => card.classList.contains("active")) === false) {
-                  return cards[0];
-                }
-                let target_el;
-                const start_index = cards.findIndex((c) => c.classList.contains("active")) || 0;
-                for (let index = start_index + 1; index < cards.length; index++) {
-                  const card = cards[index];
-                  if (this.cfg.restudy) {
-                    target_el = card;
-                    break;
-                  } else {
-                    if ((_b = (_a = card.querySelector(".finished-icon")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.includes("已完成")) {
-                      continue;
-                    }
-                    target_el = card;
-                    break;
+              setExtensionAutomation(true, "智慧树课程学习");
+              const runStudy = async () => {
+                CommonProject.scripts.render.methods.pin(this);
+                const processor = new StudyVideoH5();
+                const getInfos = () => Array.from(document.querySelectorAll(".section-item-collapse-info"));
+                const getChapterName = () => {
+                  var _a, _b;
+                  return (((_a = document.querySelector(".point-title-text")) == null ? void 0 : _a.textContent) || "未知章节") + "-" + (((_b = document.querySelector('[class*="card-container"].active .video-title')) == null ? void 0 : _b.textContent) || "未知小节");
+                };
+                const include_jobs = ["video", "book", "other", "text"];
+                const getNextJob = () => {
+                  var _a, _b;
+                  const cards = Array.from(document.querySelectorAll('[class*="card-container"]'));
+                  if (cards.some((card) => card.classList.contains("active")) === false) {
+                    return cards[0];
                   }
-                }
-                return target_el;
-              };
-              const getNext = () => {
-                var _a, _b;
-                const infos = getInfos();
-                const works = [];
-                for (let index = 0; index < infos.length; index++) {
-                  const info = infos[index];
-                  const text = ((_a = info.querySelector(".collapse-info-progress .progress-text")) == null ? void 0 : _a.textContent) || "";
-                  if (this.cfg.switchMode === "all") {
-                    works.push({
-                      info,
-                      progress: 0,
-                      total: 1
-                    });
-                  } else {
-                    const [progress, total] = text.replace("必学", "").trim().split("/").map((s) => parseInt(s));
-                    if (progress < total) {
-                      works.push({ progress, total, info });
+                  let target_el;
+                  const start_index = cards.findIndex((c) => c.classList.contains("active")) || 0;
+                  for (let index = start_index + 1; index < cards.length; index++) {
+                    const card = cards[index];
+                    if (this.cfg.restudy) {
+                      target_el = card;
+                      break;
+                    } else {
+                      if ((_b = (_a = card.querySelector(".finished-icon")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.includes("已完成")) {
+                        continue;
+                      }
+                      target_el = card;
+                      break;
                     }
                   }
-                }
-                let start2 = false;
-                for (let index = 0; index < works.length; index++) {
-                  const work2 = works[index];
-                  if (start2) {
-                    if (work2.progress < work2.total) {
-                      return works[index].info;
-                    }
-                  }
-                  if (work2.info.classList.contains("active")) {
+                  return target_el;
+                };
+                const getNext = () => {
+                  var _a, _b;
+                  const infos = getInfos();
+                  const works = [];
+                  for (let index = 0; index < infos.length; index++) {
+                    const info = infos[index];
+                    const text = ((_a = info.querySelector(".collapse-info-progress .progress-text")) == null ? void 0 : _a.textContent) || "";
                     if (this.cfg.switchMode === "all") {
-                      return works[index + 1].info;
+                      works.push({
+                        info,
+                        progress: 0,
+                        total: 1
+                      });
                     } else {
-                      start2 = true;
+                      const [progress, total] = text.replace("必学", "").trim().split("/").map((s) => parseInt(s));
+                      if (progress < total) {
+                        works.push({ progress, total, info });
+                      }
                     }
                   }
-                }
-                return (_b = works[0]) == null ? void 0 : _b.info;
-              };
-              this.onConfigChange("volume", (curr) => {
-                state$8.study.currentMedia && (state$8.study.currentMedia.volume = curr);
-              });
-              this.onConfigChange("playbackRate", (curr) => {
-                if (typeof curr === "string") {
-                  this.cfg.playbackRate = parseFloat(curr);
-                }
-                processor.switchPlaybackRate(curr);
-              });
-              this.onConfigChange("definition", (curr) => {
-                processor.switchLine(curr);
-              });
-              const doWork = async () => {
-                await lib.$.sleep(5 * 1e3);
-                const next2 = async () => {
-                  const nextJob = getNextJob();
-                  if (nextJob) {
-                    const nextJobTitle = nextJob.querySelector(".common-text");
-                    if (include_jobs.some((job2) => {
-                      var _a;
-                      return (_a = nextJob.querySelector(".icon-box")) == null ? void 0 : _a.classList.contains(job2);
-                    })) {
-                      await safeClick(nextJobTitle);
-                      await doWork();
-                    } else {
-                      document.querySelectorAll('[class*="card-container"].active').forEach((el) => el.classList.remove("active"));
-                      nextJob == null ? void 0 : nextJob.classList.add("active");
-                      await lib.$.sleep(1e3);
-                      const _open = lib.$gm.unsafeWindow.open;
-                      lib.$gm.unsafeWindow.open = () => null;
-                      await safeClick(nextJobTitle);
-                      const msg2 = "链接任务完成，即将自动下一节！";
-                      lib.$message.info(msg2);
-                      setTimeout(async () => {
-                        lib.$gm.unsafeWindow.open = _open;
-                        await next2();
-                      }, 3e3);
+                  let start2 = false;
+                  for (let index = 0; index < works.length; index++) {
+                    const work2 = works[index];
+                    if (start2) {
+                      if (work2.progress < work2.total) {
+                        return works[index].info;
+                      }
                     }
+                    if (work2.info.classList.contains("active")) {
+                      if (this.cfg.switchMode === "all") {
+                        return works[index + 1].info;
+                      } else {
+                        start2 = true;
+                      }
+                    }
+                  }
+                  return (_b = works[0]) == null ? void 0 : _b.info;
+                };
+                this.onConfigChange("volume", (curr) => {
+                  state$8.study.currentMedia && (state$8.study.currentMedia.volume = curr);
+                });
+                this.onConfigChange("playbackRate", (curr) => {
+                  if (typeof curr === "string") {
+                    this.cfg.playbackRate = parseFloat(curr);
+                  }
+                  processor.switchPlaybackRate(curr);
+                });
+                this.onConfigChange("definition", (curr) => {
+                  processor.switchLine(curr);
+                });
+                const doWork = async () => {
+                  await lib.$.sleep(5 * 1e3);
+                  const next2 = async () => {
+                    const nextJob = getNextJob();
+                    if (nextJob) {
+                      const nextJobTitle = nextJob.querySelector(".common-text");
+                      if (include_jobs.some((job2) => {
+                        var _a;
+                        return (_a = nextJob.querySelector(".icon-box")) == null ? void 0 : _a.classList.contains(job2);
+                      })) {
+                        await safeClick(nextJobTitle);
+                        await doWork();
+                      } else {
+                        document.querySelectorAll('[class*="card-container"].active').forEach((el) => el.classList.remove("active"));
+                        nextJob == null ? void 0 : nextJob.classList.add("active");
+                        await lib.$.sleep(1e3);
+                        const _open = lib.$gm.unsafeWindow.open;
+                        lib.$gm.unsafeWindow.open = () => null;
+                        await safeClick(nextJobTitle);
+                        const msg2 = "链接任务完成，即将自动下一节！";
+                        lib.$message.info(msg2);
+                        setTimeout(async () => {
+                          lib.$gm.unsafeWindow.open = _open;
+                          await next2();
+                        }, 3e3);
+                      }
+                      return;
+                    }
+                    const nextEl = getNext();
+                    if (nextEl) {
+                      await safeClick(nextEl);
+                    } else {
+                      finishAlert();
+                    }
+                  };
+                  try {
+                    const wrapper = document.querySelector(".video-player-wrapper");
+                    if (!wrapper || wrapper.style.display === "none") {
+                      throw new Error("视频加载失败");
+                    }
+                    await waitForMedia({
+                      timeout: 5 * 1e3,
+                      filter: (m) => m.src.length !== 0
+                    });
+                  } catch {
+                    const msg2 = "未找到学习视频，即将自动下一节！";
+                    lib.$message.error(msg2);
+                    $console.error(msg2);
+                    await lib.$.sleep(3e3);
+                    await next2();
                     return;
                   }
-                  const nextEl = getNext();
-                  if (nextEl) {
-                    await safeClick(nextEl);
-                  } else {
-                    finishAlert();
-                  }
-                };
-                try {
-                  const wrapper = document.querySelector(".video-player-wrapper");
-                  if (!wrapper || wrapper.style.display === "none") {
-                    throw new Error("视频加载失败");
-                  }
-                  await waitForMedia({
-                    timeout: 5 * 1e3,
-                    filter: (m) => m.src.length !== 0
-                  });
-                } catch {
-                  const msg2 = "未找到学习视频，即将自动下一节！";
-                  lib.$message.error(msg2);
-                  $console.error(msg2);
-                  await lib.$.sleep(3e3);
-                  await next2();
-                  return;
-                }
-                const set = async () => {
-                  try {
-                    await processor.switchLine(this.cfg.definition || "line1bq");
-                    await lib.$.sleep(1e3);
-                    await processor.switchPlaybackRate(this.cfg.playbackRate);
-                    await lib.$.sleep(1e3);
-                    const media = await waitForMedia({ timeout: 5 * 1e3, filter: (m) => m.src.length !== 0 });
-                    await lib.$.sleep(1e3);
-                    state$8.study.currentMedia = media;
-                    if (media) {
-                      media.currentTime = 1;
-                      media.volume = this.cfg.volume;
+                  const set = async () => {
+                    try {
+                      await processor.switchLine(this.cfg.definition || "line1bq");
+                      await lib.$.sleep(1e3);
+                      await processor.switchPlaybackRate(this.cfg.playbackRate);
+                      await lib.$.sleep(1e3);
+                      const media = await waitForMedia({ timeout: 5 * 1e3, filter: (m) => m.src.length !== 0 });
+                      await lib.$.sleep(1e3);
+                      state$8.study.currentMedia = media;
+                      if (media) {
+                        media.currentTime = 1;
+                        media.volume = this.cfg.volume;
+                      }
+                      return state$8.study.currentMedia;
+                    } catch (e) {
+                      $console.log("视频加载失败，请尝试刷新页面！：" + e);
+                      lib.$message.error({ content: "视频加载失败，请尝试刷新页面！：" + e, duration: 0 });
                     }
-                    return state$8.study.currentMedia;
-                  } catch (e) {
-                    $console.log("视频加载失败，请尝试刷新页面！：" + e);
-                    lib.$message.error({ content: "视频加载失败，请尝试刷新页面！：" + e, duration: 0 });
+                  };
+                  const video = await set();
+                  if (!video) {
+                    return;
                   }
+                  playMedia(() => video == null ? void 0 : video.play()).then(() => {
+                    const cn = getChapterName();
+                    lib.$message.info({ content: "正在学习：" + cn });
+                    $console.log("正在学习：" + cn);
+                  });
+                  video.onpause = async () => {
+                    if (!(video == null ? void 0 : video.ended) && state$8.study.stop === false) {
+                      await lib.$.sleep(1e3);
+                      video == null ? void 0 : video.play();
+                    }
+                  };
+                  video.onended = async () => {
+                    lib.$message.info({ content: "即将自动跳转下一节" });
+                    await lib.$.sleep(3e3);
+                    await next2();
+                  };
                 };
-                const video = await set();
-                if (!video) {
-                  return;
-                }
-                playMedia(() => video == null ? void 0 : video.play()).then(() => {
-                  const cn = getChapterName();
-                  lib.$message.info({ content: "正在学习：" + cn });
-                  $console.log("正在学习：" + cn);
-                });
-                video.onpause = async () => {
-                  if (!(video == null ? void 0 : video.ended) && state$8.study.stop === false) {
-                    await lib.$.sleep(1e3);
-                    video == null ? void 0 : video.play();
-                  }
-                };
-                video.onended = async () => {
-                  lib.$message.info({ content: "即将自动跳转下一节" });
-                  await lib.$.sleep(3e3);
-                  await next2();
-                };
+                doWork();
               };
-              doWork();
+              try {
+                await runStudy();
+              } finally {
+                setExtensionAutomation(false, "智慧树课程学习");
+              }
             }
           };
         }
@@ -15750,11 +15824,16 @@
             };
             this.onConfigChange("playbackRate", updateMediaState);
             this.onConfigChange("volume", updateMediaState);
-            await study({
-              ...this.cfg,
-              playbackRate: parseFloat(this.cfg.playbackRate.toString()),
-              workOptions: CommonProject.scripts.settings.methods.getWorkOptions()
-            });
+            setExtensionAutomation(true, "超星课程学习");
+            try {
+              await study({
+                ...this.cfg,
+                playbackRate: parseFloat(this.cfg.playbackRate.toString()),
+                workOptions: CommonProject.scripts.settings.methods.getWorkOptions()
+              });
+            } finally {
+              setExtensionAutomation(false, "超星课程学习");
+            }
           }
         }
       }),
@@ -24117,12 +24196,14 @@ ${lines.join("\n")}`);
             main: async () => {
               if (state.running) {
                 state.running = false;
+                setExtensionAutomation(false, "讯飞在线学习");
                 if (state.media && !state.media.paused)
                   state.media.pause();
                 lib.$message.warn("已停止");
                 return;
               }
               state.running = true;
+              setExtensionAutomation(true, "讯飞在线学习");
               CommonProject.scripts.render.methods.pin(this);
               try {
                 await this.methods.run();
@@ -24130,6 +24211,7 @@ ${lines.join("\n")}`);
                 lib.$message.error("运行出错：" + String(err));
               } finally {
                 state.running = false;
+                setExtensionAutomation(false, "讯飞在线学习");
               }
             }
           };

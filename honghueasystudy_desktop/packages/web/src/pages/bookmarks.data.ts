@@ -52,6 +52,12 @@ export const OFFLINE_PLATFORMS: CatalogEntry[] = [
 		name: 'U校园',
 		url: 'https://uai.unipus.cn/',
 		description: '外语课程学习、练习与能力训练平台'
+	},
+	{
+		name: '讯飞智课',
+		url: 'https://icourse.fifedu.com/',
+		description: '讯飞智慧课程平台，AI 通识课程学习入口',
+		icon: 'https://icourse.fifedu.com/favicon.ico'
 	}
 ];
 

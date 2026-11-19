@@ -24,6 +24,7 @@ import { waitForMedia, waitForElement } from '../utils/study';
 import { $playwright } from '../utils/app';
 import { $render } from '../utils/render';
 import { answerVideoQuiz, judgeAnswerOf, VideoQuizStrategy } from '../utils/video-quiz';
+import { setExtensionAutomation } from '../utils/automation-state';
 
 const state = {
 	study: {
@@ -1653,229 +1654,239 @@ export const ZHSProject = Project.create({
 							$message.info({ content: '请点击任意章节开始进行自动学习', duration: 60 });
 							return;
 						}
-						// 置顶当前脚本
-						CommonProject.scripts.render.methods.pin(this);
-						const processor = new StudyVideoH5();
+						setExtensionAutomation(true, '智慧树课程学习');
+						// 整个学习流程包一层 try/finally：手动停止 / 定时停止 / 全部完成都会熄灭流光。
+						const runStudy = async () => {
+							// 置顶当前脚本
+							CommonProject.scripts.render.methods.pin(this);
+							const processor = new StudyVideoH5();
 
-						const getInfos = () => Array.from(document.querySelectorAll<HTMLElement>('.section-item-collapse-info'));
-						const getChapterName = () =>
-							(document.querySelector('.point-title-text')?.textContent || '未知章节') +
-							'-' +
-							(document.querySelector('[class*="card-container"].active .video-title')?.textContent || '未知小节');
+							const getInfos = () => Array.from(document.querySelectorAll<HTMLElement>('.section-item-collapse-info'));
+							const getChapterName = () =>
+								(document.querySelector('.point-title-text')?.textContent || '未知章节') +
+								'-' +
+								(document.querySelector('[class*="card-container"].active .video-title')?.textContent || '未知小节');
 
-						// 需点击的任务点，其他是是外部链接或者未知任务点
-						const include_jobs = ['video', 'book', /** 一般是PPT */ 'other', /** 一般是文档 */ 'text'];
+							// 需点击的任务点，其他是是外部链接或者未知任务点
+							const include_jobs = ['video', 'book', /** 一般是PPT */ 'other', /** 一般是文档 */ 'text'];
 
-						const getNextJob = () => {
-							const cards = Array.from(document.querySelectorAll('[class*="card-container"]'));
+							const getNextJob = () => {
+								const cards = Array.from(document.querySelectorAll('[class*="card-container"]'));
 
-							// 如果没有正在选中的章节，证明第一个就是外链模式，此时默认点击第一个
-							if (cards.some((card) => card.classList.contains('active')) === false) {
-								return cards[0];
-							}
-
-							let target_el;
-							const start_index = cards.findIndex((c) => c.classList.contains('active')) || 0;
-							for (let index = start_index + 1; index < cards.length; index++) {
-								const card = cards[index];
-
-								if (this.cfg.restudy) {
-									target_el = card;
-									break;
-								} else {
-									if (card.querySelector('.finished-icon')?.textContent?.includes('已完成')) {
-										continue;
-									}
-									target_el = card;
-									break;
+								// 如果没有正在选中的章节，证明第一个就是外链模式，此时默认点击第一个
+								if (cards.some((card) => card.classList.contains('active')) === false) {
+									return cards[0];
 								}
-							}
-							return target_el;
-						};
-						const getNext = () => {
-							const infos = getInfos();
 
-							const works: { info: HTMLElement; progress: number; total: number }[] = [];
+								let target_el;
+								const start_index = cards.findIndex((c) => c.classList.contains('active')) || 0;
+								for (let index = start_index + 1; index < cards.length; index++) {
+									const card = cards[index];
 
-							for (let index = 0; index < infos.length; index++) {
-								const info = infos[index];
-								const text = info.querySelector('.collapse-info-progress .progress-text')?.textContent || '';
-
-								if (this.cfg.switchMode === 'all') {
-									works.push({
-										info,
-										progress: 0,
-										total: 1
-									});
-								} else {
-									const [progress, total] = text
-										.replace('必学', '')
-										.trim()
-										.split('/')
-										.map((s) => parseInt(s));
-									if (progress < total) {
-										works.push({ progress, total, info });
-									}
-								}
-							}
-							let start = false;
-							for (let index = 0; index < works.length; index++) {
-								const work = works[index];
-								if (start) {
-									if (work.progress < work.total) {
-										return works[index].info;
-									}
-								}
-								if (work.info.classList.contains('active')) {
-									if (this.cfg.switchMode === 'all') {
-										return works[index + 1].info;
+									if (this.cfg.restudy) {
+										target_el = card;
+										break;
 									} else {
-										start = true;
+										if (card.querySelector('.finished-icon')?.textContent?.includes('已完成')) {
+											continue;
+										}
+										target_el = card;
+										break;
 									}
 								}
-							}
-							return works[0]?.info;
-						};
+								return target_el;
+							};
+							const getNext = () => {
+								const infos = getInfos();
 
-						// 监听音量
-						this.onConfigChange('volume', (curr) => {
-							state.study.currentMedia && (state.study.currentMedia.volume = curr);
-						});
+								const works: { info: HTMLElement; progress: number; total: number }[] = [];
 
-						// 监听速度
-						this.onConfigChange('playbackRate', (curr) => {
-							if (typeof curr === 'string') {
-								this.cfg.playbackRate = parseFloat(curr);
-							}
-							processor.switchPlaybackRate(curr);
-						});
+								for (let index = 0; index < infos.length; index++) {
+									const info = infos[index];
+									const text = info.querySelector('.collapse-info-progress .progress-text')?.textContent || '';
 
-						// 监听清晰度
-						this.onConfigChange('definition', (curr) => {
-							processor.switchLine(curr);
-						});
-
-						const doWork = async () => {
-							await $.sleep(5 * 1000);
-
-							const next = async () => {
-								const nextJob = getNextJob();
-
-								if (nextJob) {
-									const nextJobTitle = nextJob.querySelector('.common-text') as HTMLElement;
-
-									if (include_jobs.some((job) => nextJob.querySelector('.icon-box')?.classList.contains(job))) {
-										await safeClick(nextJobTitle);
-										await doWork();
+									if (this.cfg.switchMode === 'all') {
+										works.push({
+											info,
+											progress: 0,
+											total: 1
+										});
+									} else {
+										const [progress, total] = text
+											.replace('必学', '')
+											.trim()
+											.split('/')
+											.map((s) => parseInt(s));
+										if (progress < total) {
+											works.push({ progress, total, info });
+										}
 									}
-									// 链接任务
-									else {
-										/**
-										 * 链接任务点不会自动取消 active 样式，导致无法获取下一个任务点
-										 * 这里手动移除 active 样式，避免影响获取下一个任务点
-										 */
-										document
-											.querySelectorAll('[class*="card-container"].active')
-											.forEach((el) => el.classList.remove('active'));
-
-										// 链接任务点不会自动附加 active 样式，这里手动添加
-										nextJob?.classList.add('active');
-
-										await $.sleep(1000);
-
-										const _open = $gm.unsafeWindow.open;
-										$gm.unsafeWindow.open = () => null;
-										await safeClick(nextJobTitle);
-
-										const msg = '链接任务完成，即将自动下一节！';
-										$message.info(msg);
-										setTimeout(async () => {
-											$gm.unsafeWindow.open = _open;
-											// 直接下一个
-											await next();
-										}, 3000);
+								}
+								let start = false;
+								for (let index = 0; index < works.length; index++) {
+									const work = works[index];
+									if (start) {
+										if (work.progress < work.total) {
+											return works[index].info;
+										}
 									}
+									if (work.info.classList.contains('active')) {
+										if (this.cfg.switchMode === 'all') {
+											return works[index + 1].info;
+										} else {
+											start = true;
+										}
+									}
+								}
+								return works[0]?.info;
+							};
+
+							// 监听音量
+							this.onConfigChange('volume', (curr) => {
+								state.study.currentMedia && (state.study.currentMedia.volume = curr);
+							});
+
+							// 监听速度
+							this.onConfigChange('playbackRate', (curr) => {
+								if (typeof curr === 'string') {
+									this.cfg.playbackRate = parseFloat(curr);
+								}
+								processor.switchPlaybackRate(curr);
+							});
+
+							// 监听清晰度
+							this.onConfigChange('definition', (curr) => {
+								processor.switchLine(curr);
+							});
+
+							const doWork = async () => {
+								await $.sleep(5 * 1000);
+
+								const next = async () => {
+									const nextJob = getNextJob();
+
+									if (nextJob) {
+										const nextJobTitle = nextJob.querySelector('.common-text') as HTMLElement;
+
+										if (include_jobs.some((job) => nextJob.querySelector('.icon-box')?.classList.contains(job))) {
+											await safeClick(nextJobTitle);
+											await doWork();
+										}
+										// 链接任务
+										else {
+											/**
+											 * 链接任务点不会自动取消 active 样式，导致无法获取下一个任务点
+											 * 这里手动移除 active 样式，避免影响获取下一个任务点
+											 */
+											document
+												.querySelectorAll('[class*="card-container"].active')
+												.forEach((el) => el.classList.remove('active'));
+
+											// 链接任务点不会自动附加 active 样式，这里手动添加
+											nextJob?.classList.add('active');
+
+											await $.sleep(1000);
+
+											const _open = $gm.unsafeWindow.open;
+											$gm.unsafeWindow.open = () => null;
+											await safeClick(nextJobTitle);
+
+											const msg = '链接任务完成，即将自动下一节！';
+											$message.info(msg);
+											setTimeout(async () => {
+												$gm.unsafeWindow.open = _open;
+												// 直接下一个
+												await next();
+											}, 3000);
+										}
+										return;
+									}
+
+									const nextEl = getNext();
+									if (nextEl) {
+										await safeClick(nextEl);
+									} else {
+										finishAlert();
+									}
+								};
+
+								try {
+									const wrapper = document.querySelector<HTMLElement>('.video-player-wrapper');
+									if (!wrapper || wrapper.style.display === 'none') {
+										throw new Error('视频加载失败');
+									}
+									await waitForMedia({
+										timeout: 5 * 1000,
+										filter: (m) => m.src.length !== 0
+									});
+								} catch {
+									const msg = '未找到学习视频，即将自动下一节！';
+									$message.error(msg);
+									$console.error(msg);
+									await $.sleep(3000);
+									await next();
 									return;
 								}
 
-								const nextEl = getNext();
-								if (nextEl) {
-									await safeClick(nextEl);
-								} else {
-									finishAlert();
-								}
-							};
-
-							try {
-								const wrapper = document.querySelector<HTMLElement>('.video-player-wrapper');
-								if (!wrapper || wrapper.style.display === 'none') {
-									throw new Error('视频加载失败');
-								}
-								await waitForMedia({
-									timeout: 5 * 1000,
-									filter: (m) => m.src.length !== 0
-								});
-							} catch {
-								const msg = '未找到学习视频，即将自动下一节！';
-								$message.error(msg);
-								$console.error(msg);
-								await $.sleep(3000);
-								await next();
-								return;
-							}
-
-							const set = async () => {
-								// 上面操作会导致元素刷新，这里重新获取视频
-								try {
-									// 设置清晰度
-									await processor.switchLine(this.cfg.definition || 'line1bq');
-									await $.sleep(1000);
-									// 设置播放速度
-									await processor.switchPlaybackRate(this.cfg.playbackRate);
-									await $.sleep(1000);
-									const media = await waitForMedia({ timeout: 5 * 1000, filter: (m) => m.src.length !== 0 });
-									await $.sleep(1000);
-									state.study.currentMedia = media;
-									if (media) {
-										// 如果已经播放完了，则重置视频进度
-										media.currentTime = 1;
-										// 音量
-										media.volume = this.cfg.volume;
+								const set = async () => {
+									// 上面操作会导致元素刷新，这里重新获取视频
+									try {
+										// 设置清晰度
+										await processor.switchLine(this.cfg.definition || 'line1bq');
+										await $.sleep(1000);
+										// 设置播放速度
+										await processor.switchPlaybackRate(this.cfg.playbackRate);
+										await $.sleep(1000);
+										const media = await waitForMedia({ timeout: 5 * 1000, filter: (m) => m.src.length !== 0 });
+										await $.sleep(1000);
+										state.study.currentMedia = media;
+										if (media) {
+											// 如果已经播放完了，则重置视频进度
+											media.currentTime = 1;
+											// 音量
+											media.volume = this.cfg.volume;
+										}
+										return state.study.currentMedia;
+									} catch (e) {
+										$console.log('视频加载失败，请尝试刷新页面！：' + e);
+										$message.error({ content: '视频加载失败，请尝试刷新页面！：' + e, duration: 0 });
 									}
-									return state.study.currentMedia;
-								} catch (e) {
-									$console.log('视频加载失败，请尝试刷新页面！：' + e);
-									$message.error({ content: '视频加载失败，请尝试刷新页面！：' + e, duration: 0 });
+								};
+
+								const video = await set();
+								if (!video) {
+									return;
 								}
+
+								playMedia(() => video?.play()).then(() => {
+									const cn = getChapterName();
+									$message.info({ content: '正在学习：' + cn });
+									$console.log('正在学习：' + cn);
+								});
+
+								video.onpause = async () => {
+									if (!video?.ended && state.study.stop === false) {
+										await $.sleep(1000);
+										video?.play();
+									}
+								};
+
+								video.onended = async () => {
+									$message.info({ content: '即将自动跳转下一节' });
+									await $.sleep(3000);
+
+									await next();
+								};
 							};
 
-							const video = await set();
-							if (!video) {
-								return;
-							}
-
-							playMedia(() => video?.play()).then(() => {
-								const cn = getChapterName();
-								$message.info({ content: '正在学习：' + cn });
-								$console.log('正在学习：' + cn);
-							});
-
-							video.onpause = async () => {
-								if (!video?.ended && state.study.stop === false) {
-									await $.sleep(1000);
-									video?.play();
-								}
-							};
-
-							video.onended = async () => {
-								$message.info({ content: '即将自动跳转下一节' });
-								await $.sleep(3000);
-
-								await next();
-							};
+							doWork();
 						};
-
-						doWork();
+						try {
+							await runStudy();
+						} finally {
+							// 页面直接关闭时走不到这里，由桌面端心跳租约 60 秒兜底回收。
+							setExtensionAutomation(false, '智慧树课程学习');
+						}
 					}
 				};
 			}

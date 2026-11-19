@@ -171,7 +171,7 @@
 						</div>
 
 						<div class="hero__assurance reveal reveal--five">
-							<span><i></i>七大主流平台</span>
+							<span><i></i>八大主流平台</span>
 							<span><i></i>智能答题辅助</span>
 							<span><i></i>独立浏览器环境</span>
 						</div>

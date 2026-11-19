@@ -2,6 +2,7 @@ import { $, Project, Script, $ui, $message, h } from 'easy-us';
 import { playMedia } from '../utils';
 import { playbackRate, volume } from '../utils/configs';
 import { CommonProject } from './common';
+import { setExtensionAutomation } from '../utils/automation-state';
 
 /** 由 gm-polyfill 提供，最终由 background 执行 `chrome.tabs.remove` */
 declare const GM_closeTab: ((url: string, cb?: (res: unknown) => void) => void) | undefined;
@@ -1697,11 +1698,13 @@ export const FIFProject = Project.create({
 					main: async () => {
 						if (state.running) {
 							state.running = false;
+							setExtensionAutomation(false, '讯飞在线学习');
 							if (state.media && !state.media.paused) state.media.pause();
 							$message.warn('已停止');
 							return;
 						}
 						state.running = true;
+						setExtensionAutomation(true, '讯飞在线学习');
 						CommonProject.scripts.render.methods.pin(this);
 						try {
 							await this.methods.run();
@@ -1709,6 +1712,7 @@ export const FIFProject = Project.create({
 							$message.error('运行出错：' + String(err));
 						} finally {
 							state.running = false;
+							setExtensionAutomation(false, '讯飞在线学习');
 						}
 					}
 				};

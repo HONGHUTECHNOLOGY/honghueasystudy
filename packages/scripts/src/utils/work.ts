@@ -2,6 +2,7 @@ import { SimplifyWorkResult, WorkerEvents, WorkResult } from '@honghu/core';
 import { $ui, $message, MessageElement, Script, h, CommonEventEmitter, cors, $elements } from 'easy-us';
 import { CommonProject } from '../projects/common';
 import { CommonWorkOptions, workPreCheckMessage } from '.';
+import { setExtensionAutomation } from './automation-state';
 
 export let globalControlPanel: HTMLElement | null = null;
 
@@ -124,10 +125,13 @@ export function commonWork(
 	const start = async () => {
 		await options.beforeRunning?.();
 		running = true;
+		setExtensionAutomation(true, script.fullName());
 		worker = options.workerProvider(workOptions);
 
 		if (worker) {
 			options.onWorkerCreated?.(worker);
+		} else {
+			setExtensionAutomation(false, script.fullName());
 		}
 
 		const { container, controlBtn } = createWorkControlPanel();

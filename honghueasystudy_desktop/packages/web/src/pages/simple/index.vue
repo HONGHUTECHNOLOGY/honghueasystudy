@@ -54,7 +54,7 @@
 						class="mb-3"
 						banner
 						title="使用提示"
-						:html="lang('simple_mode_index_browser_usage', '启动浏览器、打开任意网课后即可自动执行脚本。')"
+						:html="lang('simple_mode_index_browser_usage', '先在桌面端「新建浏览器」并启动它，课程要在这个浏览器里打开 —— 直接用平时的 Chrome / Edge 不会执行桌面端能力。')"
 					/>
 
 					<div class="cards-area entities">

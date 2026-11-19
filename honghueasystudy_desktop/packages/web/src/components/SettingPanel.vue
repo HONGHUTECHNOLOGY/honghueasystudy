@@ -142,6 +142,17 @@
 					/>
 				</a-tooltip>
 			</Description>
+
+			<Description label="自动化流光提示">
+				<a-tooltip
+					content="自动刷课、自动答题或登录脚本操作页面时，在页面四周显示流光光效，并在底部提示「正在自动操作中」。不需要时关闭即可。"
+				>
+					<a-switch
+						v-model="store.render.setting.browser.autoGlow"
+						size="small"
+					/>
+				</a-tooltip>
+			</Description>
 		</a-card>
 
 		<RemoteControl />

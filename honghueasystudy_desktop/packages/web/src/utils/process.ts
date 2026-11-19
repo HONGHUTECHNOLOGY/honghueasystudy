@@ -541,7 +541,12 @@ export class Process extends EventEmitter {
 							 * 开发者调试端口：>0 时 worker 会额外拼上 --remote-debugging-port。
 							 * 关闭开关传 0，保证不会因为历史参数继续对外开放端口。
 							 */
-							devToolsPort: store.render.setting.dev?.enabled ? Number(store.render.setting.dev?.port) || 0 : 0
+							devToolsPort: store.render.setting.dev?.enabled ? Number(store.render.setting.dev?.port) || 0 : 0,
+							/**
+							 * 自动化流光提示（页面四周光效 + 底部「正在自动操作中」）。
+							 * 必须由渲染端传：worker 子进程里拿不到 electron 模块，解密不了设置存档。
+							 */
+							autoGlow: store.render.setting.browser?.autoGlow !== false
 						});
 					} else {
 						// preCheck 失败（浏览器路径缺失等）：原实现 promise 永不落定，状态永久卡在 launching

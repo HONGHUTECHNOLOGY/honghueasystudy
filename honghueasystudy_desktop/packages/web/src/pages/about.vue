@@ -22,7 +22,7 @@
 					<div class="doc-badges">
 						<span><i></i>MIT 开源</span>
 						<span><i></i>浏览器扩展 + 桌面端</span>
-						<span><i></i>七大学习平台</span>
+						<span><i></i>八大学习平台</span>
 					</div>
 				</div>
 
@@ -259,7 +259,7 @@
 
 					<div class="platform-line">
 						<span>已适配</span>
-						<p>超星学习通 · 知到智慧树 · 职教云 · 智慧职教 · 中国大学MOOC · 雨课堂 · U校园</p>
+						<p>超星学习通 · 知到智慧树 · 职教云 · 智慧职教 · 中国大学MOOC · 雨课堂 · U校园 · 讯飞智课 · 实验室安全考试平台</p>
 					</div>
 				</div>
 			</section>

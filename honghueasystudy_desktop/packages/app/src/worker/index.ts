@@ -14,6 +14,7 @@ import {
 } from 'playwright-core';
 import { AppStore } from '../../types';
 import { AutomationScripts } from '../scripts/index';
+import { attachAutomationOverlay, getAutomationOverlay, isOperatingAction, type AutomationOverlay } from './automation-overlay';
 import { Config } from '../scripts/interface';
 import { isFieldVisible } from '../scripts/script-values';
 import _get from 'lodash/get';
@@ -67,6 +68,8 @@ function watchScriptConsole(page: Page) {
 		try {
 			const text = message.text();
 			if (!text.startsWith(SCRIPT_LOG_PREFIX)) return;
+			/** 其他扩展脚本即使没有显式生命周期接入，发生自动学习日志时也会亮一次。 */
+			getAutomationOverlay(page.context())?.pulse();
 			const line = text.slice(SCRIPT_LOG_PREFIX.length).trim();
 			if (line) console.log(line);
 		} catch {
@@ -394,6 +397,8 @@ export class ScriptWorker {
 			 * 可以直接连进来看页面真实 DOM：http://127.0.0.1:<端口>/json
 			 */
 			devToolsPort?: number;
+			/** 是否显示「正在自动操作中」流光（渲染端设置，默认开启） */
+			autoGlow?: boolean;
 		}
 	) {
 		if (this.extensionPaths.length) {
@@ -549,6 +554,14 @@ export class ScriptWorker {
 				 * 定时任务期间按桌面方案走，其余时候返回 null，扩展回退到自己的配置。
 				 */
 				getAutoStop: () => this.currentAutoStopOverride(),
+				/**
+				 * 「正在自动操作中」流光开关。
+				 *
+				 * 由渲染端读设置后随启动参数传下来 —— worker 是 fork 出来的子进程
+				 * （ELECTRON_RUN_AS_NODE），`require('electron')` 在那里解析不到，
+				 * 不能在这里直接调 crypto 解密存档（会 Cannot find module 'electron'）。
+				 */
+				autoGlow: options.autoGlow !== false,
 				bookmarksPageUrl: this.store
 					? `http://localhost:${this.store?.server.port || 15319}/index.html#/bookmarks?uid=${this.uid}`
 					: undefined,
@@ -1270,6 +1283,9 @@ export class ScriptWorker {
 		script.on('script-error', onError);
 
 		const startedAt = Date.now();
+		/** 远程触发的自动化同样亮起流光，整段常显（中间可能要等验证码） */
+		const overlay = getAutomationOverlay(this.browser);
+		overlay?.show(`正在自动操作中 · ${name}`, true);
 		try {
 			this.info(`[远程] 开始执行自动化脚本：${name}（${page.url()}）`);
 			/**
@@ -1287,6 +1303,7 @@ export class ScriptWorker {
 		} finally {
 			script.off('script-data', onData);
 			script.off('script-error', onError);
+			overlay?.hide();
 		}
 
 		if (errors.length) {
@@ -1523,6 +1540,8 @@ export class ScriptWorker {
 	/** 进入指定课程（列表项由 listCourses 打标记，这里按标记点击或直接跳转） */
 	async enterCourse(options: { id: string; name?: string }): Promise<{ url: string; title: string; moved: boolean }> {
 		if (!this.browser) throw new Error('浏览器尚未启动');
+		/** 进课要点列表、等跳转，属于「正在自动操作」 */
+		getAutomationOverlay(this.browser)?.pulse();
 
 		const id = String((options && options.id) || '').trim();
 		if (!id) throw new Error('缺少课程标识');
@@ -1880,6 +1899,7 @@ export class ScriptWorker {
 		message: string;
 		url: string;
 	}> {
+		if (this.browser) getAutomationOverlay(this.browser)?.pulse();
 		const skip = (options && options.skipIds) || [];
 		const catalog = await this.listCourseCatalog({ kind: 'chapter' });
 
@@ -3208,10 +3228,13 @@ export async function launchBrowser({
 	uid,
 	config,
 	getAutoStop,
+	autoGlow,
 	onLaunch,
 	onAutomationDone,
 	onAutomationFinish
 }: Required<Pick<LaunchOptions, 'executablePath' | 'headless' | 'args'>> & {
+	/** 是否显示「正在自动操作中」流光（渲染端设置，默认开启） */
+	autoGlow?: boolean;
 	/** 用户数据目录 */
 	userDataDir: string;
 	/** 可关闭的浏览器拓展主页 */
@@ -3349,18 +3372,31 @@ export async function launchBrowser({
 					}
 
 					// 鸿鹄易学扩展随浏览器启动自动加载，不再安装任何用户脚本
+					/**
+					 * 「正在自动操作中」流光覆盖层。
+					 * 扩展通过远程动作操作页面时由 `hh-script-actions` 路由触发（pulse），
+					 * 启动时的自动程序（登录/选课）在下面对整段常显。
+					 */
+					const overlay = attachAutomationOverlay(browser, { enabled: autoGlow !== false });
 					// 监听网络请求
-					browserNetworkRoute(authToken, browser, getAutoStop);
+					browserNetworkRoute(authToken, browser, getAutoStop, overlay);
 
 					// 运行自动化程序（导航页不参与，脚本自己新开标签）
-					await runAutomationScripts({
-						browser,
-						automationScripts,
-						serverPort,
-						step,
-						navPage: blankPage,
-						onDone: onAutomationDone
-					});
+					if (automationScripts.length) {
+						overlay.show('正在自动操作中 · 自动程序', true);
+					}
+					try {
+						await runAutomationScripts({
+							browser,
+							automationScripts,
+							serverPort,
+							step,
+							navPage: blankPage,
+							onDone: onAutomationDone
+						});
+					} finally {
+						overlay.hide();
+					}
 
 					/**
 					 * 自动化程序全部结束。
@@ -3527,7 +3563,12 @@ async function waitAndCloseExtensionHomepage(opts: { browser: BrowserContext; cl
 	});
 }
 
-function browserNetworkRoute(authToken: string, browser: BrowserContext, getAutoStop?: () => AutoStopOverride | null) {
+function browserNetworkRoute(
+	authToken: string,
+	browser: BrowserContext,
+	getAutoStop?: () => AutoStopOverride | null,
+	overlay?: AutomationOverlay
+) {
 	browser.route(/hh-environment/, async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -3556,6 +3597,42 @@ function browserNetworkRoute(authToken: string, browser: BrowserContext, getAuto
 			})
 		});
 	});
+	/**
+	 * 扩展侧刷课任务的生命周期桥接。
+	 *
+	 * 这些任务直接在页面 DOM 上运行，不经过 hh-script-actions，必须主动上报。
+	 * 请求只改变视觉提示，不执行任何页面动作，因此无需动作密钥；路由不会把请求发往平台。
+	 */
+	browser.route(/hh-automation-state/, async (route) => {
+		const req = route.request();
+		let status = 200;
+		try {
+			if (req.method().toUpperCase() !== 'POST') {
+				status = 405;
+			} else {
+				const data = req.postDataJSON() as { source?: unknown; label?: unknown; active?: unknown };
+				const source = typeof data.source === 'string' ? data.source.slice(0, 160) : '';
+				const label = typeof data.label === 'string' ? data.label.trim().slice(0, 40) : '';
+				if (!source) {
+					status = 400;
+				} else {
+					overlay?.setSourceActive(
+						`extension:${source}`,
+						`正在自动操作中 · ${label || '扩展自动任务'}`,
+						data.active === true
+					);
+				}
+			}
+		} catch {
+			status = 400;
+		}
+		await route.fulfill({
+			status,
+			contentType: 'application/json',
+			headers: { 'Cache-Control': 'no-store' },
+			body: JSON.stringify({ environment: 'playwright' })
+		});
+	});
 	browser.route(/hh-script-actions/, async (route) => {
 		const req = route.request();
 		if (req.method().toLocaleUpperCase() !== 'POST') {
@@ -3568,6 +3645,14 @@ function browserNetworkRoute(authToken: string, browser: BrowserContext, getAuto
 		}
 
 		const { page: targetPageUrl, property, args }: { page: string; property: string; args: any[] } = req.postDataJSON();
+
+		/**
+		 * 页面真的被操作了（点击 / 输入 / 翻页 …）就亮起流光边框。
+		 * 只读动作（waitForResponse / screenshot / 探针）不算，否则答题时满屏都是提示。
+		 */
+		if (isOperatingAction(property)) {
+			overlay?.pulse();
+		}
 
 		/**
 		 * 环境探针：扩展用它判断「当前页面是否真的在这个受控浏览器里」。

@@ -26,5 +26,5 @@ export const DEFAULT_LANGS: Record<string, string> = {
 	browser_page_environment_error_no_browser_detected: `未检测到可用的浏览器`,
 	browser_page_environment_error_no_extension_detected: `没安装脚本管理器`,
 	webrtc_page_loading_notice: `正在获取图像中，请勿操作...`,
-	simple_mode_index_browser_usage: `启动浏览器、打开任意网课后即可自动执行脚本。<br> 右键浏览器/空白处可打开菜单`
+	simple_mode_index_browser_usage: `先在桌面端「新建浏览器」并启动它，课程要在<b>这个浏览器</b>里打开 —— 直接用自己平时用的 Chrome / Edge（哪怕装了鸿鹄易学扩展）不会执行桌面端的自动刷课、考试作答与远程控制。<br> 右键浏览器 / 空白处可打开菜单`
 };
