@@ -1,6 +1,27 @@
 # Changelog
 
 
+## [5.6.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.5.1...v5.6.0) (2026-11-19)
+
+
+### ✨ 新功能
+
+* **desktop-ui:** 脚本配置表单支持条件显隐、下拉字段与空态添加入口 ([e0b4031](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/e0b4031503c1905a425bdf2989dca65245348440))
+* **desktop:** 同平台多门课排队依次跑，暂停后不再被自动拉起 ([4da7bba](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/4da7bba8deffd54736d33388e119d098518d5f88))
+* **desktop:** 登录脚本支持条件字段与旧名别名 ([97d5515](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/97d55158721dcd7735cb4f2f751b8a955a2ba578))
+* **desktop:** 自动化流光覆盖层 + 扩展刷课状态上报 ([6321db8](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/6321db80210895c0234911f3f44f9fdb28f87c37))
+* **release:** 增加 Gitee 发布页（只放 GitCode 下载入口，不放附件） ([ee40e20](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/ee40e2072b0066c4a19b6271ff52b206c83d035b))
+* **release:** 增加 Gitee 发布页（只放 GitCode 下载入口，不放附件） ([6dc222e](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/6dc222e774b06ac2221f9247edca858cc6ba834e))
+* **scripts:** 新增讯飞智课平台学习脚本 ([c767418](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/c767418b1865c4f72f8f9b9dd6528be0e4952589))
+
+
+### 🐛 问题修复
+
+* **desktop-ui:** 每个浏览器独立保存脚本配置，补齐关闭与设置入口 ([979a7fe](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/979a7fe2f7641e15feb91d88c9764374357f762b))
+* **fifedu:** 修正资源类型误判，支持网页链接，页数上报改用平台回显校准 ([805114c](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/805114c5dfbbe3d24fd34e26d55be5bed7e89f5c))
+* **fifedu:** 完成判定只认「已完成」，100% 差末页的场景不再被跳过 ([1cc9d9c](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/1cc9d9c863db2091ac74bbe5776569a0338b01be))
+* 修正题库连接、AI 提示、自动化指纹与远程动作通道 ([0b905e1](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/0b905e16e5a4ed0e4d535eaf7d4fbb73e3c42b92))
+
 ## [5.5.1](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.5.0...v5.5.1) (2026-11-11)
 
 
