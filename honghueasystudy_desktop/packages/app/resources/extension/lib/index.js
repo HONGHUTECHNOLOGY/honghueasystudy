@@ -22878,14 +22878,77 @@
     }
   });
   const MAX_PDF_PAGES = 300;
+  const PDF_PAGE_TIMEOUT = 4e3;
+  function dlog(...args) {
+    console.log("[hh-fif]", ...args);
+  }
   const state = {
     running: false,
     media: null,
     activityKey: "",
     stuck: 0,
     handled: /* @__PURE__ */ new WeakSet(),
-    autoStartedKey: ""
+    autoStartedKey: "",
+    pptTotal: 0,
+    pdfTotal: 0,
+    retry: /* @__PURE__ */ new WeakMap(),
+    failures: [],
+    totals: /* @__PURE__ */ new Map()
   };
+  function pickPageTotal(data, depth = 0) {
+    if (!data || typeof data !== "object" || depth > 2)
+      return 0;
+    const keys = ["totalPage", "totalPages", "numPages", "pageCount", "pageTotal", "total", "pages", "pageNum"];
+    for (const key of keys) {
+      const value = data[key];
+      if (value === void 0 || value === null || typeof value === "object")
+        continue;
+      const num = parseInt(String(value), 10);
+      if (num > 0 && num <= 5e3)
+        return num;
+    }
+    for (const key of Object.keys(data)) {
+      const value = data[key];
+      if (!value || typeof value !== "object")
+        continue;
+      const nested = pickPageTotal(value, depth + 1);
+      if (nested > 0)
+        return nested;
+    }
+    return 0;
+  }
+  window.addEventListener(
+    "message",
+    (event) => {
+      var _a, _b;
+      if (!/ow365\.cn/.test(event.origin || ""))
+        return;
+      const data = event.data;
+      const total = parseInt(String((_b = (_a = data == null ? void 0 : data.page) == null ? void 0 : _a.total) != null ? _b : ""), 10);
+      if (total > 0)
+        state.pptTotal = total;
+    },
+    true
+  );
+  let pdfMsgDumped = 0;
+  window.addEventListener(
+    "message",
+    (event) => {
+      if (!/resc\.fifedu\.com/.test(event.origin || ""))
+        return;
+      if (pdfMsgDumped < 3) {
+        pdfMsgDumped++;
+        try {
+          dlog("pdf msg:", JSON.stringify(event.data).slice(0, 220));
+        } catch {
+        }
+      }
+      const total = pickPageTotal(event.data);
+      if (total > 0)
+        state.pdfTotal = total;
+    },
+    true
+  );
   function activeItem() {
     return document.querySelector(".activity-list-item.is-active");
   }
@@ -22916,19 +22979,94 @@
     const item = activeItem();
     return item ? itemFinished(item) : false;
   }
+  const MAX_RESOURCE_RETRY = 3;
+  function diagnose(kind) {
+    const parts = [`类型=${kind}`, `平台状态=${activeStatus() || "空"}`];
+    if (kind === "ppt") {
+      parts.push(`预览器=${pptFrame() ? "有" : "无"}`);
+      parts.push(`总页数=${state.pptTotal || "未上报"}`);
+    } else if (kind === "pdf") {
+      const frame = pdfFrame();
+      parts.push(`阅读器=${frame ? "有" : "无"}`);
+      parts.push(`总页数=${state.pdfTotal || "未上报"}`);
+      const hash = frame ? (frame.getAttribute("src") || "").split("#")[1] || "" : "";
+      parts.push(`页码参数=${hash || "无"}`);
+    } else if (kind === "video") {
+      const media = document.querySelector("video");
+      parts.push(`播放器=${media ? "有" : "无"}`);
+      if (media) {
+        const duration = isFinite(media.duration) ? Math.round(media.duration) : "?";
+        parts.push(`进度=${Math.round(media.currentTime)}/${duration}s`);
+        parts.push(`倍速=${media.playbackRate}`, `暂停=${media.paused ? "是" : "否"}`);
+      }
+    }
+    const hosts = Array.from(document.querySelectorAll("iframe")).filter((f) => !isCompanionFrame(f)).map((f) => {
+      const src2 = f.getAttribute("src") || f.src || "";
+      const matched = /^https?:\/\/([^/?#]+)/.exec(src2);
+      return matched ? matched[1] : src2.slice(0, 24);
+    });
+    if (hosts.length)
+      parts.push(`iframe=${hosts.join(",")}`);
+    parts.push(`资源列表=${activityItems().length}项`);
+    return parts.join(" ");
+  }
+  function isCompanionFrame(frame) {
+    const src2 = frame.getAttribute("src") || frame.src || "";
+    return /istp-learning-companions/.test(src2);
+  }
+  function hasPreviewFrame() {
+    return Array.from(document.querySelectorAll("iframe")).some((f) => !isCompanionFrame(f));
+  }
+  function visibleFrame(frame) {
+    return Boolean(frame && frame.offsetWidth > 80 && frame.offsetHeight > 80);
+  }
+  function visiblePlayer() {
+    const player = document.querySelector(".xgplayer");
+    if (player && player.offsetHeight > 100)
+      return true;
+    const media = document.querySelector("video");
+    return Boolean(media && (media.offsetHeight > 80 || media.readyState > 0));
+  }
+  function typeBadge() {
+    var _a;
+    const item = activeItem();
+    if (!item)
+      return "";
+    const list = Array.from(item.querySelectorAll(".activityStatus"));
+    return (((_a = list[0]) == null ? void 0 : _a.textContent) || "").trim();
+  }
   function activeKind() {
-    const name = activeName();
-    if (/视频/.test(name))
+    if (visiblePlayer())
       return "video";
+    if (visibleFrame(pptFrame()))
+      return "ppt";
+    if (visibleFrame(pdfFrame()))
+      return "pdf";
+    const badge = typeBadge();
+    if (/视频/.test(badge))
+      return "video";
+    if (/PPT/i.test(badge))
+      return "ppt";
+    if (/PDF|Word|Excel|文档/i.test(badge))
+      return "pdf";
+    if (/网页|链接/.test(badge))
+      return "link";
+    if (/作业|讨论|测验|问卷|考试|音频/.test(badge))
+      return "other";
+    const name = activeName();
+    if (/\.(docx?|pdf|xlsx?|txt)\b/i.test(name))
+      return "pdf";
+    if (/\.(pptx?)\b/i.test(name))
+      return "ppt";
+    if (/\.(mp4|flv|m3u8)\b/i.test(name))
+      return "video";
+    if (/网页链接|超链接|^链接/.test(name))
+      return "link";
     if (/\bPPT\b|PPTX?/i.test(name))
       return "ppt";
-    if (/PDF|Word|Excel/i.test(name))
-      return "pdf";
-    if (document.querySelector(".xgplayer"))
+    if (/视频/.test(name))
       return "video";
-    if (pptFrame())
-      return "ppt";
-    if (pdfFrame())
+    if (/PDF|Word|Excel/i.test(name))
       return "pdf";
     return "other";
   }
@@ -22992,9 +23130,8 @@
     return false;
   }
   function pdfFrame() {
-    return Array.from(document.querySelectorAll("iframe")).find(
-      (f) => /pdfv-resource/.test(f.getAttribute("src") || f.src || "")
-    ) || null;
+    const frames = Array.from(document.querySelectorAll("iframe"));
+    return frames.find((f) => /pdfv-resource/.test(f.getAttribute("src") || "")) || frames.find((f) => /pdfv-resource/.test(f.src || "")) || frames.find((f) => /resc\.fifedu\.com/.test(f.src || "")) || null;
   }
   function pptFrame() {
     return Array.from(document.querySelectorAll("iframe")).find(
@@ -23006,7 +23143,7 @@
   async function waitActivityReady(timeout = 15e3) {
     const start2 = Date.now();
     while (Date.now() - start2 < timeout) {
-      if (document.querySelector(".xgplayer") || pdfFrame() || pptFrame())
+      if (visiblePlayer() || visibleFrame(pdfFrame()) || visibleFrame(pptFrame()) || hasPreviewFrame())
         return true;
       await lib.$.sleep(500);
     }
@@ -23083,46 +23220,285 @@
   }
   function jumpPdfPage(page) {
     const frame = pdfFrame();
-    if (!frame)
-      return false;
-    const base = (frame.getAttribute("src") || frame.src || "").split("#")[0];
-    if (!base)
-      return false;
-    frame.setAttribute("src", `${base}#page=${page}`);
-    return true;
-  }
-  async function readPdf() {
-    const frame = pdfFrame();
     if (!frame) {
-      lib.$message.warn("未找到文档阅读器，跳过当前资源");
+      dlog("jump: 没有阅读器 iframe");
       return false;
     }
-    jumpPdfPage(9999);
-    await lib.$.sleep(1500);
-    if (isFinished())
-      return true;
-    let last = "";
-    let same = 0;
-    for (let page = 1; page <= MAX_PDF_PAGES && state.running; page++) {
-      if (!pdfFrame())
-        return isFinished();
-      jumpPdfPage(page);
-      await lib.$.sleep(900);
-      if (isFinished())
+    const base = (frame.getAttribute("src") || frame.src || "").split("#")[0];
+    if (!base) {
+      dlog("jump: src 为空");
+      return false;
+    }
+    frame.setAttribute("src", `${base}#page=${page}`);
+    dlog("jump →", page, (frame.getAttribute("src") || "").split("#")[1]);
+    return true;
+  }
+  async function waitStatusChange(from, timeout) {
+    const start2 = Date.now();
+    while (Date.now() - start2 < timeout) {
+      if (!state.running)
+        return false;
+      if (activeStatus() !== from)
         return true;
-      const now2 = activeStatus();
-      if (now2 === last) {
-        same++;
-        if (same >= (/\d+\s*%/.test(now2) ? 2 : 12))
-          return isFinished();
-      } else {
-        same = 0;
-        last = now2;
+      await lib.$.sleep(400);
+    }
+    return false;
+  }
+  function markPdfDone(totalPage) {
+    var _a;
+    if (!(totalPage > 0))
+      return false;
+    const win = (_a = pdfFrame()) == null ? void 0 : _a.contentWindow;
+    if (!win)
+      return false;
+    try {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: { eventName: "currentPage", currentPage: totalPage, totalPage },
+          origin: "https://resc.fifedu.com",
+          source: win
+        })
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  function markPptDone() {
+    const frame = pptFrame();
+    const win = frame == null ? void 0 : frame.contentWindow;
+    if (!win)
+      return false;
+    const total = state.pptTotal;
+    if (!(total > 0))
+      return false;
+    try {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            info: "ow365",
+            anim: { total: "0", idx: "0" },
+            page: { total: String(total), idx: String(total) },
+            url: (frame == null ? void 0 : frame.src) || ""
+          },
+          origin: "https://ow365.cn",
+          source: win
+        })
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  async function calibratePptDone(guess = state.pptTotal) {
+    let page = guess;
+    for (let round = 0; round < 3 && state.running; round++) {
+      if (!(page > 0))
+        break;
+      state.pptTotal = page;
+      const before = activeStatus();
+      if (!markPptDone())
+        return false;
+      if (!await waitStatusChange(before, 2500)) {
+        dlog("calibratePpt: 报", page, "页没反应，停在", activeStatus());
+        break;
       }
+      if (isFinished()) {
+        dlog("calibratePpt: 报", page, "页 →", activeStatus());
+        return true;
+      }
+      const pct = percentOf(activeStatus());
+      if (!pct || pct === 100)
+        break;
+      const real = Math.round(page * 100 / pct);
+      dlog("calibratePpt: 报", page, "页 → 平台", pct + "%", "，真实约", real);
+      if (pct >= 95 && pct <= 105) {
+        for (const candidate of [real, real - 1, real + 1]) {
+          if (candidate <= 0 || candidate === page)
+            continue;
+          state.pptTotal = candidate;
+          const from = activeStatus();
+          markPptDone();
+          if (!await waitStatusChange(from, 2500))
+            continue;
+          if (isFinished()) {
+            dlog("calibratePpt: 临界修正 报", candidate, "页 →", activeStatus());
+            return true;
+          }
+        }
+        break;
+      }
+      if (real === page || real <= 0 || real > 5e3)
+        break;
+      page = real;
     }
     return isFinished();
   }
-  function askPptNext(frame) {
+  function percentOf(text) {
+    const matched = /(\d+)\s*%/.exec(text || "");
+    return matched ? parseInt(matched[1], 10) : 0;
+  }
+  async function calibratePdfDone(guess) {
+    let page = guess;
+    for (let round = 0; round < 3 && state.running; round++) {
+      const before = activeStatus();
+      if (!markPdfDone(page))
+        return false;
+      if (!await waitStatusChange(before, 2500)) {
+        dlog("calibrate: 报", page, "页没反应，停在", activeStatus());
+        break;
+      }
+      if (isFinished()) {
+        dlog("calibrate: 报", page, "页 →", activeStatus());
+        return true;
+      }
+      const pct = percentOf(activeStatus());
+      if (!pct || pct === 100)
+        break;
+      const real = Math.round(page * 100 / pct);
+      dlog("calibrate: 报", page, "页 → 平台", pct + "%", "，真实约", real);
+      if (pct >= 95 && pct <= 105) {
+        let fixed = false;
+        for (const candidate of [real, real - 1, real + 1]) {
+          if (candidate <= 0 || candidate === page)
+            continue;
+          const from = activeStatus();
+          markPdfDone(candidate);
+          if (!await waitStatusChange(from, 2500))
+            continue;
+          if (isFinished()) {
+            dlog("calibrate: 临界修正 报", candidate, "页 →", activeStatus());
+            fixed = true;
+            break;
+          }
+        }
+        if (fixed)
+          return true;
+        break;
+      }
+      if (real === page || real <= 0 || real > 5e3)
+        break;
+      page = real;
+    }
+    return isFinished();
+  }
+  async function waitPdfTotal(timeout = 3e3) {
+    const start2 = Date.now();
+    while (Date.now() - start2 < timeout && state.running) {
+      if (state.pdfTotal > 0) {
+        dlog("waitPdfTotal: 阅读器主动上报总页数", state.pdfTotal);
+        return state.pdfTotal;
+      }
+      await lib.$.sleep(200);
+    }
+    return 0;
+  }
+  async function probePdfTotal() {
+    if (!pdfFrame())
+      return { total: 0, page: 0 };
+    let responsive = false;
+    for (let attempt = 0; attempt < 5 && state.running; attempt++) {
+      if (!pdfFrame())
+        return { total: 0, page: 0 };
+      const from = activeStatus();
+      jumpPdfPage(2);
+      if (await waitStatusChange(from, PDF_PAGE_TIMEOUT)) {
+        responsive = true;
+        if (state.pdfTotal > 0) {
+          dlog("probePdfTotal: 直接从阅读器消息读到总页数", state.pdfTotal);
+          return { total: state.pdfTotal, page: 2 };
+        }
+        break;
+      }
+      if (attempt === 0)
+        lib.$message.info("文档还在加载（大文件通常要几十秒），继续等待…");
+      await lib.$.sleep(2e3);
+    }
+    if (!responsive) {
+      dlog("probePdfTotal: 跳页始终无反应", diagnose("pdf"));
+      return { total: 0, page: 0 };
+    }
+    if (isFinished())
+      return { total: 0, page: 2 };
+    let probePage = 2;
+    let pct2 = percentOf(activeStatus());
+    if (!pct2) {
+      const from = activeStatus();
+      jumpPdfPage(10);
+      if (await waitStatusChange(from, PDF_PAGE_TIMEOUT)) {
+        probePage = 10;
+        if (isFinished())
+          return { total: 0, page: probePage };
+        pct2 = percentOf(activeStatus());
+      }
+    }
+    if (!pct2)
+      return { total: 0, page: probePage };
+    const guess = Math.round(probePage * 100 / pct2);
+    dlog("probePdfTotal:", probePage + "/" + guess, "=", pct2 + "% → 总页数约", guess);
+    return { total: guess >= 2 && guess <= 5e3 ? guess : 0, page: probePage };
+  }
+  async function readPdf(allowSwitch = true) {
+    const frame = pdfFrame();
+    if (!frame) {
+      if (allowSwitch && pptFrame()) {
+        dlog("readPdf: 没有 pdf 阅读器，改走 PPT 分支");
+        return readPpt(false);
+      }
+      lib.$message.warn("未找到文档阅读器，跳过当前资源");
+      dlog("readPdf: 没有 iframe", diagnose("pdf"));
+      return false;
+    }
+    if (isFinished())
+      return true;
+    const cacheKey = `pdf:${currentKey()}`;
+    const cached = state.totals.get(cacheKey) || 0;
+    let total = cached || state.pdfTotal || await waitPdfTotal(2e3);
+    let probedPage = 0;
+    if (!total) {
+      const probed = await probePdfTotal();
+      total = probed.total;
+      probedPage = probed.page;
+    }
+    if (total > 0)
+      state.totals.set(cacheKey, total);
+    if (isFinished())
+      return true;
+    if (total > 0 && await calibratePdfDone(total))
+      return true;
+    dlog("readPdf: start", (frame.getAttribute("src") || "").slice(-40));
+    let stagnant = 0;
+    for (let page = probedPage + 1; page <= MAX_PDF_PAGES && state.running; page++) {
+      if (!pdfFrame()) {
+        dlog("readPdf: iframe 消失，停止");
+        return isFinished();
+      }
+      const from = activeStatus();
+      jumpPdfPage(page);
+      const changed = await waitStatusChange(from, PDF_PAGE_TIMEOUT);
+      dlog("readPdf: page", page, changed ? "变化 →" : "无变化 →", activeStatus());
+      if (isFinished())
+        return true;
+      if (changed) {
+        stagnant = 0;
+        continue;
+      }
+      stagnant++;
+      if (stagnant >= 4) {
+        dlog("readPdf: 连续", stagnant, "次无变化", diagnose("pdf"));
+        break;
+      }
+      if (stagnant >= 2)
+        await lib.$.sleep(1500);
+    }
+    if (!isFinished()) {
+      const finalTotal = state.pdfTotal || total;
+      if (finalTotal > 0)
+        await calibratePdfDone(finalTotal);
+    }
+    return isFinished();
+  }
+  function askPptNext(frame, timeout = 1500) {
     return new Promise((resolve) => {
       var _a;
       let done = false;
@@ -23130,26 +23506,82 @@
         if (done)
           return;
         done = true;
+        clearTimeout(timer);
         window.removeEventListener("message", onMessage);
         resolve(page);
       };
       const onMessage = (event) => {
-        var _a2;
+        var _a2, _b;
         const data = event.data;
         if (!data || typeof data !== "object" || data.type !== PPT_PAGE)
           return;
-        finish(String((_a2 = data.page) != null ? _a2 : ""));
+        const total = parseInt(String((_a2 = data.total) != null ? _a2 : ""), 10);
+        if (total > 0)
+          state.pptTotal = total;
+        finish(String((_b = data.page) != null ? _b : ""));
       };
       window.addEventListener("message", onMessage);
       (_a = frame.contentWindow) == null ? void 0 : _a.postMessage(PPT_NEXT, "*");
-      window.setTimeout(() => finish(""), 3e3);
+      const timer = window.setTimeout(() => finish(""), timeout);
     });
   }
-  async function readPpt() {
+  async function waitPptReady(timeout = 12e3) {
+    const start2 = Date.now();
+    let probed = 0;
+    while (Date.now() - start2 < timeout && state.running) {
+      const frame = pptFrame();
+      if (!frame) {
+        await lib.$.sleep(600);
+        continue;
+      }
+      if (state.pptTotal > 0)
+        return true;
+      probed++;
+      const page = await askPptNext(frame, 1200);
+      if (page) {
+        dlog("waitPptReady: 就绪 当前页", page, "总页数", state.pptTotal || "未上报");
+        return true;
+      }
+      if (probed === 1)
+        lib.$message.info("PPT 预览器响应慢，改用平台进度反推页数…");
+      await lib.$.sleep(600);
+    }
+    const pct = percentOf(activeStatus());
+    if (pct > 0 && pct < 100) {
+      const guess = Math.max(2, Math.round(100 / pct));
+      state.pptTotal = guess;
+      dlog("waitPptReady: 预览器无应答，按", pct + "% 反推总页数", guess);
+      return true;
+    }
+    dlog("waitPptReady: 等满", Math.round((Date.now() - start2) / 1e3), "秒", diagnose("ppt"));
+    return Boolean(pptFrame());
+  }
+  async function readPpt(allowSwitch = true) {
     if (!pptFrame()) {
+      if (allowSwitch && pdfFrame()) {
+        dlog("readPpt: 没有永中预览器，改走 PDF 分支");
+        return readPdf(false);
+      }
       lib.$message.warn("未找到 PPT 预览器，跳过当前资源");
+      dlog("readPpt: 没有 iframe", diagnose("ppt"));
       return false;
     }
+    const cacheKey = `ppt:${currentKey()}`;
+    const cached = state.totals.get(cacheKey) || 0;
+    if (cached > 0) {
+      state.pptTotal = cached;
+      dlog("readPpt: 复用上次校准的总页数", cached);
+    }
+    if (!await waitPptReady()) {
+      dlog("readPpt: 预览器未就绪", diagnose("ppt"));
+      return isFinished();
+    }
+    if (await calibratePptDone()) {
+      if (state.pptTotal > 0)
+        state.totals.set(cacheKey, state.pptTotal);
+      return true;
+    }
+    dlog("readPpt: 补页后 →", activeStatus(), "总页数", state.pptTotal || "未上报");
     let lastPage = "";
     let same = 0;
     for (let i = 0; i < MAX_PDF_PAGES && state.running; i++) {
@@ -23162,14 +23594,128 @@
         return true;
       if (!page || page === lastPage) {
         same++;
-        if (same >= 6)
-          return isFinished();
+        if (same >= 6) {
+          dlog("readPpt: 连续", same, "次页码不动", diagnose("ppt"));
+          break;
+        }
+        if (same >= 3)
+          await lib.$.sleep(1200);
       } else {
         same = 0;
         lastPage = page;
       }
     }
+    if (!isFinished()) {
+      await calibratePptDone();
+      if (isFinished() && state.pptTotal > 0)
+        state.totals.set(cacheKey, state.pptTotal);
+      dlog("readPpt: 收尾 →", activeStatus(), diagnose("ppt"));
+    }
     return isFinished();
+  }
+  function closeTabByUrl(url) {
+    const api2 = typeof GM_closeTab === "function" ? GM_closeTab : null;
+    if (!api2) {
+      dlog("closeTabByUrl: 桥接不可用，跳过");
+      return;
+    }
+    try {
+      api2(url, (res) => dlog("closeTabByUrl:", JSON.stringify(res)));
+    } catch (err) {
+      dlog("closeTabByUrl: 调用失败", String(err));
+    }
+  }
+  async function readLink() {
+    const queryLink = () => document.querySelector(".content .link") || document.querySelector(".link");
+    let el = queryLink();
+    for (let i = 0; i < 6 && !el && state.running; i++) {
+      await lib.$.sleep(500);
+      el = queryLink();
+    }
+    const url = ((el == null ? void 0 : el.textContent) || "").trim() || (document.body.innerText.match(/https?:\/\/[^\s]+/) || [""])[0];
+    if (!el && !/^https?:\/\//i.test(url)) {
+      lib.$message.warn(`没找到网页链接，跳过：${activeName()}`);
+      dlog("readLink: 找不到链接元素");
+      return false;
+    }
+    const before = activeStatus();
+    const fakeWindow = {
+      closed: false,
+      close() {
+      },
+      focus() {
+      },
+      blur() {
+      },
+      postMessage() {
+      },
+      location: { href: url, replace() {
+      }, assign() {
+      }, reload() {
+      } },
+      document: { write() {
+      }, close() {
+      }, open() {
+      } },
+      opener: null
+    };
+    const originalOpen = window.open;
+    let replaced = false;
+    try {
+      window.open = function(openUrl) {
+        fakeWindow.location.href = String(openUrl || url);
+        return fakeWindow;
+      };
+      replaced = window.open !== originalOpen;
+      if (!replaced) {
+        try {
+          Object.defineProperty(window, "open", {
+            configurable: true,
+            writable: true,
+            value: function(openUrl) {
+              fakeWindow.location.href = String(openUrl || url);
+              return fakeWindow;
+            }
+          });
+          replaced = window.open !== originalOpen;
+        } catch {
+        }
+      }
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        const opts = {
+          bubbles: true,
+          cancelable: true,
+          clientX: rect.left + 10,
+          clientY: rect.top + 8
+        };
+        el.dispatchEvent(new MouseEvent("mousedown", opts));
+        el.dispatchEvent(new MouseEvent("mouseup", opts));
+        el.dispatchEvent(new MouseEvent("click", opts));
+      } else {
+        dlog("readLink: 没有可点的元素，只上报了地址", url.slice(0, 60));
+      }
+    } catch (err) {
+      dlog("readLink: 点击失败", String(err));
+    } finally {
+      window.open = originalOpen;
+    }
+    dlog("readLink: 点击", url.slice(0, 70), "open替换成功=", replaced ? "是" : "否");
+    await lib.$.sleep(1200);
+    try {
+      closeTabByUrl(url);
+    } catch (err) {
+      dlog("readLink: 关标签失败", String(err));
+    }
+    const changed = await waitStatusChange(before, 6e3);
+    const done = isFinished();
+    if (done) {
+      dlog("readLink: 已完成", activeName());
+    } else {
+      lib.$message.info(`已点击网页链接${changed ? "" : "（平台暂未回写完成状态）"}：${url.slice(0, 56)}`);
+      dlog("readLink: 未回写", diagnose("link"));
+    }
+    return true;
   }
   function nextPendingItem() {
     const items = activityItems();
@@ -23188,13 +23734,15 @@
     const target = nextPendingItem();
     if (!target)
       return false;
-    const fromIdx = activityItems().indexOf(activeItem());
+    const current = activeItem();
+    const fromIdx = current ? activityItems().indexOf(current) : -1;
     state.media = null;
     target.click();
     const start2 = Date.now();
     while (Date.now() - start2 < 2e4) {
       await lib.$.sleep(700);
-      const nowIdx = activityItems().indexOf(activeItem());
+      const nowItem = activeItem();
+      const nowIdx = nowItem ? activityItems().indexOf(nowItem) : -1;
       if (nowIdx >= 0 && nowIdx !== fromIdx) {
         await lib.$.sleep(1200);
         return true;
@@ -23230,12 +23778,32 @@
         hideInPanel: true,
         matches: [["永中预览器", "ow365.cn"]],
         oncomplete() {
+          const readPage = () => {
+            var _a, _b, _c, _d, _e;
+            const api2 = window.getAnimtPage;
+            if (typeof api2 === "function") {
+              try {
+                const info = api2();
+                const idx = parseInt(String((_b = (_a = info == null ? void 0 : info.page) == null ? void 0 : _a.idx) != null ? _b : ""), 10);
+                const total = parseInt(String((_d = (_c = info == null ? void 0 : info.page) == null ? void 0 : _c.total) != null ? _d : ""), 10);
+                if (idx > 0)
+                  return { page: String(idx), total: total > 0 ? total : 0 };
+              } catch {
+              }
+            }
+            const sn = document.querySelector("#sn");
+            const value = parseInt(String((_e = sn == null ? void 0 : sn.value) != null ? _e : ""), 10);
+            const count = window.pageCount;
+            return {
+              page: value > 0 ? String(value) : "",
+              total: typeof count === "number" && count > 0 ? count : 0
+            };
+          };
           window.addEventListener("message", (event) => {
             if (event.data !== PPT_NEXT)
               return;
             const source = event.source;
-            const sn = document.querySelector("#sn");
-            const before = sn ? sn.value : "";
+            const before = readPage().page;
             const next2 = window.nextPage;
             if (typeof next2 === "function") {
               next2();
@@ -23255,9 +23823,15 @@
                 );
               }
             }
-            window.setTimeout(() => {
-              source == null ? void 0 : source.postMessage({ type: PPT_PAGE, page: sn ? sn.value : "", before }, "*");
-            }, 600);
+            let waited = 0;
+            const timer = window.setInterval(() => {
+              waited += 250;
+              const now2 = readPage();
+              if (now2.page && now2.page !== before || waited >= 3e3) {
+                window.clearInterval(timer);
+                source == null ? void 0 : source.postMessage({ type: PPT_PAGE, page: now2.page, total: now2.total, before }, "*");
+              }
+            }, 250);
           });
         }
       }),
@@ -23322,7 +23896,22 @@
             handleCurrent: async (rate, vol) => {
               const mode = this.cfg.videoMode === "seek" ? "seek" : "play";
               const kind = activeKind();
+              dlog("handle:", kind, "|", activeName(), "| skipPdf=", this.cfg.skipPdf);
+              if (kind === "link") {
+                lib.$message.info(`打开网页链接：${activeName()}`);
+                return readLink();
+              }
               if (kind === "other") {
+                if (hasPreviewFrame()) {
+                  const unknown = Array.from(document.querySelectorAll("iframe")).filter((f) => !isCompanionFrame(f)).map((f) => (f.getAttribute("src") || f.src || "").slice(0, 80));
+                  dlog("handle: 未识别的预览器", unknown);
+                  lib.$message.warn(`未识别的预览器，等待加载后重试：${activeName()}`);
+                  await lib.$.sleep(4e3);
+                  if (activeKind() !== "other")
+                    return false;
+                  lib.$message.warn(`不支持的预览器（${unknown[0] || "未知地址"}）：${activeName()}`);
+                  return true;
+                }
                 lib.$message.info(`跳过不支持的资源：${activeName()}`);
                 return true;
               }
@@ -23435,13 +24024,34 @@
                 const item = activeItem();
                 const key = currentKey();
                 const beforeIdx = item ? activityItems().indexOf(item) : -1;
+                if (state.activityKey !== key) {
+                  state.pdfTotal = 0;
+                  state.pptTotal = 0;
+                }
                 state.activityKey = key;
                 if (isFinished()) {
                   lib.$message.info(`已完成，跳过：${activeName()}`);
                 } else {
                   const ok = await this.methods.handleCurrent(rate, vol);
-                  if (!ok && state.running) {
-                    lib.$message.warn(`未能完成：${activeName()}，继续下一个资源`);
+                  if (ok) {
+                    const stale = state.failures.findIndex((f) => f.name === activeName());
+                    if (stale >= 0)
+                      state.failures.splice(stale, 1);
+                  }
+                  if (!ok && state.running && item) {
+                    const tries = (state.retry.get(item) || 0) + 1;
+                    state.retry.set(item, tries);
+                    const reason = diagnose(activeKind());
+                    dlog(`[未完成] ${activeName()} 第 ${tries}/${MAX_RESOURCE_RETRY} 次 | ${reason}`);
+                    if (tries < MAX_RESOURCE_RETRY && autoNext) {
+                      lib.$message.warn(`未能完成（第 ${tries} 次，将重试）：${activeName()}｜${reason}`);
+                      await lib.$.sleep(3e3);
+                      continue;
+                    }
+                    state.failures.push({ name: activeName(), kind: activeKind(), reason });
+                    lib.$message.error(
+                      `重试 ${tries} 次仍未完成，先跳过：${activeName()}｜${reason}`
+                    );
                   }
                 }
                 if (item)
@@ -23457,7 +24067,8 @@
                   lib.$message.success("本节资源已全部处理，且没有下一节了，学习结束");
                   break;
                 }
-                const afterIdx = activityItems().indexOf(activeItem());
+                const afterItem = activeItem();
+                const afterIdx = afterItem ? activityItems().indexOf(afterItem) : -1;
                 if (currentKey() === key && afterIdx === beforeIdx) {
                   state.stuck++;
                   if (state.stuck >= 3) {
@@ -23471,6 +24082,12 @@
                   lib.$message.warn("已连续处理 800 个资源，自动停止");
                   break;
                 }
+              }
+              if (state.failures.length) {
+                const lines = state.failures.map((f) => `· ${f.name}｜${f.reason}`);
+                dlog("[未完成汇总]\n" + lines.join("\n"));
+                lib.$message.warn(`本轮有 ${state.failures.length} 个资源未完成：
+${lines.join("\n")}`);
               }
             },
             nextInSection: async () => {

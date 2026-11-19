@@ -351,6 +351,32 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 		);
 		return true;
 	}
+	/**
+	 * 关掉脚本自己弹出的标签
+	 *
+	 * 讯飞的「网页链接」资源必须点一下才算学完，但平台点完会用**自己的方式**开新标签
+	 * （不是走 `window.open`，实测替换掉 `window.open` 也拦不住，估计是 `<a target=_blank>`
+	 * 或模块加载时缓存的引用）。所以只能事后关：按 URL 前缀找最近打开的那个标签。
+	 */
+	if (type === 'closeTab') {
+		const target = String((payload && payload.url) || '').trim();
+		if (!target) {
+			sendResponse({ ok: false, error: 'no url' });
+			return false;
+		}
+		const prefix = target.split('?')[0];
+		const tabId = sender.tab && sender.tab.id;
+		chrome.tabs.query({}, (tabs) => {
+			const hits = (tabs || []).filter(
+				(t) => t.id !== tabId && typeof t.url === 'string' && t.url.indexOf(prefix) === 0
+			);
+			hits.forEach((t) => {
+				chrome.tabs.remove(t.id, () => void chrome.runtime.lastError);
+			});
+			sendResponse({ ok: true, closed: hits.length });
+		});
+		return true;
+	}
 	sendResponse({ error: 'unknown type: ' + type });
 	return false;
 });

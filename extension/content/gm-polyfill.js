@@ -315,6 +315,17 @@ var GM = (function () {
 			});
 		},
 
+		/**
+		 * 关掉按 URL 前缀匹配的标签（由后台执行）
+		 *
+		 * 平台自己弹出来的页面不经过我们的 `window.open`，拦不住，只能事后关。
+		 */
+		GM_closeTab: function (url, cb) {
+			send('closeTab', { url: url }, { retry: 1 }).then(function (res) {
+				if (cb) cb(res || {});
+			});
+		},
+
 		GM_getResourceText: function (name) {
 			var resources = RES.resources || {};
 			return resources[name];
@@ -335,5 +346,6 @@ var GM_xmlhttpRequest = GM.GM_xmlhttpRequest;
 var GM_notification = GM.GM_notification;
 var GM_getTab = GM.GM_getTab;
 var GM_saveTab = GM.GM_saveTab;
+var GM_closeTab = GM.GM_closeTab;
 var GM_getResourceText = GM.GM_getResourceText;
 var __bootReady__ = GM.__bootReady__;

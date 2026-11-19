@@ -3,6 +3,9 @@ import { playMedia } from '../utils';
 import { playbackRate, volume } from '../utils/configs';
 import { CommonProject } from './common';
 
+/** 由 gm-polyfill 提供，最终由 background 执行 `chrome.tabs.remove` */
+declare const GM_closeTab: ((url: string, cb?: (res: unknown) => void) => void) | undefined;
+
 /**
  * 讯飞智慧课程平台（icourse.fifedu.com）
  *
@@ -22,6 +25,14 @@ import { CommonProject } from './common';
 
 /** 单节课最多尝试翻动的页数，防止异常情况死循环 */
 const MAX_PDF_PAGES = 300;
+
+/** 每翻一页最多等平台回写进度的时间 */
+const PDF_PAGE_TIMEOUT = 4000;
+
+/** 临时排查用：控制台看脚本分支（排查完会撤掉） */
+function dlog(...args: any[]) {
+	console.log('[hh-fif]', ...args);
+}
 
 const state = {
 	running: false,
@@ -44,8 +55,102 @@ const state = {
 	 * 不记住就会在每一跳都尝试重新启动一次。一个地址只自动起一次，
 	 * 用户手动点了「停止」之后也不会被立刻拉起来。
 	 */
-	autoStartedKey: ''
+	autoStartedKey: '',
+	/** 永中预览器（ PPT / 部分文档）报上来的总页数，用来把进度顶满 */
+	pptTotal: 0,
+	/** pdf.js 阅读器（ Word / PDF）报上来的总页数 */
+	pdfTotal: 0,
+	/**
+	 * 每个资源的失败次数
+	 *
+	 * 大文件（几百页的 PPT、几十兆的 PDF）预览器要几十秒才能交互，第一次处理
+	 * 往往拿不到页码，直接记账跳过就永远停在「未开始」。这里按元素记次数，
+	 * 失败后不记账、原地重试，超过上限才放弃并留档。切章后 DOM 重建，WeakMap 自动重置。
+	 */
+	retry: new WeakMap<HTMLElement, number>(),
+	/** 本次运行最终没做成的资源，收尾时统一打出来 */
+	failures: [] as Array<{ name: string; kind: string; reason: string }>,
+	/**
+	 * 已探明的总页数缓存（key = 类型 + 资源标识）
+	 *
+	 * 同一个文档被跳过又回来、或者切走再切回时，没必要重新跳页探测 ——
+	 * 每次探测都要翻两页、等两轮回写，纯浪费。
+	 */
+	totals: new Map<string, number>()
 };
+
+/**
+ * 从消息体里挑出「总页数」
+ *
+ * 两个预览器的字段名不一样，平台也升级过几次命名。按可信度**依次命中**，
+ * 不要「取所有数字里最大的」：消息里常混着 `pages`（已渲染页数）、`currentPage`
+ * 这类干扰项，取最大会把 14 页的文档认成 19 页，平台按 19/14 就算出 136%。
+ * 只认白名单 key，避免误取 `videoTotalTime` 之类的数字。
+ */
+function pickPageTotal(data: any, depth = 0): number {
+	if (!data || typeof data !== 'object' || depth > 2) return 0;
+
+	const keys = ['totalPage', 'totalPages', 'numPages', 'pageCount', 'pageTotal', 'total', 'pages', 'pageNum'];
+	for (const key of keys) {
+		const value = (data as any)[key];
+		if (value === undefined || value === null || typeof value === 'object') continue;
+		const num = parseInt(String(value), 10);
+		if (num > 0 && num <= 5000) return num;
+	}
+
+	for (const key of Object.keys(data)) {
+		const value = (data as any)[key];
+		if (!value || typeof value !== 'object') continue;
+		const nested = pickPageTotal(value, depth + 1);
+		if (nested > 0) return nested;
+	}
+	return 0;
+}
+
+/**
+ * 记下永中预览器的总页数
+ *
+ * 预览器翻一页就往父页面发一条 `{info:'ow365', page:{total, idx}}`，
+ * 平台按 idx/total 算进度。这里只是顺带记一下 total，好在收尾时凑出「最后一页」。
+ */
+window.addEventListener(
+	'message',
+	(event: MessageEvent) => {
+		if (!/ow365\.cn/.test(event.origin || '')) return;
+		const data = event.data as { page?: { total?: string } } | null;
+		const total = parseInt(String(data?.page?.total ?? ''), 10);
+		if (total > 0) state.pptTotal = total;
+	},
+	true
+);
+
+/**
+ * 记下 pdf.js 阅读器（Word / PDF）的总页数
+ *
+ * 阅读器每翻一页往父页面发一条 `{eventName:'currentPage', ...}`，里面带总页数。
+ * 平台按「当前页 / 总页数」算百分比，所以收尾时上报的页码必须是**真实末页**，
+ * 早先写死 999 会被平台算成 33300%，把课程进度统计搞脏。
+ */
+/** 阅读器消息只打印前几条，用来确认字段名，别把控制台刷了 */
+let pdfMsgDumped = 0;
+
+window.addEventListener(
+	'message',
+	(event: MessageEvent) => {
+		if (!/resc\.fifedu\.com/.test(event.origin || '')) return;
+		if (pdfMsgDumped < 3) {
+			pdfMsgDumped++;
+			try {
+				dlog('pdf msg:', JSON.stringify(event.data).slice(0, 220));
+			} catch {
+				/* 循环引用之类，忽略 */
+			}
+		}
+		const total = pickPageTotal(event.data);
+		if (total > 0) state.pdfTotal = total;
+	},
+	true
+);
 
 /* ======================== 页面结构 ======================== */
 
@@ -94,15 +199,127 @@ function isFinished() {
 	return item ? itemFinished(item) : false;
 }
 
-/** 资源类型：优先看列表里的类型角标，再看页面上的播放器 / 阅读器 */
-function activeKind(): 'video' | 'pdf' | 'ppt' | 'other' {
+/** 单个资源最多重试几轮（大文件加载慢，一次没做完不代表资源有问题） */
+const MAX_RESOURCE_RETRY = 3;
+
+/**
+ * 给「没学完」的资源做一次现场体检
+ *
+ * 面板上只显示「未能完成」的话，根本分不清是预览器还没加载完、总页数没探到，
+ * 还是平台没回写进度。把能查到的都列出来：一条摘要进面板，完整明细进控制台。
+ */
+function diagnose(kind: string) {
+	const parts: string[] = [`类型=${kind}`, `平台状态=${activeStatus() || '空'}`];
+
+	if (kind === 'ppt') {
+		parts.push(`预览器=${pptFrame() ? '有' : '无'}`);
+		parts.push(`总页数=${state.pptTotal || '未上报'}`);
+	} else if (kind === 'pdf') {
+		const frame = pdfFrame();
+		parts.push(`阅读器=${frame ? '有' : '无'}`);
+		parts.push(`总页数=${state.pdfTotal || '未上报'}`);
+		const hash = frame ? (frame.getAttribute('src') || '').split('#')[1] || '' : '';
+		parts.push(`页码参数=${hash || '无'}`);
+	} else if (kind === 'video') {
+		const media = document.querySelector<HTMLVideoElement>('video');
+		parts.push(`播放器=${media ? '有' : '无'}`);
+		if (media) {
+			const duration = isFinite(media.duration) ? Math.round(media.duration) : '?';
+			parts.push(`进度=${Math.round(media.currentTime)}/${duration}s`);
+			parts.push(`倍速=${media.playbackRate}`, `暂停=${media.paused ? '是' : '否'}`);
+		}
+	}
+
+	// 把预览器域名也带上：平台换厂商时，日志里能直接看出该适配谁
+	const hosts = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe'))
+		.filter((f) => !isCompanionFrame(f))
+		.map((f) => {
+			const src = f.getAttribute('src') || f.src || '';
+			const matched = /^https?:\/\/([^/?#]+)/.exec(src);
+			return matched ? matched[1] : src.slice(0, 24);
+		});
+	if (hosts.length) parts.push(`iframe=${hosts.join(',')}`);
+
+	parts.push(`资源列表=${activityItems().length}项`);
+	return parts.join(' ');
+}
+
+/** 数字人伴学 iframe 不是学习资源，判断预览器时要排掉 */
+function isCompanionFrame(frame: HTMLIFrameElement) {
+	const src = frame.getAttribute('src') || frame.src || '';
+	return /istp-learning-companions/.test(src);
+}
+
+/** 页面上有没有挂资源预览器（不限于已知的两种域名） */
+function hasPreviewFrame() {
+	return Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe')).some((f) => !isCompanionFrame(f));
+}
+
+/**
+ * iframe 得真的有尺寸，才算当前资源挂上来的
+ *
+ * 切换资源时旧预览器会残留在 DOM 里一拍，光看「有没有 iframe」会把上一节的
+ * Word 当成当前资源的类型（从 Word 切到视频时最明显）。
+ */
+function visibleFrame(frame: HTMLIFrameElement | null) {
+	return Boolean(frame && frame.offsetWidth > 80 && frame.offsetHeight > 80);
+}
+
+/** 播放器同理：有尺寸或有数据才算真的在放视频 */
+function visiblePlayer() {
+	const player = document.querySelector<HTMLElement>('.xgplayer');
+	if (player && player.offsetHeight > 100) return true;
+	const media = document.querySelector<HTMLVideoElement>('video');
+	return Boolean(media && (media.offsetHeight > 80 || media.readyState > 0));
+}
+
+/**
+ * 资源类型角标
+ *
+ * 列表项里有两个 `.activityStatus`：第一个是类型（视频 / Word / PPT / PDF），
+ * 第二个是学习状态（已学 60% / 已完成）。判断类型只能看第一个。
+ */
+function typeBadge() {
+	const item = activeItem();
+	if (!item) return '';
+	const list = Array.from(item.querySelectorAll('.activityStatus'));
+	return (list[0]?.textContent || '').trim();
+}
+
+/**
+ * 资源类型：**可见的播放器/预览器 → 类型角标 → 文件名后缀**
+ *
+ * 踩过的坑：
+ * 1. `23视频的构成.docx` 里带「视频」两个字，早先按名字正则先判视频，
+ *    于是脚本去等 `<video>` 播放器，等不到就判失败——明明挂的是 pdf.js 阅读器。
+ * 2. 只看「有没有 iframe」会被残留元素骗：从 Word 切到视频时旧阅读器还在 DOM 里。
+ *    所以这里要求 iframe / 播放器**有实际尺寸**。
+ * 3. 网页链接（`<div class="link">` 只展示一个外链，无 iframe 无按钮）单独归类，
+ *    平台对它没有「学完」的判定，点开也不发任何接口，只能识别出来干净跳过。
+ */
+function activeKind(): 'video' | 'pdf' | 'ppt' | 'link' | 'other' {
+	if (visiblePlayer()) return 'video';
+	if (visibleFrame(pptFrame())) return 'ppt';
+	if (visibleFrame(pdfFrame())) return 'pdf';
+
+	// 预览器还没挂上来时，看类型角标
+	const badge = typeBadge();
+	if (/视频/.test(badge)) return 'video';
+	if (/PPT/i.test(badge)) return 'ppt';
+	if (/PDF|Word|Excel|文档/i.test(badge)) return 'pdf';
+	if (/网页|链接/.test(badge)) return 'link';
+	if (/作业|讨论|测验|问卷|考试|音频/.test(badge)) return 'other';
+
+	// 最后才看名字：先认后缀，再认关键词，避免「视频的构成.docx」被当成视频
 	const name = activeName();
-	if (/视频/.test(name)) return 'video';
+	if (/\.(docx?|pdf|xlsx?|txt)\b/i.test(name)) return 'pdf';
+	if (/\.(pptx?)\b/i.test(name)) return 'ppt';
+	if (/\.(mp4|flv|m3u8)\b/i.test(name)) return 'video';
+	// 「视频的构成 网页链接」这种没有后缀的，别因为带「视频」就去等播放器
+	if (/网页链接|超链接|^链接/.test(name)) return 'link';
 	if (/\bPPT\b|PPTX?/i.test(name)) return 'ppt';
+	if (/视频/.test(name)) return 'video';
 	if (/PDF|Word|Excel/i.test(name)) return 'pdf';
-	if (document.querySelector('.xgplayer')) return 'video';
-	if (pptFrame()) return 'ppt';
-	if (pdfFrame()) return 'pdf';
 	return 'other';
 }
 
@@ -191,10 +408,13 @@ async function gotoNextChapter() {
 
 /** 资源阅读器 iframe（PDF / PPT / Word 共用同一个 pdf.js 阅读器） */
 function pdfFrame() {
+	const frames = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe'));
 	return (
-		Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe')).find((f) =>
-			/pdfv-resource/.test(f.getAttribute('src') || f.src || '')
-		) || null
+		frames.find((f) => /pdfv-resource/.test(f.getAttribute('src') || '')) ||
+		frames.find((f) => /pdfv-resource/.test(f.src || '')) ||
+		/** 路径改版时兜底：只要挂在资源服务器上的预览器就算 */
+		frames.find((f) => /resc\.fifedu\.com/.test(f.src || '')) ||
+		null
 	);
 }
 
@@ -216,7 +436,8 @@ const PPT_PAGE = 'hh-fifedu:ppt-page';
 async function waitActivityReady(timeout = 15000) {
 	const start = Date.now();
 	while (Date.now() - start < timeout) {
-		if (document.querySelector('.xgplayer') || pdfFrame() || pptFrame()) return true;
+		// 已知预览器优先；`hasPreviewFrame` 兜住平台将来换域名/换厂商的情况
+		if (visiblePlayer() || visibleFrame(pdfFrame()) || visibleFrame(pptFrame()) || hasPreviewFrame()) return true;
 		await $.sleep(500);
 	}
 	return false;
@@ -301,68 +522,441 @@ async function playOneVideo(rate: number, vol: number, mode: 'play' | 'seek') {
 /** 把阅读器跳到指定页：只改 hash，不会重新加载文档 */
 function jumpPdfPage(page: number) {
 	const frame = pdfFrame();
-	if (!frame) return false;
+	if (!frame) {
+		dlog('jump: 没有阅读器 iframe');
+		return false;
+	}
 	const base = (frame.getAttribute('src') || frame.src || '').split('#')[0];
-	if (!base) return false;
+	if (!base) {
+		dlog('jump: src 为空');
+		return false;
+	}
 	frame.setAttribute('src', `${base}#page=${page}`);
+	dlog('jump →', page, (frame.getAttribute('src') || '').split('#')[1]);
 	return true;
 }
 
-/** 逐页翻到末尾，直到平台标记完成 */
-async function readPdf() {
-	const frame = pdfFrame();
-	if (!frame) {
-		$message.warn('未找到文档阅读器，跳过当前资源');
+/** 等平台把进度报上来：状态文本变了就返回 true */
+async function waitStatusChange(from: string, timeout: number) {
+	const start = Date.now();
+	while (Date.now() - start < timeout) {
+		if (!state.running) return false;
+		if (activeStatus() !== from) return true;
+		await $.sleep(400);
+	}
+	return false;
+}
+
+/**
+ * 让平台把当前文档当成「翻到最后一页」
+ *
+ * 平台不直接读阅读器 DOM，只认阅读器 postMessage 上来的 `{eventName:'currentPage'}`，
+ * 再按 currentPage/totalPage 算进度、签名后上报。所以不必真的逐页翻——
+ * 用阅读器自己的 iframe.contentWindow 作为 source 补一条「最后一页」即可，
+ * 平台会当成正常浏览走完自己的上报链路（签名、节流都不用我们操心）。
+ *
+ * `totalPage` 必须是真实总页数：上报 999 时平台会算成 999/3 = 33300%，
+ * 虽然状态也变成「已完成」，但课程总进度统计会被这个脏值污染。
+ */
+function markPdfDone(totalPage: number) {
+	if (!(totalPage > 0)) return false;
+	const win = pdfFrame()?.contentWindow;
+	if (!win) return false;
+	try {
+		window.dispatchEvent(
+			new MessageEvent('message', {
+				data: { eventName: 'currentPage', currentPage: totalPage, totalPage },
+				origin: 'https://resc.fifedu.com',
+				source: win
+			})
+		);
+		return true;
+	} catch {
 		return false;
 	}
+}
 
-	// 先用一个超大页码探底：pdf.js 会把它压到最后一页，
-	// 这样「翻到末页即完成」的文档一次就能收工
-	jumpPdfPage(9999);
-	await $.sleep(1500);
-	if (isFinished()) return true;
+/** 永中预览器同理：`page.idx = page.total` 就是最后一页（总页数没探到时不做假） */
+function markPptDone() {
+	const frame = pptFrame();
+	const win = frame?.contentWindow;
+	if (!win) return false;
+	const total = state.pptTotal;
+	if (!(total > 0)) return false;
+	try {
+		window.dispatchEvent(
+			new MessageEvent('message', {
+				data: {
+					info: 'ow365',
+					anim: { total: '0', idx: '0' },
+					page: { total: String(total), idx: String(total) },
+					url: frame?.src || ''
+				},
+				origin: 'https://ow365.cn',
+				source: win
+			})
+		);
+		return true;
+	} catch {
+		return false;
+	}
+}
 
-	let last = '';
-	let same = 0;
-	for (let page = 1; page <= MAX_PDF_PAGES && state.running; page++) {
-		if (!pdfFrame()) return isFinished();
-		jumpPdfPage(page);
-		await $.sleep(900);
-		if (isFinished()) return true;
+/**
+ * PPT 版的补页校准：逻辑同 `calibratePdfDone`
+ *
+ * 永中预览器的 `pageCount` 一般是准的，但从消息里取的 total 仍可能取错，
+ * 所以同样用平台回显反推一轮兜底。
+ */
+async function calibratePptDone(guess = state.pptTotal) {
+	let page = guess;
+	for (let round = 0; round < 3 && state.running; round++) {
+		if (!(page > 0)) break;
+		state.pptTotal = page;
+		const before = activeStatus();
+		if (!markPptDone()) return false;
 
-		// 状态完全不动就说明翻到位了。有百分比时两页没变化即可收，
-		// Word 这类不显示百分比的资源只能靠多翻几页兜底
-		const now = activeStatus();
-		if (now === last) {
-			same++;
-			if (same >= (/\d+\s*%/.test(now) ? 2 : 12)) return isFinished();
-		} else {
-			same = 0;
-			last = now;
+		if (!(await waitStatusChange(before, 2500))) {
+			dlog('calibratePpt: 报', page, '页没反应，停在', activeStatus());
+			break;
 		}
+		if (isFinished()) {
+			dlog('calibratePpt: 报', page, '页 →', activeStatus());
+			return true;
+		}
+
+		const pct = percentOf(activeStatus());
+		if (!pct || pct === 100) break;
+
+		const real = Math.round((page * 100) / pct);
+		dlog('calibratePpt: 报', page, '页 → 平台', pct + '%', '，真实约', real);
+
+		// 同 PDF：临界区四舍五入会差一页，前后各试一个
+		if (pct >= 95 && pct <= 105) {
+			for (const candidate of [real, real - 1, real + 1]) {
+				if (candidate <= 0 || candidate === page) continue;
+				state.pptTotal = candidate;
+				const from = activeStatus();
+				markPptDone();
+				if (!(await waitStatusChange(from, 2500))) continue;
+				if (isFinished()) {
+					dlog('calibratePpt: 临界修正 报', candidate, '页 →', activeStatus());
+					return true;
+				}
+			}
+			break;
+		}
+
+		if (real === page || real <= 0 || real > 5000) break;
+		page = real;
 	}
 	return isFinished();
 }
 
-/** 让预览器翻一页，并拿回翻页后的页码 */
-function askPptNext(frame: HTMLIFrameElement) {
+/** 从「已学 22%」里取 22 */
+function percentOf(text: string) {
+	const matched = /(\d+)\s*%/.exec(text || '');
+	return matched ? parseInt(matched[1], 10) : 0;
+}
+
+/**
+ * 用平台回显的百分比把「补页」校准到 100%
+ *
+ * 平台按「当前页 / 它自己的总页数」算百分比，而这个总页数我们只能猜：
+ * 猜大了（上报 19 页、实际 14 页）显示 136%，猜小了（上报 5 页、实际 15 页）停在 33%，
+ * 两种都不算「已完成」，资源就卡在半路。
+ *
+ * 把回显当反馈反推真实值再报一次：5 页报出 33% → 真实约 15 页 → 报 15 → 100%。
+ * 最多收敛 3 轮，任一轮到 100% 就收工。
+ */
+async function calibratePdfDone(guess: number) {
+	let page = guess;
+	for (let round = 0; round < 3 && state.running; round++) {
+		const before = activeStatus();
+		if (!markPdfDone(page)) return false;
+
+		// 平台没反应就别硬试了：要么阅读器还没就绪，要么它根本不认这条消息
+		if (!(await waitStatusChange(before, 2500))) {
+			dlog('calibrate: 报', page, '页没反应，停在', activeStatus());
+			break;
+		}
+		if (isFinished()) {
+			dlog('calibrate: 报', page, '页 →', activeStatus());
+			return true;
+		}
+
+		const pct = percentOf(activeStatus());
+		if (!pct || pct === 100) break;
+
+		const real = Math.round((page * 100) / pct);
+		dlog('calibrate: 报', page, '页 → 平台', pct + '%', '，真实约', real);
+
+		/**
+		 * 百分比落在 95~105 时已经接近末页，但四舍五入会让反推整整差一页：
+		 * 151 页的文档报 200 得 132%，反推 152（101%）、再推 150（99%），
+		 * 就是绕不到 151。这里把前后各一页都试掉，命中就走。
+		 */
+		if (pct >= 95 && pct <= 105) {
+			let fixed = false;
+			for (const candidate of [real, real - 1, real + 1]) {
+				if (candidate <= 0 || candidate === page) continue;
+				const from = activeStatus();
+				markPdfDone(candidate);
+				if (!(await waitStatusChange(from, 2500))) continue;
+				if (isFinished()) {
+					dlog('calibrate: 临界修正 报', candidate, '页 →', activeStatus());
+					fixed = true;
+					break;
+				}
+			}
+			if (fixed) return true;
+			break;
+		}
+
+		if (real === page || real <= 0 || real > 5000) break;
+		page = real;
+	}
+	return isFinished();
+}
+
+/**
+ * 进文档先等阅读器把总页数报上来
+ *
+ * 实测 pdf.js 加载完成后会主动发一条
+ * `{eventName:'ready', totalPage:5, currentPage:1, loading:false}`，
+ * **只有这条带 totalPage**，之后的 `{eventName:'currentPage', currentPage:N}` 不带。
+ * 所以进文档先等这条，拿到就能一次补页到 100%，省掉跳页探测和百分比反推。
+ *
+ * 大文件下载慢，ready 可能要几秒，这里给 3 秒；等不到再走 `probePdfTotal`。
+ */
+async function waitPdfTotal(timeout = 3000) {
+	const start = Date.now();
+	while (Date.now() - start < timeout && state.running) {
+		if (state.pdfTotal > 0) {
+			dlog('waitPdfTotal: 阅读器主动上报总页数', state.pdfTotal);
+			return state.pdfTotal;
+		}
+		await $.sleep(200);
+	}
+	return 0;
+}
+
+/**
+ * 探出真实总页数
+ *
+ * 首选「直接读」：pdf.js 每次翻页都会往父页面发 `currentPage`，消息里带总页数，
+ * 我们的全局监听器已经存进 `state.pdfTotal`。跳一页就能拿到，**一次就准**。
+ *
+ * 拿不到（消息里没有 total 字段）才退回反推：平台按「当前页 / 总页数」算百分比，
+ * 2/9 显示 22%，`round(2 * 100 / 22) = 9`。反推差一页没关系，`calibratePdfDone`
+ * 会用平台回显修回来，所以只跳一页、不再做第二轮交叉验证。
+ *
+ * 同时返回「探到第几页」，调用方从下一页接着翻，不要倒回第 1 页
+ * （倒回去会让平台看到进度从 3/N 掉回 1/N，判定反复震荡，永远不给完成）。
+ */
+async function probePdfTotal(): Promise<{ total: number; page: number }> {
+	if (!pdfFrame()) return { total: 0, page: 0 };
+
+	/**
+	 * 大文件先把文件下完、渲染首页才认跳页。「跳了没反应」不能直接当成「只有一页」，
+	 * 重试几次；始终没反应说明这个阅读器不认 hash，交给后面的逐页翻兜底。
+	 */
+	let responsive = false;
+	for (let attempt = 0; attempt < 5 && state.running; attempt++) {
+		if (!pdfFrame()) return { total: 0, page: 0 };
+		const from = activeStatus();
+		jumpPdfPage(2);
+		if (await waitStatusChange(from, PDF_PAGE_TIMEOUT)) {
+			responsive = true;
+			// 阅读器刚发了消息：直接用它报的总页数，不用再从百分比瞎推
+			if (state.pdfTotal > 0) {
+				dlog('probePdfTotal: 直接从阅读器消息读到总页数', state.pdfTotal);
+				return { total: state.pdfTotal, page: 2 };
+			}
+			break;
+		}
+		if (attempt === 0) $message.info('文档还在加载（大文件通常要几十秒），继续等待…');
+		await $.sleep(2000);
+	}
+	if (!responsive) {
+		dlog('probePdfTotal: 跳页始终无反应', diagnose('pdf'));
+		return { total: 0, page: 0 };
+	}
+	if (isFinished()) return { total: 0, page: 2 };
+
+	let probePage = 2;
+	let pct2 = percentOf(activeStatus());
+
+	/**
+	 * 页数多的文档，2/N 会四舍五入成 0%，反推不出东西。
+	 * 往后多跳一点（10 页）再读一次，让百分比进入能分辨的范围。
+	 */
+	if (!pct2) {
+		const from = activeStatus();
+		jumpPdfPage(10);
+		if (await waitStatusChange(from, PDF_PAGE_TIMEOUT)) {
+			probePage = 10;
+			if (isFinished()) return { total: 0, page: probePage };
+			pct2 = percentOf(activeStatus());
+		}
+	}
+	if (!pct2) return { total: 0, page: probePage };
+
+	// `round(页 × 100 / pct)` 一步算出总页数。
+	// 四舍五入可能差一页，但差一页由 calibratePdfDone 用回显修回来，
+	// 没必要再跳一页多等一轮（每次等回写就要 4 秒）。
+	const guess = Math.round((probePage * 100) / pct2);
+	dlog('probePdfTotal:', probePage + '/' + guess, '=', pct2 + '% → 总页数约', guess);
+	return { total: guess >= 2 && guess <= 5000 ? guess : 0, page: probePage };
+}
+
+/**
+ * 逐页翻到末尾，直到平台标记完成
+ *
+ * 关键点：平台不是每翻一页立刻回写进度，而是几百毫秒到一两秒后才更新状态文本。
+ * 之前固定等 900ms 就取样，第 2 页时状态还停在旧值，被当成「翻不动」提前收工，
+ * 文档只走到 1/N 就被标记跳过。现在每页都等状态真的变化，连续两页等满超时才算到底。
+ *
+ * 另外 `#page=9999` 这种超大页码是无效的（pdf.js 忽略越界值，原地不动），
+ * 所以不再用「一次跳末页」的探底法，老老实实从第 1 页往后推。
+ */
+async function readPdf(allowSwitch = true): Promise<boolean> {
+	const frame = pdfFrame();
+	if (!frame) {
+		// 名字是 Word，页面挂的却是永中预览器：直接转过去，别报「找不到阅读器」
+		if (allowSwitch && pptFrame()) {
+			dlog('readPdf: 没有 pdf 阅读器，改走 PPT 分支');
+			return readPpt(false);
+		}
+		$message.warn('未找到文档阅读器，跳过当前资源');
+		dlog('readPdf: 没有 iframe', diagnose('pdf'));
+		return false;
+	}
+	if (isFinished()) return true;
+
+	// 先走「补最后一页」：真的逐页翻要把每一页都渲染+上报一遍，慢，而且中途被别的
+	// 逻辑打断就会停在 6/9 这种半截状态。补一条「末页」消息平台立刻就按 100% 上报。
+	// 页码优先直接读（缓存 → 阅读器消息 → 跳一页后的消息），实在读不到才用百分比反推。
+	const cacheKey = `pdf:${currentKey()}`;
+	const cached = state.totals.get(cacheKey) || 0;
+	let total = cached || state.pdfTotal || (await waitPdfTotal(2000));
+	let probedPage = 0;
+	if (!total) {
+		const probed = await probePdfTotal();
+		total = probed.total;
+		probedPage = probed.page;
+	}
+	if (total > 0) state.totals.set(cacheKey, total);
+	if (isFinished()) return true;
+	if (total > 0 && (await calibratePdfDone(total))) return true;
+
+	dlog('readPdf: start', (frame.getAttribute('src') || '').slice(-40));
+
+	let stagnant = 0;
+	for (let page = probedPage + 1; page <= MAX_PDF_PAGES && state.running; page++) {
+		if (!pdfFrame()) {
+			dlog('readPdf: iframe 消失，停止');
+			return isFinished();
+		}
+
+		const from = activeStatus();
+		jumpPdfPage(page);
+		const changed = await waitStatusChange(from, PDF_PAGE_TIMEOUT);
+		dlog('readPdf: page', page, changed ? '变化 →' : '无变化 →', activeStatus());
+
+		if (isFinished()) return true;
+		if (changed) {
+			stagnant = 0;
+			continue;
+		}
+
+		// 翻页没带来任何进度变化：要么已经到末页，要么这个阅读器不认 hash。
+		// 大文件渲染慢，前两三次没反应很常见，给到 4 次（并逐次拉长等待）再判到底
+		stagnant++;
+		if (stagnant >= 4) {
+			dlog('readPdf: 连续', stagnant, '次无变化', diagnose('pdf'));
+			break;
+		}
+		if (stagnant >= 2) await $.sleep(1500);
+	}
+
+	// 兜底再补一次：翻页这条路走完还没完成的话，拿最新探到的总页数再校准一轮
+	if (!isFinished()) {
+		const finalTotal = state.pdfTotal || total;
+		if (finalTotal > 0) await calibratePdfDone(finalTotal);
+	}
+	return isFinished();
+}
+
+/** 让预览器翻一页，并拿回翻页后的页码（超时返回空串） */
+function askPptNext(frame: HTMLIFrameElement, timeout = 1500) {
 	return new Promise<string>((resolve) => {
 		let done = false;
 		const finish = (page: string) => {
 			if (done) return;
 			done = true;
+			clearTimeout(timer);
 			window.removeEventListener('message', onMessage);
 			resolve(page);
 		};
 		const onMessage = (event: MessageEvent) => {
-			const data = event.data as { type?: string; page?: string } | null;
+			const data = event.data as { type?: string; page?: string; total?: number } | null;
 			if (!data || typeof data !== 'object' || data.type !== PPT_PAGE) return;
+			// 预览器一并回传总页数，优先用它（比平台消息到得早，收尾时能立刻补末页）
+			const total = parseInt(String(data.total ?? ''), 10);
+			if (total > 0) state.pptTotal = total;
 			finish(String(data.page ?? ''));
 		};
 		window.addEventListener('message', onMessage);
 		frame.contentWindow?.postMessage(PPT_NEXT, '*');
-		window.setTimeout(() => finish(''), 3000);
+		const timer = window.setTimeout(() => finish(''), timeout);
 	});
+}
+
+/**
+ * 等永中预览器可用，并尽量拿到总页数
+ *
+ * 正常路径是 pptHelper 在 iframe 里应答翻页请求。但 ow365 是**跨域 OOPIF**，
+ * `chrome.scripting.registerContentScripts({ world:'MAIN' })` 进不去这种子框架
+ * （实测该框架的 default world 里 `OCS` / `__bootReady__` 全是 undefined），
+ * pptHelper 永远不会应答 —— 之前就是在这里空转 60 秒 × 重试 3 次，看起来「一直卡着」。
+ *
+ * 所以这里补一条不依赖 iframe 内脚本的退路：预览器默认停在第 1 页，
+ * 平台显示 4% 就是 1/25，用 `round(100 / pct)` 反推总页数。
+ * 反推不准没关系，`calibratePptDone` 会用后续回显把它收敛到 100%。
+ */
+async function waitPptReady(timeout = 12000) {
+	const start = Date.now();
+	let probed = 0;
+	while (Date.now() - start < timeout && state.running) {
+		const frame = pptFrame();
+		if (!frame) {
+			await $.sleep(600);
+			continue;
+		}
+		if (state.pptTotal > 0) return true;
+
+		probed++;
+		const page = await askPptNext(frame, 1200);
+		if (page) {
+			dlog('waitPptReady: 就绪 当前页', page, '总页数', state.pptTotal || '未上报');
+			return true;
+		}
+		if (probed === 1) $message.info('PPT 预览器响应慢，改用平台进度反推页数…');
+		await $.sleep(600);
+	}
+
+	// 预览器不应答：用平台已经算出来的百分比反推
+	const pct = percentOf(activeStatus());
+	if (pct > 0 && pct < 100) {
+		const guess = Math.max(2, Math.round(100 / pct));
+		state.pptTotal = guess;
+		dlog('waitPptReady: 预览器无应答，按', pct + '% 反推总页数', guess);
+		return true;
+	}
+
+	dlog('waitPptReady: 等满', Math.round((Date.now() - start) / 1000), '秒', diagnose('ppt'));
+	return Boolean(pptFrame());
 }
 
 /**
@@ -372,11 +966,42 @@ function askPptNext(frame: HTMLIFrameElement) {
  * 所以由注入到该 iframe 的 pptHelper 脚本代收消息、调用预览器自己的 nextPage()。
  * 每次翻页都会回传页码：页码不再变化就说明翻到最后一页了。
  */
-async function readPpt() {
+async function readPpt(allowSwitch = true): Promise<boolean> {
 	if (!pptFrame()) {
+		// 反过来：名字是 PPT，实际挂的是 pdf.js（少见但存在）
+		if (allowSwitch && pdfFrame()) {
+			dlog('readPpt: 没有永中预览器，改走 PDF 分支');
+			return readPdf(false);
+		}
 		$message.warn('未找到 PPT 预览器，跳过当前资源');
+		dlog('readPpt: 没有 iframe', diagnose('ppt'));
 		return false;
 	}
+
+	// 上一轮已经校准出准确页数的，直接复用（同一资源被跳过后重来时省掉一轮）
+	const cacheKey = `ppt:${currentKey()}`;
+	const cached = state.totals.get(cacheKey) || 0;
+	if (cached > 0) {
+		state.pptTotal = cached;
+		dlog('readPpt: 复用上次校准的总页数', cached);
+	}
+
+	// 大 PPT 的预览器要几十秒才可交互，没就绪前发消息是石沉大海。
+	// 旧逻辑在这一步直接开始数「翻不动」次数，数满就判成结束 —— 大文件就是这么被跳过的。
+	if (!(await waitPptReady())) {
+		dlog('readPpt: 预览器未就绪', diagnose('ppt'));
+		return isFinished();
+	}
+
+	// 同文档：直接补一条「最后一页」。永中预览器自己演到 47 张要几十秒，
+	// 而且演到 87%（41/47）时脚本以为翻不动就跳过了，永远差那几点。
+	// 页数靠平台回显校准，报大报小都能收敛到 100%。
+	if (await calibratePptDone()) {
+		if (state.pptTotal > 0) state.totals.set(cacheKey, state.pptTotal);
+		return true;
+	}
+	dlog('readPpt: 补页后 →', activeStatus(), '总页数', state.pptTotal || '未上报');
+
 	let lastPage = '';
 	let same = 0;
 	for (let i = 0; i < MAX_PDF_PAGES && state.running; i++) {
@@ -387,17 +1012,173 @@ async function readPpt() {
 		await $.sleep(400);
 		if (isFinished()) return true;
 
-		// 页码没动：到底了，或者这一页没翻成。预览器偶尔会卡住一两拍，
-		// 留 6 次余量，免得中途卡页被误判成结尾
+		// 页码没动：到底了，或者这一页没翻成。预览器渲染大图会卡一两拍，
+		// 但 pptHelper 在跨域 OOPIF 里可能根本不参与，6 次（约 12 秒）没动静就收手
 		if (!page || page === lastPage) {
 			same++;
-			if (same >= 6) return isFinished();
+			if (same >= 6) {
+				dlog('readPpt: 连续', same, '次页码不动', diagnose('ppt'));
+				break;
+			}
+			if (same >= 3) await $.sleep(1200);
 		} else {
 			same = 0;
 			lastPage = page;
 		}
 	}
+
+	// 翻完还没完成：拿最新的 total 再校准一轮
+	if (!isFinished()) {
+		await calibratePptDone();
+		if (isFinished() && state.pptTotal > 0) state.totals.set(cacheKey, state.pptTotal);
+		dlog('readPpt: 收尾 →', activeStatus(), diagnose('ppt'));
+	}
 	return isFinished();
+}
+
+/**
+ * 请后台关掉按 URL 前缀匹配的标签
+ *
+ * 讯飞「网页链接」资源点一下才算学完，但平台点完会自己开一个外部页面，
+ * 而且**不是通过 `window.open`**（实测把这个 API 替换掉照样弹），所以只能事后关。
+ * `GM_closeTab` 是 gm-polyfill 新加的桥接 API，拿不到就静默跳过——关不掉标签不影响完成判定。
+ */
+function closeTabByUrl(url: string) {
+	const api = typeof GM_closeTab === 'function' ? GM_closeTab : null;
+	if (!api) {
+		dlog('closeTabByUrl: 桥接不可用，跳过');
+		return;
+	}
+	try {
+		api(url, (res) => dlog('closeTabByUrl:', JSON.stringify(res)));
+	} catch (err) {
+		dlog('closeTabByUrl: 调用失败', String(err));
+	}
+}
+
+/**
+ * 网页链接：点开就算完成
+ *
+ * 这类资源页面只有一个 `<div class="link">外链</div>`，没有 iframe、没有打开按钮。
+ * **必须点这个元素，不能直接 window.open**：
+ * 平台在它的点击处理器里发 `courseStudyClickResource` 埋点，完成判定挂在这次上报上；
+ * 实测直接 `window.open` 只会开个窗口，一个请求都不发，状态永远「已学 0%」。
+ *
+ * 平台自己会开新标签，这里临时接管 `window.open` 拿到句柄，回写完就关掉。
+ */
+async function readLink(): Promise<boolean> {
+	const queryLink = () =>
+		document.querySelector<HTMLElement>('.content .link') || document.querySelector<HTMLElement>('.link');
+
+	// 资源刚切过来时链接区块还没渲染，等它出现（最多 3 秒）再判定，别浪费一轮重试
+	let el = queryLink();
+	for (let i = 0; i < 6 && !el && state.running; i++) {
+		await $.sleep(500);
+		el = queryLink();
+	}
+	const url =
+		(el?.textContent || '').trim() || (document.body.innerText.match(/https?:\/\/[^\s]+/) || [''])[0];
+	if (!el && !/^https?:\/\//i.test(url)) {
+		$message.warn(`没找到网页链接，跳过：${activeName()}`);
+		dlog('readLink: 找不到链接元素');
+		return false;
+	}
+
+	const before = activeStatus();
+
+	/**
+	 * 平台在点击处理器里自己 `window.open` 一个外部页面。我们只要那次点击埋点，
+	 * 弹出来的标签纯属干扰 —— 而且 MAIN world 里的 `window.open` 返回 null（伪 Window），
+	 * 拿不到句柄根本关不掉，每遇到一个链接就多留一个标签。
+	 *
+	 * 所以直接把它换成一个「假窗口」：不真开标签，但 `close/focus/location` 这些
+	 * 平台可能会用到的成员都在，避免它拿到 null 之后抛错、把埋点也中断掉。
+	 */
+	const fakeWindow = {
+		closed: false,
+		close() {},
+		focus() {},
+		blur() {},
+		postMessage() {},
+		location: { href: url, replace() {}, assign() {}, reload() {} },
+		document: { write() {}, close() {}, open() {} },
+		opener: null
+	};
+
+	const originalOpen = window.open;
+	/** `window.open` 到底替换成功没有：伪 Window 上可能只读，赋值会静默失败 */
+	let replaced = false;
+	try {
+		window.open = function (openUrl?: string | URL) {
+			fakeWindow.location.href = String(openUrl || url);
+			return fakeWindow as unknown as Window;
+		} as typeof window.open;
+		replaced = window.open !== originalOpen;
+		if (!replaced) {
+			// 赋值被吞掉（属性只读或有 setter 保护），试试 defineProperty 硬写
+			try {
+				Object.defineProperty(window, 'open', {
+					configurable: true,
+					writable: true,
+					value: function (openUrl?: string | URL) {
+						fakeWindow.location.href = String(openUrl || url);
+						return fakeWindow as unknown as Window;
+					}
+				});
+				replaced = window.open !== originalOpen;
+			} catch {
+				/* 还是不行，只能靠事后关标签 */
+			}
+		}
+		if (el) {
+			const rect = el.getBoundingClientRect();
+			/**
+			 * 不要传 `view: window`！
+			 * MAIN world 里的 window 是伪 Window 对象（沙箱为了隔离重写过），
+			 * `new MouseEvent(..., {view: window})` 会直接抛
+			 * `Failed to convert value to 'Window'`，事件构造不出来，点击等于没发。
+			 */
+			const opts = {
+				bubbles: true,
+				cancelable: true,
+				clientX: rect.left + 10,
+				clientY: rect.top + 8
+			};
+			el.dispatchEvent(new MouseEvent('mousedown', opts));
+			el.dispatchEvent(new MouseEvent('mouseup', opts));
+			el.dispatchEvent(new MouseEvent('click', opts));
+		} else {
+			dlog('readLink: 没有可点的元素，只上报了地址', url.slice(0, 60));
+		}
+	} catch (err) {
+		dlog('readLink: 点击失败', String(err));
+	} finally {
+		window.open = originalOpen;
+	}
+
+	dlog('readLink: 点击', url.slice(0, 70), 'open替换成功=', replaced ? '是' : '否');
+
+	/**
+	 * 平台开新标签不是走 `window.open`（实测替换成功了照样弹），拦不住，
+	 * 只能请后台按 URL 前缀把它关掉。等 1.2 秒让标签先真正创建出来。
+	 */
+	await $.sleep(1200);
+	try {
+		closeTabByUrl(url);
+	} catch (err) {
+		dlog('readLink: 关标签失败', String(err));
+	}
+
+	const changed = await waitStatusChange(before, 6000);
+	const done = isFinished();
+
+	if (done) {
+		dlog('readLink: 已完成', activeName());
+	} else {
+		$message.info(`已点击网页链接${changed ? '' : '（平台暂未回写完成状态）'}：${url.slice(0, 56)}`);
+		dlog('readLink: 未回写', diagnose('link'));
+	}
+	return true;
 }
 
 /* ======================== 推进 ======================== */
@@ -424,14 +1205,16 @@ function nextPendingItem() {
 async function gotoPending() {
 	const target = nextPendingItem();
 	if (!target) return false;
-	const fromIdx = activityItems().indexOf(activeItem());
+	const current = activeItem();
+	const fromIdx = current ? activityItems().indexOf(current) : -1;
 	state.media = null;
 	target.click();
 
 	const start = Date.now();
 	while (Date.now() - start < 20000) {
 		await $.sleep(700);
-		const nowIdx = activityItems().indexOf(activeItem());
+		const nowItem = activeItem();
+		const nowIdx = nowItem ? activityItems().indexOf(nowItem) : -1;
 		// URL 里的 activityId 不一定跟着变，用「选中项位置」判定更可靠
 		if (nowIdx >= 0 && nowIdx !== fromIdx) {
 			await $.sleep(1200); // 等新资源挂载
@@ -473,7 +1256,10 @@ export const FIFProject = Project.create({
 		 * 永中预览器在独立 iframe 里，父页面拿不到它的 DOM。它自己暴露了
 		 * `nextPage()`，比合成 keydown 可靠得多（合成事件命中率只有一成左右，
 		 * 翻几页就被丢掉，看起来就像「没翻完就跳了」）。
-		 * 翻完把当前页码回传，父页面据此判断有没有真的翻动。
+		 *
+		 * 页码有两代来源：新版是 `getAnimtPage().page.{idx,total}`，老版是 `#sn` 输入框。
+		 * 只认 `#sn` 的话，新版预览器永远回空，父页面数满几次就当成「翻到末尾」——
+		 * 这就是大 PPT 「没放完就跳过」的真正原因。
 		 */
 		pptHelper: new Script({
 			name: 'PPT 预览器',
@@ -481,11 +1267,32 @@ export const FIFProject = Project.create({
 			hideInPanel: true,
 			matches: [['永中预览器', 'ow365.cn']],
 			oncomplete() {
+				/** 读当前页 / 总页数，读不到返回空串和 0 */
+				const readPage = () => {
+					const api = (window as unknown as { getAnimtPage?: () => any }).getAnimtPage;
+					if (typeof api === 'function') {
+						try {
+							const info = api();
+							const idx = parseInt(String(info?.page?.idx ?? ''), 10);
+							const total = parseInt(String(info?.page?.total ?? ''), 10);
+							if (idx > 0) return { page: String(idx), total: total > 0 ? total : 0 };
+						} catch {
+							/* 预览器还没就绪，落到下面的兜底 */
+						}
+					}
+					const sn = document.querySelector<HTMLInputElement>('#sn');
+					const value = parseInt(String(sn?.value ?? ''), 10);
+					const count = (window as unknown as { pageCount?: number }).pageCount;
+					return {
+						page: value > 0 ? String(value) : '',
+						total: typeof count === 'number' && count > 0 ? count : 0
+					};
+				};
+
 				window.addEventListener('message', (event) => {
 					if (event.data !== PPT_NEXT) return;
 					const source = event.source as Window | null;
-					const sn = document.querySelector<HTMLInputElement>('#sn');
-					const before = sn ? sn.value : '';
+					const before = readPage().page;
 
 					const next = (window as unknown as { nextPage?: () => void }).nextPage;
 					if (typeof next === 'function') {
@@ -507,9 +1314,16 @@ export const FIFProject = Project.create({
 						}
 					}
 
-					window.setTimeout(() => {
-						source?.postMessage({ type: PPT_PAGE, page: sn ? sn.value : '', before }, '*');
-					}, 600);
+					// 大图渲染慢，页码不是立刻变；轮询到变化或超时再回传
+					let waited = 0;
+					const timer = window.setInterval(() => {
+						waited += 250;
+						const now = readPage();
+						if ((now.page && now.page !== before) || waited >= 3000) {
+							window.clearInterval(timer);
+							source?.postMessage({ type: PPT_PAGE, page: now.page, total: now.total, before }, '*');
+						}
+					}, 250);
 				});
 			}
 		}),
@@ -575,13 +1389,41 @@ export const FIFProject = Project.create({
 					handleCurrent: async (rate: number, vol: number) => {
 						const mode = this.cfg.videoMode === 'seek' ? 'seek' : 'play';
 						const kind = activeKind();
+						dlog('handle:', kind, '|', activeName(), '| skipPdf=', this.cfg.skipPdf);
 
 						/**
 						 * 不支持的类型（作业、讨论、测验…）先判掉，**不能先去等资源加载**：
 						 * 这类资源永远不会挂出播放器或阅读器，等满两轮 30 秒才跳过，
 						 * 用户看到的就是「明明加载好了，脚本却卡在这里不动」。
 						 */
+						/**
+						 * 网页链接：页面只有一个 `<div class="link">` 展示外链，
+						 * 没有 iframe、没有打开按钮。平台不校验内容，真实行为是
+						 * 「打开链接即上报完成」——实测 window.open 之后 6 秒内
+						 * 状态从「已学 0%」变「已完成」。
+						 */
+						if (kind === 'link') {
+							$message.info(`打开网页链接：${activeName()}`);
+							return readLink();
+						}
+
 						if (kind === 'other') {
+							/**
+							 * 有预览器 iframe 却认不出类型，多半是平台换了预览器域名。
+							 * 先等几秒再判一次（返回 false 让主循环重来一轮），
+							 * 仍不认识就带着 iframe 地址留档跳过，别静默丢掉。
+							 */
+							if (hasPreviewFrame()) {
+								const unknown = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe'))
+									.filter((f) => !isCompanionFrame(f))
+									.map((f) => (f.getAttribute('src') || f.src || '').slice(0, 80));
+								dlog('handle: 未识别的预览器', unknown);
+								$message.warn(`未识别的预览器，等待加载后重试：${activeName()}`);
+								await $.sleep(4000);
+								if (activeKind() !== 'other') return false;
+								$message.warn(`不支持的预览器（${unknown[0] || '未知地址'}）：${activeName()}`);
+								return true;
+							}
 							$message.info(`跳过不支持的资源：${activeName()}`);
 							return true;
 						}
@@ -728,15 +1570,51 @@ export const FIFProject = Project.create({
 							const item = activeItem();
 							const key = currentKey();
 							const beforeIdx = item ? activityItems().indexOf(item) : -1;
+							/**
+							 * 换资源了就把上一份的页数清掉。
+							 * `state.pdfTotal` / `pptTotal` 是全局的，阅读器只在 `ready` 时上报一次，
+							 * 不清就会拿上一个文档的总页数去补这一个（5 页的 Word 之后遇到 20 页的，
+							 * 会先报 5 页得 25%，白多一轮校准）。
+							 */
+							if (state.activityKey !== key) {
+								state.pdfTotal = 0;
+								state.pptTotal = 0;
+							}
 							state.activityKey = key;
 
 							if (isFinished()) {
 								$message.info(`已完成，跳过：${activeName()}`);
 							} else {
 								const ok = await this.methods.handleCurrent(rate, vol);
-								if (!ok && state.running) {
-									// 处理失败但可能只是没上报成功，继续尝试推进
-									$message.warn(`未能完成：${activeName()}，继续下一个资源`);
+								if (ok) {
+									// 前几轮重试失败过、这次做成了：把失败清单里的旧记录摘掉，
+									// 否则收尾汇总会报一个其实已经完成的资源
+									const stale = state.failures.findIndex((f) => f.name === activeName());
+									if (stale >= 0) state.failures.splice(stale, 1);
+								}
+								if (!ok && state.running && item) {
+									/**
+									 * 没做完不记账、原地重试。
+									 *
+									 * 大文件（几百页 PPT、几十兆 PDF）的预览器要几十秒才可交互，
+									 * 第一次处理拿不到页码是常态。以前失败也照样记进 handled，
+									 * 本次运行内就再也不会回头——用户看到的就是「没放完就跳过了」。
+									 */
+									const tries = (state.retry.get(item) || 0) + 1;
+									state.retry.set(item, tries);
+									const reason = diagnose(activeKind());
+									dlog(`[未完成] ${activeName()} 第 ${tries}/${MAX_RESOURCE_RETRY} 次 | ${reason}`);
+
+									if (tries < MAX_RESOURCE_RETRY && autoNext) {
+										$message.warn(`未能完成（第 ${tries} 次，将重试）：${activeName()}｜${reason}`);
+										await $.sleep(3000);
+										continue;
+									}
+
+									state.failures.push({ name: activeName(), kind: activeKind(), reason });
+									$message.error(
+										`重试 ${tries} 次仍未完成，先跳过：${activeName()}｜${reason}`
+									);
 								}
 							}
 							// 处理过就记账，避免作业这类点不进去的资源被反复重试
@@ -753,7 +1631,8 @@ export const FIFProject = Project.create({
 								break;
 							}
 							// 防止在原地来回打转：知识点和选中的资源都没变才算卡住
-							const afterIdx = activityItems().indexOf(activeItem());
+							const afterItem = activeItem();
+							const afterIdx = afterItem ? activityItems().indexOf(afterItem) : -1;
 							if (currentKey() === key && afterIdx === beforeIdx) {
 								state.stuck++;
 								if (state.stuck >= 3) {
@@ -767,6 +1646,13 @@ export const FIFProject = Project.create({
 								$message.warn('已连续处理 800 个资源，自动停止');
 								break;
 							}
+						}
+
+						// 收尾留档：这一轮哪些资源重试到上限还是没完成，各自什么原因
+						if (state.failures.length) {
+							const lines = state.failures.map((f) => `· ${f.name}｜${f.reason}`);
+							dlog('[未完成汇总]\n' + lines.join('\n'));
+							$message.warn(`本轮有 ${state.failures.length} 个资源未完成：\n${lines.join('\n')}`);
 						}
 					},
 
