@@ -181,10 +181,16 @@ function activeStatus() {
 	return statusOf(activeItem());
 }
 
-/** 这一项是否已经学完（「已完成」或进度到 100%） */
+/**
+ * 这一项是否已经学完
+ *
+ * **只认「已完成」**：平台把进度和完成状态分开存，`已学 100%` 只是进度值，
+ * 服务端的 `learnStatus` 没到位，课程统计里不算完成。
+ * 之前把 100% 也算完成，结果卡在 100% 的 PPT 被直接跳过，永远等不到那一下补页。
+ */
 function itemFinished(item: HTMLElement) {
 	const text = statusOf(item);
-	return text.includes('已完成') || /已学\s*100\s*%/.test(text);
+	return text.includes('已完成');
 }
 
 /** 当前资源名 + 类型，用于日志 */
@@ -916,10 +922,10 @@ function askPptNext(frame: HTMLIFrameElement, timeout = 1500) {
 /**
  * 等永中预览器可用，并尽量拿到总页数
  *
- * 正常路径是 pptHelper 在 iframe 里应答翻页请求。但 ow365 是**跨域 OOPIF**，
- * `chrome.scripting.registerContentScripts({ world:'MAIN' })` 进不去这种子框架
- * （实测该框架的 default world 里 `OCS` / `__bootReady__` 全是 undefined），
- * pptHelper 永远不会应答 —— 之前就是在这里空转 60 秒 × 重试 3 次，看起来「一直卡着」。
+ * 正常路径是 pptHelper 在 iframe 里应答翻页请求——预览器加载成功时扩展能注入进去
+ * （实测该框架的执行上下文里有扩展的 ctx，`pageCount` / `nextPage` 都能问到）。
+ * 不应答的典型情况是预览器还没加载完，或者干脆是网络错误页（文档都没拉下来，
+ * `waitPptReady` 问谁都白问）。
  *
  * 所以这里补一条不依赖 iframe 内脚本的退路：预览器默认停在第 1 页，
  * 平台显示 4% 就是 1/25，用 `round(100 / pct)` 反推总页数。
@@ -993,6 +999,24 @@ async function readPpt(allowSwitch = true): Promise<boolean> {
 		return isFinished();
 	}
 
+	/**
+	 * 已经是 100% 却还差最后一下的场景
+	 *
+	 * 平台把「进度 100%」和「learnStatus 已完成」分开记，有时 100% 了仍不标完成，
+	 * 需要再补一次末页。但预览器没应答时（最常见：iframe 是网络错误页、文档根本没
+	 * 加载出来，pptHelper 无处安身）拿不到总页数——这时候**绝对不能瞎报**：报 1 页
+	 * 会把 100% 打回 4%。
+	 *
+	 * 所以直接认了：留一条明确记录跳过，别让它拖掉三轮重试（每轮 13 秒等预览器）。
+	 * 预览器正常加载时扩展能注入进去（实测 CDP 上下文里有扩展的 ctx），
+	 * `waitPptReady` 会问到页数，走不到这个分支。
+	 */
+	if (state.pptTotal <= 0 && percentOf(activeStatus()) >= 100) {
+		$message.warn(`PPT 已是 100% 但平台未标完成，且读不到总页数，跳过：${activeName()}`);
+		dlog('readPpt: 100% 无总页数', diagnose('ppt'));
+		return true;
+	}
+
 	// 同文档：直接补一条「最后一页」。永中预览器自己演到 47 张要几十秒，
 	// 而且演到 87%（41/47）时脚本以为翻不动就跳过了，永远差那几点。
 	// 页数靠平台回显校准，报大报小都能收敛到 100%。
@@ -1013,7 +1037,7 @@ async function readPpt(allowSwitch = true): Promise<boolean> {
 		if (isFinished()) return true;
 
 		// 页码没动：到底了，或者这一页没翻成。预览器渲染大图会卡一两拍，
-		// 但 pptHelper 在跨域 OOPIF 里可能根本不参与，6 次（约 12 秒）没动静就收手
+		// 预览器中途挂掉（网络错误页）时页码永远不动，6 次（约 12 秒）没动静就收手
 		if (!page || page === lastPage) {
 			same++;
 			if (same >= 6) {

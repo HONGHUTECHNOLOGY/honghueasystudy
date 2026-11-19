@@ -23362,7 +23362,7 @@ try {
   }
   function itemFinished(item) {
     const text = statusOf(item);
-    return text.includes("已完成") || /已学\s*100\s*%/.test(text);
+    return text.includes("已完成");
   }
   function activeName() {
     const item = activeItem();
@@ -23970,6 +23970,11 @@ try {
     if (!await waitPptReady()) {
       dlog("readPpt: 预览器未就绪", diagnose("ppt"));
       return isFinished();
+    }
+    if (state.pptTotal <= 0 && percentOf(activeStatus()) >= 100) {
+      lib.$message.warn(`PPT 已是 100% 但平台未标完成，且读不到总页数，跳过：${activeName()}`);
+      dlog("readPpt: 100% 无总页数", diagnose("ppt"));
+      return true;
     }
     if (await calibratePptDone()) {
       if (state.pptTotal > 0)
