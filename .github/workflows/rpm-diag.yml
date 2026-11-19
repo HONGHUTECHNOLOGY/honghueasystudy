@@ -1,0 +1,75 @@
+name: RPM Diagnose (temporary)
+
+# 临时诊断：rpm 打包在 ubuntu-latest 上稳定失败（AppImage/deb 都成功），
+# 而 electron-builder 只透出 fpm 的 out=，rpmbuild 自身报错被吞。
+# 这里用与真实打包完全相同的 fpm 参数跑一个玩具目录，把 rpmbuild 的原始报错打出来。
+# 定位完成后本文件会被删除。
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Env
+        run: |
+          echo "== rpmbuild =="; rpmbuild --version || echo "缺失"
+          echo "== fpm 需要的依赖 =="; command -v rpm2cpio || true
+          echo "== locale =="; locale
+          echo "== 磁盘 =="; df -h /tmp /
+          echo "== 7z =="; command -v 7z || sudo apt-get update -qq && sudo apt-get install -y -qq p7zip-full >/dev/null 2>&1; command -v 7z || echo "无 7z"
+
+      # A：最小 spec，路径/文件名都用中文，判断 rpmbuild 本身是否吃得下非 ASCII
+      - name: Smoke A - 纯 rpmbuild + 中文路径
+        run: |
+          W=$(mktemp -d); mkdir -p "$W/SPECS"
+          cat > "$W/SPECS/a.spec" <<'SPEC'
+          Name: hh-smoke-a
+          Version: 0.0.1
+          Release: 1
+          Summary: smoke
+          License: MIT
+          BuildArch: x86_64
+          %description
+          smoke
+          %install
+          mkdir -p %{buildroot}/opt/鸿鹄易学
+          echo hi > %{buildroot}/opt/鸿鹄易学/x.txt
+          %files
+          /opt/鸿鹄易学
+          /opt/鸿鹄易学/x.txt
+          SPEC
+          echo "---- A 输出 ----"
+          rpmbuild -bb --define "_topdir $W" "$W/SPECS/a.spec" 2>&1 | tail -30
+          echo "---- A 退出码: ${PIPESTATUS[0]} ----"
+
+      # B：完全照搬真实 fpm 参数（含 --rpm-compression xzmt / --rpm-os linux），跑玩具目录
+      - name: Smoke B - fpm 同参数复现
+        run: |
+          set -x
+          FPM=/home/runner/.cache/electron-builder/fpm/fpm-1.9.3-2.3.1-linux-x86_64
+          if [ ! -x "$FPM/fpm" ]; then
+            curl -sSL -o /tmp/fpm.7z "https://github.com/electron-userland/electron-builder-binaries/releases/download/fpm-1.9.3-2.3.1-linux-x86_64/fpm-1.9.3-2.3.1-linux-x86_64.7z"
+            7z x -y -o/tmp/fpmx /tmp/fpm.7z >/dev/null
+            FPM=$(dirname "$(find /tmp/fpmx -name fpm -type f | head -1)")
+          fi
+          AppDir=/tmp/appdir; rm -rf "$AppDir"; mkdir -p "$AppDir"
+          echo hi > "$AppDir/some-file.txt"
+          echo "== B1: 中文安装路径 + xzmt =="
+          "$FPM/fpm" -s dir --force -t rpm -d gtk3 --rpm-os linux --rpm-compression xzmt \
+            --architecture amd64 --description 'test' --version 1.0.0 --package /tmp/out1.rpm \
+            --name hh-smoke --maintainer 'a <a@b.c>' --url https://example.com --vendor 'a <a@b.c>' --license MIT \
+            "$AppDir/=/opt/鸿鹄易学" 2>&1 | tail -40
+          echo "== B2: 中文安装路径 + 默认压缩 =="
+          "$FPM/fpm" -s dir --force -t rpm -d gtk3 --rpm-os linux \
+            --architecture amd64 --description 'test' --version 1.0.0 --package /tmp/out2.rpm \
+            --name hh-smoke --maintainer 'a <a@b.c>' --url https://example.com --vendor 'a <a@b.c>' --license MIT \
+            "$AppDir/=/opt/鸿鹄易学" 2>&1 | tail -40
+          echo "== B3: ASCII 安装路径 + xzmt =="
+          "$FPM/fpm" -s dir --force -t rpm -d gtk3 --rpm-os linux --rpm-compression xzmt \
+            --architecture amd64 --description 'test' --version 1.0.0 --package /tmp/out3.rpm \
+            --name hh-smoke --maintainer 'a <a@b.c>' --url https://example.com --vendor 'a <a@b.c>' --license MIT \
+            "$AppDir/=/opt/honghueasystudy" 2>&1 | tail -40
+          ls -la /tmp/out*.rpm 2>/dev/null || echo "没有任何 rpm 产出"
