@@ -15,6 +15,10 @@
 ![Platform](https://shieldcn.dev/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-%238E8E93.svg?size=xs)
 
 <br>
+
+[**官网 · easystudy.honghutech.eu.org**](https://easystudy.honghutech.eu.org)
+
+<br>
 <br>
 
 支持超星学习通、智慧树、智慧职教、职教云、中国大学 MOOC、雨课堂、U校园、讯飞智课、实验室安全考试平台
