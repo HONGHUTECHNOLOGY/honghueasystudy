@@ -159,21 +159,35 @@ async function probeUrl(url) {
 	const directOnly = /(^|\.)gitcode\.com$/.test(host);
 	const configs = directOnly ? [{ proxy: false }] : [{}, { proxy: false }];
 
+	/**
+	 * UA 要试两遍。
+	 *
+	 * GitCode 前置 CloudWAF 会按「浏览器 UA + 机房 IP」的组合判爬虫，直接回 **418**；
+	 * 同一时刻、同一台 runner、同一个链接，换成不带浏览器 UA 的请求却是 206
+	 * （`publish-to-gitee.js` 的探链就是后者，2026-11-19 实测两组结果并存）。
+	 * 所以先按浏览器 UA 试，失败再换默认 UA —— 只影响探测请求，不发往用户。
+	 */
+	const uaVariants = [{ 'User-Agent': PROBE_UA }, {}];
+
 	let last = '未知错误';
-	for (const extra of configs) {
-		try {
-			const res = await axios.get(url, {
-				headers: { 'User-Agent': PROBE_UA, Range: 'bytes=0-1' },
-				timeout: 20000,
-				maxRedirects: 5,
-				validateStatus: () => true,
-				responseType: 'arraybuffer',
-				...extra
-			});
-			if (res.status === 200 || res.status === 206) return { ok: true, detail: `HTTP ${res.status}` };
-			last = `HTTP ${res.status}`;
-		} catch (e) {
-			last = e?.message || String(e);
+	for (const ua of uaVariants) {
+		for (const extra of configs) {
+			try {
+				const res = await axios.get(url, {
+					headers: { ...ua, Range: 'bytes=0-1' },
+					timeout: 20000,
+					maxRedirects: 5,
+					validateStatus: () => true,
+					responseType: 'arraybuffer',
+					...extra
+				});
+				if (res.status === 200 || res.status === 206) return { ok: true, detail: `HTTP ${res.status}` };
+				last = `HTTP ${res.status}`;
+				/** 418/403 是 WAF 判定，代理切换无关紧要，直接换 UA 重试省一轮 */
+				if (res.status === 418 || res.status === 403) break;
+			} catch (e) {
+				last = e?.message || String(e);
+			}
 		}
 	}
 	return { ok: false, detail: last };
