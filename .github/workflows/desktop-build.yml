@@ -117,7 +117,11 @@ jobs:
             arch: x64
 
           # Linux x64
-          - os: ubuntu-latest
+          # 必须钉 24.04：ubuntu-latest 自 2026-11 起指向 26.04（rpm 6.0.1），
+          # 而 electron-builder 23.6.0 自带的 fpm 1.9.3 与 rpm 6 不兼容 ——
+          # 连「单文件 + ASCII 路径」的最小目录都会 rpmbuild exit 1（CI 实测），
+          # 表现就是 AppImage/deb 成功、rpm 稳定失败。24.04 的 rpm 4.18 正常。
+          - os: ubuntu-24.04
             platform: linux
             arch: x64
 
@@ -184,52 +188,6 @@ jobs:
       - name: Install desktop dependencies
         run: pnpm -C honghueasystudy_desktop install --frozen-lockfile
 
-      # rpm 打包稳定失败（AppImage / deb 都成功），而 electron-builder 只透出 fpm 的
-      # `out=`，rpmbuild 自身的报错被吞掉，拿不到真实原因。这里用最小 spec 快速定位
-      # 最常见的嫌疑：安装路径 / 文件名含中文时 rpmbuild 能否正常出包。
-      # 只打印信息，不阻断构建（真正的修复要看这里的结果再做）。
-      - name: Diagnose rpm toolchain
-        if: matrix.platform == 'linux' && matrix.arch == 'x64'
-        run: |
-          echo "== rpmbuild 版本 =="
-          if command -v rpmbuild >/dev/null 2>&1; then
-            rpmbuild --version || true
-          else
-            echo "::error::runner 上没有 rpmbuild —— rpm 打包必然失败（fpm 依赖系统 rpmbuild）"
-            exit 0
-          fi
-          echo "== locale =="
-          locale 2>/dev/null | head -5 || true
-          echo "== 磁盘 =="
-          df -h /tmp / | sed -n '1,3p'
-
-          WORK=$(mktemp -d)
-          mkdir -p "$WORK/SPECS"
-          cat > "$WORK/SPECS/smoke.spec" <<'SPEC'
-          Name: hh-rpm-smoke
-          Version: 0.0.1
-          Release: 1
-          Summary: smoke test for non-ascii path
-          License: MIT
-          BuildArch: x86_64
-          %description
-          smoke
-          %install
-          mkdir -p %{buildroot}/opt/鸿鹄易学
-          echo hi > %{buildroot}/opt/鸿鹄易学/测试.txt
-          %files
-          /opt/鸿鹄易学
-          /opt/鸿鹄易学/测试.txt
-          SPEC
-
-          if rpmbuild -bb --define "_topdir $WORK" "$WORK/SPECS/smoke.spec" > "$WORK/out.log" 2>&1; then
-            echo "::notice::非 ASCII 路径 smoke 测试通过 → rpm 失败原因不在中文路径/编码"
-          else
-            echo "::warning::非 ASCII 路径 smoke 测试失败 → 中文路径/编码就是原因，下面是 rpmbuild 原始报错"
-            tail -40 "$WORK/out.log"
-          fi
-
-
       # 直连 gulp 流水线（tsc → build-app），不走 pnpm build 的 lint 前置门：
       # 仓库既有 lint 债（default-langs.ts 超长行、bookmarks.vue no-void 等处）
       # 使 eslint --fix 必然失败，且 prettier --write 会改写无关文件。
@@ -268,10 +226,6 @@ jobs:
           USE_HARD_LINKS: false
           PLATFORM: ${{ matrix.platform }}
           ARCH: ${{ matrix.arch }}
-          # rpm 的 spec 里含中文路径（/opt/鸿鹄易学）；runner 若跑在 C/POSIX locale 下，
-          # rpmbuild 对非 ASCII 路径的处理会随 rpm 版本变化。显式声明 UTF-8。
-          LANG: ${{ matrix.platform == 'linux' && 'C.UTF-8' || '' }}
-          LC_ALL: ${{ matrix.platform == 'linux' && 'C.UTF-8' || '' }}
 
       # 更新元数据：只写 update-meta.json（版本号 / tag 推导），不打就地更新包。
       # 客户端自 3.3 起走「下载 setup.exe → 静默覆盖安装」，清单只读 installers；
