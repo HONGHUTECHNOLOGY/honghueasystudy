@@ -38,7 +38,8 @@ function parseArgs(argv) {
 		notesFile: null,
 		token: process.env.GITEE_TOKEN || null,
 		apiBase: process.env.GITEE_API_BASE || API_BASE,
-		target: process.env.GITHUB_SHA || null,
+		/** 不再默认取 GITHUB_SHA：CI 从不往 Gitee 推代码，该 commit 在 Gitee 上不存在 */
+		target: null,
 		verify: true,
 		verifyRetries: 3,
 		purgeAssets: false,
@@ -71,13 +72,14 @@ function usage() {
 	console.log(`用法: node scripts/publish-to-gitee.js --tag <tag> --notes-file <md> [选项]
 
 选项:
-  --tag <tag>           目标 tag（如 v5.5.1），Gitee 上必须已存在同名 tag
+  --tag <tag>           目标 tag（如 v5.5.1），不存在时自动基于 Gitee 默认分支创建
   --notes-file <path>   正文来源（通常是 artifacts/release-notes.md）
   --notes <text>        额外追加正文，可重复
   --repo <owner/repo>   Gitee 仓库，默认 ${DEFAULT_REPO}
   --gitcode-repo <o/r>  下载链接指向的 GitCode 仓库，默认 ${DEFAULT_GITCODE_REPO}
   --github-repo <o/r>   仅用于识别需要替换的 GitHub 链接，默认 ${DEFAULT_GITHUB_REPO}
   --name <title>        Release 标题，默认取 tag
+  --target <ref>        建 tag 的 ref（分支名/sha），默认用 Gitee 仓库的 default_branch；
   --no-verify           跳过下载链接探链（不建议）
   --purge-assets        删除该 Release 上残留的附件（Gitee 放不下大包，附件一律不保留）
   --dry-run             只打印结果，不发请求
@@ -149,6 +151,57 @@ async function probe(url, retries) {
 		await new Promise((r) => setTimeout(r, 5000 * (i + 1)));
 	}
 	return { ok: false, status: 'unreachable' };
+}
+
+/**
+ * 确保 Gitee 上存在同名 tag；不存在就显式创建。
+ *
+ * 为什么不依赖「创建 Release 自动建 tag」：那条路径的 target_commitish 在 CI 里
+ * 默认是 GITHUB_SHA，但 CI 从不往 Gitee 推代码（本仓库只推 GitHub/GitCode），
+ * 该 commit 在 Gitee 上不存在 → Gitee 建 tag 失败 → 400 「创建标签失败：<tag>」。
+ * 这不是偶发，是每次必现。所以这里显式建 tag，ref 用 Gitee 仓库自己的默认分支。
+ *
+ * 返回 { ok, ref }：ref 是建 tag 实际用的引用；tag 本就存在时为 null
+ * （此时 Release 的 target_commitish 随便填，Gitee 不会再用它）。
+ */
+async function ensureTag(opts) {
+	// 列表接口逐页找（本仓库 tag 数量远小于 3 页）
+	for (let page = 1; page <= 3; page++) {
+		const res = await api(opts, 'GET', `/repos/${opts.repo}/tags`, {
+			query: { page, per_page: 100 }
+		});
+		if (!res.ok) {
+			console.log(`  列出 Gitee tag 失败（${res.error}），跳过存在性检查`);
+			break;
+		}
+		if (Array.isArray(res.data) && res.data.some((t) => t.name === opts.tag)) {
+			console.log(`Gitee tag ${opts.tag} 已存在，直接复用`);
+			return { ok: true, ref: null };
+		}
+		if (!Array.isArray(res.data) || res.data.length < 100) break;
+	}
+
+	// ref 不能用 GITHUB_SHA（Gitee 上没有该 commit），用 Gitee 自己的默认分支
+	const repo = await api(opts, 'GET', `/repos/${opts.repo}`);
+	const fallbackRef = repo.ok && repo.data && repo.data.default_branch ? repo.data.default_branch : 'main';
+	const ref = opts.target || fallbackRef;
+	for (let attempt = 1; attempt <= 3; attempt++) {
+		const made = await api(opts, 'POST', `/repos/${opts.repo}/tags`, {
+			json: { tag_name: opts.tag, ref, message: opts.tag }
+		});
+		if (made.ok) {
+			console.log(`已在 Gitee 创建 tag ${opts.tag}（ref=${ref}）`);
+			return { ok: true, ref };
+		}
+		// 并发/重试下 tag 可能已被建出，「已存在」按成功处理
+		if (/已存在|already exist/i.test(made.error)) {
+			console.log(`Gitee tag ${opts.tag} 已存在（并发创建），继续`);
+			return { ok: true, ref: null };
+		}
+		console.log(`  创建 tag 第 ${attempt} 次失败: ${made.error}`);
+		if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 3000));
+	}
+	return { ok: false, ref };
 }
 
 async function main() {
@@ -235,22 +288,32 @@ async function main() {
 	}
 
 	if (opts.dryRun) {
-		console.log(`[dry-run] 将创建 Release tag=${opts.tag}`);
+		console.log(`[dry-run] 将确保 tag=${opts.tag} 存在（不存在则基于 Gitee 默认分支创建），随后创建 Release`);
 		return;
 	}
 
+	/** 先确保 tag 存在。Gitee「创建 Release 自动建 tag」依赖 target_commitish 指向的
+	 *  commit 在 Gitee 上真实存在，而 CI 不往 Gitee 推代码 —— 传 GITHUB_SHA 就是
+	 *  400「创建标签失败」的来源。显式建好 tag 后该路径不会被触发。 */
+	const tag = await ensureTag(opts);
+	if (!tag.ok) {
+		console.log('::warning::无法确保 Gitee tag 存在，继续尝试创建 Release（其自动建 tag 可能同样失败）');
+	}
+
 	/**
-	 * 创建 Release（Gitee 会在 tag 不存在时自动建 tag）。
+	 * 创建 Release（tag 已由 ensureTag 保证存在，Gitee 不再走自动建 tag）。
 	 *
-	 * 实测 Gitee 这条接口会偶发 400 `{"message":"创建标签失败：<tag>"}` ——
-	 * 同样的 token、同样的流程在上一版本能成功，重试一次往往就过。
-	 * 这里做 3 次退避重试；仍失败则再列一次 Release：
+	 * 实测 Gitee 这条接口偶发抖动，保留 3 次退避重试；仍失败则再列一次 Release：
 	 * 如果这期间有人（或 Gitee 自己）建好了，就退化成 PATCH 更新正文。
 	 */
 	let created;
 	for (let attempt = 1; attempt <= 3; attempt++) {
 		created = await api(opts, 'POST', `/repos/${opts.repo}/releases`, {
-			json: { ...payload, prerelease: false, target_commitish: opts.target || 'main' }
+			json: {
+				...payload,
+				prerelease: false,
+				target_commitish: opts.target || tag.ref || 'main'
+			}
 		});
 		if (created.ok) break;
 		console.log(`  创建 Release 第 ${attempt} 次失败: ${created.error}`);
