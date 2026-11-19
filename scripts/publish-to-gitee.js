@@ -238,14 +238,49 @@ async function main() {
 		console.log(`[dry-run] 将创建 Release tag=${opts.tag}`);
 		return;
 	}
-	const created = await api(opts, 'POST', `/repos/${opts.repo}/releases`, {
-		json: { ...payload, prerelease: false, target_commitish: opts.target || 'main' }
-	});
-	if (!created.ok) throw new Error('创建 Gitee Release 失败: ' + created.error);
+
+	/**
+	 * 创建 Release（Gitee 会在 tag 不存在时自动建 tag）。
+	 *
+	 * 实测 Gitee 这条接口会偶发 400 `{"message":"创建标签失败：<tag>"}` ——
+	 * 同样的 token、同样的流程在上一版本能成功，重试一次往往就过。
+	 * 这里做 3 次退避重试；仍失败则再列一次 Release：
+	 * 如果这期间有人（或 Gitee 自己）建好了，就退化成 PATCH 更新正文。
+	 */
+	let created;
+	for (let attempt = 1; attempt <= 3; attempt++) {
+		created = await api(opts, 'POST', `/repos/${opts.repo}/releases`, {
+			json: { ...payload, prerelease: false, target_commitish: opts.target || 'main' }
+		});
+		if (created.ok) break;
+		console.log(`  创建 Release 第 ${attempt} 次失败: ${created.error}`);
+		if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 3000));
+	}
+
+	if (!created.ok) {
+		const again = await api(opts, 'GET', `/repos/${opts.repo}/releases`, {
+			query: { page: 1, per_page: 100 }
+		});
+		const now = again.ok ? (again.data || []).find((r) => r.tag_name === opts.tag) : undefined;
+		if (now) {
+			const patched = await api(opts, 'PATCH', `/repos/${opts.repo}/releases/${now.id}`, { json: payload });
+			if (!patched.ok) throw new Error('更新 Gitee Release 失败: ' + patched.error);
+			console.log(`已更新 Gitee Release: id=${now.id} tag=${opts.tag}`);
+			return;
+		}
+		throw new Error('创建 Gitee Release 失败: ' + created.error);
+	}
 	console.log(`已创建 Gitee Release: id=${created.data.id} tag=${opts.tag}`);
 }
 
 main().catch((e) => {
 	console.error('发布到 Gitee 失败:', e.message);
-	process.exit(1);
+	/**
+	 * Gitee 发布页只是「说明 + 指向 GitCode 的下载链接」的落地页，
+	 * 真正的下载源是 GitHub Release 与 GitCode 镜像，二者都已在上游步骤完成。
+	 * 因此这里默认只警告、不判失败；要严格门禁时加 `--strict`。
+	 */
+	if (process.argv.includes('--strict')) process.exit(1);
+	console.log('::warning::Gitee 发布页未更新（不影响下载源），可稍后重跑或用 --strict 强制失败');
+	process.exit(0);
 });
