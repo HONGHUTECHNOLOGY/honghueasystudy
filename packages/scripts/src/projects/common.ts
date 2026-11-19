@@ -2611,7 +2611,16 @@ const createGuide = () => {
 
 	const aiCfg = CommonProject.scripts.aiSettings.cfg;
 	const aiConfigured = !!(aiCfg.aiEndpoint && aiCfg.aiApiKey && aiCfg.aiModel);
-	const aiGuideCard = !aiConfigured
+	/**
+	 * 已经配了普通题库（非 AI）就不用再催「AI 尚未配置」：
+	 * 普通题库本身就能答题，AI 只是可选的增强，继续显示引导卡片纯属噪音。
+	 * 注意排除「AI答题」这条自动生成的包装，它存在说明走的就是 AI 配置本身。
+	 */
+	const bankCfg = CommonProject.scripts.settings.cfg;
+	const enabledBanks = (bankCfg.answererWrappers || []).filter(
+		(w) => w.name !== 'AI答题' && !(bankCfg.disabledAnswererWrapperNames || []).includes(w.name)
+	);
+	const aiGuideCard = !aiConfigured && enabledBanks.length === 0
 		? h(
 				'div',
 				{

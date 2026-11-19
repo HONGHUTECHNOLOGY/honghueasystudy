@@ -134,7 +134,12 @@ const ListOfActions = [
 	'mouse.dblclick',
 	'mouse.down',
 	'mouse.up',
-	'mouse.move'
+	'mouse.move',
+	/**
+	 * 环境探针：桌面端路由收到后直接回 'pong'，不走页面查找、没有副作用。
+	 * 用来判断「当前页面是否真的在桌面端新建的浏览器里」。
+	 */
+	'hhProbe'
 ];
 
 const mouseIdleRequireActions = [
@@ -176,16 +181,33 @@ export class RemotePlaywright {
 					method: 'get',
 					responseType: 'text'
 				});
-				this.currentPage = this.createRemotePage(this.authToken, { show_debug_cursor, logger });
-				return this.currentPage;
 			} catch (e) {
 				console.log(e);
 				return undefined;
 			}
-		} else {
-			this.currentPage = this.createRemotePage(this.authToken, { show_debug_cursor, logger });
-			return this.currentPage;
 		}
+		if (!this.authToken) return undefined;
+
+		const page = this.createRemotePage(this.authToken, { show_debug_cursor, logger });
+
+		/**
+		 * 拿到 key 只能说明「桌面端进程在跑」，**不代表当前页面在桌面端新建的浏览器里**。
+		 *
+		 * 用户可能同时装了纯扩展版：桌面端常驻后台时，扩展照样能从 localhost:15319 拿到 key，
+		 * 但动作请求 `/hh-script-actions` 靠的是桌面端 Playwright 在受控浏览器里拦截；
+		 * 普通浏览器里这个请求会打到网站自己身上（404 HTML），而 `request` 对非 2xx 不报错，
+		 * 于是每次点击都「静默成功」——表现就是脚本卡住不动，也不提示装桌面端。
+		 *
+		 * 所以先发一次空转探针，只有真的收到 'pong' 才认为处在受控浏览器里。
+		 */
+		const pong = await Promise.race([page.hhProbe(), $.sleep(3000).then(() => undefined)]);
+		if (pong !== 'pong') {
+			logger?.('[RP]: 动作通道无响应，判定不在桌面端浏览器环境');
+			return undefined;
+		}
+
+		this.currentPage = page;
+		return this.currentPage;
 	}
 
 	private static createRemotePage(

@@ -3304,7 +3304,8 @@
     "mouse.dblclick",
     "mouse.down",
     "mouse.up",
-    "mouse.move"
+    "mouse.move",
+    "hhProbe"
   ];
   const mouseIdleRequireActions = [
     "click",
@@ -3335,16 +3336,21 @@
             method: "get",
             responseType: "text"
           });
-          this.currentPage = this.createRemotePage(this.authToken, { show_debug_cursor, logger });
-          return this.currentPage;
         } catch (e) {
           console.log(e);
           return void 0;
         }
-      } else {
-        this.currentPage = this.createRemotePage(this.authToken, { show_debug_cursor, logger });
-        return this.currentPage;
       }
+      if (!this.authToken)
+        return void 0;
+      const page = this.createRemotePage(this.authToken, { show_debug_cursor, logger });
+      const pong = await Promise.race([page.hhProbe(), $.sleep(3e3).then(() => void 0)]);
+      if (pong !== "pong") {
+        logger == null ? void 0 : logger("[RP]: 动作通道无响应，判定不在桌面端浏览器环境");
+        return void 0;
+      }
+      this.currentPage = page;
+      return this.currentPage;
     }
     static createRemotePage(authToken, configs) {
       const page = /* @__PURE__ */ Object.create({});
@@ -8782,7 +8788,11 @@
     ]);
     const aiCfg = CommonProject.scripts.aiSettings.cfg;
     const aiConfigured = !!(aiCfg.aiEndpoint && aiCfg.aiApiKey && aiCfg.aiModel);
-    const aiGuideCard = !aiConfigured ? lib.h(
+    const bankCfg = CommonProject.scripts.settings.cfg;
+    const enabledBanks = (bankCfg.answererWrappers || []).filter(
+      (w) => w.name !== "AI答题" && !(bankCfg.disabledAnswererWrapperNames || []).includes(w.name)
+    );
+    const aiGuideCard = !aiConfigured && enabledBanks.length === 0 ? lib.h(
       "div",
       {
         style: {

@@ -3569,6 +3569,18 @@ function browserNetworkRoute(authToken: string, browser: BrowserContext, getAuto
 
 		const { page: targetPageUrl, property, args }: { page: string; property: string; args: any[] } = req.postDataJSON();
 
+		/**
+		 * 环境探针：扩展用它判断「当前页面是否真的在这个受控浏览器里」。
+		 *
+		 * 只凭 localhost:15319/get-actions-key 能拿到 key 是不够的 —— 桌面端常驻时，
+		 * 用户自己浏览器里的纯扩展版也能拿到 key。探针必须由**这里**应答，
+		 * 才对得上「动作只能在本浏览器内执行」的事实。
+		 */
+		if (property === 'hhProbe') {
+			await route.fulfill({ status: 200, contentType: 'text/plain', body: 'pong' });
+			return;
+		}
+
 		try {
 			const page = browser?.pages().find((p) => p.url().includes(targetPageUrl));
 			if (!page) {
@@ -3640,9 +3652,38 @@ function browserNetworkRoute(authToken: string, browser: BrowserContext, getAuto
 }
 
 function handleBrowserInit(browser: BrowserContext, config: { enable_dialog?: boolean; userDataDir: string }) {
-	// 防检测
+	/**
+	 * 防检测：`navigator.webdriver`
+	 *
+	 * 启动参数里已经移除了 `--enable-automation`（见 ignoreDefaultArgs），原生值本来就是 false，
+	 * 所以这里**默认什么都不做**。
+	 *
+	 * 以前是无条件 `Object.defineProperty(navigator, 'webdriver', { get: () => false })`：
+	 * 会在 navigator **实例**上留一个自有属性，反作弊平台一句
+	 * `Object.getOwnPropertyDescriptor(navigator, 'webdriver')` 就能看出是伪造的
+	 * ——原生 getter 在 `Navigator.prototype` 上、toString 是 `[native code]`，
+	 * 而伪造的是 `() => false`。等于自己把「异常脚本」的标签贴上去。
+	 *
+	 * 万一某个浏览器版本真把值置成 true，也只改原型、不碰实例：
+	 * Proxy 包住原生 getter（`Function.prototype.toString` 对 Proxy 固定返回 `[native code]`），
+	 * 描述符形状（enumerable/configurable/name/length）全部沿用原生的。
+	 */
 	browser.addInitScript({
-		content: 'Object.defineProperty(navigator, "webdriver", { get: () => false });console.log(navigator)'
+		content: `(() => {
+	try {
+		if (navigator.webdriver !== true) return;
+		const proto = Object.getPrototypeOf(navigator);
+		const desc = proto && Object.getOwnPropertyDescriptor(proto, 'webdriver');
+		if (!desc || typeof desc.get !== 'function') return;
+		const getter = new Proxy(desc.get, { apply: () => false });
+		Object.defineProperty(proto, 'webdriver', {
+			get: getter,
+			set: desc.set,
+			enumerable: desc.enumerable,
+			configurable: true
+		});
+	} catch (e) {}
+})();`
 	});
 
 	/**
