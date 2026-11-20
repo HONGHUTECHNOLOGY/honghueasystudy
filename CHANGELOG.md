@@ -1,6 +1,16 @@
 # Changelog
 
 
+## [5.7.2](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.7.1...v5.7.2) (2026-11-20)
+
+
+* **release:** 指定下一个版本为 5.7.2 ([25102d7](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/25102d7ca1c89b4ba75eace012c59f4dc1a913e0))
+
+
+### ✨ 新功能
+
+* **remote:** 按新版 Cloudflare 控制台更新固定域名配置指导 ([f0fae52](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/f0fae52a946df11fcd90964a962ecdb29fac849a))
+
 ## [5.7.1](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.7.0...v5.7.1) (2026-11-20)
 
 
