@@ -1,6 +1,29 @@
 # Changelog
 
 
+## [5.7.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.6.0...v5.7.0) (2026-11-20)
+
+
+### ✨ 新功能
+
+* **remote-control:** 支持 Cloudflare 命名隧道固定域名 ([39c3045](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/39c30457e8a5e21d894db2ac95fac6fb070ae8cd))
+* **worker:** 读取课程列表时显示流光提示 ([595d50f](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/595d50f3ac6490804cc28b27377928dc2913b8c9))
+
+
+### 🐛 问题修复
+
+* **automation:** 修复智慧树登录竞态，并在 OCR 期间将流光降级为纯蓝 ([b1db080](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/b1db0801b9dfcf8428b80481d205f65be6c4ca3f))
+* **automation:** 学习时长按进课起算，修复流光不灭、更新重试与日志缺失 ([7f22eb5](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/7f22eb5b0aaa3ecb9ebe2c4d4418cec1b4f22ebf))
+* **overlay:** 流光显示/隐藏增加淡入淡出，修复不显示与残留的边界情况 ([58e13e1](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/58e13e16504421cea7e1d7122206dcb9c9d62a38))
+* **release:** Gitee 发布页创建失败不再阻断发版 ([1a61e27](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/1a61e2758c01c2b58b479f093ffd27804121b19c))
+* **release:** 建 Release 前先显式确保 Gitee tag 存在 ([cadb961](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/cadb9616291d3444b15d7c6f9ac35e143dda102e))
+* **release:** 清单探链对 GitCode 的 418 增加无 UA 重试 ([a6029f1](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/a6029f198643f0f205c973ba565c8476a02b21ee))
+
+
+### 📝 文档
+
+* README 徽章下方增加官网入口 ([270f51c](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/270f51c78980155ea5e690e81c0102f45a2383ce))
+
 ## [5.6.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.5.1...v5.6.0) (2026-11-19)
 
 
