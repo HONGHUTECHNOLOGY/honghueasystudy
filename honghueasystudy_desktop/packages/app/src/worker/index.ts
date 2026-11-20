@@ -39,6 +39,18 @@ const { bgRedBright, bgBlueBright, bgYellowBright, bgGray } = new Chalk({ level:
 const AUTOMATION_READY_TIMEOUT = 5 * 60 * 1000;
 
 /**
+ * 读课程时允许在登录页上等待多久
+ *
+ * 登录脚本「结束」不等于「登录成功」：脚本内部的异常都被吞掉转成 `script-error`，
+ * 而智慧树登录成功后还要在 login → passport → www 之间连续跳转。
+ * 自动刷课 / 手机端往往就在这一刻来读课程，太早抽取只能拿到空列表。
+ * 这里给它一个有限窗口；窗口用完仍未登录就返回明确原因，
+ * 避免把「登录还没完成」误报成「没找到课程」。
+ * 15 秒与渲染端 3 次重试（间隔 8 秒）配合，失败反馈不会被拖得过慢。
+ */
+const LOGIN_LANDING_TIMEOUT = 15 * 1000;
+
+/**
  * 脚本日志前缀
  *
  * 必须与 `packages/scripts/src/projects/background.ts` 的
@@ -1411,7 +1423,26 @@ export class ScriptWorker {
 			}
 		}
 
-		const page = await this.acquireAutomationPage({ requirePlatform: true });
+		let page = await this.acquireAutomationPage({ requirePlatform: true });
+
+		/**
+		 * 登录脚本结束 ≠ 登录完成：脚本把异常都吞成 `script-error`，智慧树登录成功后
+		 * 也还要在 login → passport → www 之间跳几轮。自动刷课 / 手机端刚好在这一刻来读，
+		 * 落在登录页上只会抽到空列表（还会把正在登录的标签导航走）。
+		 * 先给跳转一个有限窗口；窗口用完仍没登录就明确说「登录还没完成」。
+		 */
+		page = await this.settlePlatformPage(page);
+		if (isLoginPageUrl(safePageUrl(page))) {
+			const loginPlatform = detectCoursePlatform(safePageUrl(page)) || this.rememberedPlatform();
+			this.info(`[远程] 读取课程时页面仍停在登录页，暂不读取：${safePageUrl(page)}`);
+			return {
+				platform: loginPlatform?.id || '',
+				pageUrl: safePageUrl(page),
+				pageTitle: '',
+				courses: [],
+				hint: '登录还没有完成（页面仍停在登录页）。请先在浏览器里完成登录 / 安全验证，再点「刷新课程列表」重试。'
+			};
+		}
 
 		/**
 		 * 平台判定四层兜底：当前页 → 记住的上次平台 → Cookie 域 → 放弃。
@@ -1421,15 +1452,15 @@ export class ScriptWorker {
 		 * Cookie 是按 context 持久化的，只要还留着一个平台域名的 Cookie，
 		 * 就知道该去哪个平台读课程。
 		 */
-		let platform = detectCoursePlatform(page.url()) || this.rememberedPlatform() || (await this.platformFromCookies());
+		let platform = detectCoursePlatform(safePageUrl(page)) || this.rememberedPlatform() || (await this.platformFromCookies());
 
 		/**
 		 * 超星把「我的课程」整个放在 iframe 里（`i.chaoxing.com/base` 主文档只有导航），
 		 * 主文档域名常常认不出平台，得连各 frame 的 URL 一起看。
 		 */
 		if (!platform) {
-			for (const frame of page.frames()) {
-				const hit = detectCoursePlatform(frame.url());
+			for (const frame of pageFrames(page)) {
+				const hit = detectCoursePlatform(safeFrameUrl(frame));
 				if (hit) {
 					platform = hit;
 					break;
@@ -1442,7 +1473,7 @@ export class ScriptWorker {
 			await autoScrollForCourses(target);
 			return target
 				.evaluate(extractCoursesInPage, {
-					platform: detectCoursePlatform(target.url())?.id || platform?.id || ''
+					platform: detectCoursePlatform(targetUrl(target))?.id || platform?.id || ''
 				})
 				.catch(() => undefined);
 		};
@@ -1462,7 +1493,9 @@ export class ScriptWorker {
 		const attempts: (Page | Frame)[] = [page];
 		browser.pages().forEach((item) => {
 			if (item === page || item.isClosed() || attempts.length >= 4) return;
-			if (!detectCoursePlatform(item.url())) return;
+			if (!detectCoursePlatform(safePageUrl(item))) return;
+			/** 登录页也在平台域名下，但上面没有课程：抽它只会污染页标题、浪费时间 */
+			if (isLoginPageUrl(safePageUrl(item))) return;
 			attempts.push(item);
 		});
 
@@ -1472,10 +1505,11 @@ export class ScriptWorker {
 		 */
 		const frameTargets: Frame[] = [];
 		for (const source of attempts.slice() as Page[]) {
-			for (const frame of source.frames()) {
+			for (const frame of pageFrames(source)) {
 				if (frameTargets.length >= 6) break;
 				if (frame === source.mainFrame()) continue;
-				if (!detectCoursePlatform(frame.url())) continue;
+				if (!detectCoursePlatform(safeFrameUrl(frame))) continue;
+				if (isLoginPageUrl(safeFrameUrl(frame))) continue;
 				frameTargets.push(frame);
 			}
 		}
@@ -1499,10 +1533,10 @@ export class ScriptWorker {
 		 * 只在用户主动刷新、或当前页根本不是网页时做；
 		 * 静默探测（refresh=false）遇到普通网页就到此为止，不去打扰用户正在看的东西。
 		 */
-		const onBlankPage = !/^https?:/i.test(page.url());
+		const onBlankPage = !/^https?:/i.test(safePageUrl(page));
 		if (!items.length && platform && (wantRefresh || onBlankPage)) {
 			const target = platform.listUrl;
-			if (normalizeUrl(page.url()) !== normalizeUrl(target)) {
+			if (normalizeUrl(safePageUrl(page)) !== normalizeUrl(target)) {
 				this.info(`[远程] 打开课程列表页：${target}`);
 				await page
 					.goto(target, { waitUntil: 'domcontentloaded', timeout: 45000 })
@@ -1510,16 +1544,34 @@ export class ScriptWorker {
 				/** 后台标签的渲染会被 Chromium 节流，抽列表前先顶到前台 */
 				await page.bringToFront().catch(() => {});
 			}
-			platform = detectCoursePlatform(page.url()) || platform;
+
+			platform = detectCoursePlatform(safePageUrl(page)) || platform;
 			this.automationPlatformId = platform.id;
-			/** 课程列表大多是异步渲染，直接抽取会抽到空列表 */
-			await page.waitForTimeout(2500);
+			/** 课程列表大多是异步渲染，直接抽取会抽到空列表（这里不依赖页面对象，页面被关也不会抛错） */
+			await new Promise<void>((resolve) => setTimeout(resolve, 2500));
+
+			/**
+			 * 未登录 / 登录态失效时，课程页会被重定向回登录中心。
+			 * 放在渲染等待之后判定：部分跳转是前端路由完成的，落地即查会漏掉。
+			 * 这时课程列表一定为空，继续抽取只会得到「没读到课程」的误导提示。
+			 */
+			if (isLoginPageUrl(safePageUrl(page))) {
+				this.info(`[远程] 课程页被跳转到登录页，停止读取：${safePageUrl(page)}`);
+				return {
+					platform: platform.id,
+					pageUrl: safePageUrl(page),
+					pageTitle: '',
+					courses: [],
+					hint: '登录状态已失效，课程页被跳转到了登录页。请在浏览器里重新登录（或运行登录脚本）后再点「刷新课程列表」。'
+				};
+			}
 
 			/** 导航后 frame 会重建，必须重新收集（超星「我的课程」就在 iframe 里） */
 			const afterNav: (Page | Frame)[] = [page];
-			for (const frame of page.frames()) {
+			for (const frame of pageFrames(page)) {
 				if (frame === page.mainFrame()) continue;
-				if (!detectCoursePlatform(frame.url())) continue;
+				if (!detectCoursePlatform(safeFrameUrl(frame))) continue;
+				if (isLoginPageUrl(safeFrameUrl(frame))) continue;
 				afterNav.push(frame);
 			}
 
@@ -1536,7 +1588,7 @@ export class ScriptWorker {
 			}
 		}
 
-		const finalPlatform = detectCoursePlatform(used.url()) || platform;
+		const finalPlatform = detectCoursePlatform(targetUrl(used)) || platform;
 		if (items.length) {
 			/** 抽到课程的那一页就是后续「进入课程」要点击的页面（frame 里抽到的就记它的宿主页） */
 			this.automationPage = toPage(used);
@@ -1546,14 +1598,14 @@ export class ScriptWorker {
 		const hint = items.length
 			? ''
 			: finalPlatform
-			? `已识别为${finalPlatform.label}，但没读到课程（当前页面：${pageTitle || used.url()}）。` +
+			? `已识别为${finalPlatform.label}，但没读到课程（当前页面：${pageTitle || targetUrl(used)}）。` +
 			  '课程页可能还没加载完，点「刷新课程列表」重试，或在桌面端浏览器里打开「我的课程」后再点刷新。'
 			: '没有检测到教学平台的登录状态。请先在桌面端浏览器里完成登录（或运行登录脚本），再点「刷新课程列表」。';
 
 		this.info(`[远程] 课程列表：识别到 ${items.length} 门课程（${finalPlatform?.id || '未知平台'}）`);
 		return {
 			platform: finalPlatform?.id || '',
-			pageUrl: used.url(),
+			pageUrl: targetUrl(used),
 			pageTitle,
 			courses: items,
 			hint
@@ -1585,6 +1637,15 @@ export class ScriptWorker {
 
 		/** 优先用读课程列表那一页：上面的 `data-hh-course` 标记就是在这里打的 */
 		const page = await this.acquireAutomationPage();
+
+		/**
+		 * 同一个登录陷阱：智慧树登录中心也在平台域名下，会被当成课程页。
+		 * 登录没完成时进课只会在登录表单上找课程卡片，点也点不动，
+		 * 用户看到的却是「点了课程但没跳转」，所以这里直接说清楚原因。
+		 */
+		if (isLoginPageUrl(safePageUrl(page))) {
+			throw new Error('登录还没有完成，暂时不能进入课程。请先在浏览器里完成登录 / 安全验证，再进入。');
+		}
 
 		/**
 		 * 标记可能打在 iframe 里（超星「我的课程」整个在 mooc2-ans 的 iframe 内），
@@ -2202,18 +2263,35 @@ export class ScriptWorker {
 				? this.automationPage
 				: undefined;
 		const requirePlatform = !!(options && options.requirePlatform);
+		const isPlatform = (item: Page) => !!detectCoursePlatform(item.url());
+		/** 登录中心也在平台域名下，但上面没有课程，不能当课程页用 */
+		const isLoggedInPlatform = (item: Page) => isPlatform(item) && !isLoginPageUrl(item.url());
 
 		/** 1) 正在用的这一页就合适：直接复用（标记、滚动位置都还在） */
-		if (cached && (!requirePlatform || detectCoursePlatform(cached.url()))) return cached;
+		if (cached && (!requirePlatform || isLoggedInPlatform(cached))) return cached;
 
-		/** 2) 已有教学平台的页面：自动登录脚本跑完通常就停在这里 */
-		const platformPage = alive().find((item) => detectCoursePlatform(item.url()));
+		/**
+		 * 2) 已有教学平台的页面：自动登录脚本跑完通常就停在这里。
+		 *
+		 * 必须优先选「非登录页」：智慧树的登录中心（login / passport）也算平台域名，
+		 * 登录还没完成时按原顺序会把登录页交出去，调用方随后在登录页上抽课程 ——
+		 * 抽到的永远是空列表，还会把正在登录的标签导航走。
+		 */
+		const platformPages = alive().filter(isPlatform);
+		const platformPage = platformPages.find(isLoggedInPlatform);
 		if (platformPage) {
 			this.automationPage = platformPage;
 			return platformPage;
 		}
 
 		if (cached) return cached;
+
+		/** 只剩登录页可选时也交出去：调用方据此提示「登录还没完成」，而不是另开一张空白页 */
+		const loginPage = platformPages.find((item) => isLoginPageUrl(item.url()));
+		if (loginPage) {
+			this.automationPage = loginPage;
+			return loginPage;
+		}
 
 		/** 3) 任意普通网页：优先真正的前台页，其次最新打开的 */
 		const webPages = alive().filter((item) => /^https?:/i.test(item.url()));
@@ -2238,6 +2316,44 @@ export class ScriptWorker {
 		/** 让电脑前的人也能看到登录过程（用户是远程点的，说明人就在等） */
 		await page.bringToFront().catch(() => {});
 		return page;
+	}
+
+	/** 找一页「已登录」的平台页：域名属于教学平台，且不是登录中心 */
+	private findLoggedInPlatformPage(exclude?: Page): Page | undefined {
+		if (!this.browser) return undefined;
+		const serverPort = this.store?.server?.port || 15319;
+		return this.browser
+			.pages()
+			.filter((item) => item !== exclude && !item.isClosed())
+			.filter((item) => !isBookmarksPageUrl(safePageUrl(item), serverPort))
+			.find((item) => !!detectCoursePlatform(safePageUrl(item)) && !isLoginPageUrl(safePageUrl(item)));
+	}
+
+	/**
+	 * 等页面离开登录页
+	 *
+	 * 登录脚本结束时，智慧树的跳转链（login → passport → www）可能还在走，
+	 * 此时读课程必然拿到空列表。这里给一个有界等待：期间既看当前标签自己跳走，
+	 * 也看别的标签是否已经登录完成（脚本常自己开新标签）。
+	 * 超时后原样返回，调用方据此给出「登录还没完成」的明确提示。
+	 */
+	private async settlePlatformPage(page: Page, timeout = LOGIN_LANDING_TIMEOUT): Promise<Page> {
+		const deadline = Date.now() + timeout;
+		for (;;) {
+			if (!isLoginPageUrl(safePageUrl(page))) return page;
+
+			const other = this.findLoggedInPlatformPage();
+			if (other) {
+				this.automationPage = other;
+				return other;
+			}
+
+			if (Date.now() >= deadline) return page;
+			/** 不用 page.waitForTimeout：页面可能在等待期间被关闭，那会直接抛错 */
+			await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+			if (!this.browser) return page;
+			page = await this.acquireAutomationPage({ requirePlatform: true });
+		}
 	}
 
 	/** 取真正的前台页；判定不出时退回最新页面（与页面列表的选择保持一致） */
@@ -2341,6 +2457,63 @@ function normalizeUrl(url: string): string {
 		return `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, '')}`.toLowerCase();
 	} catch {
 		return String(url || '').toLowerCase();
+	}
+}
+
+/** 取页面地址：页面可能正在跳转或已被关闭，读不到时返回空串而不是抛错 */
+function safePageUrl(page: Page): string {
+	try {
+		return page.isClosed() ? '' : page.url();
+	} catch {
+		return '';
+	}
+}
+
+/** 取页面的 frame 列表：页面正在跳转 / 已被关闭时返回空数组，不让读课程整段失败 */
+function pageFrames(page: Page): Frame[] {
+	try {
+		return page.isClosed() ? [] : page.frames();
+	} catch {
+		return [];
+	}
+}
+
+/** 取 frame 地址：frame 被销毁时返回空串 */
+function safeFrameUrl(frame: Frame): string {
+	try {
+		return frame.url();
+	} catch {
+		return '';
+	}
+}
+
+/** 取抽取目标（页面或 iframe）的地址 */
+function targetUrl(target: Page | Frame): string {
+	return typeof (target as Frame).page === 'function' ? safeFrameUrl(target as Frame) : safePageUrl(target as Page);
+}
+
+/** 登录 / 单点登录中心的 host 前缀：login.zhihuishu.com、passport2.chaoxing.com … */
+const LOGIN_HOST_PREFIX = /^(login|passport|sso|cas|signin|auth|account)\d*\./i;
+/** 登录路径：www.zhihuishu.com/login、/login.html、passport2 的 /mlogin、…/signin … */
+const LOGIN_PATH_SEGMENT = /^\/(m?login|signin|sign-in|passport|sso|cas)(?:\.html?)?(\/|$)/i;
+
+/**
+ * 是不是登录页
+ *
+ * `detectCoursePlatform` 只认域名，而登录中心恰好也在平台域名下
+ * （login.zhihuishu.com / passport.zhihuishu.com 都属于智慧树），
+ * 于是「找一页来用」时登录页会被当成可用的课程页。
+ * 登录页上永远没有课程，在上面抽取只能得到空列表，还会把正在登录的标签导航走，
+ * 所以取页与抽取之前都必须先把它排除掉。
+ */
+export function isLoginPageUrl(url: string): boolean {
+	const text = String(url || '');
+	if (!/^https?:/i.test(text)) return false;
+	try {
+		const parsed = new URL(text);
+		return LOGIN_HOST_PREFIX.test(parsed.hostname) || LOGIN_PATH_SEGMENT.test(parsed.pathname);
+	} catch {
+		return false;
 	}
 }
 

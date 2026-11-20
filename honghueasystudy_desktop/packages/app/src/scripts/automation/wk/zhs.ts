@@ -174,25 +174,55 @@ async function agreeAndSubmit(page: Page) {
 async function solveCaptcha(page: Page, options?: ZHSCaptchaOptions) {
 	if (!options?.ocrApiUrl || !options?.detTargetKey || !options?.detBackgroundKey) return;
 
-	let count = 5;
-	while (await isNotVerified(page)) {
-		if (count <= 0) throw new Error('滑块识别失败，请手动登录。');
-		count--;
-		await verify(page, {
-			ocrApiUrl: options.ocrApiUrl,
-			detTargetKey: options.detTargetKey,
-			detBackgroundKey: options.detBackgroundKey
-		});
-		await page.waitForTimeout(2000);
-		if (await isNotVerified(page)) {
-			// 拖动失败后换一张图再试，避免一直重复同一张失败图片
-			const refresh = page.locator('.yidun_refresh').first();
-			if (await refresh.count().catch(() => 0)) {
-				await refresh.click().catch(() => {});
-				await page.waitForTimeout(1500);
+	/**
+	 * 整个「识别 + 拖动 + 重试」区间都切成静态纯蓝，并暂停流光的大面积动画。
+	 *
+	 * 流光是两块全屏动画（旋转的 conic + blur），会把登录页压到个位数帧率；
+	 * 验证码的图片解码与拖动正好与它抢渲染，表现为「OCR 启动很慢」。
+	 * 放在循环外：验证码常有多次重试，如果每次 verify 都切回流光，
+	 * 视觉会在蓝和流光之间反复跳，重试间隙也重新变卡。
+	 * 结束时（无论成功、失败、异常）finally 再渐变回流光。
+	 */
+	const overlay = getAutomationOverlay(page.context());
+	overlay?.setSourceActive(OCR_TIP_SOURCE, OCR_TIP_MESSAGE, true, { steady: true });
+	try {
+		let count = 5;
+		while (await isNotVerified(page)) {
+			if (count <= 0) throw new Error('滑块识别失败，请手动登录。');
+			count--;
+			await verify(page, {
+				ocrApiUrl: options.ocrApiUrl,
+				detTargetKey: options.detTargetKey,
+				detBackgroundKey: options.detBackgroundKey
+			});
+			await page.waitForTimeout(2000);
+			if (await isNotVerified(page)) {
+				// 拖动失败后换一张图再试，避免一直重复同一张失败图片
+				const refresh = page.locator('.yidun_refresh').first();
+				if (await refresh.count().catch(() => 0)) {
+					await refresh.click().catch(() => {});
+					await page.waitForTimeout(1500);
+				}
 			}
 		}
+	} finally {
+		overlay?.setSourceActive(OCR_TIP_SOURCE, '', false);
 	}
+}
+
+/**
+ * 是否仍停在登录入口
+ *
+ * 智慧树登录成功不是一步到位：login 中心 → passport → www，连续跳转好几轮。
+ * 只认 `login.zhihuishu.com` 的话，`passport.zhihuishu.com` 这段中间页
+ * 只要地址稳定 3 秒就会被误判成「登录完成」，脚本随即结束、读课程立即开跑，
+ * 结果就是在登录页上抽出空列表并报错。
+ */
+function isLoginEntryUrl(url: string): boolean {
+	const text = String(url || '');
+	if (!/^https?:/i.test(text)) return false;
+	if (/^https?:\/\/(login|passport)\.zhihuishu\.com/i.test(text)) return true;
+	return /zhihuishu\.com\/(?:[^?#]*\/)?(?:login|signin)(?:\.html?)?(?:[/?#]|$)/i.test(text);
 }
 
 /** 登录页可能停留在新登录中心，等待跳转；超时则给出明确错误 */
@@ -201,20 +231,23 @@ async function waitForLogin(page: Page) {
 	 * 登录成功后智慧树不是一步到位：login 中心 → passport → www → 学习页，
 	 * 会连续跳转好几轮。这里必须等**地址稳定**再返回，否则后面的读课流程
 	 * 会在跳转途中被顶掉（表现为读到空列表或执行上下文被销毁）。
+	 *
+	 * 上限给到 60 秒：弱网下 passport 换票据 + 首页渲染可能超过 40 秒，
+	 * 提前放弃会让脚本「正常结束」，读课程随即撞上还没登录完的页面。
 	 */
-	const deadline = Date.now() + 40 * 1000;
+	const deadline = Date.now() + 60 * 1000;
 	let lastUrl = '';
 	let stable = 0;
 	while (Date.now() < deadline) {
 		const url = page.url();
-		if (url.includes('login.zhihuishu.com')) {
+		if (isLoginEntryUrl(url)) {
 			lastUrl = url;
 			stable = 0;
 		} else {
 			stable = url === lastUrl ? stable + 1 : 0;
 			lastUrl = url;
-			/** 连续 3 秒地址不变，认为多轮跳转已经结束 */
-			if (stable >= 3) {
+			/** 连续 3 秒地址不变，且已经落在真正的网页上，才认为多轮跳转结束 */
+			if (stable >= 3 && /^https?:/i.test(url)) {
 				await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
 				return;
 			}
@@ -267,30 +300,20 @@ async function verify(page: Page, opts: { ocrApiUrl: string; detTargetKey: strin
 		const det_target_src = await det_target_el.getAttribute('src');
 		const det_bg_src = await det_bg_el.getAttribute('src');
 		if (det_target_src && det_bg_src) {
-			/**
-			 * OCR 识别通常要 1~3 秒，这段窗口里页面看起来是「卡住」的：
-			 * 用户可能去手动拖滑块，反而打断自动验证。所以识别期间常显提示。
-			 */
-			const overlay = getAutomationOverlay(page.context());
-			overlay?.setSourceActive(OCR_TIP_SOURCE, OCR_TIP_MESSAGE, true);
-			try {
-				// 必须把 page 传进去：易盾的图片地址带会话校验，由 Node 侧独立下载会被回 400
-				const [det_target_base64, det_bg_base64] = await Promise.all([
-					getBase64(det_target_src, page),
-					getBase64(det_bg_src, page)
-				]);
-				// 拼图元素自身的位移已经按背景图显示比例缩放过了，鼠标拖动距离直接使用 OCR 原始偏移；
-				// 再乘一次显示比例会导致拖动不足，拼图偏左。
-				await breakSliderVerify(page, det_slider_el, det_target_base64, det_bg_base64, {
-					...opts,
-					offset: 0,
-					startAtCenter: true,
-					pieceElement: det_target_el,
-					backgroundElement: det_bg_el
-				});
-			} finally {
-				overlay?.setSourceActive(OCR_TIP_SOURCE, '', false);
-			}
+			// 必须把 page 传进去：易盾的图片地址带会话校验，由 Node 侧独立下载会被回 400
+			const [det_target_base64, det_bg_base64] = await Promise.all([
+				getBase64(det_target_src, page),
+				getBase64(det_bg_src, page)
+			]);
+			// 拼图元素自身的位移已经按背景图显示比例缩放过了，鼠标拖动距离直接使用 OCR 原始偏移；
+			// 再乘一次显示比例会导致拖动不足，拼图偏左。
+			await breakSliderVerify(page, det_slider_el, det_target_base64, det_bg_base64, {
+				...opts,
+				offset: 0,
+				startAtCenter: true,
+				pieceElement: det_target_el,
+				backgroundElement: det_bg_el
+			});
 		}
 	}
 }

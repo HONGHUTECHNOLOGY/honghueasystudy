@@ -44,18 +44,22 @@ export function isOperatingAction(property: string): boolean {
  * 页面里创建覆盖层（字符串形式，避免主进程 tsconfig 没有 DOM 类型）
  *
  * 元素结构（全部在 closed shadow root 内）：
- *   .glow  —— 四条方向性渐变，静态绘制一次，动效只做 opacity（合成层，不重绘）
- *   .edge  —— 四条 3px 细条，background-position 平移做出流动光，重绘面积只有 3px
+ *   .glow  —— 流光：旋转的 conic + blur 大图层（视觉最重，只在普通状态运行动画）
+ *   .blue  —— OCR / 验证码期间的纯色蓝：静态边框 + 四边渐变，零动画
  *   .pill  —— 底部胶囊：呼吸圆点 + 文案，带一道扫过的反光
  *
- * 为什么不用「大 conic + blur」：每次页面导航都会重建覆盖层，那块几千万像素的模糊图层
- * 要重新光栅化，正好和页面自己的首屏渲染抢资源 —— 跳转越频繁越明显。
+ * 性能注意：`.glow` 的两块全屏动画会把登录 / 验证码页压到个位数帧率，
+ * 直接拖慢验证码取图与拖动。所以只要出现 OCR / 滑块场景，就把 `.glow`
+ * 淡出并暂停（`.calm`），换成静态 `.blue`；结束后再渐变回去。
+ * 新增动画前务必按这条标准评估：宁可少一层模糊，也不要和页面抢渲染。
  */
-export function buildOverlayScript(message: string): string {
+export function buildOverlayScript(message: string, calm = false): string {
 	return `(() => {
 	try {
 		var KEY = Symbol.for('hh.glow.ctl');
 		var MSG = ${JSON.stringify(message)};
+		/* 平静态：OCR / 验证码期间显示纯色蓝色，停掉大图层动画，避免和验证码抢渲染 */
+		var CALM = ${JSON.stringify(!!calm)};
 		var prev = window[KEY];
 		if (prev && prev.host && prev.host.isConnected) {
 			/* 正在淡出的旧覆盖层：取消移除并淡回来，避免出现「两个胶囊叠加」 */
@@ -63,6 +67,8 @@ export function buildOverlayScript(message: string): string {
 			prev.text.textContent = ${JSON.stringify(message)};
 			prev.host.style.display = 'block';
 			prev.host.style.opacity = '1';
+			/* 直接原地切换状态：走 CSS 过渡，视觉上是自然渐变 */
+			if (prev.applyCalm) prev.applyCalm(CALM);
 			return 'updated';
 		}
 		var host = document.createElement('div');
@@ -91,6 +97,8 @@ export function buildOverlayScript(message: string): string {
 			.glow {
 				position: absolute; inset: 0; pointer-events: none; overflow: hidden;
 				opacity: .5;
+				/* OCR 期间整体淡出，露出下面的纯色蓝；结束后再淡回流光 */
+				transition: opacity .45s ease;
 				-webkit-mask:
 					linear-gradient(to right, rgba(0,0,0,.95), rgba(0,0,0,.52) min(9%, 100px), rgba(0,0,0,.16) min(17%, 190px), transparent min(30%, 330px)),
 					linear-gradient(to left, rgba(0,0,0,.95), rgba(0,0,0,.52) min(9%, 100px), rgba(0,0,0,.16) min(17%, 190px), transparent min(30%, 330px)),
@@ -121,6 +129,23 @@ export function buildOverlayScript(message: string): string {
 				mask-composite: exclude;
 				animation: hh-rotate 14s linear infinite;
 			}
+			/* 平静态：动画直接暂停，连不可见的合成开销也省掉 */
+			.glow.calm::before, .glow.calm::after { animation-play-state: paused; }
+			/*
+			 * 纯色蓝：OCR / 验证码期间替代流光。
+			 * 只用静态边框 + 四边方向渐变，没有任何动画与大面积模糊，
+			 * 光栅化一次即可，不会再和验证码抢渲染资源。
+			 */
+			.blue {
+				position: absolute; inset: 0; pointer-events: none; opacity: 0;
+				transition: opacity .45s ease;
+				box-shadow: inset 0 0 0 2px #3b82f6, inset 0 0 30px rgba(59,130,246,.34);
+				background:
+					linear-gradient(to right, rgba(59,130,246,.26), rgba(59,130,246,0) 64px),
+					linear-gradient(to left, rgba(59,130,246,.26), rgba(59,130,246,0) 64px),
+					linear-gradient(to bottom, rgba(59,130,246,.20), rgba(59,130,246,0) 56px),
+					linear-gradient(to top, rgba(59,130,246,.20), rgba(59,130,246,0) 56px);
+			}
 			.pill {
 				position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
 				display: flex; align-items: center; gap: 8px;
@@ -150,6 +175,8 @@ export function buildOverlayScript(message: string): string {
 		\`;
 		var glow = document.createElement('div');
 		glow.className = 'glow';
+		var blue = document.createElement('div');
+		blue.className = 'blue';
 		var pill = document.createElement('div');
 		pill.className = 'pill';
 		var dot = document.createElement('i');
@@ -161,9 +188,24 @@ export function buildOverlayScript(message: string): string {
 		var frag = document.createDocumentFragment();
 		frag.appendChild(style);
 		frag.appendChild(glow);
+		frag.appendChild(blue);
 		frag.appendChild(pill);
 		root.appendChild(frag);
-		var ctl = { host: host, text: text, timer: 0 };
+		var ctl = { host: host, text: text, timer: 0, glow: glow, blue: blue };
+		/**
+		 * 切换「流光 / 纯色蓝」。
+		 *
+		 * 只用内联样式改 opacity：两边都带 .45s 过渡，所以是自然渐变，
+		 * 既不是硬切，也不会重建 DOM。颜色与布局全在影子树里，页面脚本看不到。
+		 */
+		ctl.applyCalm = function (on) {
+			try {
+				glow.classList.toggle('calm', !!on);
+				glow.style.opacity = on ? '0' : '';
+				blue.style.opacity = on ? '1' : '0';
+			} catch (e) {}
+		};
+		ctl.applyCalm(CALM);
 		/**
 		 * 延后到空闲帧再插入 DOM。
 		 *
@@ -233,8 +275,9 @@ export interface AutomationOverlay {
 	/**
 	 * 设置一个独立任务来源的常显状态。
 	 * 扩展每次心跳都会续租；页面异常关闭后来源会在 60 秒后自动回收。
+	 * `steady` 为真时该来源显示期间切「纯色蓝」并暂停流光（OCR / 验证码专用）。
 	 */
-	setSourceActive: (source: string, message: string, active: boolean) => void;
+	setSourceActive: (source: string, message: string, active: boolean, options?: { steady?: boolean }) => void;
 	/** 停止监听（浏览器关闭时调用） */
 	dispose: () => void;
 	readonly active: boolean;
@@ -284,6 +327,15 @@ export function attachAutomationOverlay(browser: BrowserContext, options: Automa
 	/** 常显任务按来源保存；worker 与多个扩展页面/任务可以并行存在。 */
 	const stickySources = new Map<string, string>();
 	const sourceExpiryTimers = new Map<string, NodeJS.Timeout>();
+	/**
+	 * 需要在显示期间切成「纯色蓝」的来源（OCR / 验证码）。
+	 *
+	 * 登录/验证码阶段是页面最吃渲染的时刻，流光那两块大面积动画会把页面拖到几帧，
+	 * 连带 OCR 的取图与滑块都变慢。这里只把覆盖层降级成静态纯色蓝，
+	 * 其它来源（自动程序、扩展任务）仍然保持流光。
+	 */
+	const steadySources = new Set<string>();
+	let calm = false;
 	/** 非 sticky 的动作脉冲状态，和常显任务分开，脉冲结束不能误关掉长任务。 */
 	let transient = false;
 	let transientMessage = '';
@@ -319,7 +371,7 @@ export function attachAutomationOverlay(browser: BrowserContext, options: Automa
 		nextAttemptAt.set(page, now + APPLY_COOLDOWN_MS);
 		mounted.add(page);
 		page
-			.evaluate(buildOverlayScript(message))
+			.evaluate(buildOverlayScript(message, calm))
 			.then((result) => {
 				/**
 				 * 注入脚本自己 catch 掉的失败会以 `error:...` **正常返回**，
@@ -355,20 +407,23 @@ export function attachAutomationOverlay(browser: BrowserContext, options: Automa
 		if (disposed) return;
 		const wasActive = active;
 		const previousMessage = message;
+		const previousCalm = calm;
 		const sourceMessages = Array.from(stickySources.values());
 		active = stickySources.size > 0 || transient;
 		message = sourceMessages[sourceMessages.length - 1] || (transient && transientMessage) || message;
+		/** 只要有来源要求「纯色蓝」，整块覆盖层就进入平静态（多个来源同时存在时也保持一致） */
+		calm = steadySources.size > 0;
 
 		if (!active) {
 			if (wasActive) browser.pages().forEach(clear);
 			return;
 		}
-		if (previousMessage !== message) {
-			/** 文案变化才重建；心跳和重复 pulse 只会命中 mounted，直接跳过注入。 */
+		if (previousMessage !== message || previousCalm !== calm) {
+			/** 文案或形态变化才重建；心跳和重复 pulse 只会命中 mounted，直接跳过注入。 */
 			browser.pages().forEach((page) => {
 				mounted.delete(page);
 				/**
-				 * 文案变化是真实的状态变化（例如「自动程序」→「OCR 识别中」），
+				 * 这是真实的状态变化（例如「自动程序」→「OCR 识别中」或流光→纯色蓝），
 				 * 不能被 200ms 的注入冷却挡掉，否则提示要等下一次心跳才更新。
 				 */
 				nextAttemptAt.delete(page);
@@ -422,24 +477,34 @@ export function attachAutomationOverlay(browser: BrowserContext, options: Automa
 		scheduleIdle();
 	};
 
-	const setSourceActive = (source: string, msg: string, sourceActive: boolean) => {
+	const setSourceActive = (
+		source: string,
+		msg: string,
+		sourceActive: boolean,
+		options?: { steady?: boolean }
+	) => {
 		if (disposed || !source) return;
 		clearSourceExpiry(source);
 		if (sourceActive) {
 			stickySources.set(source, msg || '正在自动操作中 · 扩展脚本');
+			if (options && options.steady) steadySources.add(source);
+			else steadySources.delete(source);
 			/** 心跳正常时每 20 秒续租；页面崩溃/直接关标签后最迟 60 秒回收。 */
 			sourceExpiryTimers.set(
 				source,
 				setTimeout(() => {
 					sourceExpiryTimers.delete(source);
 					stickySources.delete(source);
+					steadySources.delete(source);
 					sync();
 				}, 60_000)
 			);
 		} else {
 			/** 收到结束就立刻熄灭，不再强撑（此前有 2.5 秒最小展示时长，任务一结束还要亮着） */
-			if (!stickySources.has(source)) return;
-			stickySources.delete(source);
+			const hadSource = stickySources.delete(source);
+			const hadSteady = steadySources.delete(source);
+			/** 来源已经回收、也没要求过平静态：没必要再跑一遍同步 */
+			if (!hadSource && !hadSteady) return;
 		}
 		sync();
 	};
@@ -474,6 +539,8 @@ export function attachAutomationOverlay(browser: BrowserContext, options: Automa
 		dispose: () => {
 			disposed = true;
 			stickySources.clear();
+			steadySources.clear();
+			calm = false;
 			transient = false;
 			for (const source of Array.from(sourceExpiryTimers.keys())) clearSourceExpiry(source);
 			if (timer) clearTimeout(timer);
