@@ -66,7 +66,16 @@ export const OriginalAppStore = {
 		/** 内网穿透设置 */
 		tunnel: {
 			enabled: false,
-			provider: 'cloudflared'
+			provider: 'cloudflared',
+			/**
+			 * Cloudflare 命名隧道 Token（Zero Trust 控制台复制）
+			 *
+			 * 填了 Token + 固定域名就走命名隧道，域名固定不变；
+			 * 留空则退回快速隧道（每次启动都是新的随机 trycloudflare.com 域名）。
+			 */
+			token: '',
+			/** 命名隧道对外域名，例如 https://remote.example.com */
+			hostname: ''
 		},
 		/** 会话 Cookie 签名密钥，首次启动生成 */
 		sessionSecret: ''

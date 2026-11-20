@@ -65,6 +65,8 @@ export interface RemoteControlStatus {
 	tunnel: TunnelStatus;
 	/** 设置里是否开启了内网穿透（与隧道实时状态分开，避免界面开关与真实配置不一致） */
 	tunnelEnabled: boolean;
+	/** 固定域名配置（不回传 Token 本身） */
+	tunnelConfig: { hasToken: boolean; hostname: string };
 	sessionCount: number;
 	error: string;
 	appVersion: string;
@@ -174,7 +176,12 @@ export class RemoteControlService {
 				this.appsDir(),
 				() => this.emitStatus(),
 				/** 隧道自愈判据：服务在跑且设置要求开穿透 */
-				() => this.running && this.settings().tunnel.enabled
+				() => this.running && this.settings().tunnel.enabled,
+				/** 固定域名配置：Token 与域名齐备时走命名隧道 */
+				() => {
+					const tunnel = this.settings().tunnel;
+					return { token: tunnel.token || '', hostname: tunnel.hostname || '' };
+				}
 			);
 		}
 		return this._tunnel;
@@ -813,7 +820,8 @@ export class RemoteControlService {
 					error: '',
 					progress: 0,
 					provider: settings.tunnel.provider,
-					builtin: hasBuiltinCloudflared()
+					builtin: hasBuiltinCloudflared(),
+					mode: 'quick' as const
 			  };
 
 		let preferredUrl = urls.length > 0 ? urls[0] : `http://127.0.0.1:${settings.port}`;
@@ -832,6 +840,11 @@ export class RemoteControlService {
 			hasPassword: this.auth.hasPassword(),
 			tunnel: tunnelStatus,
 			tunnelEnabled: settings.tunnel.enabled,
+			/** 固定域名配置（Token 只回传「是否已设置」，不把密钥暴露给渲染进程） */
+			tunnelConfig: {
+				hasToken: !!settings.tunnel.token,
+				hostname: settings.tunnel.hostname
+			},
 			sessionCount: this.auth.list().length,
 			error: this.lastError,
 			appVersion: app.getVersion(),
@@ -999,6 +1012,24 @@ export class RemoteControlService {
 		return this.getStatus().tunnel;
 	}
 
+	/**
+	 * 设置固定域名（Cloudflare 命名隧道）
+	 *
+	 * 与 `setTunnel` 一样只负责落设置，启停交给设置监听统一处理：
+	 * 传空字符串表示清除该项；两项齐备时自动从随机域名切到固定域名。
+	 */
+	async setTunnelConfig(patch: { token?: string; hostname?: string }): Promise<TunnelStatus> {
+		const current = this.settings().tunnel;
+		const next = { ...current };
+
+		if (typeof patch.token === 'string') next.token = patch.token.trim();
+		if (typeof patch.hostname === 'string') next.hostname = patch.hostname.trim();
+
+		store.set('remoteControl.tunnel', next);
+		this.emitStatus();
+		return this.getStatus().tunnel;
+	}
+
 	/** 修改端口（运行中会自动重启） */
 	async setPort(port: number): Promise<RemoteControlStatus> {
 		const wasRunning = this.running;
@@ -1043,7 +1074,9 @@ export class RemoteControlService {
 			passwordHash: current.passwordHash || defaults.passwordHash,
 			tunnel: {
 				enabled: tunnel.enabled === undefined ? defaults.tunnel.enabled : tunnel.enabled,
-				provider: tunnel.provider || defaults.tunnel.provider
+				provider: tunnel.provider || defaults.tunnel.provider,
+				token: tunnel.token || defaults.tunnel.token,
+				hostname: tunnel.hostname || defaults.tunnel.hostname
 			},
 			sessionSecret: current.sessionSecret || defaults.sessionSecret
 		};
@@ -1106,6 +1139,11 @@ export class RemoteControlService {
 
 			const tunnelNext = next.tunnel ? next.tunnel.enabled : false;
 			const tunnelPrev = prev.tunnel ? prev.tunnel.enabled : false;
+			/** Token / 固定域名变化也要重连：地址本身变了，旧隧道已无意义 */
+			const tunnelCfgChanged =
+				String((prev.tunnel && prev.tunnel.token) || '') !== String(next.tunnel.token || '') ||
+				String((prev.tunnel && prev.tunnel.hostname) || '') !== String(next.tunnel.hostname || '');
+
 			if (tunnelNext !== tunnelPrev) {
 				if (tunnelNext && this.running) {
 					this.startTunnel().catch((e) => logger.error('隧道启动失败', e));
@@ -1113,6 +1151,10 @@ export class RemoteControlService {
 					this._tunnel.stop();
 					this.emitStatus();
 				}
+			} else if (tunnelNext && tunnelCfgChanged && this.running) {
+				/** 重启沿用同一套 stop → start，stop 会清掉「Token 无效」标记，改配置后能立即重试 */
+				if (this._tunnel) this._tunnel.stop();
+				this.startTunnel().catch((e) => logger.error('隧道配置变更后重启失败', e));
 			}
 		} catch (e) {
 			logger.error('应用远程控制设置失败', e);

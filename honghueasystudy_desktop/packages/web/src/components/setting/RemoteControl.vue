@@ -52,6 +52,123 @@
 			</a-tooltip>
 		</Description>
 
+		<!-- 固定域名（Cloudflare 命名隧道） -->
+		<div
+			v-if="settings.tunnel.enabled"
+			class="rc-named"
+		>
+			<div class="rc-named-row">
+				<a-input
+					v-model="tunnelHostnameDraft"
+					size="small"
+					placeholder="固定域名，如 remote.example.com"
+					allow-clear
+					@input="tunnelDirty = true"
+				/>
+				<a-input-password
+					v-model="tunnelTokenDraft"
+					size="small"
+					:placeholder="
+						status.tunnelConfig?.hasToken ? 'Token 已保存（留空不修改）' : 'Cloudflare 隧道 Token'
+					"
+					allow-clear
+					@input="tunnelDirty = true"
+				/>
+				<a-button
+					size="mini"
+					type="primary"
+					:loading="state.savingTunnel"
+					@click="saveTunnelConfig"
+				>
+					保存
+				</a-button>
+				<a-button
+					v-if="status.tunnelConfig?.hasToken || status.tunnelConfig?.hostname"
+					size="mini"
+					@click="clearTunnelConfig"
+				>
+					用随机域名
+				</a-button>
+				<a-button
+					size="mini"
+					type="text"
+					@click="guideVisible = true"
+				>
+					操作指导
+				</a-button>
+			</div>
+			<p class="rc-faint rc-note">
+				填了域名和 Token 就走固定域名；两项留空则继续使用随机域名。不知道 Cloudflare 那边怎么点，点上方「操作指导」。
+			</p>
+		</div>
+
+		<a-modal
+			v-model:visible="guideVisible"
+			title="Cloudflare 固定域名配置指导"
+			:footer="false"
+			:width="620"
+		>
+			<div class="rc-guide">
+				<p class="rc-guide-lead">
+					只需要配一次，之后软件每次启动都用同一个域名。前提：你的域名已托管在
+					Cloudflare（域名的 DNS 服务器改成了 Cloudflare 分配的那两个）。
+				</p>
+
+				<ol>
+					<li>
+						<b>创建隧道</b>：打开
+						<a @click.prevent="openExternal(CF_DASHBOARD)">Cloudflare Zero Trust 控制台</a>
+						→ 左侧「网络 / Networks」→「隧道 / Tunnels」→「创建隧道」→ 选择
+						<b>Cloudflared</b> → 下一步。
+					</li>
+					<li>
+						<b>复制 Token</b>：安装连接器页面会显示一条很长的
+						<code>cloudflared service install eyJ...</code>
+						命令，把 <code>eyJ...</code> 这一段（不含前面的命令）复制下来，这就是要填的 Token。
+					</li>
+					<li>
+						<b>添加公网地址</b>：进入刚创建的隧道 →「公共主机名 / Public Hostname」→「添加」：
+						<ul>
+							<li>子域 + 域名：例如 <code>remote</code> + <code>example.com</code>，最终域名是 <code>https://remote.example.com</code></li>
+							<li>服务类型：<code>HTTP</code></li>
+							<li>URL：<code>127.0.0.1:{{ status.port }}</code>（端口要和上面「服务端口」一致）</li>
+						</ul>
+						保存后 Cloudflare 会自动创建好 DNS 记录，不用手动加。
+					</li>
+					<li>
+						<b>回到本软件</b>：在「固定域名」里填
+						<code>https://remote.example.com</code>，Token 粘贴刚复制的那段，点「保存」。隧道状态变为
+						「固定域名」即成功。
+					</li>
+					<li>
+						<b>手机访问</b>：打开这个固定域名，输入上方显示的配对码即可。之后地址一直不变，可以直接收藏。
+					</li>
+				</ol>
+
+				<a-alert
+					type="info"
+					:show-icon="false"
+					content="常见问题：提示「固定域名未就绪」多为 Public Hostname 的端口与软件端口不一致，或域名还没走 Cloudflare 代理；提示「Token 无效」说明 Token 复制不完整或隧道已被删除，重新复制即可。"
+				/>
+
+				<div class="rc-guide-actions">
+					<a-button
+						size="small"
+						type="primary"
+						@click="openExternal(CF_DASHBOARD)"
+					>
+						打开 Cloudflare 控制台
+					</a-button>
+					<a-button
+						size="small"
+						@click="openExternal(CF_DOCS)"
+					>
+						官方文档
+					</a-button>
+				</div>
+			</div>
+		</a-modal>
+
 		<!-- 运行状态 -->
 		<div
 			v-if="status.running"
@@ -121,6 +238,12 @@
 				<template v-else-if="status.tunnel.state === 'running'">
 					<span class="rc-dot on"></span>
 					<span class="ellipsis">{{ status.tunnel.url }}</span>
+					<a-tag
+						size="small"
+						:bordered="false"
+					>
+						{{ status.tunnel.mode === 'named' ? '固定域名' : '随机域名' }}
+					</a-tag>
 					<a-tag
 						size="small"
 						:bordered="false"
@@ -383,6 +506,20 @@ import { Message, Modal } from '@arco-design/web-vue';
 import Description from '../Description.vue';
 import Icon from '../Icon.vue';
 import { remote } from '../../utils/remote';
+import { electron } from '../../utils/node';
+
+/** Cloudflare Zero Trust 控制台（隧道在这里创建） */
+const CF_DASHBOARD = 'https://one.dash.cloudflare.com/';
+/** 官方文档：创建远程隧道（Token 方式） */
+const CF_DOCS =
+	'https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/';
+
+const { shell } = electron;
+
+/** 外链走系统浏览器，不在应用内新开页面 */
+function openExternal(url: string) {
+	shell.openExternal(url);
+}
 
 interface TunnelInfo {
 	state: string;
@@ -391,6 +528,8 @@ interface TunnelInfo {
 	progress: number;
 	/** 是否随安装包内置（内置时无需下载） */
 	builtin?: boolean;
+	/** quick=随机域名；named=账号固定域名 */
+	mode?: 'quick' | 'named';
 }
 
 interface Status {
@@ -407,6 +546,8 @@ interface Status {
 	tunnel: TunnelInfo;
 	/** 设置里是否开启了内网穿透（后端权威值，用来校正界面开关） */
 	tunnelEnabled?: boolean;
+	/** 固定域名配置（后端不回传 Token 本身，只告诉是否已设置） */
+	tunnelConfig?: { hasToken: boolean; hostname: string };
 	sessionCount: number;
 	error: string;
 	appVersion: string;
@@ -450,7 +591,8 @@ const status = reactive<Status>({
 const state = reactive({
 	pending: false,
 	detecting: false,
-	savingPassword: false
+	savingPassword: false,
+	savingTunnel: false
 });
 
 const settings = reactive({
@@ -466,13 +608,21 @@ const portDraft = ref(15320);
 /** 访问验证方式的界面选择值（可能领先于已生效的后端配置） */
 const authModeDraft = ref<'pair' | 'password' | 'none'>('pair');
 const passwordDraft = ref('');
+/** 固定域名草稿（后端只回传域名，不清空用户正在输入的内容） */
+const tunnelHostnameDraft = ref('');
+/** Token 草稿：留空表示「保持已保存的 Token 不变」 */
+const tunnelTokenDraft = ref('');
+/** 用户正在编辑时，3 秒轮询不要用后端值覆盖输入框 */
+let tunnelDirty = false;
+/** 固定域名操作指导弹窗 */
+const guideVisible = ref(false);
 
 /** 穿透组件提示：内置版和需下载版的说明不同 */
 const tunnelTip = computed(() => {
-	if (status.tunnel.builtin) {
-		return '开启后会通过 Cloudflare 快速隧道生成公网地址，手机在任意网络下都能访问。穿透组件已随安装包内置，无需下载。';
-	}
-	return '开启后会通过 Cloudflare 快速隧道生成公网地址，手机在任意网络下都能访问。当前安装包未内置穿透组件，首次使用需下载（约 40MB，视网络情况可能耗时数分钟）。';
+	const prefix = status.tunnel.builtin
+		? '开启后会通过 Cloudflare 生成公网地址，手机在任意网络下都能访问。穿透组件已随安装包内置，无需下载。'
+		: '开启后会通过 Cloudflare 生成公网地址，手机在任意网络下都能访问。当前安装包未内置穿透组件，首次使用需下载（约 40MB，视网络情况可能耗时数分钟）。';
+	return prefix + '默认是每次都不一样的随机域名；填了固定域名和 Token 后地址固定不变。';
 });
 
 /** 二维码提示语随验证方式变化 */
@@ -521,6 +671,11 @@ async function loadStatus() {
 			settings.tunnel.enabled = data.tunnelEnabled;
 		}
 		settings.allowLan = data.allowLan !== false;
+
+		/** 回填已保存的固定域名（用户正在编辑时不覆盖） */
+		if (!tunnelDirty && data.tunnelConfig) {
+			tunnelHostnameDraft.value = data.tunnelConfig.hostname || '';
+		}
 
 		/** 以后端已生效的配置为准回填界面选择（用户有进行中的切换时不覆盖） */
 		const serverMode = data.authMode || 'pair';
@@ -654,6 +809,54 @@ async function onTunnelChange(value: string | number | boolean) {
 /** 去掉 IPC 层包装的 Error 前缀，便于直接展示 */
 function errText(e: any): string {
 	return String(e).replace(/^Error:\s*/, '');
+}
+
+/** 保存固定域名配置：域名 + Token 齐备后隧道会自动从随机域名切换过去 */
+async function saveTunnelConfig() {
+	const hostname = tunnelHostnameDraft.value.trim();
+	const token = tunnelTokenDraft.value.trim();
+
+	if (!hostname) {
+		Message.warning('请填写固定域名（例如 remote.example.com）');
+		return;
+	}
+	if (!token && !status.tunnelConfig?.hasToken) {
+		Message.warning('还需要填写 Cloudflare 隧道 Token');
+		return;
+	}
+
+	state.savingTunnel = true;
+	try {
+		const patch: { token?: string; hostname?: string } = { hostname };
+		/** 留空表示不修改已保存的 Token */
+		if (token) patch.token = token;
+		await remote.methods.call('rcSetTunnelConfig' as any, patch);
+		tunnelTokenDraft.value = '';
+		tunnelDirty = false;
+		await loadStatus();
+		Message.success('已保存，隧道正在切换到固定域名…');
+	} catch (e) {
+		Message.error(errText(e));
+	} finally {
+		state.savingTunnel = false;
+	}
+}
+
+/** 清空固定域名配置，回到随机域名 */
+async function clearTunnelConfig() {
+	state.savingTunnel = true;
+	try {
+		await remote.methods.call('rcSetTunnelConfig' as any, { token: '', hostname: '' });
+		tunnelTokenDraft.value = '';
+		tunnelHostnameDraft.value = '';
+		tunnelDirty = false;
+		await loadStatus();
+		Message.success('已改回随机域名');
+	} catch (e) {
+		Message.error(errText(e));
+	} finally {
+		state.savingTunnel = false;
+	}
 }
 
 /** 切换访问验证方式 */
@@ -879,6 +1082,88 @@ onBeforeUnmount(() => {
 	align-items: center;
 	gap: 6px;
 	font-size: 12px;
+}
+
+/** 固定域名配置区 */
+.rc-named {
+	margin: 4px 0 10px;
+	padding: 10px 12px;
+	border-radius: var(--r-sm);
+	background: var(--color-fill-1);
+}
+
+.rc-named-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.rc-named-row > :first-child {
+	flex: 1 1 200px;
+	min-width: 160px;
+}
+
+.rc-named-row > :nth-child(2) {
+	flex: 1 1 240px;
+	min-width: 180px;
+}
+
+.rc-named code {
+	padding: 1px 4px;
+	border-radius: 3px;
+	background: var(--color-fill-2);
+	font-size: 11px;
+}
+
+/** 操作指导弹窗 */
+.rc-guide {
+	font-size: 13px;
+	line-height: 1.75;
+	color: var(--color-text-1);
+}
+
+.rc-guide-lead {
+	margin: 0 0 10px;
+	color: var(--color-text-2);
+}
+
+.rc-guide ol {
+	margin: 0 0 12px;
+	padding-left: 20px;
+}
+
+.rc-guide li {
+	margin-bottom: 8px;
+}
+
+.rc-guide li ul {
+	margin: 4px 0;
+	padding-left: 18px;
+	color: var(--color-text-2);
+}
+
+.rc-guide code {
+	padding: 1px 5px;
+	border-radius: 3px;
+	background: var(--color-fill-2);
+	font-size: 12px;
+	word-break: break-all;
+}
+
+.rc-guide a {
+	color: rgb(var(--primary-6));
+	cursor: pointer;
+}
+
+.rc-guide a:hover {
+	text-decoration: underline;
+}
+
+.rc-guide-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 14px;
 }
 
 .rc-tunnel .ellipsis {

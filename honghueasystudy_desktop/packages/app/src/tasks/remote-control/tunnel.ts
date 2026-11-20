@@ -12,6 +12,9 @@ const STALL_TIMEOUT = 20000;
 
 export type TunnelState = 'idle' | 'downloading' | 'starting' | 'running' | 'error';
 
+/** quick=随机域名（trycloudflare.com）；named=账号固定域名（Cloudflare 命名隧道） */
+export type TunnelMode = 'quick' | 'named';
+
 export interface TunnelStatus {
 	state: TunnelState;
 	/** 公网访问地址 */
@@ -24,6 +27,25 @@ export interface TunnelStatus {
 	provider: string;
 	/** 是否已内置可执行文件（内置时无需下载） */
 	builtin: boolean;
+	/** 当前隧道模式 */
+	mode: TunnelMode;
+}
+
+/** 命名隧道配置（两者齐备才启用，缺一退回快速隧道） */
+export interface NamedTunnelConfig {
+	token: string;
+	hostname: string;
+}
+
+/** cloudflared 对无效 Token 的几种报错特征：这类错误重连多少次都没用，直接停下并提示 */
+const TOKEN_ERROR_PATTERN = /invalid tunnel secret|provided tunnel token is not valid|failed to (parse|decode|unmarshal) token/i;
+
+/** 规范化用户填写的固定域名：允许不带协议，统一 https */
+function normalizeHostname(raw: string): string {
+	let value = String(raw || '').trim();
+	if (!value) return '';
+	if (!/^https?:\/\//i.test(value)) value = 'https://' + value;
+	return value.replace(/\/+$/, '');
 }
 
 /** 二进制下载地址（按平台），优先 GitHub，失败后依次尝试镜像加速 */
@@ -86,13 +108,23 @@ export class CloudflaredTunnel {
 	private probing = false;
 	/** 用于中止进行中的下载 */
 	private currentAbort?: AbortController;
+	/** 本次启动使用的命名隧道配置；为空表示快速隧道 */
+	private named: NamedTunnelConfig | null = null;
+	/**
+	 * Token 无效这类「重试无意义」的错误。
+	 *
+	 * 置位后健康检查不再自动拉起，直到用户修改配置或重新开关隧道，
+	 * 否则无效 Token 会以指数退避无限重连，日志和 Cloudflare 请求都会被刷爆。
+	 */
+	private permanentError = false;
 	private status: TunnelStatus = {
 		state: 'idle',
 		url: '',
 		error: '',
 		progress: 0,
 		provider: 'cloudflared',
-		builtin: false
+		builtin: false,
+		mode: 'quick'
 	};
 
 	// eslint-disable-next-line no-useless-constructor
@@ -100,7 +132,9 @@ export class CloudflaredTunnel {
 		private baseDir: string,
 		private onStatusChange?: (status: TunnelStatus) => void,
 		/** 上层期望隧道是否应当处于运行状态（读设置与开关）；用于静默死亡后的自愈 */
-		private shouldRun?: () => boolean
+		private shouldRun?: () => boolean,
+		/** 命名隧道配置；返回空 token/hostname 即用随机域名 */
+		private getNamed?: () => NamedTunnelConfig
 	) {
 		/** 安装包是否已内置二进制，决定界面是否需要提示「首次下载」 */
 		this.status.builtin = hasBuiltinCloudflared();
@@ -136,6 +170,8 @@ export class CloudflaredTunnel {
 	 */
 	private checkHealth(): void {
 		if (!this.shouldRun || !this.port) return;
+		/** Token 无效等永久性错误：等用户改配置或重开开关，不再自动重试 */
+		if (this.permanentError) return;
 
 		let wanted = false;
 		try {
@@ -234,6 +270,23 @@ export class CloudflaredTunnel {
 			return '';
 		}
 
+		/**
+		 * 固定域名模式：Token + 域名两者齐备才走命名隧道。
+		 *
+		 * 命名隧道的公网地址由 Cloudflare 控制台的 Public Hostname 决定，
+		 * cloudflared 不会把地址打印出来，所以域名必须由用户填写，
+		 * 我们就绪判定改为「探测该域名 + /api/ping 是否返回 200」。
+		 */
+		const config = (this.getNamed && this.getNamed()) || { token: '', hostname: '' };
+		const token = String(config.token || '').trim();
+		const hostname = normalizeHostname(config.hostname);
+		this.named = token && hostname ? { token, hostname } : null;
+		this.setStatus({ mode: this.named ? 'named' : 'quick' });
+
+		const args = this.named
+			? ['tunnel', '--no-autoupdate', 'run', '--token', this.named.token]
+			: ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${port}`];
+
 		return new Promise<string>((resolve) => {
 			let settled = false;
 			const finish = (url: string) => {
@@ -244,7 +297,7 @@ export class CloudflaredTunnel {
 
 			let child: ChildProcess;
 			try {
-				child = execFile(binary, ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${port}`], {
+				child = execFile(binary, args, {
 					windowsHide: true,
 					maxBuffer: 1024 * 1024
 				});
@@ -255,24 +308,52 @@ export class CloudflaredTunnel {
 			}
 
 			this.proc = child;
-			logger.info('cloudflared 已启动，pid=' + child.pid);
+			logger.info(`cloudflared 已启动（${this.named ? '命名隧道·' + this.named.hostname : '快速隧道'}），pid=` + child.pid);
+
+			/** 两种模式共用的「就绪」收尾 */
+			const markReady = (url: string) => {
+				this.retrying = 0;
+				this.probeFailures = 0;
+				this.probeAt = Date.now();
+				this.setStatus({ state: 'running', url, error: '' });
+				logger.info('隧道地址：' + url);
+				finish(url);
+			};
 
 			const handleChunk = (chunk: Buffer) => {
 				const text = chunk.toString();
-				const match = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com[^\s|]*/i);
-				if (match && !settled) {
-					const url = match[0];
-					this.retrying = 0;
-					this.probeFailures = 0;
-					this.probeAt = Date.now();
-					this.setStatus({ state: 'running', url, error: '' });
-					logger.info('隧道地址：' + url);
-					finish(url);
+
+				if (this.named) {
+					if (TOKEN_ERROR_PATTERN.test(text) && !this.permanentError) {
+						this.permanentError = true;
+						this.setStatus({
+							state: 'error',
+							url: '',
+							error: '隧道 Token 无效或隧道已被删除，请到 Cloudflare 控制台重新复制 Token'
+						});
+						logger.error('命名隧道 Token 无效：' + text.trim().slice(0, 200));
+						finish('');
+						/** 无效 Token 下 cloudflared 有时不会自己退出，主动结束，交给 exit 回调收尾（不重连） */
+						try {
+							child.kill();
+						} catch {}
+					}
+					return;
 				}
+
+				const match = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com[^\s|]*/i);
+				if (match && !settled) markReady(match[0]);
 			};
 
 			child.stdout?.on('data', handleChunk);
 			child.stderr?.on('data', handleChunk);
+
+			if (this.named) {
+				/** 命名隧道没有可解析的地址，靠反向探测判断是否真的通了 */
+				this.waitNamedReady(child, () => {
+					if (!settled) markReady(this.named ? this.named.hostname : '');
+				});
+			}
 
 			child.on('error', (err) => {
 				logger.error('cloudflared 进程错误', err);
@@ -301,6 +382,13 @@ export class CloudflaredTunnel {
 					return;
 				}
 
+				/** Token 无效这类错误重连没有意义，保留错误提示等用户改配置 */
+				if (this.permanentError) {
+					logger.warn('隧道因配置错误停止，不再自动重连');
+					finish('');
+					return;
+				}
+
 				logger.warn('cloudflared 已退出，code=' + code);
 				this.setStatus({
 					state: 'error',
@@ -314,13 +402,15 @@ export class CloudflaredTunnel {
 				this.scheduleRetry();
 			});
 
-			// 30 秒内没有解析到地址则判定本次失败：杀掉当前进程，
+			// 30 秒内没有就绪则判定本次失败：杀掉当前进程，
 			// 由 exit 回调触发自动重连（原来直接 stop() 会永久放弃，休眠唤醒后网络慢就会踩中）
 			setTimeout(() => {
 				if (settled) return;
 				this.setStatus({
 					state: 'error',
-					error: '隧道建立超时，正在自动重连…（持续失败请检查网络，或改用局域网访问）'
+					error: this.named
+						? `固定域名 ${this.named.hostname} 未就绪，正在重试…请确认 Cloudflare 隧道已配置 Public Hostname 指向 http://127.0.0.1:${port}`
+						: '隧道建立超时，正在自动重连…（持续失败请检查网络，或改用局域网访问）'
 				});
 				finish('');
 				/** 只结束自己这一代进程，避免误杀后来的新进程 */
@@ -334,6 +424,37 @@ export class CloudflaredTunnel {
 				}
 			}, 30000);
 		});
+	}
+
+	/**
+	 * 命名隧道就绪探测
+	 *
+	 * 每 2 秒请求一次固定域名的 `/api/ping`，返回 200 才算真正通了。
+	 * 只看 cloudflared 输出不够：进程注册成功不代表 DNS/ingress 已经生效，
+	 * 而且地址是我们自己填的，必须实测一次才能把地址交给二维码。
+	 */
+	private async waitNamedReady(child: ChildProcess, onReady: () => void): Promise<void> {
+		const target = this.named;
+		if (!target) return;
+
+		const deadline = Date.now() + 30000;
+		while (Date.now() < deadline) {
+			if (this.stopping || this.permanentError || this.proc !== child) return;
+			try {
+				const res = await axios.get(`${target.hostname}/api/ping`, {
+					timeout: 5000,
+					proxy: false,
+					validateStatus: () => true
+				});
+				if (res.status === 200) {
+					onReady();
+					return;
+				}
+			} catch {
+				/* 隧道还在连接，继续等 */
+			}
+			await new Promise((r) => setTimeout(r, 2000));
+		}
 	}
 
 	/** 指数退避自动重连：2s、4s、8s、16s、32s、之后 60s 封顶，成功后清零 */
@@ -357,6 +478,8 @@ export class CloudflaredTunnel {
 		this.stopping = true;
 		this.probeFailures = 0;
 		this.probing = false;
+		/** 再次启动时允许重新尝试（用户可能刚换了 Token） */
+		this.permanentError = false;
 
 		/** 记录调用来源：开关关闭和内部重启都会走到这里，出问题时能直接看出是谁停的 */
 		try {

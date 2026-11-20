@@ -244,6 +244,7 @@ const methods = {
 	rcListSessions: () => remoteControl.listSessions(),
 	rcRevokeSession: (id: string) => remoteControl.revokeSession(id),
 	rcSetTunnel: (enabled: boolean) => remoteControl.setTunnel(enabled),
+	rcSetTunnelConfig: (patch: { token?: string; hostname?: string }) => remoteControl.setTunnelConfig(patch),
 	rcSetPort: (port: number) => remoteControl.setPort(port),
 	rcSetAllowLan: (allowLan: boolean) => remoteControl.setAllowLan(allowLan),
 	rcGetExternalTestUrl: () => remoteControl.getExternalTestUrl(),
