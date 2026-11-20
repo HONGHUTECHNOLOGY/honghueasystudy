@@ -22,11 +22,18 @@ export const MIRROR_STALL_MS = 20000;
 export const PROBE_TIMEOUT_MS = 6000;
 
 /**
- * GitCode 的附件下载会 302 到 file-cdn.gitcode.com，默认 UA（axios/x.y.z）在部分节点会被拦，
- * 用一个常规浏览器 UA 最稳。GitHub 侧无影响。
+ * 下载更新包时使用的 UA。
+ *
+ * **不能用浏览器 UA**：GitCode 会校验「UA 与 TLS 指纹是否一致」，非浏览器客户端
+ * （Node / axios）却声称自己是 Chrome / Edge 时，下载入口直接返回 418，
+ * 表现就是「浏览器点官网链接能秒下，桌面端一直 418」。
+ *
+ * 也不能留 axios 默认 UA：部分 CDN 节点会拦。
+ *
+ * 用一个明确自报家门的客户端 UA：既不像浏览器（不会触发一致性校验），
+ * 也不再是 axios 默认值（不会被当成脚本流量）。
  */
-const DOWNLOAD_USER_AGENT =
-	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+export const DOWNLOAD_USER_AGENT = 'HonghuEasyStudy/1.0 (Windows NT 10.0; Win64; x64; updater)';
 
 export interface DownloadOptions {
 	sha256?: string;
