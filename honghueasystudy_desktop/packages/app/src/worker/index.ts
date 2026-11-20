@@ -1335,8 +1335,31 @@ export class ScriptWorker {
 	 * `refresh` 为 true 时先打开平台课程页（登录完成后手机端点「刷新课程列表」走这条），
 	 * 否则只在当前页面上抽取。抽取到的元素会就地打上 `data-hh-course` 标记，
 	 * 之后「进入课程」按标记点击 —— 这样对纯 JS 跳转、没有 href 的卡片也有效。
+	 *
+	 * 读取过程会滚动列表触发懒加载，耗时且页面在动，所以整段常显流光提示；
+	 * 这里用独立来源，避免和「自动程序 / 远程操作」的常显互相顶掉。
 	 */
 	async listCourses(options?: { refresh?: boolean }): Promise<{
+		platform: string;
+		pageUrl: string;
+		pageTitle: string;
+		/** label 是课程类型角标（共享课 / 翻转课 / 公开课…），平台没标就为空 */
+		courses: { id: string; name: string; url: string; label?: string }[];
+		hint: string;
+	}> {
+		if (!this.browser) throw new Error('浏览器尚未启动');
+
+		const overlay = getAutomationOverlay(this.browser);
+		const source = 'course-read';
+		overlay?.setSourceActive(source, '正在读取课程列表，请稍候', true);
+		try {
+			return await this.readCourseList(options);
+		} finally {
+			overlay?.setSourceActive(source, '', false);
+		}
+	}
+
+	private async readCourseList(options?: { refresh?: boolean }): Promise<{
 		platform: string;
 		pageUrl: string;
 		pageTitle: string;
