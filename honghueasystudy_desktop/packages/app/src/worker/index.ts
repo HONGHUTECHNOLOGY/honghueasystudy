@@ -1488,14 +1488,21 @@ export class ScriptWorker {
 		 * 登录脚本跑完常常就停在「我的课程」页，课程是全的；以前这里无条件先跳到平台首页，
 		 * 等于把现成能用的页面顶掉，反而一门课都读不到。
 		 *
+		 * 例外是**平台首页**：它上面的推荐卡片会被当成课程（智慧树 www 首页实测 5 门），
+		 * 而登录脚本判断「已登录」时正好把页面停在这里 —— 不跳过的话，
+		 * 每次已登录启动都会「读到几门不相干的课」，目标课程永远找不到。
+		 *
 		 * 用户常同时开着课程页和视频页，所以主页面抽不到时再试其他平台标签（最多 4 个）。
 		 */
-		const attempts: (Page | Frame)[] = [page];
+		const pageIsHome = isPlatformHomeUrl(safePageUrl(page));
+		const attempts: (Page | Frame)[] = pageIsHome ? [] : [page];
 		browser.pages().forEach((item) => {
 			if (item === page || item.isClosed() || attempts.length >= 4) return;
 			if (!detectCoursePlatform(safePageUrl(item))) return;
 			/** 登录页也在平台域名下，但上面没有课程：抽它只会污染页标题、浪费时间 */
 			if (isLoginPageUrl(safePageUrl(item))) return;
+			/** 首页同理：推荐卡片会冒充课程，交给下面的 listUrl 导航 */
+			if (isPlatformHomeUrl(safePageUrl(item))) return;
 			attempts.push(item);
 		});
 
@@ -1510,6 +1517,8 @@ export class ScriptWorker {
 				if (frame === source.mainFrame()) continue;
 				if (!detectCoursePlatform(safeFrameUrl(frame))) continue;
 				if (isLoginPageUrl(safeFrameUrl(frame))) continue;
+				/** 首页的 iframe 里也全是推荐位，不是课程列表 */
+				if (isPlatformHomeUrl(safeFrameUrl(frame))) continue;
 				frameTargets.push(frame);
 			}
 		}
@@ -1534,7 +1543,8 @@ export class ScriptWorker {
 		 * 静默探测（refresh=false）遇到普通网页就到此为止，不去打扰用户正在看的东西。
 		 */
 		const onBlankPage = !/^https?:/i.test(safePageUrl(page));
-		if (!items.length && platform && (wantRefresh || onBlankPage)) {
+		/** 首页必须导航：停在首页时「抽不到课」是必然的，不能因为 refresh=false 就返回空列表 */
+		if (!items.length && platform && (wantRefresh || onBlankPage || pageIsHome)) {
 			const target = platform.listUrl;
 			if (normalizeUrl(safePageUrl(page)) !== normalizeUrl(target)) {
 				this.info(`[远程] 打开课程列表页：${target}`);
@@ -2512,6 +2522,26 @@ export function isLoginPageUrl(url: string): boolean {
 	try {
 		const parsed = new URL(text);
 		return LOGIN_HOST_PREFIX.test(parsed.hostname) || LOGIN_PATH_SEGMENT.test(parsed.pathname);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * 是不是教学平台的首页（根路径）
+ *
+ * 首页不是课程列表：智慧树 www 首页的「推荐 / 我的学堂」卡片和真实课程卡长得很像，
+ * 抽取器会把它们当成课程（实测 5 门），要刷的那门永远不在里面。
+ * 登录脚本判断「已登录」时正好会把页面停在 www 首页，
+ * 于是每次启动都变成「明明登录了，却只读到几门不相干的课」。
+ * 识别出来后跳过首页，按 `listUrl` 打开真正的课程列表再抽。
+ */
+export function isPlatformHomeUrl(url: string): boolean {
+	const text = String(url || '');
+	if (!/^https?:/i.test(text)) return false;
+	try {
+		const path = new URL(text).pathname;
+		return path === '/' || /^\/index\.html?$/i.test(path);
 	} catch {
 		return false;
 	}

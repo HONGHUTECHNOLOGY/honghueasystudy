@@ -337,22 +337,73 @@ async function isNotVerified(page: Page) {
 	return !!(await page.$('.yidun_popup .yidun_slider, .yidun_popup--light .yidun_slider, .yidun_slider'));
 }
 
-/** 智慧树已改为 login.zhihuishu.com 登录中心 */
+/** 智慧树课程列表：只有它能证明「课程系统」真的已登录 */
+const ZHS_COURSE_LIST_URL = 'https://onlineweb.zhihuishu.com/onlinestuh5';
+
+/**
+ * 课程系统的登录态校验
+ *
+ * 打开课程列表并等它落定：
+ * - 被重定向到 passport / login 登录中心 → 未登录；
+ * - 连续 4 秒稳定停在课程列表主机上 → 已登录。
+ *
+ * 观察到的跳转链：onlineweb（约 0.1s）→ passport（约 2.1s）→ 登录中心，
+ * 所以必须等几秒再看，太早检查会把「马上要被踢去登录」误判成已登录。
+ */
+async function isCourseSystemLoggedIn(page: Page, timeoutMs = 20000): Promise<boolean> {
+	await page
+		.goto(ZHS_COURSE_LIST_URL, { waitUntil: 'domcontentloaded', timeout: 20000 })
+		.catch(() => {});
+
+	const listHost = new URL(ZHS_COURSE_LIST_URL).hostname;
+	const deadline = Date.now() + timeoutMs;
+	let lastUrl = '';
+	let stable = 0;
+
+	while (Date.now() < deadline) {
+		const url = page.url();
+		if (isLoginEntryUrl(url)) return false;
+
+		let onListHost = false;
+		try {
+			onListHost = new URL(url).hostname === listHost;
+		} catch {}
+
+		if (/^https?:/i.test(url) && onListHost) {
+			stable = url === lastUrl ? stable + 1 : 0;
+			lastUrl = url;
+			if (stable >= 4) return true;
+		} else {
+			stable = 0;
+			lastUrl = url;
+		}
+		await page.waitForTimeout(1000);
+	}
+	return false;
+}
+
+/**
+ * 是否还没登录（true = 需要执行登录）
+ *
+ * 注意：**不能只看 www 首页**。首页顶部显示用户名（`#login` 可见）只代表门户会话还在，
+ * 课程系统的 SSO 会话可以独立过期 —— 页面看起来「已登录」，
+ * 一打开课程列表却被 302 回登录中心，登录脚本于是被整段跳过，
+ * 读课程只能读到首页的推荐卡片。所以这里直接用课程列表页判断真实登录态。
+ */
 async function isNotLogin(page: Page) {
-	await page.goto('https://www.zhihuishu.com/');
-	await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-	await page.waitForTimeout(2000);
+	if (await isCourseSystemLoggedIn(page)) return false;
 
-	const loggedIn = await evaluateSafe(page, () =>
-		page.evaluate(() => {
-			const el = document.querySelector('#login') as HTMLElement | null;
-			return !!el && getComputedStyle(el).display !== 'none';
-		})
-	);
-	if (loggedIn) return false;
-
-	const href = await page.getAttribute('#notLogin a', 'href').catch(() => null);
-	await page.goto(href || 'https://login.zhihuishu.com/?origin=zhs');
-	await page.waitForTimeout(2000);
+	/** 已经被重定向到登录中心时保留它（带 service 参数，登录后会回到课程列表） */
+	if (!isLoginEntryUrl(page.url())) {
+		await page.goto('https://login.zhihuishu.com/?origin=zhs').catch(() => {});
+		await page.waitForTimeout(1500);
+	}
+	/**
+	 * 等登录表单真正渲染出来再返回：
+	 * 检测到 login 域名时页面往往还在跳转，表单稍后才出现；
+	 * 早退会让 `openLoginTab` 看不到「学号登录」入口，直接去填学校表单而失败。
+	 */
+	await page.waitForSelector('input[type="password"]', { timeout: 20000 }).catch(() => {});
+	await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
 	return true;
 }
