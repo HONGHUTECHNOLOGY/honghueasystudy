@@ -213,7 +213,7 @@ export function readPlan(browser: Browser): BrowserAutomation {
  * 赋值发生在响应式实体上，`watch(() => store.render, deep)` 会节流落盘，
  * 不需要额外调用保存接口。
  *
- * **记账字段（lastRunDate / lastStopDate / runStartedAt）一律沿用实体里的当前值。**
+ * **记账字段（lastRunDate / lastStopDate / runStartedAt / studyStartedAt）一律沿用实体里的当前值。**
  * 界面上那份 `plan` 是挂载时的镜像，用户在面板里勾一下星期几就会整份写回；
  * 如果镜像里的记账字段是旧的，就会把调度器刚写下的「今天已启动」抹掉 ——
  * 下一轮 tick 立刻再启动一次，单次时长也从头计时。这类字段只由调度器写。
@@ -224,6 +224,7 @@ export function writePlan(browser: Browser, plan: any): BrowserAutomation {
 	next.schedule.lastRunDate = current.schedule.lastRunDate;
 	next.schedule.lastStopDate = current.schedule.lastStopDate;
 	next.schedule.runStartedAt = current.schedule.runStartedAt;
+	next.schedule.studyStartedAt = current.schedule.studyStartedAt;
 
 	/** 这一次保存有没有动到「自动刷课」 */
 	const studyChanged =
@@ -600,6 +601,8 @@ export async function runStudy(uid: string, opts?: { silent?: boolean }): Promis
 		 * 课已经进去了，用户仍能在面板里手动点。
 		 */
 		markCourseReady(uid, true);
+		/** 课程页已经打开：定时任务的学习时长从这一刻起算（不含登录等待时间） */
+		noteStudyStarted(browser);
 		const target = plan.study.target;
 		let chapterNote = '';
 		if (catalogSupport[uid] && target !== 'none') {
@@ -831,9 +834,19 @@ function runDeadline(schedule: AutomationSchedule, now: Date): number | null {
 
 	let deadline = session.end;
 	if (schedule.maxMinutes > 0) {
-		deadline = Math.min(deadline, schedule.runStartedAt + schedule.maxMinutes * 60 * 1000);
+		deadline = Math.min(deadline, runDurationBase(schedule) + schedule.maxMinutes * 60 * 1000);
 	}
 	return deadline;
+}
+
+/**
+ * 单次学习时长的起算点
+ *
+ * 优先用「真正进入课程页」的时刻，登录/等滑块不算学习时间；
+ * 还没进课（含进课失败）时退回启动时刻，兜底保证浏览器不会无限挂着。
+ */
+function runDurationBase(schedule: AutomationSchedule): number {
+	return schedule.studyStartedAt > 0 ? schedule.studyStartedAt : schedule.runStartedAt;
 }
 
 /**
@@ -1025,7 +1038,7 @@ async function handleSchedule(
 			 * 不会在用户手动用着浏览器时把窗口关掉。
 			 */
 			if (!canStartSession(schedule, session, now)) {
-				patchSchedule(browser, { lastRunDate: session.id, runStartedAt: 0 });
+				patchSchedule(browser, { lastRunDate: session.id, runStartedAt: 0, studyStartedAt: 0 });
 				syncAutoStop(browser);
 				const message = `已错过 ${schedule.startTime} 的定时启动（超过 ${SCHEDULE_GRACE_MINUTES} 分钟），今天不再执行；需要时点「立即执行一次」`;
 				planLog(uid, message);
@@ -1060,7 +1073,7 @@ async function handleSchedule(
 			const alive = !!proc && (proc.status === 'launched' || proc.status === 'launching');
 
 			/** 记下「这一场已经处理过」，先写再启动：启动失败也不该每 20 秒重试一次 */
-			patchSchedule(browser, { lastRunDate: session.id, runStartedAt: Date.now() });
+			patchSchedule(browser, { lastRunDate: session.id, runStartedAt: Date.now(), studyStartedAt: 0 });
 			/** 新的一场定时开始：解除上一场留下的暂停，否则启动后不会被拉去进课 */
 			delete studyPaused[uid];
 			/** 轮到了：把上一拍挂着的「排队中」擦掉，后面由刷课流程接管状态 */
@@ -1115,9 +1128,14 @@ async function handleSchedule(
 			return;
 		}
 
-		/** 单次最长学习时长 */
+		/**
+		 * 单次最长学习时长
+		 *
+		 * 从「真正进入课程页」起算，登录/等滑块/加载列表的时间不算学习时间；
+		 * 还没进课时退回启动时刻兜底，进课失败（例如课程被删）也能正常收尾。
+		 */
 		if (schedule.maxMinutes > 0 && schedule.runStartedAt > 0) {
-			const elapsed = Date.now() - schedule.runStartedAt;
+			const elapsed = Date.now() - runDurationBase(schedule);
 			if (elapsed > schedule.maxMinutes * 60 * 1000) {
 				await applyEndAction(browser, schedule, 'max-minutes', session.id);
 			}
@@ -1178,6 +1196,35 @@ function patchSchedule(browser: Browser, patch: Partial<AutomationSchedule>): vo
 }
 
 /**
+ * 记录「这一场定时真正开始学习了」
+ *
+ * 进入课程页成功时调用：单次学习时长从这一刻起算，登录、等滑块、读课程列表
+ * 这些时间不再计入。重复进课（比如换目标、重新执行）不重开计时 ——
+ * 一场定时的时长是这一场整体的上限，不是每次进课都给一份新的。
+ *
+ * 手动打开的浏览器也会走 `runStudy`，但那时没有「本场会话」，直接跳过。
+ */
+function noteStudyStarted(browser: Browser): void {
+	const plan = readPlan(browser);
+	const schedule = plan.schedule;
+	if (!schedule.enabled) return;
+	if (schedule.runStartedAt <= 0 || schedule.studyStartedAt > 0) return;
+
+	const session = activeSession(schedule, new Date());
+	if (!session || schedule.lastRunDate !== session.id) return;
+
+	patchSchedule(browser, { studyStartedAt: Date.now() });
+	/** 起算点变了，收尾时刻跟着变：立刻下发给扩展，别等下一个 20 秒节拍 */
+	syncAutoStop(browser);
+	planLog(
+		browser.uid,
+		schedule.maxMinutes > 0
+			? `已进入课程，开始计算学习时长（上限 ${schedule.maxMinutes} 分钟）`
+			: '已进入课程，开始计算学习时长'
+	);
+}
+
+/**
  * 到点收尾
  *
  * `reason` 只用于日志与提示文案，不影响动作本身。
@@ -1215,7 +1262,8 @@ async function applyEndAction(
 		plan.schedule = {
 			...plan.schedule,
 			lastStopDate: sessionId || dateKey(new Date()),
-			runStartedAt: 0
+			runStartedAt: 0,
+			studyStartedAt: 0
 		};
 		applyPlan(browser, plan);
 		/**

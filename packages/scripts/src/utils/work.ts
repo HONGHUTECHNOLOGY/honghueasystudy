@@ -38,6 +38,14 @@ export function commonWork(
 	 */
 	let running = false;
 
+	/**
+	 * 当前运行的序号。
+	 *
+	 * 「重新答题」会先让旧 worker 停止再创建新 worker，旧 worker 迟到的 done 事件
+	 * 不能把新任务刚点亮的流光关掉，所以只有最后一次运行结束才熄灭。
+	 */
+	let runSeq = 0;
+
 	/** 显示答题控制按钮 */
 	const createWorkControlPanel = () => {
 		const { controlBtn, restartBtn, startBtn } = createWorkerControl({
@@ -125,8 +133,15 @@ export function commonWork(
 	const start = async () => {
 		await options.beforeRunning?.();
 		running = true;
+		const seq = ++runSeq;
 		setExtensionAutomation(true, script.fullName());
-		worker = options.workerProvider(workOptions);
+		try {
+			worker = options.workerProvider(workOptions);
+		} catch (e) {
+			// 创建 worker 就抛错时不会有 done 事件，必须立刻熄灭，否则光效会一直挂着
+			setExtensionAutomation(false, script.fullName());
+			throw e;
+		}
 
 		if (worker) {
 			options.onWorkerCreated?.(worker);
@@ -142,6 +157,13 @@ export function commonWork(
 			running = false;
 			globalControlPanel = null;
 			controlBtn.disabled = true;
+			/*
+			 * 答题结束必须主动熄灭流光。
+			 *
+			 * 桌面端按「扩展上报的心跳租约」常显（每 20 秒续租一次），只要脚本不报
+			 * active=false，光效就会一直亮着 —— 此前作业/考试答完后脚本已停，边框却还在。
+			 */
+			if (seq === runSeq) setExtensionAutomation(false, script.fullName());
 		});
 	};
 }

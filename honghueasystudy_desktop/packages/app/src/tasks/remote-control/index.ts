@@ -448,16 +448,17 @@ export class RemoteControlService {
 		/**
 		 * 定时器的记账字段由桌面端独占维护。
 		 *
-		 * `lastRunDate/lastStopDate/runStartedAt` 决定「今天是否已经自动跑过/收过尾」，
-		 * 手机端根本不知道这些值，如果跟着表单一起覆盖：
+		 * `lastRunDate/lastStopDate/runStartedAt/studyStartedAt` 决定「今天是否已经自动跑过/收过尾」
+		 * 以及「学习时长从什么时候开始算」，手机端根本不知道这些值，如果跟着表单一起覆盖：
 		 * 用户在定时窗口内保存一次方案，桌面端就会以为「今天还没跑过」，
-		 * 于是又拉起一次浏览器（或重复收尾）。
+		 * 于是又拉起一次浏览器（或重复收尾），学习计时也会被重置。
 		 */
 		const previous = normalizeBrowserAutomation(current && current.plan);
 		const plan = normalizeBrowserAutomation(opts && opts.plan);
 		plan.schedule.lastRunDate = previous.schedule.lastRunDate;
 		plan.schedule.lastStopDate = previous.schedule.lastStopDate;
 		plan.schedule.runStartedAt = previous.schedule.runStartedAt;
+		plan.schedule.studyStartedAt = previous.schedule.studyStartedAt;
 
 		const saved = await this.bridge.dispatch('automation.save', { uid: id, plan, scripts });
 		return {

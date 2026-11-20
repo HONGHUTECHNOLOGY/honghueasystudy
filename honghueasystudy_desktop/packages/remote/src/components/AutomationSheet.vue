@@ -429,7 +429,7 @@
 									max="1440"
 									step="10"
 								/>
-								<span class="faint">分钟（0=不限）</span>
+								<span class="faint">分钟（0=不限；进课后开始计时）</span>
 							</div>
 						</div>
 
@@ -1354,7 +1354,9 @@ function normalizePlan(plan: AutomationPlan): AutomationPlan {
 			catchUp: plan.schedule?.catchUp === true,
 			lastRunDate: plan.schedule?.lastRunDate || '',
 			lastStopDate: plan.schedule?.lastStopDate || '',
-			runStartedAt: Number(plan.schedule?.runStartedAt) || 0
+			runStartedAt: Number(plan.schedule?.runStartedAt) || 0,
+			/** 记账字段：桌面端会以自己维护的值为准，这里原样带回，避免类型缺字段 */
+			studyStartedAt: Number(plan.schedule?.studyStartedAt) || 0
 		}
 	};
 }

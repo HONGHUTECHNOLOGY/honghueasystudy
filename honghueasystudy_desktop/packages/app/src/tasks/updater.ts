@@ -170,12 +170,25 @@ function collectNotes(current: string, newestTag: string, changelog: any): Chang
 /** 更新日志的内存缓存：同一次运行里手动点几次「检查更新」不必反复拉 */
 let changelogCache: { at: number; data: any } | null = null;
 const CHANGELOG_TTL = 10 * 60 * 1000;
+/**
+ * 拉取失败只短暂缓存。
+ *
+ * 启动检测经常发生在网络还没就绪时（Wi-Fi 刚连上、代理还没起、DNS 还没通），
+ * 若像成功结果一样缓存 10 分钟，用户紧接着点「检查更新」就会整整十分钟都看不到日志。
+ */
+const CHANGELOG_FAIL_TTL = 60 * 1000;
 
-async function loadChangelog(): Promise<any> {
-	if (changelogCache && Date.now() - changelogCache.at < CHANGELOG_TTL) return changelogCache.data;
+/**
+ * @param force 手动检查更新时强制刷新，避免拿到几分钟前的旧日志
+ */
+async function loadChangelog(force = false): Promise<any> {
+	const age = changelogCache ? Date.now() - changelogCache.at : Infinity;
+	const ttl = changelogCache?.data ? CHANGELOG_TTL : CHANGELOG_FAIL_TTL;
+	if (!force && changelogCache && age < ttl) return changelogCache.data;
+
 	const data = await HonghuApi.getChangelogSafe().catch(() => null);
-	// 失败也缓存（空值）：网络不好时不必每次重试都再等一个超时
 	changelogCache = { at: Date.now(), data };
+	if (!data) logger.warn('更新日志拉取失败，本次更新弹窗将不展示日志');
 	return data;
 }
 
@@ -414,7 +427,7 @@ export async function checkUpdate(manual = false): Promise<UpdateCheckResult> {
 	 * 网络差时日志那 5s 超时会直接推迟「发现新版本」弹窗。这里先发出去，
 	 * 真正要用的时候再 await（多半已经回来了）；日志拉不到也不影响更新本身。
 	 */
-	const changelogPromise = loadChangelog();
+	const changelogPromise = loadChangelog(manual);
 
 	const infos = await HonghuApi.getInfosSafe().catch(() => null);
 	if (!infos) {

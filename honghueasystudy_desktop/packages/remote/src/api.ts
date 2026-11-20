@@ -229,6 +229,8 @@ export interface AutomationSchedule {
 	lastRunDate?: string;
 	lastStopDate?: string;
 	runStartedAt?: number;
+	/** 本次运行真正进入课程页的时间（桌面端记账字段，手机端原样带回即可） */
+	studyStartedAt?: number;
 }
 
 /** 自动化方案：每次启动浏览器都会自动执行 */

@@ -1,6 +1,16 @@
 import { Page } from 'playwright-core';
 import { breakSliderVerify, getBase64 } from '../../utils';
 import { AutomationScript } from '../../script';
+import { getAutomationOverlay } from '../../../worker/automation-overlay';
+
+/**
+ * OCR 提示的来源标识。
+ *
+ * 用独立来源而不是覆盖「自动程序」那条常显：OCR 结束只撤这一条，
+ * 外层「正在自动操作中」的文案会自动恢复，不用记住原文。
+ */
+const OCR_TIP_SOURCE = 'zhs-login-ocr';
+const OCR_TIP_MESSAGE = 'OCR 识别中，无需操作';
 
 type ZHSCaptchaOptions = {
 	ocrApiUrl?: string;
@@ -257,20 +267,30 @@ async function verify(page: Page, opts: { ocrApiUrl: string; detTargetKey: strin
 		const det_target_src = await det_target_el.getAttribute('src');
 		const det_bg_src = await det_bg_el.getAttribute('src');
 		if (det_target_src && det_bg_src) {
-			// 必须把 page 传进去：易盾的图片地址带会话校验，由 Node 侧独立下载会被回 400
-			const [det_target_base64, det_bg_base64] = await Promise.all([
-				getBase64(det_target_src, page),
-				getBase64(det_bg_src, page)
-			]);
-			// 拼图元素自身的位移已经按背景图显示比例缩放过了，鼠标拖动距离直接使用 OCR 原始偏移；
-			// 再乘一次显示比例会导致拖动不足，拼图偏左。
-			await breakSliderVerify(page, det_slider_el, det_target_base64, det_bg_base64, {
-				...opts,
-				offset: 0,
-				startAtCenter: true,
-				pieceElement: det_target_el,
-				backgroundElement: det_bg_el
-			});
+			/**
+			 * OCR 识别通常要 1~3 秒，这段窗口里页面看起来是「卡住」的：
+			 * 用户可能去手动拖滑块，反而打断自动验证。所以识别期间常显提示。
+			 */
+			const overlay = getAutomationOverlay(page.context());
+			overlay?.setSourceActive(OCR_TIP_SOURCE, OCR_TIP_MESSAGE, true);
+			try {
+				// 必须把 page 传进去：易盾的图片地址带会话校验，由 Node 侧独立下载会被回 400
+				const [det_target_base64, det_bg_base64] = await Promise.all([
+					getBase64(det_target_src, page),
+					getBase64(det_bg_src, page)
+				]);
+				// 拼图元素自身的位移已经按背景图显示比例缩放过了，鼠标拖动距离直接使用 OCR 原始偏移；
+				// 再乘一次显示比例会导致拖动不足，拼图偏左。
+				await breakSliderVerify(page, det_slider_el, det_target_base64, det_bg_base64, {
+					...opts,
+					offset: 0,
+					startAtCenter: true,
+					pieceElement: det_target_el,
+					backgroundElement: det_bg_el
+				});
+			} finally {
+				overlay?.setSourceActive(OCR_TIP_SOURCE, '', false);
+			}
 		}
 	}
 }

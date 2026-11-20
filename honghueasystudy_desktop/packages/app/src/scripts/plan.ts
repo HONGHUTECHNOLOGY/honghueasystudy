@@ -54,8 +54,17 @@ export interface AutomationSchedule {
 	lastRunDate: string;
 	/** 最近一次自动收尾的会话日期 YYYY-MM-DD（防重复关闭） */
 	lastStopDate: string;
-	/** 本次自动运行的开始时间戳（用于 maxMinutes 判断） */
+	/** 本次自动运行的开始时间戳（浏览器被拉起的那一刻，用于收尾兜底） */
 	runStartedAt: number;
+	/**
+	 * 本次运行真正进入课程页的时间戳（0=还没进课）
+	 *
+	 * 单次学习时长从这一刻开始算，而不是从拉起浏览器开始算：
+	 * 登录、等滑块、加载课程列表这些时间不是学习时间，按启动时间算会让
+	 * 「学 60 分钟」实际只学了 50 多分钟。进课前退回 {@link runStartedAt} 兜底，
+	 * 避免进课失败时浏览器一直挂着不收尾。
+	 */
+	studyStartedAt: number;
 }
 
 /**
@@ -125,7 +134,8 @@ export function defaultBrowserAutomation(): BrowserAutomation {
 			catchUp: false,
 			lastRunDate: '',
 			lastStopDate: '',
-			runStartedAt: 0
+			runStartedAt: 0,
+			studyStartedAt: 0
 		}
 	};
 }
@@ -156,7 +166,9 @@ export function normalizeBrowserAutomation(input: any): BrowserAutomation {
 			catchUp: schedule.catchUp === true,
 			lastRunDate: typeof schedule.lastRunDate === 'string' ? schedule.lastRunDate : '',
 			lastStopDate: typeof schedule.lastStopDate === 'string' ? schedule.lastStopDate : '',
-			runStartedAt: clampNumber(schedule.runStartedAt, 0, Number.MAX_SAFE_INTEGER, 0)
+			runStartedAt: clampNumber(schedule.runStartedAt, 0, Number.MAX_SAFE_INTEGER, 0),
+			/** 旧存档没有这个字段：0 表示「还没进课」，收尾退回启动时刻计算 */
+			studyStartedAt: clampNumber(schedule.studyStartedAt, 0, Number.MAX_SAFE_INTEGER, 0)
 		}
 	};
 }
@@ -481,10 +493,15 @@ export function autoStopOverride(schedule: AutomationSchedule, now: Date): AutoS
 	 *
 	 * 新模型里 `endTime` 与 `startTime` 相同（全天窗口），收尾由 `maxMinutes` 或
 	 * `maxMinutes=0` 时的不限时长决定；旧存档的窗口长度已在 `migrateSpanToDuration` 折算过。
+	 *
+	 * 学习时长从「真正进入课程页」起算：`studyStartedAt > 0` 用它，
+	 * 还没进课时退回 `runStartedAt` 兜底，等桌面端进课后会立刻重算并在 20 秒内下发，
+	 * 扩展的倒计时随之变长（登录时间不算学习时间）。
 	 */
 	let endAt = session.end;
 	if (schedule.maxMinutes > 0) {
-		endAt = Math.min(endAt, schedule.runStartedAt + schedule.maxMinutes * 60 * 1000);
+		const base = schedule.studyStartedAt > 0 ? schedule.studyStartedAt : schedule.runStartedAt;
+		endAt = Math.min(endAt, base + schedule.maxMinutes * 60 * 1000);
 	}
 
 	/**

@@ -6211,6 +6211,7 @@
     let startBtnPressed = false;
     let checkFailed = false;
     let running = false;
+    let runSeq = 0;
     const createWorkControlPanel = () => {
       const { controlBtn, restartBtn, startBtn } = createWorkerControl({
         workerProvider: () => worker,
@@ -6287,8 +6288,14 @@
       var _a, _b, _c, _d;
       await ((_a = options.beforeRunning) == null ? void 0 : _a.call(options));
       running = true;
+      const seq = ++runSeq;
       setExtensionAutomation(true, script2.fullName());
-      worker = options.workerProvider(workOptions);
+      try {
+        worker = options.workerProvider(workOptions);
+      } catch (e) {
+        setExtensionAutomation(false, script2.fullName());
+        throw e;
+      }
       if (worker) {
         (_b = options.onWorkerCreated) == null ? void 0 : _b.call(options, worker);
       } else {
@@ -6300,6 +6307,8 @@
         running = false;
         globalControlPanel = null;
         controlBtn.disabled = true;
+        if (seq === runSeq)
+          setExtensionAutomation(false, script2.fullName());
       });
     };
   }

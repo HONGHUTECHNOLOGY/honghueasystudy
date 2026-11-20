@@ -160,8 +160,46 @@ export function downloadOne(url: string, dest: string, opts: DownloadOptions = {
 	});
 }
 
+/** 同一个源最多尝试几次：CDN 偶发连接重置 / 5xx / 中途断流，重试一次往往就通了 */
+export const SOURCE_ATTEMPTS = 3;
+
+/** 同一个源两次尝试之间的间隔，给 CDN 一点恢复时间 */
+export const SOURCE_RETRY_DELAY_MS = 1200;
+
+function wait(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
- * 多源下载：按清单顺序逐个尝试，任一步失败（连不上 / 中断 / 大小或 sha256 不符）立刻换下一个源。
+ * 删除下载到一半的文件。
+ *
+ * Windows 上流刚 abort 时写句柄可能还没释放，直接 rmSync 会抛 EBUSY/EPERM；
+ * 重试几次基本都能删掉。即使最终没删掉也不影响后续：createWriteStream 默认会截断重写。
+ */
+async function removePartial(file: string): Promise<void> {
+	for (let i = 0; i < 6; i++) {
+		try {
+			rmSync(file, { force: true });
+			return;
+		} catch {
+			await wait(120);
+		}
+	}
+}
+
+export interface MirrorDownloadOptions extends DownloadOptions {
+	/** 每个源的尝试次数（含首次），默认 3 */
+	attemptsPerSource?: number;
+	/** 重试间隔（毫秒），默认 1200 */
+	retryDelayMs?: number;
+}
+
+/**
+ * 多源下载：每个源先重试若干次，仍失败再换下一个源。
+ *
+ * 顺序是「源优先」而不是「次数优先」：同一源连续重试比来回切源更容易命中
+ * CDN 的临时抖动（换源会重新走 DNS + 握手，慢且未必更可靠）。
+ * 任一步失败（连不上 / 中断 / 大小或 sha256 不符）都会删掉半成品再重来。
  *
  * 校验必须放在这里而不只是下载之后 —— 镜像站最常见的故障是「返回 200 但内容是错误页」，
  * 那种情况只有校验能发现，否则会拿一个坏包去覆盖用户的程序目录。
@@ -169,23 +207,39 @@ export function downloadOne(url: string, dest: string, opts: DownloadOptions = {
 export async function downloadFromMirrors(
 	sources: string[],
 	dest: string,
-	opts: DownloadOptions = {}
+	opts: MirrorDownloadOptions = {}
 ): Promise<string> {
 	const failures: string[] = [];
 	const log = opts.onLog || (() => {});
+	const attempts = Math.max(1, opts.attemptsPerSource ?? SOURCE_ATTEMPTS);
+	const retryDelay = Math.max(0, opts.retryDelayMs ?? SOURCE_RETRY_DELAY_MS);
 
 	for (let i = 0; i < sources.length; i++) {
 		const url = sources[i];
-		try {
-			log('info', `下载更新包（源 ${i + 1}/${sources.length}）：${hostOf(url)}`);
-			await downloadOne(url, dest, opts);
-			log('info', '下载完成：' + url);
-			return url;
-		} catch (e: any) {
-			const msg = e?.message || String(e);
-			log('warn', `源不可用，切换下一个：${url} — ${msg}`);
-			failures.push(`${hostOf(url)}：${msg}`);
-			rmSync(dest, { force: true });
+
+		for (let attempt = 1; attempt <= attempts; attempt++) {
+			try {
+				log(
+					'info',
+					`下载更新包（源 ${i + 1}/${sources.length}，第 ${attempt}/${attempts} 次）：${hostOf(url)}`
+				);
+				await downloadOne(url, dest, opts);
+				log('info', '下载完成：' + url);
+				return url;
+			} catch (e: any) {
+				const msg = e?.message || String(e);
+				// 半成品必须删掉：断点续传不保证服务端支持 Range，残留文件会让下一次写入出错
+				await removePartial(dest);
+
+				if (attempt < attempts) {
+					log('warn', `源下载失败，准备重试（${attempt + 1}/${attempts}）：${hostOf(url)} — ${msg}`);
+					await wait(retryDelay);
+					continue;
+				}
+
+				log('warn', `源不可用，切换下一个：${url} — ${msg}`);
+				failures.push(`${hostOf(url)}（尝试 ${attempts} 次）：${msg}`);
+			}
 		}
 	}
 

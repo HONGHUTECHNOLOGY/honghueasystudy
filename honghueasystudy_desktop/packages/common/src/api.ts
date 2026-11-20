@@ -191,14 +191,22 @@ export class HonghuApi {
 	 * 影响更新本身；调用方按「没有日志区域」处理即可。
 	 */
 	static async getChangelogSafe(): Promise<ChangelogFile | null> {
-		try {
-			// 超时给短一点：它挡在更新弹窗前面，网络不好时不该让用户干等
-			const { data } = await axios.get(CHANGELOG_URL + '?t=' + Date.now(), { timeout: 5000 });
-			// 站点对未知路径会回退 index.html（200），形状不对即视为没拿到
-			if (data && typeof data === 'object' && Array.isArray((data as ChangelogFile).versions)) {
-				return data as ChangelogFile;
-			}
-		} catch {}
+		/*
+		 * 重试一次：更新日志只有 17KB，失败几乎都是瞬时抖动（DNS / TLS 握手超时）。
+		 * 首次超时给 5s（它挡在更新弹窗前面），重试时放宽到 10s，避免又卡在同一个坑里。
+		 */
+		for (let attempt = 0; attempt < 2; attempt++) {
+			try {
+				const { data } = await axios.get(CHANGELOG_URL + '?t=' + Date.now(), {
+					timeout: attempt === 0 ? 5000 : 10000
+				});
+				// 站点对未知路径会回退 index.html（200），形状不对即视为没拿到
+				if (data && typeof data === 'object' && Array.isArray((data as ChangelogFile).versions)) {
+					return data as ChangelogFile;
+				}
+			} catch {}
+			if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 1000));
+		}
 		return null;
 	}
 }

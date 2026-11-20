@@ -195,7 +195,7 @@
 						:step="10"
 						style="width: 100px"
 					/>
-					<span class="text-secondary">分钟（0=不限）</span>
+					<span class="text-secondary">分钟（0=不限；进课后开始计时）</span>
 				</div>
 
 				<!-- 错过了开始时间还跑不跑：默认不跑，避免中午打开软件时突然开始刷课 -->

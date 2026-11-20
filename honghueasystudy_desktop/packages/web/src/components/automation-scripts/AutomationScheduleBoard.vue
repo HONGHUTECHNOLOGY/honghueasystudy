@@ -156,7 +156,7 @@
 							style="width: 108px"
 							@change="(value) => commit(browser, (plan) => (plan.schedule.maxMinutes = Number(value) || 0))"
 						/>
-						<span class="field__hint">分钟（0=不限，不限就没有收尾）</span>
+						<span class="field__hint">分钟（0=不限；从真正进入课程开始计时，登录等待不算）</span>
 					</div>
 
 					<div class="field field--wide">
