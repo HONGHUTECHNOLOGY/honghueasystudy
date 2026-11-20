@@ -1,6 +1,14 @@
 # Changelog
 
 
+## [5.7.1](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.7.0...v5.7.1) (2026-11-20)
+
+
+### 🐛 问题修复
+
+* **automation:** 按课程系统会话判断智慧树登录态，首页不再当作课程列表 ([e78430e](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/e78430ebc4108e4f31bc18c8c255c92dbe5571eb))
+* **update:** 下载 UA 改为中性客户端标识，修复 GitCode 418 ([fee909d](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/fee909d5738f09d37c37239c1490dca2b5fe46d9))
+
 ## [5.7.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.6.0...v5.7.0) (2026-11-20)
 
 
