@@ -58,12 +58,18 @@ export function buildOverlayScript(message: string): string {
 		var MSG = ${JSON.stringify(message)};
 		var prev = window[KEY];
 		if (prev && prev.host && prev.host.isConnected) {
+			/* 正在淡出的旧覆盖层：取消移除并淡回来，避免出现「两个胶囊叠加」 */
+			if (prev.timer) { clearTimeout(prev.timer); prev.timer = 0; }
 			prev.text.textContent = ${JSON.stringify(message)};
 			prev.host.style.display = 'block';
+			prev.host.style.opacity = '1';
 			return 'updated';
 		}
 		var host = document.createElement('div');
 		host.style.cssText = 'all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483647;display:block';
+		/* 淡入淡出：整块覆盖层只做 opacity，走合成层，不触发页面重绘 */
+		host.style.opacity = '0';
+		host.style.transition = 'opacity .24s ease';
 		var root = host.attachShadow({ mode: 'closed' });
 		var style = document.createElement('style');
 		style.textContent = \`
@@ -157,6 +163,7 @@ export function buildOverlayScript(message: string): string {
 		frag.appendChild(glow);
 		frag.appendChild(pill);
 		root.appendChild(frag);
+		var ctl = { host: host, text: text, timer: 0 };
 		/**
 		 * 延后到空闲帧再插入 DOM。
 		 *
@@ -165,12 +172,20 @@ export function buildOverlayScript(message: string): string {
 		 */
 		var run = function () {
 			try {
+				/**
+				 * 挂载前就被撤销了（点亮后 1.5 秒内熄灭）：此时 KEY 已被删掉，
+				 * 如果还继续 append，就会留下一个再也没有句柄去关闭的覆盖层。
+				 */
+				if (window[KEY] !== ctl) return;
 				if (!host.isConnected) document.documentElement.appendChild(host);
+				/* 先强制算一次样式，否则「挂载 + 改 opacity」在同一帧里会被合并，过渡不触发 */
+				void host.offsetWidth;
+				host.style.opacity = '1';
 			} catch (e) {}
 		};
 		if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1500 });
 		else setTimeout(run, 200);
-		Object.defineProperty(window, KEY, { value: { host: host, text: text }, configurable: true, enumerable: false });
+		Object.defineProperty(window, KEY, { value: ctl, configurable: true, enumerable: false });
 		return 'mounted';
 	} catch (e) {
 		return 'error:' + (e && e.message);
@@ -183,10 +198,20 @@ function unmountScript(): string {
 	try {
 		var KEY = Symbol.for('hh.glow.ctl');
 		var ctl = window[KEY];
-		if (ctl && ctl.host) {
-			ctl.host.remove();
+		if (!ctl || !ctl.host) return 'removed';
+		if (!ctl.host.isConnected) {
 			try { delete window[KEY]; } catch (e) {}
+			return 'removed';
 		}
+		/* 淡出：先降到 0，动画结束再摘掉节点；期间如果又重新点亮，上面会取消这个计时 */
+		if (ctl.timer) clearTimeout(ctl.timer);
+		ctl.host.style.opacity = '0';
+		ctl.timer = setTimeout(function () {
+			try {
+				ctl.host.remove();
+				if (window[KEY] === ctl) delete window[KEY];
+			} catch (e) {}
+		}, 260);
 		return 'removed';
 	} catch (e) {
 		return 'error:' + (e && e.message);
@@ -293,14 +318,28 @@ export function attachAutomationOverlay(browser: BrowserContext, options: Automa
 		if (now < (nextAttemptAt.get(page) || 0)) return;
 		nextAttemptAt.set(page, now + APPLY_COOLDOWN_MS);
 		mounted.add(page);
-		page.evaluate(buildOverlayScript(message)).catch(() => {
-			/** 注入失败（页面正在导航等）不能算已挂载，下次还要再试 */
-			mounted.delete(page);
-		});
+		page
+			.evaluate(buildOverlayScript(message))
+			.then((result) => {
+				/**
+				 * 注入脚本自己 catch 掉的失败会以 `error:...` **正常返回**，
+				 * 不会触发下面的 catch。以前这种情况仍被标记为「已挂载」，
+				 * 于是这个页面直到下一次整页跳转都不会再尝试注入 —— 表现为「脚本在跑、光效不亮」。
+				 */
+				if (typeof result === 'string' && result.indexOf('error') === 0) {
+					mounted.delete(page);
+				}
+			})
+			.catch(() => {
+				/** 注入失败（页面正在导航等）不能算已挂载，下次还要再试 */
+				mounted.delete(page);
+			});
 	};
 
 	const clear = (page: Page) => {
 		mounted.delete(page);
+		/** 熄灭后立刻又点亮（例如快速切换任务）时不该被注入冷却挡掉 */
+		nextAttemptAt.delete(page);
 		if (!isUsablePage(page)) return;
 		page.evaluate(unmountScript()).catch(() => {});
 	};
@@ -328,6 +367,11 @@ export function attachAutomationOverlay(browser: BrowserContext, options: Automa
 			/** 文案变化才重建；心跳和重复 pulse 只会命中 mounted，直接跳过注入。 */
 			browser.pages().forEach((page) => {
 				mounted.delete(page);
+				/**
+				 * 文案变化是真实的状态变化（例如「自动程序」→「OCR 识别中」），
+				 * 不能被 200ms 的注入冷却挡掉，否则提示要等下一次心跳才更新。
+				 */
+				nextAttemptAt.delete(page);
 				apply(page);
 			});
 		} else {
