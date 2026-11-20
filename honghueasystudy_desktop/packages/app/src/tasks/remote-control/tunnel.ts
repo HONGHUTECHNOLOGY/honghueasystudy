@@ -273,7 +273,7 @@ export class CloudflaredTunnel {
 		/**
 		 * 固定域名模式：Token + 域名两者齐备才走命名隧道。
 		 *
-		 * 命名隧道的公网地址由 Cloudflare 控制台的 Public Hostname 决定，
+		 * 命名隧道的公网地址由 Cloudflare 控制台的「Routes → Published application」决定，
 		 * cloudflared 不会把地址打印出来，所以域名必须由用户填写，
 		 * 我们就绪判定改为「探测该域名 + /api/ping 是否返回 200」。
 		 */
@@ -409,7 +409,7 @@ export class CloudflaredTunnel {
 				this.setStatus({
 					state: 'error',
 					error: this.named
-						? `固定域名 ${this.named.hostname} 未就绪，正在重试…请确认 Cloudflare 隧道已配置 Public Hostname 指向 http://127.0.0.1:${port}`
+						? `固定域名 ${this.named.hostname} 未就绪，正在重试…请确认 Cloudflare 隧道的 Routes → Published application 指向 http://127.0.0.1:${port}`
 						: '隧道建立超时，正在自动重连…（持续失败请检查网络，或改用局域网访问）'
 				});
 				finish('');

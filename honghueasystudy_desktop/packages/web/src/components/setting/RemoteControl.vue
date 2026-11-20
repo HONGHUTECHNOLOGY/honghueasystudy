@@ -117,21 +117,23 @@
 				<ol>
 					<li>
 						<b>创建隧道</b>：打开
-						<a @click.prevent="openExternal(CF_DASHBOARD)">Cloudflare Zero Trust 控制台</a>
-						→ 左侧「网络 / Networks」→「隧道 / Tunnels」→「创建隧道」→ 选择
-						<b>Cloudflared</b> → 下一步。
+						<a @click.prevent="openExternal(CF_DASHBOARD)">Cloudflare 控制台 · Tunnels</a>
+						→ 左侧「Networking / 网络」→「Tunnels / 隧道」→「Create a tunnel / 创建隧道」→
+						输入一个名字 →「Create Tunnel / 创建隧道」。
 					</li>
 					<li>
-						<b>复制 Token</b>：安装连接器页面会显示一条很长的
-						<code>cloudflared service install eyJ...</code>
-						命令，把 <code>eyJ...</code> 这一段（不含前面的命令）复制下来，这就是要填的 Token。
+						<b>复制 Token</b>：下一步会显示安装命令（Windows 下形如
+						<code>cloudflared.exe service install eyJ...</code>），只复制
+						<code>eyJ...</code> 这一段。<b>不要在本机执行这条命令</b>：连接器由本软件启动，
+						重复安装会多出一个开机自启的后台服务，和软件重复连接同一个隧道。
 					</li>
 					<li>
-						<b>添加公网地址</b>：进入刚创建的隧道 →「公共主机名 / Public Hostname」→「添加」：
+						<b>添加公网地址</b>（新版控制台在「路由」里）：如果向导停在「等待连接器连接」不用等，
+						直接回「Tunnels / 隧道」列表选中刚建的隧道 →「Routes / 路由」标签 →
+						「Add route / 添加路由」→「Published application / 已发布应用」：
 						<ul>
 							<li>子域 + 域名：例如 <code>remote</code> + <code>example.com</code>，最终域名是 <code>https://remote.example.com</code></li>
-							<li>服务类型：<code>HTTP</code></li>
-							<li>URL：<code>127.0.0.1:{{ status.port }}</code>（端口要和上面「服务端口」一致）</li>
+							<li>Service URL：<code>http://127.0.0.1:{{ status.port }}</code>（端口要和上面「服务端口」一致）</li>
 						</ul>
 						保存后 Cloudflare 会自动创建好 DNS 记录，不用手动加。
 					</li>
@@ -148,7 +150,7 @@
 				<a-alert
 					type="info"
 					:show-icon="false"
-					content="常见问题：提示「固定域名未就绪」多为 Public Hostname 的端口与软件端口不一致，或域名还没走 Cloudflare 代理；提示「Token 无效」说明 Token 复制不完整或隧道已被删除，重新复制即可。"
+					content="常见问题：新版控制台的「公共主机名 / Public Hostname」已改名为「Routes → Add route → Published application」。提示「固定域名未就绪」多为 Service URL 的端口与软件端口不一致，或域名还没托管在 Cloudflare；提示「Token 无效」说明 Token 复制不完整或隧道已被删除，重新复制即可；隧道一直连不上时，检查网络是否放行到 Cloudflare 的 7844 端口（UDP）。"
 				/>
 
 				<div class="rc-guide-actions">
@@ -508,11 +510,11 @@ import Icon from '../Icon.vue';
 import { remote } from '../../utils/remote';
 import { electron } from '../../utils/node';
 
-/** Cloudflare Zero Trust 控制台（隧道在这里创建） */
-const CF_DASHBOARD = 'https://one.dash.cloudflare.com/';
-/** 官方文档：创建远程隧道（Token 方式） */
+/** Cloudflare 控制台 · Tunnels（新版在主导航 Networking > Tunnels，直接深链过去） */
+const CF_DASHBOARD = 'https://dash.cloudflare.com/?to=/:account/tunnels';
+/** 官方文档：创建远程隧道（Token 方式，2026 版路径） */
 const CF_DOCS =
-	'https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/';
+	'https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/';
 
 const { shell } = electron;
 

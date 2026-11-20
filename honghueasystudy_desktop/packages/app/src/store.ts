@@ -68,7 +68,7 @@ export const OriginalAppStore = {
 			enabled: false,
 			provider: 'cloudflared',
 			/**
-			 * Cloudflare 命名隧道 Token（Zero Trust 控制台复制）
+			 * Cloudflare 命名隧道 Token（Cloudflare 控制台 Networking → Tunnels 复制）
 			 *
 			 * 填了 Token + 固定域名就走命名隧道，域名固定不变；
 			 * 留空则退回快速隧道（每次启动都是新的随机 trycloudflare.com 域名）。
