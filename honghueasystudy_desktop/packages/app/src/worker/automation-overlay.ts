@@ -90,9 +90,12 @@ export function buildOverlayScript(message: string, calm = false): string {
 			/*
 			 * 光晕：锥形渐变 + 模糊，遮罩按「离边距离」衰减。
 			 *
-			 * 尺寸刚好盖住旋转后的视口（对角线约 115vmax）——原来是 240vmax，
-			 * 面积是这里的 4 倍多，每次页面跳转重建都要重新光栅化一遍。
-			 * 模糊半径同时从 46px 降到 30px（模糊成本 ≈ 面积 × 半径）。
+			 * 尺寸只需满足「旋转扫过的外接圆盖住视口」：正方形边长 a 的外接圆
+			 * 半径是 0.707a，覆盖条件是 a ≥ 视口对角线 / √2 ——
+			 * 16:9 需要 81vmax、4:3 需要 88vmax、**1:1 需要 100vmax**，
+			 * 所以 116vmax 在任何常见比例下都够（别再按「边长 ≥ 对角线」放大，
+			 * 那会白涨 67% 面积，模糊成本 ≈ 面积 × 半径）。
+			 * 原来是 240vmax，面积是这里的 4 倍多，每次页面跳转重建都要重新光栅化。
 			 */
 			.glow {
 				position: absolute; inset: 0; pointer-events: none; overflow: hidden;
@@ -119,18 +122,36 @@ export function buildOverlayScript(message: string, calm = false): string {
 				will-change: transform;
 			}
 			@keyframes hh-rotate { to { transform: rotate(1turn); } }
-			/* 最外圈 3px 流光：与光晕同源同速，读起来是一整团光在绕 */
-			.glow::after {
-				content: ''; position: absolute; inset: 0; padding: 3px;
-				background: conic-gradient(from 0turn, #4f8cff, #8b5cf6, #22d3ee, #34d399, #f59e0b, #4f8cff);
+			/*
+			 * 最外圈 3px 流光：与光晕同源同速，读起来是一整团光在绕。
+			 *
+			 * ⚠️ 边框所在的矩形**绝对不能旋转**：inset:0 的矩形转到 45° 就是菱形，
+			 * 视口四角按几何必然没有边框覆盖（1:1 方形视口最显眼），表现就是
+			 * 「四角一会儿变圆角、一会儿又正常」。
+			 * 所以拆成两层：.edge 只负责静态的 3px 环 mask（不参与动画），
+			 * 内部 ::before 画一个盖住视口对角线的大 conic 方盘并旋转 ——
+			 * 环的每个位置任何角度都有内容，四角永远完整；旋转仍是 transform，
+			 * 走合成层不重绘（同 .glow::before 的优化思路）。
+			 */
+			.edge {
+				position: absolute; inset: 0; padding: 3px; pointer-events: none;
 				-webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
 				-webkit-mask-composite: xor;
 				mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
 				mask-composite: exclude;
+			}
+			.edge::before {
+				content: ''; position: absolute; left: 50%; top: 50%;
+				/* 外接圆（0.707a）≥ 半对角线即可，0.75 倍对角线留 6% 余量 */
+				width: calc(hypot(100vw, 100vh) * 0.75);
+				height: calc(hypot(100vw, 100vh) * 0.75);
+				margin: calc(hypot(100vw, 100vh) * -0.375) 0 0 calc(hypot(100vw, 100vh) * -0.375);
+				background: conic-gradient(from 0turn, #4f8cff, #8b5cf6, #22d3ee, #34d399, #f59e0b, #4f8cff);
 				animation: hh-rotate 14s linear infinite;
+				will-change: transform;
 			}
 			/* 平静态：动画直接暂停，连不可见的合成开销也省掉 */
-			.glow.calm::before, .glow.calm::after { animation-play-state: paused; }
+			.glow.calm::before, .glow.calm .edge::before { animation-play-state: paused; }
 			/*
 			 * 纯色蓝：OCR / 验证码期间替代流光。
 			 * 只用静态边框 + 四边方向渐变，没有任何动画与大面积模糊，
@@ -170,11 +191,15 @@ export function buildOverlayScript(message: string, calm = false): string {
 			@keyframes hh-sheen { 0% { transform: translateX(-160%); } 55%,100% { transform: translateX(320%); } }
 			@keyframes hh-in { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 			@media (prefers-reduced-motion: reduce) {
-				.glow::before, .glow::after, .dot, .pill::after { animation: none; }
+				.glow::before, .glow .edge::before, .dot, .pill::after { animation: none; }
 			}
 		\`;
 		var glow = document.createElement('div');
 		glow.className = 'glow';
+		/* 3px 边条容器：静态 mask 环 + 内部旋转方盘，避免矩形旋转在四角露空 */
+		var edge = document.createElement('div');
+		edge.className = 'edge';
+		glow.appendChild(edge);
 		var blue = document.createElement('div');
 		blue.className = 'blue';
 		var pill = document.createElement('div');
