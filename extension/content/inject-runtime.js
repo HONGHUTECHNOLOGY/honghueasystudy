@@ -33,9 +33,30 @@ function __ocsCreateSandbox() {
 	var isFunction = function (value) {
 		return typeof value === 'function';
 	};
+	var toStringFn = Function.prototype.toString;
+	var nativeCodeRe = /\{\s*\[native code\]\s*\}/;
+	/**
+	 * 是否必须保持原样（不能 bind）—— 只有「原生构造器」满足。
+	 *
+	 * 只判断 `!!value.prototype` 是不够的：页面（尤其是微前端容器）常把
+	 * window.addEventListener 这类原生方法换成普通 JS 函数，普通函数同样带
+	 * prototype，会被误判成构造器而不 bind。经沙箱调用时 this 指向 proxy，
+	 * 内核直接抛 `Illegal invocation`，整个核心包在注入阶段中断。
+	 *
+	 * 实际踩坑：智慧树新版考试页用 polymas 容器链把 window.addEventListener
+	 * 包了四层（polymas-container → a2ui → exam_hub → 主应用），全是普通函数，
+	 * 于是 main-world 注入即报 Illegal invocation，页面既没有面板也不会答题。
+	 *
+	 * 判据改为「原生代码 + 有 prototype」：
+	 *   - 原生方法（addEventListener / setTimeout / fetch…）没有 prototype → bind
+	 *   - 页面包装的 JS 函数（任何来源）→ bind
+	 *   - 只有 Object / Array / XMLHttpRequest 这类真构造器保留原样，否则会丢
+	 *     prototype 与静态成员
+	 */
 	var isConstructor = function (value) {
 		try {
-			return isFunction(value) && !!value.prototype;
+			if (!isFunction(value) || !value.prototype) return false;
+			return nativeCodeRe.test(toStringFn.call(value));
 		} catch (e) {
 			return false;
 		}

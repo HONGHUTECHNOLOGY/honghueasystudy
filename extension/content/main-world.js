@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-var __HH_BRIDGE_KEY__="0882ed92-b881-400b-be1d-f6213cffc0c5";
+var __HH_BRIDGE_KEY__="d7f14c7e-74d2-44b6-b5f7-16fea54225db";
 /* 鸿鹄易学 · MAIN world 运行时（ScriptCat 风格）
  *
  * 本文件由 background.js 通过 chrome.userScripts.register({ world: "MAIN" })
@@ -36,9 +36,30 @@ function __ocsCreateSandbox() {
 	var isFunction = function (value) {
 		return typeof value === 'function';
 	};
+	var toStringFn = Function.prototype.toString;
+	var nativeCodeRe = /\{\s*\[native code\]\s*\}/;
+	/**
+	 * 是否必须保持原样（不能 bind）—— 只有「原生构造器」满足。
+	 *
+	 * 只判断 `!!value.prototype` 是不够的：页面（尤其是微前端容器）常把
+	 * window.addEventListener 这类原生方法换成普通 JS 函数，普通函数同样带
+	 * prototype，会被误判成构造器而不 bind。经沙箱调用时 this 指向 proxy，
+	 * 内核直接抛 `Illegal invocation`，整个核心包在注入阶段中断。
+	 *
+	 * 实际踩坑：智慧树新版考试页用 polymas 容器链把 window.addEventListener
+	 * 包了四层（polymas-container → a2ui → exam_hub → 主应用），全是普通函数，
+	 * 于是 main-world 注入即报 Illegal invocation，页面既没有面板也不会答题。
+	 *
+	 * 判据改为「原生代码 + 有 prototype」：
+	 *   - 原生方法（addEventListener / setTimeout / fetch…）没有 prototype → bind
+	 *   - 页面包装的 JS 函数（任何来源）→ bind
+	 *   - 只有 Object / Array / XMLHttpRequest 这类真构造器保留原样，否则会丢
+	 *     prototype 与静态成员
+	 */
 	var isConstructor = function (value) {
 		try {
-			return isFunction(value) && !!value.prototype;
+			if (!isFunction(value) || !value.prototype) return false;
+			return nativeCodeRe.test(toStringFn.call(value));
 		} catch (e) {
 			return false;
 		}
@@ -7268,6 +7289,184 @@ try {
       });
     }
   };
+  const ANSWER_CONFIG_KEYS = [
+    "common.settings.answererWrappers",
+    "common.settings.disabledAnswererWrapperNames",
+    "common.ai-settings.aiEndpoint",
+    "common.ai-settings.aiApiKey",
+    "common.ai-settings.aiModel",
+    "common.ai-settings.referenceDocs"
+  ];
+  function isBlank(v) {
+    if (v === void 0 || v === null)
+      return true;
+    if (typeof v === "string")
+      return v.trim() === "";
+    if (Array.isArray(v))
+      return v.length === 0;
+    if (typeof v === "object")
+      return Object.keys(v).length === 0;
+    return false;
+  }
+  function planMerge(remote, local) {
+    const apply = {};
+    const push = {};
+    for (const key of ANSWER_CONFIG_KEYS) {
+      const r = remote == null ? void 0 : remote[key];
+      const l = local == null ? void 0 : local[key];
+      if (!isBlank(r)) {
+        if (JSON.stringify(r) !== JSON.stringify(l))
+          apply[key] = r;
+      } else if (!isBlank(l)) {
+        push[key] = l;
+      }
+    }
+    return { apply, push };
+  }
+  const SERVER = "http://localhost:15319";
+  const PUSH_DEBOUNCE_MS = 400;
+  let applying = false;
+  let browserUid = "";
+  let currentScope = "shared";
+  let desktopAvailable = false;
+  let inited = false;
+  const pending = {};
+  let pushTimer = null;
+  async function probeDesktop() {
+    try {
+      const res = await request(`${SERVER}/state`, {
+        type: "GM_xmlhttpRequest",
+        method: "get",
+        responseType: "json"
+      });
+      return !!(res == null ? void 0 : res.project);
+    } catch (e) {
+      return false;
+    }
+  }
+  async function fetchBrowserUid() {
+    try {
+      const res = await request("/hh-environment", { type: "fetch", method: "get" });
+      return typeof (res == null ? void 0 : res.browserUid) === "string" ? res.browserUid : "";
+    } catch (e) {
+      return "";
+    }
+  }
+  async function readRemoteConfig() {
+    try {
+      const qs = currentScope === "browser" ? `&uid=${encodeURIComponent(browserUid)}` : "";
+      const res = await request(`${SERVER}/api/answer-config?scope=${currentScope}${qs}`, {
+        type: "GM_xmlhttpRequest",
+        method: "get",
+        responseType: "json"
+      });
+      return (res == null ? void 0 : res.config) && typeof res.config === "object" ? res.config : {};
+    } catch (e) {
+      return null;
+    }
+  }
+  async function writeRemoteConfig(patch) {
+    if (!Object.keys(patch).length)
+      return;
+    try {
+      await request(`${SERVER}/api/answer-config`, {
+        type: "GM_xmlhttpRequest",
+        method: "post",
+        responseType: "json",
+        headers: { "Content-Type": "application/json" },
+        data: { scope: currentScope, uid: browserUid, config: patch }
+      });
+    } catch (e) {
+      const msg2 = e instanceof Error ? e.message : String(e);
+      console.warn(`[鸿鹄] [配置同步] 写入桌面端失败：${msg2}`);
+    }
+  }
+  function schedulePush() {
+    if (applying)
+      return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(() => {
+      const patch = {};
+      for (const k of Object.keys(pending)) {
+        patch[k] = pending[k];
+        delete pending[k];
+      }
+      void writeRemoteConfig(patch);
+    }, PUSH_DEBOUNCE_MS);
+  }
+  async function pullAndMerge() {
+    const remote = await readRemoteConfig();
+    if (!remote)
+      return;
+    const local = {};
+    for (const key of ANSWER_CONFIG_KEYS)
+      local[key] = lib.$store.get(key);
+    const { apply, push } = planMerge(remote, local);
+    for (const key of Object.keys(apply))
+      lib.$store.set(key, apply[key]);
+    if (Object.keys(apply).length) {
+      console.log(
+        `[鸿鹄] [配置同步] 已从桌面端载入 ${Object.keys(apply).length} 项配置（${currentScope === "shared" ? "全浏览器共享" : "本浏览器独立"}）`
+      );
+    }
+    if (Object.keys(push).length) {
+      await writeRemoteConfig(push);
+      console.log(`[鸿鹄] [配置同步] 已把本地 ${Object.keys(push).length} 项配置上传到桌面端`);
+    }
+  }
+  async function initAnswerConfigSync(isSharedMode, watchers) {
+    if (inited || !lib.$.isInTopWindow())
+      return;
+    inited = true;
+    desktopAvailable = await probeDesktop();
+    if (!desktopAvailable) {
+      console.log("[鸿鹄] [配置同步] 未检测到鸿鹄易学桌面端，题库与 AI 配置使用本浏览器本地存储");
+      return;
+    }
+    browserUid = await fetchBrowserUid();
+    currentScope = isSharedMode() ? "shared" : "browser";
+    if (currentScope === "browser" && !browserUid) {
+      console.log("[鸿鹄] [配置同步] 未取到浏览器实例标识，改为仅在本浏览器本地保存");
+      desktopAvailable = false;
+      return;
+    }
+    console.log(
+      currentScope === "shared" ? "[鸿鹄] [配置同步] 题库与 AI 配置：使用桌面端统一配置（所有浏览器共享）" : `[鸿鹄] [配置同步] 题库与 AI 配置：本浏览器单独保存（uid=${browserUid}）`
+    );
+    await pullAndMerge();
+    for (const { script: script2, keys } of watchers) {
+      for (const key of keys) {
+        script2.onConfigChange(key, (curr) => {
+          if (applying || !desktopAvailable)
+            return;
+          const fullKey = script2.namespace ? `${script2.namespace}.${key}` : key;
+          pending[fullKey] = curr;
+          schedulePush();
+        });
+      }
+    }
+  }
+  async function reinitAnswerConfigSync(isSharedMode) {
+    if (!desktopAvailable)
+      return;
+    const nextScope = isSharedMode ? "shared" : "browser";
+    if (nextScope === currentScope)
+      return;
+    if (nextScope === "browser" && !browserUid) {
+      console.log("[鸿鹄] [配置同步] 未取到浏览器实例标识，无法切换为独立配置");
+      return;
+    }
+    currentScope = nextScope;
+    applying = true;
+    try {
+      await pullAndMerge();
+      console.log(
+        currentScope === "shared" ? "[鸿鹄] [配置同步] 已切换为桌面端统一配置" : `[鸿鹄] [配置同步] 已切换为本浏览器独立配置（uid=${browserUid}）`
+      );
+    } finally {
+      applying = false;
+    }
+  }
   const TAB_WORK_RESULTS_KEY = "common.work-results.results";
   function issueLinks(prefix) {
     const link = (label, href) => lib.h(
@@ -7352,7 +7551,10 @@ try {
     },
     setting: {
       listenerIds: {
-        aw: 0
+        aw: 0,
+        aiEndpoint: 0,
+        aiApiKey: 0,
+        aiModel: 0
       }
     }
   };
@@ -7407,10 +7609,12 @@ try {
           },
           answererWrappers: {
             separator: "自动答题设置",
-            defaultValue: []
+            defaultValue: [],
+            extra: { appConfigSync: false }
           },
           disabledAnswererWrapperNames: {
-            defaultValue: []
+            defaultValue: [],
+            extra: { appConfigSync: false }
           },
           answererWrappersButton: {
             label: "题库配置",
@@ -7740,6 +7944,15 @@ try {
               };
             }
           },
+          useDesktopAnswerConfig: {
+            label: "使用桌面端统一配置",
+            defaultValue: true,
+            extra: { appConfigSync: false },
+            attrs: {
+              type: "checkbox",
+              title: "开启后题库与 AI 配置与桌面端保存的共享配置同步，所有浏览器共享同一份；关闭则本浏览器单独保存一份，互不影响。"
+            }
+          },
           upload: {
             label: "答题完成后",
             tag: "select",
@@ -7972,6 +8185,14 @@ try {
           this.onConfigChange("answerWrapperHandlerTimeout", (sec) => {
             AnswerWrapperHandlerConfig.timeout_seconds = sec;
           });
+          const isSharedMode = () => this.cfg.useDesktopAnswerConfig !== false;
+          void initAnswerConfigSync(isSharedMode, [
+            { script: this, keys: ["answererWrappers", "disabledAnswererWrapperNames"] },
+            { script: CommonProject.scripts.aiSettings, keys: ["aiEndpoint", "aiApiKey", "aiModel", "referenceDocs"] }
+          ]).catch((e) => console.warn("[鸿鹄] [配置同步] 初始化失败：" + (e instanceof Error ? e.message : String(e))));
+          this.onConfigChange("useDesktopAnswerConfig", () => {
+            void reinitAnswerConfigSync(isSharedMode());
+          });
         },
         onrender({ panel }) {
           if (lib.$gm.isInGMContext()) {
@@ -8115,16 +8336,20 @@ try {
             ]).outerHTML
           },
           aiEndpoint: {
-            defaultValue: "https://api.deepseek.com"
+            defaultValue: "https://api.deepseek.com",
+            extra: { appConfigSync: false }
           },
           aiApiKey: {
-            defaultValue: ""
+            defaultValue: "",
+            extra: { appConfigSync: false }
           },
           aiModel: {
-            defaultValue: "deepseek-flash"
+            defaultValue: "deepseek-flash",
+            extra: { appConfigSync: false }
           },
           referenceDocs: {
-            defaultValue: []
+            defaultValue: [],
+            extra: { appConfigSync: false }
           }
         },
         onrender({ panel }) {
@@ -9294,6 +9519,23 @@ try {
     modelInput.onchange = () => {
       aiCfg.aiModel = modelInput.value;
     };
+    {
+      const aiScript = CommonProject.scripts.aiSettings;
+      const refreshInputs = () => {
+        if (document.activeElement !== epInput)
+          epInput.value = aiCfg.aiEndpoint || "";
+        if (document.activeElement !== keyInput)
+          keyInput.value = aiCfg.aiApiKey || "";
+        if (document.activeElement !== modelInput)
+          modelInput.value = aiCfg.aiModel || "";
+      };
+      const ids = state$9.setting.listenerIds;
+      for (const key of ["aiEndpoint", "aiApiKey", "aiModel"]) {
+        aiScript.offConfigChange(ids[key]);
+        ids[key] = aiScript.onConfigChange(key, refreshInputs);
+      }
+      refreshInputs();
+    }
     const enableBtn = lib.h("button", { className: "ai-cfg-btn ai-cfg-btn-enable" }, "启用");
     const disableBtn = lib.h("button", { className: "ai-cfg-btn ai-cfg-btn-disable" }, "禁用");
     const testBtn = lib.h("button", { className: "ai-cfg-btn ai-cfg-btn-test" }, "测试连接");
