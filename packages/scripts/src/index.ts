@@ -10,6 +10,7 @@ import { YKTProject } from './projects/yuketang';
 import { UnipusProject } from './projects/unipus';
 import { LabsafeProject } from './projects/labsafe';
 import { FIFProject } from './projects/fifedu';
+import { YoocProject } from './projects/yooc';
 
 /** 导出所有的鸿鹄易学核心模块 */
 export * from '@honghu/core';
@@ -27,6 +28,7 @@ export { YKTProject } from './projects/yuketang';
 export { UnipusProject } from './projects/unipus';
 export { LabsafeProject } from './projects/labsafe';
 export { FIFProject } from './projects/fifedu';
+export { YoocProject } from './projects/yooc';
 export { RenderScript } from './render';
 
 export function definedProjects(): Project[] {
@@ -40,6 +42,7 @@ export function definedProjects(): Project[] {
 		UnipusProject,
 		LabsafeProject,
 		FIFProject,
+		YoocProject,
 		CommonProject,
 		BackgroundProject
 	];
