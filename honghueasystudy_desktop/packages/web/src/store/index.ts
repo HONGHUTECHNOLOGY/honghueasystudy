@@ -75,6 +75,16 @@ export type WebStore = {
 			store: any;
 			/** 是否同步鸿鹄易学配置 */
 			openSync: boolean;
+			/**
+			 * 答题 / AI 配置（全桌面端共享一份）
+			 *
+			 * 由扩展经 15319 的 `/api/answer-config` 直接读写，键是 easy-us 的全限定键
+			 * （如 `common.settings.answererWrappers`）。与 `store` 分开存，是因为两者的
+			 * 消费方不同：`store` 走「全量推送」，这份由扩展按开关决定读不读。
+			 */
+			answerStore: Record<string, any>;
+			/** 答题 / AI 配置（按浏览器 uid 各存一份，扩展关掉「统一配置」时用） */
+			browserAnswerStores: Record<string, Record<string, any>>;
 		};
 		browser: {
 			/** 浏览器缓存大小预警阈值（GB） */
@@ -190,7 +200,9 @@ const APP_DEFAULTS = {
 			hh: {
 				currentProjectName: '',
 				store: {},
-				openSync: false
+				openSync: false,
+				answerStore: {},
+				browserAnswerStores: {}
 			},
 			browser: {
 				cachesSizeWarningPoint: 10,

@@ -19,6 +19,7 @@ import { RenderScript } from '../render';
 import { dropdownStyle } from '../utils/configs';
 import { trustedClick } from '../utils/safe-click';
 import { OFFICIAL_SITE, GITHUB_REPO, GITCODE_REPO, GITHUB_ISSUES, GITCODE_ISSUES } from '../utils/links';
+import { initAnswerConfigSync, reinitAnswerConfigSync } from '../utils/answer-config-sync';
 
 const TAB_WORK_RESULTS_KEY = 'common.work-results.results';
 
@@ -125,7 +126,11 @@ const state = {
 	},
 	setting: {
 		listenerIds: {
-			aw: 0 as StoreListenerType
+			aw: 0 as StoreListenerType,
+			/** AI 配置三个输入框：配置被外部（桌面端同步 / 其它标签页）改动后需要回填 */
+			aiEndpoint: 0 as StoreListenerType,
+			aiApiKey: 0 as StoreListenerType,
+			aiModel: 0 as StoreListenerType
 		}
 	}
 };
@@ -186,13 +191,16 @@ export const CommonProject = Project.create({
 				},
 				answererWrappers: {
 					separator: '自动答题设置',
-					defaultValue: [] as AnswererWrapper[]
+					defaultValue: [] as AnswererWrapper[],
+					/** 走 answer-config-sync 的双向通道，不再参与桌面端的全量配置同步，避免两条通道互相覆盖 */
+					extra: { appConfigSync: false }
 				},
 				/**
 				 * 禁用的题库
 				 */
 				disabledAnswererWrapperNames: {
-					defaultValue: [] as string[]
+					defaultValue: [] as string[],
+					extra: { appConfigSync: false }
 				},
 				answererWrappersButton: {
 					label: '题库配置',
@@ -563,6 +571,22 @@ export const CommonProject = Project.create({
 						};
 					}
 				},
+				/**
+				 * 题库 + AI 配置是否跟随桌面端的共享配置
+				 *
+				 * 打开（默认）：与桌面端保存的共享配置双向同步，所有浏览器读到和改的都是同一份；
+				 * 关闭：只保存本浏览器的独立配置。两种方式都落在桌面端，只有桌面端不可用时才退回本地。
+				 * 开关本身是「这台浏览器怎么用」的本地决定，所以不参与全量同步。
+				 */
+				useDesktopAnswerConfig: {
+					label: '使用桌面端统一配置',
+					defaultValue: true,
+					extra: { appConfigSync: false },
+					attrs: {
+						type: 'checkbox',
+						title: '开启后题库与 AI 配置与桌面端保存的共享配置同步，所有浏览器共享同一份；关闭则本浏览器单独保存一份，互不影响。'
+					}
+				},
 				upload: {
 					label: '答题完成后',
 					tag: 'select',
@@ -837,6 +861,21 @@ export const CommonProject = Project.create({
 				this.onConfigChange('answerWrapperHandlerTimeout', (sec) => {
 					AnswerWrapperHandlerConfig.timeout_seconds = sec;
 				});
+
+				/**
+				 * 题库 / AI 配置与桌面端同步
+				 *
+				 * 不 await：同步失败也只是退回本地存储，不该拖慢页面上的其它脚本。
+				 */
+				const isSharedMode = () => this.cfg.useDesktopAnswerConfig !== false;
+				void initAnswerConfigSync(isSharedMode, [
+					{ script: this, keys: ['answererWrappers', 'disabledAnswererWrapperNames'] },
+					{ script: CommonProject.scripts.aiSettings, keys: ['aiEndpoint', 'aiApiKey', 'aiModel', 'referenceDocs'] }
+				]).catch((e) => console.warn('[鸿鹄] [配置同步] 初始化失败：' + (e instanceof Error ? e.message : String(e))));
+
+				this.onConfigChange('useDesktopAnswerConfig', () => {
+					void reinitAnswerConfigSync(isSharedMode());
+				});
 			},
 			onrender({ panel }) {
 				// 因为需要用到 GM_xhr 所以判断是否处于用户脚本环境
@@ -996,16 +1035,20 @@ export const CommonProject = Project.create({
 					]).outerHTML
 				},
 			aiEndpoint: {
-				defaultValue: 'https://api.deepseek.com'
+				defaultValue: 'https://api.deepseek.com',
+				extra: { appConfigSync: false }
 			},
 			aiApiKey: {
-				defaultValue: ''
+				defaultValue: '',
+				extra: { appConfigSync: false }
 			},
 		aiModel: {
-				defaultValue: 'deepseek-flash'
+				defaultValue: 'deepseek-flash',
+				extra: { appConfigSync: false }
 			},
 			referenceDocs: {
-				defaultValue: [] as ReferenceDoc[]
+				defaultValue: [] as ReferenceDoc[],
+				extra: { appConfigSync: false }
 			}
 	},
 		onrender({ panel }) {
@@ -2362,6 +2405,25 @@ function createAiConfigCard() {
 	modelInput.onchange = () => {
 		aiCfg.aiModel = modelInput.value;
 	};
+	/**
+	 * 配置可能被外部改写（桌面端共享配置同步、其它标签页），
+	 * 输入框不回填的话用户看到的是旧值，一改动就把刚同步下来的配置覆盖掉。
+	 * 正在输入的框跳过，避免打断打字。
+	 */
+	{
+		const aiScript = CommonProject.scripts.aiSettings;
+		const refreshInputs = () => {
+			if (document.activeElement !== epInput) epInput.value = aiCfg.aiEndpoint || '';
+			if (document.activeElement !== keyInput) keyInput.value = aiCfg.aiApiKey || '';
+			if (document.activeElement !== modelInput) modelInput.value = aiCfg.aiModel || '';
+		};
+		const ids = state.setting.listenerIds;
+		for (const key of ['aiEndpoint', 'aiApiKey', 'aiModel'] as const) {
+			aiScript.offConfigChange(ids[key]);
+			ids[key] = aiScript.onConfigChange(key, refreshInputs);
+		}
+		refreshInputs();
+	}
 
 	const enableBtn = h('button', { className: 'ai-cfg-btn ai-cfg-btn-enable' }, '启用');
 	const disableBtn = h('button', { className: 'ai-cfg-btn ai-cfg-btn-disable' }, '禁用');

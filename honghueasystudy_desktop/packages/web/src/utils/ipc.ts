@@ -299,6 +299,27 @@ export function activeIpcRenderListener() {
 	});
 
 	/**
+	 * 扩展经 15319 写入了答题 / AI 配置。
+	 *
+	 * 与上面 GPU 那条同理：主进程已经落盘，这里只负责把内存对齐，
+	 * 否则 100ms 防抖的整份回写会把扩展刚写进去的配置覆盖掉。
+	 */
+	ipcRenderer.on(
+		'hh-answer-config-updated',
+		(e, payload: { scope: 'shared' | 'browser'; uid?: string; config?: Record<string, any> }) => {
+			const config = payload?.config;
+			if (!config || typeof config !== 'object') return;
+			const hh = store.render.setting.hh;
+			if (payload.scope === 'shared') {
+				hh.answerStore = { ...(hh.answerStore || {}), ...config };
+			} else if (payload.uid) {
+				hh.browserAnswerStores = hh.browserAnswerStores || {};
+				hh.browserAnswerStores[payload.uid] = { ...(hh.browserAnswerStores[payload.uid] || {}), ...config };
+			}
+		}
+	);
+
+	/**
 	 * GPU 连续崩溃后主进程自动关掉了硬件加速。
 	 *
 	 * 必须把内存里的值同步过来：渲染端不 watch window 段，但任何一次

@@ -4,7 +4,8 @@ import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
 import { store } from '../store';
-import { getDecryptedRenderData } from '../crypto';
+import { getDecryptedRenderData, encryptRenderString } from '../crypto';
+import { applyAnswerConfig, isAnswerConfigScope, readAnswerConfig, type AnswerConfigScope } from './answer-config';
 import { getCurrentWebContents, getProjectPath, moveWindowToTop } from '../utils';
 import { canOCR, det, ocr } from '../utils/ocr';
 import { randomUUID } from 'crypto';
@@ -140,6 +141,24 @@ function isBinaryExecError(err: unknown): boolean {
 	return code === 'ENOENT' || code === 'EACCES' || code === 'ENOEXEC' || code === 127;
 }
 
+/**
+ * 答题 / AI 配置读写（供浏览器扩展直接读写）
+ *
+ * 存取逻辑在 answer-config.ts（纯函数），这里只负责「落盘 + 通知渲染端」。
+ * 两件事都必须做：渲染端只会通过 100ms 防抖把整份 store 存回去，
+ * 只落盘不发事件 → 它内存里还是旧值、下次保存把扩展写的配置覆盖掉；
+ * 只发事件不落盘 → 它虽然内存对了，但只要渲染端没起来改动就丢了。
+ */
+function writeAnswerConfig(scope: AnswerConfigScope, uid: string, patch: Record<string, any>) {
+	/** render 在磁盘上可能是加密字符串，写回时必须保持同样形态，否则渲染端读不出来 */
+	const wasEncrypted = typeof store.store.render === 'string';
+	const render = getDecryptedRenderData(store);
+	applyAnswerConfig(render, scope, uid, patch);
+	store.set('render', wasEncrypted ? encryptRenderString(JSON.stringify(render)) : render);
+	/** 同步渲染端内存，否则它的防抖保存会把旧值写回来 */
+	getCurrentWebContents()?.send('hh-answer-config-updated', { scope, uid, config: patch });
+}
+
 export async function startupServer() {
 	const app = express();
 
@@ -186,6 +205,50 @@ export async function startupServer() {
 	app.get('/is-browser-config-sync', (req, res) => {
 		const render = getDecryptedRenderData(store);
 		res.end(String(render.setting.hh.openSync));
+	});
+
+	/**
+	 * 读取答题 / AI 配置
+	 * - ?scope=shared                    全桌面端共享的一份
+	 * - ?scope=browser&uid=<浏览器 uid>   该浏览器独立的一份
+	 */
+	app.get('/api/answer-config', (req, res) => {
+		const scope = req.query.scope;
+		const uid = String(req.query.uid || '');
+		if (!isAnswerConfigScope(scope)) {
+			res.status(400).json({ error: 'scope 必须是 shared 或 browser' });
+			return;
+		}
+		if (scope === 'browser' && !uid) {
+			res.status(400).json({ error: 'scope=browser 时必须提供 uid' });
+			return;
+		}
+		res.json({ scope, uid, config: readAnswerConfig(getDecryptedRenderData(store), scope, uid) });
+	});
+
+	/** 写入答题 / AI 配置（合并式写入，只覆盖传入的键） */
+	app.post('/api/answer-config', (req, res) => {
+		const { scope, uid = '', config } = req.body || {};
+		if (!isAnswerConfigScope(scope)) {
+			res.status(400).json({ error: 'scope 必须是 shared 或 browser' });
+			return;
+		}
+		if (scope === 'browser' && !uid) {
+			res.status(400).json({ error: 'scope=browser 时必须提供 uid' });
+			return;
+		}
+		if (!config || typeof config !== 'object' || Array.isArray(config)) {
+			res.status(400).json({ error: 'config 必须是对象' });
+			return;
+		}
+		try {
+			writeAnswerConfig(scope, String(uid), config);
+			logger.info(`答题配置已写入 scope=${scope}${uid ? ` uid=${uid}` : ''} keys=${Object.keys(config).join(',')}`);
+			res.json({ ok: true });
+		} catch (e: any) {
+			logger.error(`答题配置写入失败：${e?.message || e}`);
+			res.status(500).json({ error: String(e?.message || e) });
+		}
 	});
 
 	/** 脚本操作 */

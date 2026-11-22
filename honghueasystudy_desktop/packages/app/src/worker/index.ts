@@ -3605,7 +3605,7 @@ export async function launchBrowser({
 					 */
 					const overlay = attachAutomationOverlay(browser, { enabled: autoGlow !== false });
 					// 监听网络请求
-					browserNetworkRoute(authToken, browser, getAutoStop, overlay);
+					browserNetworkRoute(authToken, browser, getAutoStop, overlay, uid);
 
 					// 运行自动化程序（导航页不参与，脚本自己新开标签）
 					if (automationScripts.length) {
@@ -3793,13 +3793,22 @@ function browserNetworkRoute(
 	authToken: string,
 	browser: BrowserContext,
 	getAutoStop?: () => AutoStopOverride | null,
-	overlay?: AutomationOverlay
+	overlay?: AutomationOverlay,
+	browserUid?: string
 ) {
 	browser.route(/hh-environment/, async (route) => {
 		await route.fulfill({
 			status: 200,
 			body: JSON.stringify({
-				environment: 'playwright'
+				environment: 'playwright',
+				/**
+				 * 浏览器实例标识。
+				 *
+				 * 扩展侧用它区分「共用全局答题配置」还是「本浏览器单独一份」：
+				 * 扩展拿不到桌面端的 browser uid（只在导航页 URL 与 user-data-dir 里），
+				 * 所以借这条每条请求都会被拦截的桥接接口下发。
+				 */
+				browserUid: browserUid || ''
 			})
 		});
 	});
