@@ -162,6 +162,22 @@ export interface CatalogItem {
 	clickable: boolean;
 	/** 原始 onclick 文本，进入时复用，省得再解析一遍 */
 	onclick: string;
+	/**
+	 * 所属「章」的标题，例如 `1 必修部分` / `2 选修部分`；作业与考试为空。
+	 *
+	 * 超星同一门课里可以既有必修又有选修，**目录顺序并不保证必修在前**，
+	 * 而平台自带的「下一节」只认 DOM 顺序 —— 这是「必修还剩一堆却去刷选修」的根源。
+	 */
+	group?: string;
+	/** 目录里的原始序号，用于同组内保持平台给的先后（闯关模式下不能乱） */
+	order?: number;
+	/**
+	 * 是不是「当前正在学的这一节」
+	 *
+	 * 用户可能在目录里手动点了某一节，这时自动刷课不应该再把他拽回第一节 ——
+	 * 「每次开始刷课都从第一节开始」就是没认这个标记造成的。
+	 */
+	active?: boolean;
 }
 
 /** 一个目录的读取结果 */
@@ -3172,11 +3188,37 @@ export function extractCoursesInPage(arg: { platform: string }): {
  * 三个条件缺一不可：已解锁（有 onclick）、还有任务点（`todo`）、没被跳过。
  * 抽成纯函数是为了能单测——真实页面上点一次菜单要好几秒，测试跑不动。
  *
- * 按目录顺序取第一个：超星是闯关模式，前面的没完成后面的本来也点不进去。
+ * 排序规则：**必修组 → 选修组 → 其它，同组内保持目录顺序**。
+ * 以前是直接取目录顺序里第一个，但超星的目录顺序并不保证必修在前
+ * （同一门课里「必修部分 / 选修部分」是两个章分组），平台自带的「下一节」
+ * 也只认 DOM 顺序 —— 结果就是必修还剩一堆，人却已经在选修里刷了。
+ * 同组内不能重排：闯关模式下前一个没做完，后一个本来就点不进去。
  */
 export function pickNextChapter(items: CatalogItem[], skipIds?: string[]): CatalogItem | undefined {
 	const skip = skipIds || [];
-	return items.filter((item) => item.status === 'todo' && item.clickable && item.id && skip.indexOf(item.id) === -1)[0];
+	const candidates = items.filter(
+		(item) => item.status === 'todo' && item.clickable && item.id && skip.indexOf(item.id) === -1
+	);
+	if (!candidates.length) return undefined;
+
+	/**
+	 * 用户在目录里手动点了某一节，就从他点的那一节接着刷
+	 *
+	 * 以前无条件按「必修优先 + 目录顺序」取第一个，等于每次开始刷课都把人拽回第一节，
+	 * 手动选的章节根本不起作用。
+	 */
+	const active = candidates.find((item) => item.active);
+	if (active) return active;
+
+	return candidates.slice().sort((a, b) => chapterGroupRank(a.group) - chapterGroupRank(b.group) || (a.order ?? 0) - (b.order ?? 0))[0];
+}
+
+/** 分组优先级：必修先刷完，再刷选修；没有分组信息的课一律同级，保持目录顺序 */
+export function chapterGroupRank(group?: string): number {
+	const text = String(group || '');
+	if (/必修/.test(text)) return 0;
+	if (/选修/.test(text)) return 1;
+	return 2;
 }
 
 /**
@@ -3221,9 +3263,28 @@ export function extractCatalogInPage(arg: { kind: CatalogKind }): {
 
 			const stateEl = el.querySelector('.catalog_state');
 			const stateCls = stateEl ? String(stateEl.className || '') : '';
-			const jobEl = el.querySelector('input.knowledgeJobCount') as HTMLInputElement | null;
+			/**
+			 * 剩余任务点：新版目录写在 `input.knowledgeJobCount`，老版写在 `input.jobUnfinishCount`。
+			 * 两个都读不到时 `pending` 为 0，只能靠状态图标判断（下面 status 的 else 分支）。
+			 */
+			const jobEl = (el.querySelector('input.knowledgeJobCount') ||
+				el.querySelector('input.jobUnfinishCount')) as HTMLInputElement | null;
 			const pending = jobEl ? Number(jobEl.value || 0) : 0;
 			const taskText = norm((el.querySelector('.catalog_task') || el).textContent);
+
+			/**
+			 * 所属「章」：新版目录的章容器是 `.chapter_unit`，里面第一个 `.chapter_item` 是章名
+			 * （"1 必修部分"），后面的 `ul.chapter_level > li` 才是小节。
+			 * 章名本身也是这个查询的命中项，所以它自己的 group 就是它自己，正好一致。
+			 */
+			const active =
+				el.classList.contains('posCatalog_active') ||
+				!!el.parentElement?.classList.contains('posCatalog_active') ||
+				!!el.closest('.posCatalog_active');
+
+			const unit = el.closest('.chapter_unit');
+			const headEl = unit ? (unit.querySelector(':scope > .chapter_item') as HTMLElement | null) : null;
+			const group = headEl ? norm(headEl.textContent).slice(0, 40) : '';
 
 			let status: CatalogItem['status'] = 'unknown';
 			let state = '';
@@ -3262,7 +3323,10 @@ export function extractCatalogInPage(arg: { kind: CatalogKind }): {
 				state,
 				hint,
 				clickable: !!onclick,
-				onclick
+				onclick,
+				active,
+				group,
+				order: items.length
 			});
 		}
 

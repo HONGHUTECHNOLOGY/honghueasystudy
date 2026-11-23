@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-var __HH_BRIDGE_KEY__="d7f14c7e-74d2-44b6-b5f7-16fea54225db";
+var __HH_BRIDGE_KEY__="42ea90e7-33fe-4802-8fce-4a81ea2ed34e";
 /* 鸿鹄易学 · MAIN world 运行时（ScriptCat 风格）
  *
  * 本文件由 background.js 通过 chrome.userScripts.register({ world: "MAIN" })
@@ -16650,6 +16650,16 @@ try {
             attrs: { type: "checkbox", title: "开启：章节测试自动答题" },
             defaultValue: true
           },
+          enableChapterRedo: {
+            elementClassName: "config-details",
+            showIf: "cx.new.study.enables",
+            label: "不及格时 AI 整卷重做",
+            attrs: {
+              type: "checkbox",
+              title: "开启：章节测验未达到及格线时，把整卷和历次答案发给 AI 重做并重新提交（需先启用「AI答题」）"
+            },
+            defaultValue: true
+          },
           enableHyperlink: {
             elementClassName: "config-details",
             showIf: "cx.new.study.enables",
@@ -16742,7 +16752,27 @@ try {
           ["考试整卷预览页面", "/mooc2/exam/preview"]
         ],
         namespace: "cx.new.work",
-        configs: { notes: workNotes$1 },
+        configs: {
+          notes: workNotes$1,
+          aiRedoOnFail: {
+            label: "不及格时 AI 整卷重做",
+            attrs: {
+              type: "checkbox",
+              title: "作业提交后若低于及格线，把整卷和上次答案一起发给 AI 重做并重新提交，最多 5 轮（需先在通用设置里启用 AI 答题）"
+            },
+            defaultValue: true
+          },
+          passScore: {
+            label: "及格线（分）",
+            attrs: { type: "number", min: "0", max: "100", step: "1" },
+            defaultValue: 60
+          },
+          aiRedoRounds: {
+            label: "最多重做轮数",
+            attrs: { type: "number", min: "0", max: "5", step: "1" },
+            defaultValue: 5
+          }
+        },
         async oncomplete() {
           const isExam2 = /\/exam\/preview/.test(location.href);
           commonWork(this, {
@@ -16975,16 +17005,39 @@ try {
             window.location.replace(decodeURIComponent(params.toString()));
             return;
           }
+          const redoPlanOnLoad = readRedoPlan();
+          const redoChapter = redoPlanOnLoad && redoPlanOnLoad.chapterId ? chapters.find((chapter) => chapter.chapterId === redoPlanOnLoad.chapterId) : void 0;
+          if (redoChapter) {
+            traceRedo(
+              `刷新后接力：目标小节 ${redoChapter.chapterId}，当前${CXAnalyses.isChapterActive(redoChapter) ? "已在" : "不在"}该节`
+            );
+            if (!CXAnalyses.isChapterActive(redoChapter)) {
+              $console.info(`重做接力：回到测验所在小节 ${redoChapter.title || redoChapter.chapterId}`);
+              CXAnalyses.clickChapter(redoChapter);
+              await $.sleep(1500);
+              return;
+            }
+            const quizTab = Array.from(
+              document.querySelectorAll("#prev_tab .prev_ul li")
+            ).find((li) => /测验/.test(li.getAttribute("title") || ""));
+            if (quizTab && !quizTab.classList.contains("active")) {
+              $console.info("重做接力：打开「学习测验」标签");
+              traceRedo("打开学习测验标签");
+              quizTab.click();
+              await $.sleep(2e3);
+            } else {
+              traceRedo(quizTab ? "测验标签已激活" : "本节没有找到测验标签");
+            }
+            return;
+          }
           if (CXProject.scripts.study.cfg.autoJumpToUnFinishJob) {
-            chapters = chapters.filter((chapter) => chapter.unFinishCount !== 0);
+            chapters = chapters.filter((chapter) => CXAnalyses.isChapterUnfinished(chapter));
             if (chapters.length === 0) {
               lib.$message.warn({ content: "页面任务点数量为空! 请刷新重试!" });
             } else {
-              const params2 = new URLSearchParams(window.location.href);
-              const courseId = params2.get("courseId");
-              const classId = params2.get("clazzid");
-              if (lib.$$el(`.posCatalog_active[id="cur${chapters[0].chapterId}"]`).length === 0) {
-                lib.$gm.unsafeWindow.getTeacherAjax(courseId, classId, chapters[0].chapterId);
+              const target = chapters[0];
+              if (!CXAnalyses.isChapterActive(target)) {
+                CXAnalyses.clickChapter(target);
               }
               await $.sleep(1e3);
             }
@@ -17023,6 +17076,427 @@ try {
       })
     }
   });
+  const WORK_REDO_KEY = "cx.work.aiRedo";
+  function archiveRedoHistory(plan) {
+    const history2 = [...(plan == null ? void 0 : plan.history) || []];
+    if (plan && plan.answers && Object.keys(plan.answers).length) {
+      history2.push({ round: plan.round || 0, answers: plan.answers });
+    }
+    return history2.slice(-4);
+  }
+  const REDO_PLAN_TTL_MS = 20 * 60 * 1e3;
+  const WORK_REDO_TRACE_KEY = "cx.work.aiRedo.trace";
+  async function requestPaperRedoByAI(paper, score, passScore, round, history2) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+    const wrappers = CommonProject.scripts.settings.cfg.answererWrappers || [];
+    const aiWrapper = wrappers.find((item) => item && item.name === "AI答题");
+    if (!aiWrapper) {
+      traceRedo("AI 重做失败：没有找到「AI答题」配置");
+      return null;
+    }
+    const typeLabel = {
+      single: "单选题",
+      multiple: "多选题",
+      judgement: "判断题",
+      completion: "填空题",
+      unknown: "未标注题型"
+    };
+    const pastAnswers = (title) => {
+      const items2 = [];
+      for (const record of history2 || []) {
+        const answer = lookupOverrideAnswer(record.answers, title);
+        if (answer)
+          items2.push(`第${Number(record.round || 1)}轮=${answer}`);
+      }
+      return items2;
+    };
+    paper.filter((q) => q.wrong !== void 0).length;
+    paper.filter((q) => q.wrong === true).length;
+    const focus = paper.filter((q) => q.wrong === true);
+    const useFocus = focus.length > 0 && focus.length < paper.length;
+    const targets = useFocus ? focus : paper;
+    const lines = targets.map((q) => {
+      const head = `${q.index}. [${typeLabel[q.type || "unknown"] || q.type || "未标注题型"}] ${q.title}`;
+      const stripPrefix = (text2) => {
+        const stripped = String(text2 || "").replace(/^[A-H][\s.．、,，:：)）]+/, "").trim();
+        return stripped || String(text2 || "").trim();
+      };
+      const options = q.options.length ? "\n选项：" + q.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${stripPrefix(o)}`).join(" | ") : "";
+      const past = pastAnswers(q.title);
+      const pastLine = past.length ? `
+历次作答（均已判错）：${past.join("；")}` : "";
+      const markTag = !useFocus && q.wrong === true ? "【平台批改：错误，必须换答案】" : "";
+      return head + (markTag ? " " + markTag : "") + options + `
+上次作答：${q.oldAnswer || "（空）"}` + pastLine;
+    }).join("\n\n");
+    const prompt = `下面是一次在线作业的完整题目、选项、上次提交的答案，以及前几轮重做时用过的答案（都已判错）。
+` + (useFocus ? `本次**只需要重做其中 ${targets.length} 道错题**（平台已批改，其余题上次是对的，不要出现在答案里）。
+` : "") + (typeof score === "number" && score > 0 ? `上次得分 ${score} 分，及格线 ${passScore} 分，说明里面有错误答案。
+` : `上次没有通过（平台提示未达到及格线 ${passScore} 分），说明里面有错误答案。
+`) + `请重新作答：逐题检查上次的答案，错的改掉，对的保留。
+
+输出要求（必须严格遵守）：
+1. 只输出一个 JSON 数组，不要输出解释、前后缀，也不要包代码块标记。
+2. 数组长度必须等于题目数量 ${targets.length}，顺序与题目一一对应。
+3. 每个元素格式：{"i": 题号数字, "answer": "新答案"}。
+4. answer 规则：**所有选择题（含判断题）统一输出选项字母**。单选输出 1 个字母（如 A）；多选输出字母并用 # 分隔（如 A#C）；判断题输出所选选项的字母（如 B）；填空题输出要填的内容，多个空用 # 分隔。
+5. 判断题也是选择题：禁止输出「对」「错」「正确」「错误」，只输出字母。
+6. 「历次作答」里已经试过且没通过的组合，不要原样重复，换更可能正确的答案。
+
+题目如下：
+${lines}`;
+    const safePrompt = prompt.replace(/\$\{/g, "$ {");
+    const wrapper = {
+      name: "AI整卷重做",
+      url: aiWrapper.url,
+      method: "post",
+      type: "GM_xmlhttpRequest",
+      contentType: "json",
+      headers: { ...aiWrapper.headers || {} },
+      data: {
+        model: (_a = aiWrapper.data) == null ? void 0 : _a.model,
+        temperature: 0,
+        max_tokens: 16384,
+        messages: [
+          {
+            role: "system",
+            content: "你是答题助手。用户会给你一整份作业的题目、选项和他上次提交的答案，并告诉你这份卷子没及格。\n你的任务是把错的答案改对、保留对的答案，并按要求的 JSON 格式整卷输出。"
+          },
+          { role: "user", content: safePrompt }
+        ]
+      },
+      handler: "return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }"
+    };
+    $console.info(`第 ${round} 轮重做：把整卷 ${targets.length} 题（含上次答案）发给 AI`);
+    const previousTimeout = AnswerWrapperHandlerConfig.timeout_seconds;
+    AnswerWrapperHandlerConfig.timeout_seconds = 180;
+    let infos;
+    try {
+      infos = await defaultAnswerWrapperHandler([wrapper], {});
+    } finally {
+      AnswerWrapperHandlerConfig.timeout_seconds = previousTimeout;
+    }
+    const content = ((_d = (_c = (_b = infos == null ? void 0 : infos[0]) == null ? void 0 : _b.results) == null ? void 0 : _c[0]) == null ? void 0 : _d.answer) || "";
+    if (!content) {
+      const reason = ((_e = infos == null ? void 0 : infos[0]) == null ? void 0 : _e.error) || "未知原因（返回为空）";
+      $console.warn("AI 整卷重做没有返回内容：" + reason);
+      traceRedo(`AI 重做失败：${String(reason).slice(0, 90)}`);
+      return null;
+    }
+    let text = String(content).trim();
+    text = text.replace(/^```[a-zA-Z]*\s*/, "").replace(/```\s*$/, "");
+    const start2 = text.indexOf("[");
+    const end = text.lastIndexOf("]");
+    if (start2 === -1 || end <= start2) {
+      $console.warn("AI 整卷重做返回的不是 JSON 数组，已忽略：" + text.slice(0, 120));
+      traceRedo(`AI 重做失败：返回非 JSON（${text.slice(0, 60)}）`);
+      return null;
+    }
+    let list;
+    try {
+      list = JSON.parse(text.slice(start2, end + 1));
+    } catch (e) {
+      const reason = e && e.message || String(e);
+      $console.warn("AI 整卷重做返回的 JSON 解析失败：" + reason);
+      traceRedo(`AI 重做失败：JSON 解析失败（${String(reason).slice(0, 60)}）`);
+      return null;
+    }
+    if (!Array.isArray(list))
+      return null;
+    const answers = {};
+    for (const item of list) {
+      if (!item || typeof item !== "object")
+        continue;
+      const index = Number((_g = (_f = item.i) != null ? _f : item.index) != null ? _g : item.q);
+      const answer = String((_i = (_h = item.answer) != null ? _h : item.a) != null ? _i : "").trim();
+      if (!Number.isFinite(index) || !answer)
+        continue;
+      const question = paper[index - 1];
+      if (!question || !question.title)
+        continue;
+      answers[question.title] = answer;
+    }
+    if (Object.keys(answers).length === 0) {
+      $console.warn("AI 整卷重做解析出来的答案是空的");
+      return null;
+    }
+    $console.info(
+      `第 ${round} 轮重做：拿到 ${Object.keys(answers).length}/${targets.length} 道题的新答案${useFocus ? `（只重做 ${targets.length} 道错题）` : ""}`
+    );
+    traceRedo(
+      `第 ${round} 轮答案：` + targets.map((q) => `${q.index}=${answers[q.title] || "—"}${q.wrong ? "✗" : ""}`).join(" ")
+    );
+    return answers;
+  }
+  async function clearQuestionSelections(root2) {
+    if (!root2)
+      return 0;
+    let clicked = 0;
+    for (let pass = 0; pass < 3; pass++) {
+      const selected = Array.from(root2.querySelectorAll('[class*="check_answer"]'));
+      if (!selected.length)
+        return clicked;
+      for (const el of selected) {
+        try {
+          const target = el.closest("li") || el;
+          target.click();
+          clicked++;
+          await $.sleep(120);
+        } catch {
+        }
+      }
+      await $.sleep(150);
+    }
+    return clicked;
+  }
+  function lookupOverrideAnswer(answers, title) {
+    if (!title)
+      return "";
+    if (answers[title])
+      return answers[title];
+    const normalize = (text) => String(text || "").replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, "").toLowerCase();
+    const target = normalize(title);
+    if (target.length < 8)
+      return "";
+    for (const key of Object.keys(answers)) {
+      const normalizedKey = normalize(key);
+      if (normalizedKey.length < 8)
+        continue;
+      if (normalizedKey === target || normalizedKey.includes(target) || target.includes(normalizedKey)) {
+        return answers[key];
+      }
+    }
+    return "";
+  }
+  function markWrongQuestions(paper, doc) {
+    const none = { wrong: 0, marked: 0 };
+    if (!doc || !paper.length)
+      return none;
+    const nodes = Array.from(doc.querySelectorAll(".TiMu"));
+    if (nodes.length !== paper.length)
+      return none;
+    let wrong = 0;
+    let marked = 0;
+    paper.forEach((question, index) => {
+      const node = nodes[index];
+      const isWrong = !!node.querySelector(".marking_cuo");
+      const isRight = !!node.querySelector(".marking_dui");
+      if (isWrong) {
+        question.wrong = true;
+        wrong++;
+        marked++;
+      } else if (isRight) {
+        question.wrong = false;
+        marked++;
+      } else {
+        question.wrong = void 0;
+      }
+    });
+    return { wrong, marked };
+  }
+  function isOptionPicked(option) {
+    var _a, _b, _c;
+    if (!option)
+      return false;
+    if ((_a = option.matches) == null ? void 0 : _a.call(option, '[class*="check_answer"]'))
+      return true;
+    if ((_b = option.querySelector) == null ? void 0 : _b.call(option, '[class*="check_answer"]'))
+      return true;
+    const li = (_c = option.closest) == null ? void 0 : _c.call(option, "li");
+    return !!(li == null ? void 0 : li.querySelector('[class*="check_answer"]'));
+  }
+  async function ensureOptionPicked(option, retries = 4) {
+    if (!option)
+      return false;
+    for (let i = 0; i < retries; i++) {
+      if (isOptionPicked(option))
+        return true;
+      try {
+        option.click();
+      } catch {
+      }
+      await $.sleep(160);
+    }
+    return isOptionPicked(option);
+  }
+  async function waitQuizInteractive(win, timeout = 15e3) {
+    if (!win)
+      return false;
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      try {
+        const doc = win.document;
+        const questions = doc.querySelectorAll(".TiMu").length;
+        const clickable = doc.querySelectorAll("li[onclick], a[onclick], .after[onclick]").length;
+        if (questions > 0 && clickable > 0)
+          return true;
+      } catch {
+      }
+      await $.sleep(400);
+    }
+    return false;
+  }
+  function countUnansweredQuestions(doc) {
+    if (!doc)
+      return { total: 0, unanswered: 0 };
+    const questions = Array.from(doc.querySelectorAll(".TiMu"));
+    let unanswered = 0;
+    for (const question of questions) {
+      if (question.querySelector("textarea, select, .filling_answer"))
+        continue;
+      if (question.querySelectorAll('[class*="check_answer"]').length === 0)
+        unanswered++;
+    }
+    return { total: questions.length, unanswered };
+  }
+  function titleInList(list, title) {
+    if (!title)
+      return false;
+    const normalize = (text) => String(text || "").replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, "").toLowerCase();
+    const target = normalize(title);
+    if (target.length < 6)
+      return list.indexOf(title) !== -1;
+    return list.some((item) => {
+      const key = normalize(item);
+      return key.length >= 6 && (key === target || key.includes(target) || target.includes(key));
+    });
+  }
+  function pickRedoOptions(options, answer) {
+    const raw = String(answer || "").trim();
+    if (!raw || !options || !options.length)
+      return [];
+    const letters = raw.replace(/[#，,、;；\s]+/g, "").toUpperCase();
+    if (/^[A-H]{1,8}$/.test(letters)) {
+      const byLetter = letters.split("").map((ch) => options[ch.charCodeAt(0) - 65]).filter(Boolean);
+      if (byLetter.length)
+        return byLetter;
+    }
+    const normalize = (text) => String(text || "").replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, "").toLowerCase();
+    const targets = raw.split(/[#，,、;；\n]+/).map((item) => normalize(item)).filter(Boolean);
+    if (!targets.length)
+      return [];
+    const textOf = (option) => {
+      const own = String(option.innerText || option.textContent || "").trim();
+      if (own)
+        return own;
+      const li = option.closest("li");
+      return String((li == null ? void 0 : li.innerText) || (li == null ? void 0 : li.textContent) || "").trim();
+    };
+    const picked = [];
+    for (const target of targets) {
+      const exact = options.find((option) => normalize(textOf(option)) === target);
+      const fuzzy = exact || options.find((option) => {
+        const text = normalize(textOf(option));
+        return !!text && (text.includes(target) || target.includes(text));
+      });
+      if (fuzzy && picked.indexOf(fuzzy) === -1)
+        picked.push(fuzzy);
+    }
+    return picked;
+  }
+  function readRedoPlan() {
+    let best;
+    for (const store2 of [localStorage, sessionStorage]) {
+      try {
+        const raw = store2.getItem(WORK_REDO_KEY);
+        if (!raw)
+          continue;
+        const plan = JSON.parse(raw);
+        if (!plan || typeof plan !== "object" || !plan.answers)
+          continue;
+        if (plan.ts && Date.now() - Number(plan.ts) > REDO_PLAN_TTL_MS) {
+          try {
+            store2.removeItem(WORK_REDO_KEY);
+          } catch {
+          }
+          continue;
+        }
+        if (!best || Number(plan.ts || 0) > Number(best.ts || 0))
+          best = plan;
+      } catch {
+      }
+    }
+    return best;
+  }
+  function writeRedoPlan(plan) {
+    const payload = JSON.stringify({ ...plan, ts: Date.now() });
+    for (const store2 of [localStorage, sessionStorage]) {
+      try {
+        store2.setItem(WORK_REDO_KEY, payload);
+      } catch {
+      }
+    }
+    traceRedo(`写入计划 round=${plan.round} 题数=${Object.keys(plan.answers).length} 小节=${plan.chapterId || "-"}`);
+  }
+  function clearRedoPlan() {
+    for (const store2 of [localStorage, sessionStorage]) {
+      try {
+        store2.removeItem(WORK_REDO_KEY);
+      } catch {
+      }
+    }
+  }
+  function traceRedo(message2) {
+    try {
+      const key = WORK_REDO_TRACE_KEY;
+      const list = JSON.parse(localStorage.getItem(key) || "[]");
+      list.push(`${new Date().toLocaleTimeString()} ${message2}`);
+      localStorage.setItem(key, JSON.stringify(list.slice(-80)));
+    } catch {
+    }
+  }
+  function buildPaperSnapshotFromResults(results, titleTransform) {
+    return results.map((item, i) => {
+      var _a, _b;
+      const ctx = item && item.ctx;
+      const title = ctx ? titleTransform(ctx.elements.title || []) : "";
+      const options = (((_a = ctx == null ? void 0 : ctx.elements) == null ? void 0 : _a.options) || []).map(
+        (option) => optimizationElementWithImage(option, true).innerText.trim()
+      );
+      const picked = (((_b = ctx == null ? void 0 : ctx.elements) == null ? void 0 : _b.options) || []).map((option, index) => {
+        var _a2, _b2;
+        const hit = ((_a2 = option.matches) == null ? void 0 : _a2.call(option, '[class*="check_answer"]')) || ((_b2 = option.querySelector) == null ? void 0 : _b2.call(option, '[class*="check_answer"]'));
+        return hit ? String.fromCharCode(65 + index) : "";
+      }).filter(Boolean);
+      const oldAnswer = picked.length ? picked.join("#") : String(
+        ((ctx == null ? void 0 : ctx.searchInfos) || []).map((info) => {
+          var _a2, _b2;
+          return (_b2 = (_a2 = info == null ? void 0 : info.results) == null ? void 0 : _a2[0]) == null ? void 0 : _b2.answer;
+        }).find((answer) => answer) || ""
+      ).trim();
+      return { index: i + 1, title, type: ctx == null ? void 0 : ctx.type, options, oldAnswer };
+    }).filter((question) => !!question.title).map((question, i) => ({ ...question, index: i + 1 }));
+  }
+  function readPopupText() {
+    try {
+      const doc = top$1 == null ? void 0 : top$1.document;
+      if (!doc)
+        return { text: "", visible: false };
+      const box = doc.querySelector("#workpop");
+      const content = doc.querySelector("#popcontent");
+      const text = ((content == null ? void 0 : content.textContent) || "").replace(/\s+/g, " ").trim();
+      const visible = box ? getComputedStyle(box).display !== "none" : false;
+      return { text, visible };
+    } catch {
+      return { text: "", visible: false };
+    }
+  }
+  async function waitFailPopupText(timeout = 6e3) {
+    const fail = /(未达到及格线|不及格|未及格|成绩不合格|请重做)/;
+    const pass = /(提交成功|已完成|保存成功|作业已提交)/;
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      const { text, visible } = readPopupText();
+      if (visible && text) {
+        if (fail.test(text))
+          return text;
+        if (pass.test(text))
+          return "";
+      }
+      await $.sleep(400);
+    }
+    return "";
+  }
   function workOrExam$1(type = "work", {
     answererWrappers,
     period,
@@ -17031,22 +17505,36 @@ try {
     answerSeparators,
     preview_mode
   }) {
+    var _a, _b, _c;
     lib.$message.info(`开始${type === "work" ? "作业" : "考试"}`);
     if (preview_mode) {
       CommonProject.scripts.workResults.methods.init({
         questionPositionSyncHandlerType: "cx"
       });
     }
+    const redoCfg = ((_a = CXProject.scripts.work) == null ? void 0 : _a.cfg) || {};
+    const redoEnabled = type === "work" && redoCfg.aiRedoOnFail !== false;
+    const passScore = Number((_b = redoCfg.passScore) != null ? _b : 60);
+    const maxRedoRounds = Math.max(0, Math.min(5, Number((_c = redoCfg.aiRedoRounds) != null ? _c : 5)));
+    const redoPlan = readRedoPlan();
+    const aiOverride = redoPlan && redoPlan.answers || {};
+    const hasOverride = Object.keys(aiOverride).length > 0;
+    if (hasOverride) {
+      lib.$message.info({
+        content: `正在用 AI 的第 ${((redoPlan == null ? void 0 : redoPlan.round) || 1) + 1} 轮答案重新作答（上次 ${((redoPlan == null ? void 0 : redoPlan.scores) || []).join(" / ") || "?"} 分）`,
+        duration: 0
+      });
+    }
     const workOrExamQuestionTitleTransform = (titles) => {
       const is_multiple_question = titles.length > 1;
       const optimizationTitle = titles.map((el, i) => {
-        var _a, _b;
+        var _a2, _b2;
         if (el) {
           const titleCloneEl = el.cloneNode(true);
           const childNodes = titleCloneEl.childNodes;
           if (i === 0) {
-            (_a = childNodes[0]) == null ? void 0 : _a.remove();
-            (_b = childNodes[0]) == null ? void 0 : _b.remove();
+            (_a2 = childNodes[0]) == null ? void 0 : _a2.remove();
+            (_b2 = childNodes[0]) == null ? void 0 : _b2.remove();
           }
           return optimizationElementWithImage(titleCloneEl, true).innerText;
         }
@@ -17069,8 +17557,8 @@ try {
           ].join(","),
           root2
         ).filter((e) => {
-          var _a;
-          return !!((_a = e.textContent) == null ? void 0 : _a.trim());
+          var _a2;
+          return !!((_a2 = e.textContent) == null ? void 0 : _a2.trim());
         }),
         options: ".answerBg .answer_p, .textDIV, .eidtDiv",
         type: type === "exam" ? 'input[name^="type"]' : 'input[id^="answertype"]',
@@ -17087,14 +17575,28 @@ try {
           if (title) {
             const typeInput = elements2.type[0];
             const type2 = (typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0) || "unknown";
-            return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
+            const searchFresh = async () => {
               await $.sleep((period != null ? period : 3) * 1e3);
               return defaultAnswerWrapperHandler(answererWrappers, {
                 type: type2,
                 title,
                 options: type2 === "completion" ? "" : ctx.elements.options.map((o) => optimizationElementWithImage(o, true).innerText).join("\n")
               });
-            });
+            };
+            if (hasOverride) {
+              const redoAnswer = lookupOverrideAnswer(aiOverride, title);
+              if (redoAnswer) {
+                return [
+                  {
+                    name: "AI整卷重做",
+                    homepage: "#",
+                    results: [{ question: title, answer: redoAnswer }]
+                  }
+                ];
+              }
+              return searchFresh();
+            }
+            return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, searchFresh);
           } else {
             throw new Error("题目为空，请查看题目是否为空，或者忽略此题");
           }
@@ -17103,26 +17605,64 @@ try {
         }
       },
       work: async (ctx) => {
-        var _a, _b;
+        var _a2, _b2, _c2, _d;
         const { elements: elements2, searchInfos } = ctx;
         const type2 = getQuestionType$1(
-          parseInt(((_a = elements2.type.find((t) => {
-            var _a2;
-            return (_a2 = t.getAttribute("name")) == null ? void 0 : _a2.match(/type\d+/);
-          })) == null ? void 0 : _a.getAttribute("value")) || "-1")
+          parseInt(((_a2 = elements2.type.find((t) => {
+            var _a3;
+            return (_a3 = t.getAttribute("name")) == null ? void 0 : _a3.match(/type\d+/);
+          })) == null ? void 0 : _a2.getAttribute("value")) || "-1")
         );
+        if (hasOverride) {
+          const redoTitle = workOrExamQuestionTitleTransform(elements2.title || []);
+          const redoAnswer = lookupOverrideAnswer(aiOverride, redoTitle);
+          if (redoAnswer && type2 && type2 !== "completion") {
+            const picked = pickRedoOptions(elements2.options, redoAnswer);
+            if (picked.length) {
+              const root2 = ctx.root || ((_b2 = elements2.options[0]) == null ? void 0 : _b2.closest(".questionLi")) || null;
+              const cleared = await clearQuestionSelections(root2);
+              if (cleared)
+                $console.info(`重做：已取消 ${cleared} 个旧选项`);
+              for (const option of picked) {
+                await ensureOptionPicked(option);
+              }
+              $console.info(`重做：AI 答案「${redoAnswer}」→ 点选 ${picked.length} 项`);
+              traceRedo(`题「${redoTitle.slice(0, 18)}」答案=${redoAnswer} 取消${cleared}项 点选${picked.length}项`);
+              return { finish: true, options: picked.map((option) => option.innerText) };
+            }
+            $console.warn(`重做：AI 答案「${redoAnswer}」对不上任何选项，保留原答案并回退题库`);
+            traceRedo(`题「${redoTitle.slice(0, 18)}」答案=${redoAnswer} 对不上选项，保留原答案`);
+          } else if (!redoAnswer) {
+            $console.warn("重做：本题题干没匹配上 AI 答案，保留原答案并回退题库");
+            traceRedo(`题「${redoTitle.slice(0, 18)}」没匹配上计划 key，保留原答案`);
+          }
+        }
+        if (!hasOverride && type2 && (type2 === "single" || type2 === "multiple" || type2 === "judgement")) {
+          const candidates = (searchInfos || []).flatMap((info) => ((info == null ? void 0 : info.results) || []).map((item) => String((item == null ? void 0 : item.answer) || "").trim())).filter(Boolean);
+          for (const candidate of candidates) {
+            const picked = pickRedoOptions(elements2.options, candidate);
+            if (!picked.length)
+              continue;
+            const root2 = ctx.root || ((_c2 = elements2.options[0]) == null ? void 0 : _c2.closest(".questionLi")) || null;
+            const cleared = await clearQuestionSelections(root2);
+            if (cleared)
+              $console.info(`作答：已取消 ${cleared} 个旧选项`);
+            for (const option of picked) {
+              await ensureOptionPicked(option);
+            }
+            $console.info(`作答：答案「${candidate}」→ 点选 ${picked.length} 项`);
+            return { finish: true, options: picked.map((option) => option.innerText) };
+          }
+        }
         if (type2 && (type2 === "completion" || type2 === "multiple" || type2 === "judgement" || type2 === "single")) {
           const resolver = createDefaultQuestionResolver(ctx)[type2];
           return await resolver(
             searchInfos,
             elements2.options.map((option) => optimizationElementWithImage(option)),
             async (type3, answer, option) => {
-              var _a2, _b2, _c;
+              var _a3, _b3, _c3;
               if (type3 === "judgement" || type3 === "single" || type3 === "multiple") {
-                if ((option == null ? void 0 : option.parentElement) && lib.$$el('[class*="check_answer"]', option.parentElement).length === 0) {
-                  option.click();
-                  await $.sleep(500);
-                }
+                await ensureOptionPicked(option);
               } else if (type3 === "completion" && answer.trim()) {
                 const text = option == null ? void 0 : option.querySelector("textarea");
                 const textareaFrame = option == null ? void 0 : option.querySelector("iframe");
@@ -17132,8 +17672,8 @@ try {
                 if (textareaFrame == null ? void 0 : textareaFrame.contentDocument) {
                   textareaFrame.contentDocument.body.innerHTML = answer;
                 }
-                if ((_a2 = option == null ? void 0 : option.parentElement) == null ? void 0 : _a2.parentElement) {
-                  (_c = lib.$el("[onclick*=saveQuestion]", (_b2 = option == null ? void 0 : option.parentElement) == null ? void 0 : _b2.parentElement)) == null ? void 0 : _c.click();
+                if ((_a3 = option == null ? void 0 : option.parentElement) == null ? void 0 : _a3.parentElement) {
+                  (_c3 = lib.$el("[onclick*=saveQuestion]", (_b3 = option == null ? void 0 : option.parentElement) == null ? void 0 : _b3.parentElement)) == null ? void 0 : _c3.click();
                   await $.sleep(500);
                 }
               }
@@ -17149,7 +17689,7 @@ try {
               for (let index = 0; index < elements2.lineSelectBox.length; index++) {
                 const box = elements2.lineSelectBox[index];
                 if (ans[index]) {
-                  (_b = lib.$el(`li[data=${ans[index]}] a`, box)) == null ? void 0 : _b.click();
+                  (_d = lib.$el(`li[data=${ans[index]}] a`, box)) == null ? void 0 : _d.click();
                   await $.sleep(200);
                 }
               }
@@ -17165,9 +17705,9 @@ try {
         return { finish: false };
       },
       async onResultsUpdate(current, _, res) {
-        var _a, _b;
+        var _a2, _b2;
         if (!preview_mode) {
-          if ((_a = current.result) == null ? void 0 : _a.finish) {
+          if ((_a2 = current.result) == null ? void 0 : _a2.finish) {
             await CommonProject.scripts.workResults.methods.appendResults(
               simplifyWorkResult(res, workOrExamQuestionTitleTransform)
             );
@@ -17179,16 +17719,232 @@ try {
         }
         CommonProject.scripts.workResults.methods.setResults(simplifyWorkResult(res, workOrExamQuestionTitleTransform));
         CommonProject.scripts.workResults.methods.updateWorkStateByResults(res);
-        if ((_b = current.result) == null ? void 0 : _b.finish) {
+        if ((_b2 = current.result) == null ? void 0 : _b2.finish) {
           CommonProject.scripts.apps.methods.addQuestionCacheFromWorkResult(
             simplifyWorkResult([current], workOrExamQuestionTitleTransform)
           );
         }
       }
     });
+    const buildPaperSnapshot = (results) => buildPaperSnapshotFromResults(results, workOrExamQuestionTitleTransform);
+    const submitWorkPaper = async () => {
+      var _a2;
+      const callPageFn = (name) => {
+        for (const scope of [window, top$1]) {
+          try {
+            if (typeof scope[name] === "function") {
+              scope[name]();
+              return true;
+            }
+          } catch {
+          }
+        }
+        return false;
+      };
+      if (!callPageFn("btnBlueSubmit")) {
+        (_a2 = document.querySelector('#tiJiao, .btnSubmit, [onclick*="btnBlueSubmit"]')) == null ? void 0 : _a2.click();
+      }
+      await $.sleep(3e3);
+      callPageFn("submitCheckTimes");
+      await $.sleep(3e3);
+    };
+    const collectDialogTexts = () => {
+      const selector = [
+        "#workpop",
+        ".popDiv",
+        ".maskDiv",
+        ".layui-layer",
+        ".layer",
+        ".modal",
+        ".dialog",
+        ".result",
+        ".mark_table",
+        ".mark_score",
+        ".score",
+        ".scoreNum",
+        ".tipDiv"
+      ].join(",");
+      const texts = [];
+      for (const scope of [document, top$1 == null ? void 0 : top$1.document]) {
+        try {
+          for (const el of Array.from((scope == null ? void 0 : scope.querySelectorAll(selector)) || [])) {
+            const text = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+            if (text && text.length <= 600)
+              texts.push(text);
+          }
+        } catch {
+        }
+      }
+      return texts;
+    };
+    const readWorkScore = () => {
+      var _a2;
+      const scoreText = /(?:本次得分|本次成绩|作业得分|作业成绩|试卷得分|总得分|得分|成绩)\s*[:：]\s*(\d+(?:\.\d+)?)/;
+      for (const text of collectDialogTexts()) {
+        const matched = scoreText.exec(text);
+        if (matched)
+          return Number(matched[1]);
+      }
+      for (const scope of [document, top$1 == null ? void 0 : top$1.document]) {
+        try {
+          const text = (((_a2 = scope == null ? void 0 : scope.body) == null ? void 0 : _a2.innerText) || "").replace(/\s+/g, " ");
+          const matched = /本次[^。；]{0,12}?(?:得分|成绩)\s*[:：]\s*(\d+(?:\.\d+)?)/.exec(text);
+          if (matched)
+            return Number(matched[1]);
+        } catch {
+        }
+      }
+      return void 0;
+    };
+    const createDialogRecorder = () => {
+      const seen = [];
+      let stop = false;
+      (async () => {
+        while (!stop) {
+          try {
+            for (const text of collectDialogTexts()) {
+              if (!seen.includes(text) && seen.length < 24)
+                seen.push(text);
+            }
+          } catch {
+          }
+          await $.sleep(300);
+        }
+      })();
+      return {
+        stop: () => {
+          stop = true;
+        },
+        get texts() {
+          return seen;
+        }
+      };
+    };
+    const readSubmitVerdict = async (recorder) => {
+      const FAIL = /(未达到及格线|未达到及格|没有达到及格线|没有达到及格|未及格|不及格|成绩不合格|低于及格|未通过|分数过低|成绩偏低)/;
+      const FAIL_REDO = /(重做|再做一次|重新作答|重新答题)/;
+      const SCORE_WORD = /(及格|分数|成绩|得分)/;
+      const isFailText = (text) => FAIL.test(text) || /未达到\s*\d{1,3}(?:\.\d+)?\s*分/.test(text) || FAIL_REDO.test(text) && SCORE_WORD.test(text);
+      const PASS = /(提交成功|已提交|作业已完成|完成作业|已保存)/;
+      for (let i = 0; i < 16; i++) {
+        const texts = collectDialogTexts();
+        for (const text of [...(recorder == null ? void 0 : recorder.texts) || [], ...texts]) {
+          if (isFailText(text)) {
+            $console.info("判定不及格，弹窗原文：" + text.slice(0, 160));
+            return { failed: true, reason: text.slice(0, 120) };
+          }
+        }
+        const score = readWorkScore();
+        if (score !== void 0) {
+          return { failed: score < passScore, score, reason: `得分 ${score}` };
+        }
+        if (i >= 3 && texts.some((text) => PASS.test(text))) {
+          return { failed: false, reason: texts.find((text) => PASS.test(text)).slice(0, 120) };
+        }
+        await $.sleep(500);
+      }
+      const captured = ((recorder == null ? void 0 : recorder.texts) || []).slice(0, 4).join(" || ");
+      $console.warn("提交后没有读到及格判定，抓到的弹窗文本：" + (captured || "（没抓到弹窗）"));
+      return { failed: false, reason: "unknown" };
+    };
+    const clickRedoButton = async () => {
+      const REDO = /^(重做|再做一次|重新答题|重新作答|重新做)$/;
+      for (const scope of [document, top$1 == null ? void 0 : top$1.document]) {
+        try {
+          const candidates = Array.from(
+            (scope == null ? void 0 : scope.querySelectorAll('a, button, input[type="button"], .popDiv span, .layui-layer-btn a')) || []
+          );
+          for (const el of candidates) {
+            const label = (el.innerText || el.value || el.textContent || "").replace(/\s+/g, "").trim();
+            if (!label || label.length > 8 || !REDO.test(label))
+              continue;
+            el.click();
+            await $.sleep(1500);
+            return true;
+          }
+        } catch {
+        }
+      }
+      return false;
+    };
+    const submitAndRedoIfFailed = async (results) => {
+      var _a2, _b2, _c2, _d, _e;
+      const aiConfigured = (CommonProject.scripts.settings.cfg.answererWrappers || []).some(
+        (wrapper) => wrapper && wrapper.name === "AI答题"
+      );
+      if (type !== "work" || !redoEnabled || !aiConfigured) {
+        if (hasOverride)
+          clearRedoPlan();
+        return;
+      }
+      const round = (redoPlan == null ? void 0 : redoPlan.round) || 0;
+      const paper = buildPaperSnapshot(results);
+      if (paper.length === 0) {
+        $console.warn("整卷重做：没有从页面上取到题目，跳过");
+        clearRedoPlan();
+        return;
+      }
+      lib.$message.info({ content: "正在提交作业…", duration: 3 });
+      const recorder = createDialogRecorder();
+      await submitWorkPaper();
+      const verdict = await readSubmitVerdict(recorder);
+      recorder.stop();
+      $console.info(
+        `作业提交结果：${verdict.failed ? "未达到及格线" : "已及格 / 未读到判定"} · ${verdict.reason || "无弹窗文本"}`
+      );
+      if (!verdict.failed) {
+        clearRedoPlan();
+        try {
+          (_c2 = (_b2 = (_a2 = top$1.$) == null ? void 0 : _a2.call(top$1, "#workpop")) == null ? void 0 : _b2.hide) == null ? void 0 : _c2.call(_b2);
+        } catch {
+        }
+        lib.$message.success({
+          content: verdict.score !== void 0 ? `作业得分 ${verdict.score}，已及格。` : "作业已提交。",
+          duration: 0
+        });
+        return;
+      }
+      if (round >= maxRedoRounds) {
+        clearRedoPlan();
+        lib.$modal.alert({
+          content: `作业未达到及格线（${verdict.reason || "平台提示需重做"}），已经重做 ${round} 轮，不再重试。`
+        });
+        return;
+      }
+      const aiTip = lib.$message.info({ content: `AI 正在重算整卷（${paper.length} 题），通常 5~20 秒…`, duration: 120 });
+      const aiStartedAt = Date.now();
+      const answers = await requestPaperRedoByAI(paper, (_d = verdict.score) != null ? _d : 0, passScore, round + 1, redoPlan == null ? void 0 : redoPlan.history);
+      const aiCost = Date.now() - aiStartedAt;
+      $console.info(`第 ${round + 1} 轮重做：AI 用时 ${aiCost}ms`);
+      aiTip == null ? void 0 : aiTip.remove();
+      if (!answers) {
+        clearRedoPlan();
+        lib.$modal.alert({ content: `作业未达到及格线，但 AI 没有给出可用的新答案，已停止重做。` });
+        return;
+      }
+      writeRedoPlan({
+        round: round + 1,
+        answers,
+        scores: [...(redoPlan == null ? void 0 : redoPlan.scores) || [], (_e = verdict.score) != null ? _e : 0],
+        history: archiveRedoHistory(redoPlan)
+      });
+      lib.$message.info({ content: `第 ${round + 1} 轮重做：正在重新打开卷子`, duration: 5 });
+      await $.sleep(1200);
+      const clicked = await clickRedoButton();
+      if (clicked) {
+        lib.$message.info({ content: "已点击平台的重做按钮，等待卷子重新打开…", duration: 0 });
+        await $.sleep(4e3);
+      }
+      location.reload();
+    };
     if (preview_mode) {
-      worker.doWork().then(() => {
+      worker.doWork().then(async (results) => {
         lib.$message.info({ content: "作业/考试完成，请自行检查后保存或提交。", duration: 0 });
+        try {
+          await submitAndRedoIfFailed(results || []);
+        } catch (error) {
+          $console.error("提交 / 重做流程出错：" + (error && error.message || error));
+        }
         worker.emit("done");
       }).catch((err) => {
         console.error(err);
@@ -17315,17 +18071,144 @@ try {
       return (_a = Array.from((top$1 == null ? void 0 : top$1.document.querySelectorAll(".posCatalog_select")) || []).pop()) == null ? void 0 : _a.classList.contains("posCatalog_active");
     },
     isFinishedAllChapters() {
-      return this.getChapterInfos().every((chapter) => chapter.unFinishCount === 0);
+      const infos = this.getChapterInfos();
+      if (!infos.length)
+        return false;
+      return !infos.some((chapter) => this.isChapterUnfinished(chapter));
     },
     getChapterInfos() {
-      return Array.from((top$1 == null ? void 0 : top$1.document.querySelectorAll('[onclick^="getTeacherAjax"]')) || []).map((el) => {
-        var _a, _b, _c;
+      var _a, _b;
+      const doc = top$1 == null ? void 0 : top$1.document;
+      if (!doc)
+        return [];
+      const groups = Array.from(doc.querySelectorAll(".posCatalog_select.firstLayer")).map((el) => {
+        var _a2;
         return {
-          element: el,
-          chapterId: (_b = (_a = el.getAttribute("onclick")) == null ? void 0 : _a.match(/\('(.*)','(.*)','(.*)'\)/)) == null ? void 0 : _b[3],
-          unFinishCount: parseInt(((_c = el.parentElement.querySelector(".jobUnfinishCount")) == null ? void 0 : _c.value) || "0")
+          el,
+          title: (((_a2 = el.querySelector(".posCatalog_title")) == null ? void 0 : _a2.getAttribute("title")) || el.textContent || "").replace(/\s+/g, " ").trim()
         };
       });
+      const groupOf = (el) => {
+        let title = "";
+        for (const group of groups) {
+          if (group.el === el)
+            continue;
+          if (group.el.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)
+            title = group.title;
+        }
+        return title;
+      };
+      const clickEls = Array.from(
+        doc.querySelectorAll(
+          '[onclick^="getTeacherAjax"], [onclick^="toOld"], .chapter_item[id^="cur"] [onclick]'
+        )
+      );
+      const seen = /* @__PURE__ */ new Set();
+      const infos = [];
+      const pageUsesIcons = clickEls.some(
+        (el) => {
+          var _a2;
+          return !!((_a2 = el.closest(".posCatalog_select")) == null ? void 0 : _a2.querySelector('[class*="icon_Completed"]'));
+        }
+      );
+      for (const clickEl of clickEls) {
+        const container2 = clickEl.closest(".posCatalog_select") || clickEl;
+        if (seen.has(container2))
+          continue;
+        seen.add(container2);
+        const onclick = clickEl.getAttribute("onclick") || container2.getAttribute("onclick") || "";
+        const fromCur = /^cur(\d+)$/.exec(container2.id || "");
+        let chapterId = fromCur ? fromCur[1] : "";
+        if (!chapterId) {
+          const args = /(?:getTeacherAjax|toOld)\s*\(([^)]*)\)/.exec(onclick);
+          if (args) {
+            const parts = args[1].split(",").map((s) => s.replace(/["'\s]/g, ""));
+            chapterId = /toOld/.test(onclick) ? parts[1] || "" : parts[2] || parts[1] || "";
+          }
+        }
+        if (!chapterId)
+          continue;
+        const countEl = container2.querySelector("input.knowledgeJobCount, input.jobUnfinishCount") || clickEl.querySelector("input.knowledgeJobCount, input.jobUnfinishCount") || ((_a = container2.parentElement) == null ? void 0 : _a.querySelector(
+          "input.knowledgeJobCount, input.jobUnfinishCount"
+        ));
+        const raw = countEl ? String((_b = countEl.value) != null ? _b : "") : "";
+        const unFinishCount = raw === "" ? NaN : Number(raw);
+        let group = groupOf(container2);
+        if (!group) {
+          const unit = container2.closest(".chapter_unit");
+          const headEl = unit ? unit.querySelector(":scope > .chapter_item") : null;
+          group = ((headEl == null ? void 0 : headEl.textContent) || "").replace(/\s+/g, " ").trim();
+        }
+        const nameEl = container2.querySelector(".posCatalog_name") || container2.querySelector(".catalog_name") || clickEl || container2;
+        const noEl = container2.querySelector(".catalog_sbar, .posCatalog_sbar");
+        const no = ((noEl == null ? void 0 : noEl.textContent) || "").trim();
+        const fullName = (nameEl.textContent || "").replace(/\s+/g, " ").trim();
+        const title = no && fullName.startsWith(no) ? fullName.slice(no.length).trim() : fullName;
+        const stateEl = container2.querySelector(".catalog_state");
+        const stateCls = stateEl ? String(stateEl.className || "") : "";
+        const stateText = ((stateEl == null ? void 0 : stateEl.textContent) || "").replace(/\s+/g, " ").trim();
+        const completedIcon = container2.querySelector('[class*="icon_Completed"], [class*="icon_yiwanc"]');
+        const done = !!completedIcon || /icon_yiwanc|icon_Completed/.test(stateCls) || /已完成/.test(stateText);
+        infos.push({
+          element: clickEl,
+          container: container2,
+          chapterId,
+          title,
+          order: infos.length,
+          group,
+          rank: group.indexOf("必修") >= 0 ? 0 : group.indexOf("选修") >= 0 ? 1 : 2,
+          unFinishCount,
+          done,
+          stateText,
+          clickable: !!onclick || !!container2.querySelector("[onclick]"),
+          pageUsesIcons
+        });
+      }
+      return infos;
+    },
+    isChapterUnfinished(info) {
+      if (info.done)
+        return false;
+      if (!isNaN(info.unFinishCount))
+        return info.unFinishCount > 0;
+      if (info.pageUsesIcons)
+        return true;
+      return /(待完成|未完成|未开始|进行中)/.test(info.stateText);
+    },
+    isChapterActive(info) {
+      var _a;
+      const el = info.container;
+      return el.classList.contains("posCatalog_active") || !!((_a = el.parentElement) == null ? void 0 : _a.classList.contains("posCatalog_active"));
+    },
+    hasNamedGroups(infos) {
+      return infos.some((info) => info.rank === 0 || info.rank === 1);
+    },
+    pickNextUnfinishedChapter(currentChapterId) {
+      if (!currentChapterId)
+        return null;
+      const infos = this.getChapterInfos();
+      const current = infos.find((item) => item.chapterId === currentChapterId);
+      if (!current)
+        return null;
+      const named = this.hasNamedGroups(infos);
+      const candidates = infos.filter((item) => {
+        if (!item.clickable || !item.chapterId)
+          return false;
+        if (item.container === current.container)
+          return false;
+        if (named && item.rank === 2)
+          return false;
+        if (!this.isChapterUnfinished(item))
+          return false;
+        return item.rank > current.rank || item.rank === current.rank && item.order > current.order;
+      });
+      if (!candidates.length)
+        return null;
+      return candidates.sort((a, b) => a.rank - b.rank || a.order - b.order)[0];
+    },
+    clickChapter(info) {
+      const target = info.element.hasAttribute("onclick") ? info.element : info.element.querySelector("[onclick]") || info.element;
+      target.click();
     },
     scrollToActiveChapter() {
       const activeChapter = top$1 == null ? void 0 : top$1.document.querySelector(".posCatalog_active");
@@ -17533,6 +18416,21 @@ try {
           top$1._preChapterId = curChapterId.value;
           CXAnalyses.scrollToActiveChapter();
           await $.sleep(200);
+          const nextChapter = CXAnalyses.pickNextUnfinishedChapter(curChapterId.value);
+          if (nextChapter) {
+            const msg2 = `下一节：${nextChapter.title || nextChapter.chapterId}`;
+            $console.info(msg2);
+            lib.$message.info({ content: msg2, duration: 4 });
+            CXAnalyses.clickChapter(nextChapter);
+            return;
+          }
+          const infos = CXAnalyses.getChapterInfos();
+          if (infos.length > 0) {
+            $console.log("本节之后的章节都已完成，不再跳转");
+            lib.$message.info({ content: "本节之后的章节都已完成", duration: 6 });
+            return;
+          }
+          $console.warn("目录没读出来，回退平台的下一节（可能跳转位置不准）");
           top$1 == null ? void 0 : top$1.PCount.next(count.length.toString(), curChapterId.value, curCourseId.value, curClazzId.value, "");
         } else {
           $console.warn("参数错误，无法跳转下一章，请尝试手动切换。");
@@ -17879,21 +18777,102 @@ try {
       lib.$message.success("长时阅读任务完成！");
       await $.sleep(5e3);
     },
-    async chapter(frame, {
-      answererWrappers,
-      period,
-      upload,
-      thread,
-      stopSecondWhenFinish,
-      redundanceWordsText,
-      answerSeparators
-    }) {
+    async chapter(frame, options) {
+      var _a, _b, _c, _d, _e, _f;
+      const { answererWrappers, period, upload, thread, stopSecondWhenFinish, redundanceWordsText, answerSeparators } = options;
       if (answererWrappers === void 0 || answererWrappers.length === 0) {
-        return answerWrapperEmptyWarning(0);
+        answerWrapperEmptyWarning(0);
+        return;
       }
       $console.info("开始章节测试");
       const visual_state = CommonProject.scripts.render.cfg.visual;
+      let chapterRedoPlan = readRedoPlan();
+      const chapterRedoCfg = ((_a = CXProject.scripts.work) == null ? void 0 : _a.cfg) || {};
+      const chapterRedoEnabled = CXProject.scripts.study.cfg.enableChapterRedo !== false;
+      const chapterPassScore = Number((_b = chapterRedoCfg.passScore) != null ? _b : 60);
+      const chapterMaxRounds = Math.max(0, Math.min(5, Number((_c = chapterRedoCfg.aiRedoRounds) != null ? _c : 5)));
+      let chapterOverride = chapterRedoPlan && chapterRedoPlan.answers || {};
+      if (chapterRedoPlan && chapterRedoPlan.pending && (chapterRedoPlan.paper || []).length) {
+        if (!chapterRedoEnabled) {
+          clearRedoPlan();
+          chapterOverride = {};
+          chapterRedoPlan = void 0;
+          traceRedo("重做开关已关闭，丢弃待重做快照");
+        } else {
+          const paper = chapterRedoPlan.paper;
+          const roundNo = chapterRedoPlan.round || 1;
+          const marks = markWrongQuestions(paper, ((_d = frame.contentWindow) == null ? void 0 : _d.document) || null);
+          if (marks.marked === 0) {
+            chapterRedoPlan.onlyTitles = void 0;
+            traceRedo("重做卷没有批改标记，整卷重做");
+          } else {
+            const refreshTitles = marks.wrong > 0 && marks.wrong < paper.length ? paper.filter((q) => q.wrong).map((q) => q.title) : void 0;
+            chapterRedoPlan.onlyTitles = refreshTitles;
+            traceRedo(
+              refreshTitles ? `重做卷批改：${marks.wrong}/${paper.length} 题错，只重做这 ${refreshTitles.length} 题` : `重做卷批改：${marks.wrong}/${paper.length} 题错（全错或无错），整卷重做`
+            );
+          }
+          const focusCount = paper.filter((q) => q.wrong).length;
+          const todoCount = focusCount > 0 && focusCount < paper.length ? focusCount : paper.length;
+          traceRedo(`在测验页重算第 ${roundNo} 轮（${todoCount} 题 / 共 ${paper.length} 题）`);
+          const aiTip = lib.$message.info({
+            content: `AI 正在重算${todoCount < paper.length ? ` ${todoCount} 道错题` : `整卷 ${paper.length} 题`}，通常 10~60 秒…`,
+            duration: 120
+          });
+          const aiStartedAt = Date.now();
+          const answers = await requestPaperRedoByAI(
+            paper,
+            void 0,
+            chapterPassScore,
+            roundNo,
+            chapterRedoPlan.history
+          );
+          const aiCost = Date.now() - aiStartedAt;
+          $console.info(`第 ${roundNo} 轮重做：AI 用时 ${aiCost}ms`);
+          traceRedo(`AI 用时 ${aiCost}ms`);
+          aiTip == null ? void 0 : aiTip.remove();
+          if (answers) {
+            const prevAnswers = ((_f = (_e = chapterRedoPlan.history) == null ? void 0 : _e[chapterRedoPlan.history.length - 1]) == null ? void 0 : _f.answers) || {};
+            const identical = Object.keys(answers).length === Object.keys(prevAnswers).length && Object.keys(answers).every((key) => answers[key] === prevAnswers[key]);
+            if (identical) {
+              $console.warn("AI 这一轮的答案与上一轮完全相同（已把历次作答一并给它，仍未改动）");
+              traceRedo("AI 答案与上一轮完全相同");
+            }
+            writeRedoPlan({
+              ...chapterRedoPlan,
+              answers,
+              pending: false,
+              paper: void 0
+            });
+            chapterOverride = answers;
+            traceRedo(`AI 返回 ${Object.keys(answers).length} 题答案，开始作答`);
+          } else {
+            writeRedoPlan({
+              ...chapterRedoPlan,
+              answers: {},
+              pending: false,
+              paper: void 0
+            });
+            chapterOverride = {};
+            traceRedo(`AI 没有给出可用答案，保留第 ${chapterRedoPlan.round} 轮计数，本轮改用题库`);
+            lib.$modal.alert({ content: "AI 没能给出可用的新答案，本轮改用题库答案作答（轮次保留，不会无限重试）。" });
+          }
+        }
+        chapterRedoPlan = readRedoPlan();
+      }
+      const hasChapterOverride = Object.keys(chapterOverride).length > 0;
+      if (hasChapterOverride) {
+        const msg22 = `章节测验：使用 AI 第 ${(chapterRedoPlan == null ? void 0 : chapterRedoPlan.round) || 1} 轮答案重新作答（${Object.keys(chapterOverride).length} 题）`;
+        $console.info(msg22);
+        traceRedo(msg22);
+      } else {
+        traceRedo("章节测验：没有读到重做答案，按普通流程（卷面已有答案会直接提交）");
+      }
       const frameWindow = frame.contentWindow;
+      if (!await waitQuizInteractive(frameWindow)) {
+        $console.warn("测验页面没有进入可交互状态（题目或事件未就绪），答题可能不完整");
+        traceRedo("测验页面未就绪：等待超时");
+      }
       const { TiMu } = domSearchAll({ TiMu: ".TiMu" }, frameWindow.document);
       CORSUtils.panelNormal();
       CommonProject.scripts.workResults.methods.init();
@@ -17924,45 +18903,109 @@ try {
           if (title) {
             const typeInput = elements2.type[0];
             const type = (typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0) || "unknown";
-            return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
+            const searchFresh = async () => {
               await $.sleep((period != null ? period : 3) * 1e3);
               return defaultAnswerWrapperHandler(answererWrappers, {
                 type,
                 title,
                 options: type === "completion" ? "" : ctx.elements.options.map((o) => optimizationElementWithImage(o, true).innerText).join("\n")
               });
-            });
+            };
+            if (hasChapterOverride) {
+              const redoAnswer = lookupOverrideAnswer(chapterOverride, title);
+              if (redoAnswer) {
+                return [
+                  {
+                    name: "AI整卷重做",
+                    homepage: "#",
+                    results: [{ question: title, answer: redoAnswer }]
+                  }
+                ];
+              }
+              return searchFresh();
+            }
+            return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, searchFresh);
           } else {
             throw new Error("题目为空，请查看题目是否为空，或者忽略此题");
           }
         },
         work: async (ctx) => {
-          var _a;
+          var _a2, _b2, _c2;
           const { elements: elements2, searchInfos } = ctx;
           const typeInput = elements2.type[0];
           const type = typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0;
+          if (hasChapterOverride) {
+            const redoTitle = chapterTestTaskQuestionTitleTransform(elements2.title);
+            const partialTitles = (chapterRedoPlan == null ? void 0 : chapterRedoPlan.onlyTitles) || [];
+            if (partialTitles.length && redoTitle && !titleInList(partialTitles, redoTitle)) {
+              return { finish: true };
+            }
+            const redoAnswer = lookupOverrideAnswer(chapterOverride, redoTitle);
+            if (redoAnswer && type && type !== "completion") {
+              const picked = pickRedoOptions(elements2.options, redoAnswer);
+              if (picked.length) {
+                const root2 = ctx.root || ((_a2 = elements2.options[0]) == null ? void 0 : _a2.closest(".TiMu")) || null;
+                const cleared = await clearQuestionSelections(root2);
+                if (cleared)
+                  $console.info(`重做：已取消 ${cleared} 个旧选项`);
+                for (const option of picked) {
+                  await ensureOptionPicked(option);
+                }
+                $console.info(`重做：AI 答案「${redoAnswer}」→ 点选 ${picked.length} 项`);
+                traceRedo(
+                  `题「${redoTitle.slice(0, 18)}」答案=${redoAnswer} 取消${cleared}项 点选${picked.length}项`
+                );
+                return { finish: true, options: picked.map((option) => option.innerText) };
+              }
+              $console.warn(`重做：AI 答案「${redoAnswer}」对不上任何选项，保留原答案并回退题库`);
+              traceRedo(`题「${redoTitle.slice(0, 18)}」答案=${redoAnswer} 对不上选项，保留原答案`);
+            } else if (!redoAnswer) {
+              $console.warn("重做：本题题干没匹配上 AI 答案，保留原答案并回退题库");
+              traceRedo(`题「${redoTitle.slice(0, 18)}」没匹配上计划 key，保留原答案`);
+            }
+          }
+          if (!hasChapterOverride && type && type !== "completion" && type !== "line") {
+            const candidates = (searchInfos || []).flatMap((info) => ((info == null ? void 0 : info.results) || []).map((item) => String((item == null ? void 0 : item.answer) || "").trim())).filter(Boolean);
+            for (const candidate of candidates) {
+              const picked = pickRedoOptions(elements2.options, candidate);
+              if (!picked.length)
+                continue;
+              const root2 = ctx.root || ((_b2 = elements2.options[0]) == null ? void 0 : _b2.closest(".TiMu")) || null;
+              const cleared = await clearQuestionSelections(root2);
+              if (cleared)
+                $console.info(`作答：已取消 ${cleared} 个旧选项`);
+              for (const option of picked) {
+                await ensureOptionPicked(option);
+              }
+              $console.info(`作答：答案「${candidate}」→ 点选 ${picked.length} 项`);
+              traceRedo(
+                `作答「${chapterTestTaskQuestionTitleTransform(elements2.title).slice(0, 16)}」答案=${candidate} 点选${picked.length}项`
+              );
+              return { finish: true, options: picked.map((option) => option.innerText) };
+            }
+          }
           if (type && (type === "completion" || type === "multiple" || type === "judgement" || type === "single")) {
             const resolver = createDefaultQuestionResolver(ctx)[type];
-            const handler = (type2, answer, option, ctx2) => {
-              var _a2, _b, _c, _d, _e, _f, _g;
+            const handler = async (type2, answer, option, ctx2) => {
+              var _a3, _b3, _c3, _d2, _e2, _f2, _g, _h;
               if (type2 === "judgement" || type2 === "single" || type2 === "multiple") {
-                const checked = ((_b = (_a2 = option == null ? void 0 : option.parentElement) == null ? void 0 : _a2.querySelector("label input")) == null ? void 0 : _b.getAttribute("checked")) === "checked" || ((_c = option == null ? void 0 : option.parentElement) == null ? void 0 : _c.getAttribute("aria-checked")) === "true";
+                const checked = !!((_a3 = option == null ? void 0 : option.parentElement) == null ? void 0 : _a3.querySelector('[class*="check_answer"]')) || ((_c3 = (_b3 = option == null ? void 0 : option.parentElement) == null ? void 0 : _b3.querySelector("label input")) == null ? void 0 : _c3.getAttribute("checked")) === "checked" || ((_d2 = option == null ? void 0 : option.parentElement) == null ? void 0 : _d2.getAttribute("aria-checked")) === "true";
                 if (checked)
                   ;
                 else {
-                  option == null ? void 0 : option.click();
+                  await ensureOptionPicked(option);
                 }
               } else if (type2 === "completion" && answer.trim()) {
-                const text = (_d = option == null ? void 0 : option.parentElement) == null ? void 0 : _d.querySelector("textarea");
-                const textareaFrame = (_e = option == null ? void 0 : option.parentElement) == null ? void 0 : _e.querySelector("iframe");
+                const text = (_e2 = option == null ? void 0 : option.parentElement) == null ? void 0 : _e2.querySelector("textarea");
+                const textareaFrame = (_f2 = option == null ? void 0 : option.parentElement) == null ? void 0 : _f2.querySelector("iframe");
                 if (text) {
                   text.value = answer;
                 }
                 if (textareaFrame == null ? void 0 : textareaFrame.contentDocument) {
                   textareaFrame.contentDocument.body.innerHTML = answer;
                 }
-                if ((_f = option == null ? void 0 : option.parentElement) == null ? void 0 : _f.parentElement) {
-                  (_g = lib.$el("[onclick*=saveQuestion]", option.parentElement.parentElement)) == null ? void 0 : _g.click();
+                if ((_g = option == null ? void 0 : option.parentElement) == null ? void 0 : _g.parentElement) {
+                  (_h = lib.$el("[onclick*=saveQuestion]", option.parentElement.parentElement)) == null ? void 0 : _h.click();
                 }
               }
             };
@@ -17988,7 +19031,7 @@ try {
                     const box = elements2.lineSelectBox[index];
                     if (splited_ans[index]) {
                       select(box, splited_ans[index]);
-                      const text = (_a = box.parentElement) == null ? void 0 : _a.querySelector(".chosen-single span");
+                      const text = (_c2 = box.parentElement) == null ? void 0 : _c2.querySelector(".chosen-single span");
                       if (text)
                         text.textContent = splited_ans[index];
                       await $.sleep(200);
@@ -18003,28 +19046,28 @@ try {
           return { finish: false };
         },
         async onResultsUpdate(curr, _, res) {
-          var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+          var _a2, _b2, _c2, _d2, _e2, _f2, _g, _h, _i, _j;
           CommonProject.scripts.workResults.methods.setResults(
             simplifyWorkResult(res, chapterTestTaskQuestionTitleTransform)
           );
-          if ((_a = curr.result) == null ? void 0 : _a.finish) {
+          if ((_a2 = curr.result) == null ? void 0 : _a2.finish) {
             CommonProject.scripts.apps.methods.addQuestionCacheFromWorkResult(
               simplifyWorkResult([curr], chapterTestTaskQuestionTitleTransform)
             );
           }
           CommonProject.scripts.workResults.methods.updateWorkStateByResults(res);
-          if (((_b = curr.result) == null ? void 0 : _b.finish) === false && curr.resolved === true) {
-            const options = ((_d = (_c = curr.ctx) == null ? void 0 : _c.elements) == null ? void 0 : _d.options) || [];
-            const typeInput = (_f = (_e = curr.ctx) == null ? void 0 : _e.elements) == null ? void 0 : _f.type[0];
+          if (((_b2 = curr.result) == null ? void 0 : _b2.finish) === false && curr.resolved === true) {
+            const options2 = ((_d2 = (_c2 = curr.ctx) == null ? void 0 : _c2.elements) == null ? void 0 : _d2.options) || [];
+            const typeInput = (_f2 = (_e2 = curr.ctx) == null ? void 0 : _e2.elements) == null ? void 0 : _f2.type[0];
             const type = typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0;
             const commonSetting = CommonProject.scripts.settings.cfg;
             if (commonSetting["randomWork-choice"] && (type === "judgement" || type === "single" || type === "multiple")) {
               $console.log("正在随机作答");
-              const option = options[Math.floor(Math.random() * options.length)];
+              const option = options2[Math.floor(Math.random() * options2.length)];
               (_h = (_g = option == null ? void 0 : option.parentElement) == null ? void 0 : _g.querySelector("a,label")) == null ? void 0 : _h.click();
             } else if (commonSetting["randomWork-complete"] && type === "completion") {
               $console.log("正在随机作答");
-              for (const option of options) {
+              for (const option of options2) {
                 const textarea = (_i = option == null ? void 0 : option.parentElement) == null ? void 0 : _i.querySelector("textarea");
                 const completeTexts = commonSetting["randomWork-completeTexts-textarea"].split("\n").filter(Boolean);
                 const text = completeTexts[Math.floor(Math.random() * completeTexts.length)];
@@ -18049,8 +19092,8 @@ try {
           const type = typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0;
           if (type === "judgement") {
             elements2.options.forEach((option) => {
-              var _a;
-              const opt = ((_a = option == null ? void 0 : option.textContent) == null ? void 0 : _a.trim()) || "";
+              var _a2;
+              const opt = ((_a2 = option == null ? void 0 : option.textContent) == null ? void 0 : _a2.trim()) || "";
               if (opt.includes("对") || opt.includes("错"))
                 ;
               else if (opt === "True") {
@@ -18076,6 +19119,78 @@ try {
       $console.info(msg2);
       lib.$message.info({ content: msg2, duration: stopSecondWhenFinish });
       await $.sleep(stopSecondWhenFinish * 1e3);
+      const prepareChapterRedo = async (failText) => {
+        var _a2, _b2, _c2;
+        const round = (chapterRedoPlan == null ? void 0 : chapterRedoPlan.round) || 0;
+        $console.info(`章节测验判定：${failText}（已完成 ${round} 轮重做）`);
+        traceRedo(`判定不及格（已完成 ${round} 轮）：${failText}`);
+        if (!chapterRedoEnabled) {
+          clearRedoPlan();
+          traceRedo("重做开关已关闭，停在结果页不重做");
+          return false;
+        }
+        const aiConfigured = (CommonProject.scripts.settings.cfg.answererWrappers || []).some(
+          (wrapper) => wrapper && wrapper.name === "AI答题"
+        );
+        if (!aiConfigured) {
+          $console.warn("没有启用 AI 答题，跳过硬做");
+          traceRedo("没有配置 AI 答题，放弃重做");
+          return false;
+        }
+        if (round >= chapterMaxRounds) {
+          clearRedoPlan();
+          traceRedo(`已重做 ${round} 轮，达到上限 ${chapterMaxRounds}，放弃`);
+          lib.$modal.alert({ content: `章节测验${failText}，已经重做 ${round} 轮，不再重试。` });
+          return false;
+        }
+        const paper = buildPaperSnapshotFromResults(results, chapterTestTaskQuestionTitleTransform);
+        if (!paper.length) {
+          $console.warn("章节测验重做：没有取到题目，跳过");
+          traceRedo("没有取到整卷快照，放弃重做");
+          return false;
+        }
+        const marks = markWrongQuestions(paper, (frameWindow == null ? void 0 : frameWindow.document) || null);
+        const onlyTitles = marks.wrong > 0 && marks.wrong < paper.length ? paper.filter((q) => q.wrong).map((q) => q.title) : void 0;
+        traceRedo(
+          onlyTitles ? `平台批改：${marks.wrong}/${paper.length} 题错，只重做这 ${onlyTitles.length} 题` : marks.marked > 0 ? `平台批改：${marks.wrong}/${paper.length} 题错，整卷重做` : "没有读到批改标记（另一种练习），整卷重做"
+        );
+        traceRedo(`整卷快照 ${paper.length} 题`);
+        const quizChapterId = (() => {
+          var _a3;
+          try {
+            return ((_a3 = lib.$el("#curChapterId", top$1 == null ? void 0 : top$1.document)) == null ? void 0 : _a3.value) || "";
+          } catch {
+            return "";
+          }
+        })();
+        writeRedoPlan({
+          round: round + 1,
+          answers: {},
+          pending: true,
+          paper,
+          onlyTitles,
+          scores: [...(chapterRedoPlan == null ? void 0 : chapterRedoPlan.scores) || [], 0],
+          chapterId: quizChapterId,
+          history: archiveRedoHistory(chapterRedoPlan)
+        });
+        traceRedo(`写入待重做快照（第 ${round + 1} 轮），立即刷新，AI 在测验页重算`);
+        lib.$message.info({ content: `第 ${round + 1} 轮重做：返回测验页，AI 将在那里重算`, duration: 5 });
+        try {
+          (_c2 = (_b2 = (_a2 = top$1.$) == null ? void 0 : _a2.call(top$1, "#workpop")) == null ? void 0 : _b2.hide) == null ? void 0 : _c2.call(_b2);
+        } catch {
+        }
+        await $.sleep(400);
+        $console.info(`第 ${round + 1} 轮重做：刷新课程页，回到小节 ${quizChapterId || "(未知)"}`);
+        try {
+          top$1 == null ? void 0 : top$1.location.reload();
+        } catch (e) {
+          $console.warn("刷新失败：" + (e && e.message || e));
+          clearRedoPlan();
+          return false;
+        }
+        return true;
+      };
+      let pendingRedo = "";
       await worker.uploadHandler({
         type: upload,
         results,
@@ -18083,11 +19198,25 @@ try {
           const msg22 = `完成率 ${finishedRate.toFixed(2)}% :  ${uploadable ? "3秒后将自动提交" : "3秒后将自动保存"} `;
           $console.info(msg22);
           lib.$message.success({ content: msg22, duration: 3 });
+          const blank = countUnansweredQuestions(frameWindow == null ? void 0 : frameWindow.document);
+          if (uploadable && blank.total > 0 && blank.unanswered === blank.total) {
+            lib.$modal.alert({
+              content: `检测到 ${blank.total} 道题一道都没选中（可能是选项结构变化或答案未生效），已取消自动提交，避免交白卷。`
+            });
+            traceRedo(`白卷拦截：${blank.unanswered}/${blank.total} 题未选，取消提交`);
+            return;
+          }
           await $.sleep(3e3);
           if (uploadable) {
             frameWindow.btnBlueSubmit();
             await $.sleep(3e3);
             frameWindow.submitCheckTimes();
+            await $.sleep(600);
+            const failText = await waitFailPopupText();
+            if (failText) {
+              pendingRedo = failText;
+              return;
+            }
             top$1.$("#workpop").hide();
           } else {
             frameWindow.alert = () => {
@@ -18098,6 +19227,11 @@ try {
       });
       if (visual_state === "minimize" && CommonProject.scripts.render.cfg.visual !== "minimize") {
         CORSUtils.panelMinimize();
+      }
+      if (pendingRedo) {
+        const scheduled = await prepareChapterRedo(pendingRedo);
+        if (scheduled)
+          return;
       }
       worker.emit("done");
     },

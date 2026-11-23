@@ -44,14 +44,18 @@ export function isOperatingAction(property: string): boolean {
  * 页面里创建覆盖层（字符串形式，避免主进程 tsconfig 没有 DOM 类型）
  *
  * 元素结构（全部在 closed shadow root 内）：
- *   .glow  —— 流光：旋转的 conic + blur 大图层（视觉最重，只在普通状态运行动画）
+ *   .glow  —— 流光容器，只有两层：
+ *             .halo  四条边缘带线性渐变，静态，画一次
+ *             .ring  四条 3px 细条，条内渐变带做 transform 平移
  *   .blue  —— OCR / 验证码期间的纯色蓝：静态边框 + 四边渐变，零动画
  *   .pill  —— 底部胶囊：呼吸圆点 + 文案，带一道扫过的反光
  *
- * 性能注意：`.glow` 的两块全屏动画会把登录 / 验证码页压到个位数帧率，
- * 直接拖慢验证码取图与拖动。所以只要出现 OCR / 滑块场景，就把 `.glow`
- * 淡出并暂停（`.calm`），换成静态 `.blue`；结束后再渐变回去。
- * 新增动画前务必按这条标准评估：宁可少一层模糊，也不要和页面抢渲染。
+ * 性能底线（这两条是「刷课页面加载卡」的直接教训）：
+ *   1. 不要出现「比视口还大」的图层，也不要给整屏容器加 mask / opacity /
+ *      filter —— 任何一个都会让浏览器开一张全屏离屏 surface，再叠上动画就是
+ *      每帧两百万像素起步的合成，正好和视频解码抢 GPU。
+ *   2. 动画只允许 transform / opacity，且必须能被 .live 门控暂停。
+ * 另外 OCR / 滑块场景额外降级成静态纯蓝（.calm），结束后再渐变回流光。
  */
 export function buildOverlayScript(message: string, calm = false): string {
 	return `(() => {
@@ -81,77 +85,127 @@ export function buildOverlayScript(message: string, calm = false): string {
 		style.textContent = \`
 			:host { all: initial; }
 			/*
-			 * 性能取舍（跳转频繁的场景是关键）：
-			 * 不再用「超大 conic + blur」——每次页面导航都要重新光栅化一块几千万像素的
-			 * 模糊图层，正好和页面自身的首屏渲染抢资源。改成：
-			 *   .glow  四条方向性渐变，静态绘制一次；动效只走 opacity（合成层，不重绘）
-			 *   .edge  四条 3px 细条，background-position 平移，重绘面积只有 3px 高
-			 */
-			/*
-			 * 光晕：锥形渐变 + 模糊，遮罩按「离边距离」衰减。
+			 * 性能说明（改这里之前先读）
 			 *
-			 * 尺寸只需满足「旋转扫过的外接圆盖住视口」：正方形边长 a 的外接圆
-			 * 半径是 0.707a，覆盖条件是 a ≥ 视口对角线 / √2 ——
-			 * 16:9 需要 81vmax、4:3 需要 88vmax、**1:1 需要 100vmax**，
-			 * 所以 116vmax 在任何常见比例下都够（别再按「边长 ≥ 对角线」放大，
-			 * 那会白涨 67% 面积，模糊成本 ≈ 面积 × 半径）。
-			 * 原来是 240vmax，面积是这里的 4 倍多，每次页面跳转重建都要重新光栅化。
+			 * 覆盖层跑在别人的网课页面上，章节一跳就重建一次 ——
+			 * 它花的每一毫秒都直接从播放器 / 题目组件的首屏预算里扣。
+			 *
+			 * 历史方案是「一块 0.75×视口对角线的 conic 方盘 + 全屏 mask + 旋转动画」：
+			 * 1080p 下那是 1652×1652 ≈ 270 万像素的图层，而且
+			 *   · .glow 上的 opacity < 1 让浏览器为整屏开一张离屏 surface；
+			 *   · 四边 mask 再开一层整屏合成；
+			 *   · 子层每帧旋转 → 上面两层整屏 surface 每帧都得重算。
+			 * 单帧两百万像素起步的全屏合成正好和视频解码抢 GPU，
+			 * 表现就是「页面加载卡、视频 / 题目组件半天不出来」。
+			 *
+			 * 现在的结构（每条都是为了让合成面积尽量小）：
+			 *   .halo  四条边缘带线性渐变，静态，挂载时画一次
+			 *   .ring  四条 3px 细条，条内 200% 长的渐变带纯 transform 平移
+			 * 每帧 GPU 填充从 ~200 万像素降到 ~5 万像素，没有 mask、没有大图层。
+			 * 新增动画前按这个标准评估：宁可少一层光，也不要和页面抢渲染。
 			 */
 			.glow {
-				position: absolute; inset: 0; pointer-events: none; overflow: hidden;
-				opacity: .5;
+				/* 不再需要 overflow:hidden：越界的只有四条细条，它们自己就裁好了。
+				   少一个裁剪容器 = 少一张整屏图层 */
+				position: absolute; inset: 0; pointer-events: none;
 				/* OCR 期间整体淡出，露出下面的纯色蓝；结束后再淡回流光 */
 				transition: opacity .45s ease;
-				-webkit-mask:
-					linear-gradient(to right, rgba(0,0,0,.95), rgba(0,0,0,.52) min(9%, 100px), rgba(0,0,0,.16) min(17%, 190px), transparent min(30%, 330px)),
-					linear-gradient(to left, rgba(0,0,0,.95), rgba(0,0,0,.52) min(9%, 100px), rgba(0,0,0,.16) min(17%, 190px), transparent min(30%, 330px)),
-					linear-gradient(to bottom, rgba(0,0,0,.95), rgba(0,0,0,.52) min(11%, 90px), rgba(0,0,0,.16) min(21%, 175px), transparent min(34%, 280px)),
-					linear-gradient(to top, rgba(0,0,0,.95), rgba(0,0,0,.52) min(11%, 90px), rgba(0,0,0,.16) min(21%, 175px), transparent min(34%, 280px));
-				mask:
-					linear-gradient(to right, rgba(0,0,0,.95), rgba(0,0,0,.52) min(9%, 100px), rgba(0,0,0,.16) min(17%, 190px), transparent min(30%, 330px)),
-					linear-gradient(to left, rgba(0,0,0,.95), rgba(0,0,0,.52) min(9%, 100px), rgba(0,0,0,.16) min(17%, 190px), transparent min(30%, 330px)),
-					linear-gradient(to bottom, rgba(0,0,0,.95), rgba(0,0,0,.52) min(11%, 90px), rgba(0,0,0,.16) min(21%, 175px), transparent min(34%, 280px)),
-					linear-gradient(to top, rgba(0,0,0,.95), rgba(0,0,0,.52) min(11%, 90px), rgba(0,0,0,.16) min(21%, 175px), transparent min(34%, 280px));
+				/*
+				 * 注意：这里**不要**再写 opacity。
+				 * 容器上挂一个小于 1 的 opacity 会让浏览器为整屏开一张离屏 surface，
+				 * 里面还套着动画子层时，这张 surface 每帧都要重算。
+				 * 需要的半透明已经写进下面各个渐变的颜色里了。
+				 */
 			}
-			.glow::before {
-				content: ''; position: absolute; left: 50%; top: 50%;
-				width: 116vmax; height: 116vmax; margin: -58vmax 0 0 -58vmax;
-				background: conic-gradient(from 0turn, #4f8cff, #8b5cf6, #22d3ee, #34d399, #f59e0b, #4f8cff);
-				filter: blur(38px) saturate(1.05);
-				animation: hh-rotate 14s linear infinite;
-				will-change: transform;
-			}
-			@keyframes hh-rotate { to { transform: rotate(1turn); } }
 			/*
-			 * 最外圈 3px 流光：与光晕同源同速，读起来是一整团光在绕。
-			 *
-			 * ⚠️ 边框所在的矩形**绝对不能旋转**：inset:0 的矩形转到 45° 就是菱形，
-			 * 视口四角按几何必然没有边框覆盖（1:1 方形视口最显眼），表现就是
-			 * 「四角一会儿变圆角、一会儿又正常」。
-			 * 所以拆成两层：.edge 只负责静态的 3px 环 mask（不参与动画），
-			 * 内部 ::before 画一个盖住视口对角线的大 conic 方盘并旋转 ——
-			 * 环的每个位置任何角度都有内容，四角永远完整；旋转仍是 transform，
-			 * 走合成层不重绘（同 .glow::before 的优化思路）。
+			 * 光晕：四条边缘带各一段线性渐变，只覆盖真正看得见的边带。
+			 * 旧实现是一整块 conic 方盘被 mask 裁成边缘 —— 中间 70% 面积纯属白画，
+			 * 而且方盘边长按视口对角线算，1080p 下就是 270 万像素的图层。
 			 */
-			.edge {
-				position: absolute; inset: 0; padding: 3px; pointer-events: none;
-				-webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-				-webkit-mask-composite: xor;
-				mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-				mask-composite: exclude;
+			.halo {
+				position: absolute; inset: 0; pointer-events: none;
+				/*
+				 * 每边都用多段衰减（而不是「有色 → 透明」两段）。
+				 * 单段线性衰减在屏幕上会读出一条生硬的等值线，旧版 mask 之所以柔和
+				 * 就是因为它是 0.95/0.52/0.16/0 的四段曲线；这里用三段曲线复刻。
+				 */
+				background-image:
+					linear-gradient(to bottom,
+						rgba(79,140,255,.40), rgba(79,140,255,.20) 26%,
+						rgba(79,140,255,.06) 58%, rgba(79,140,255,0)),
+					linear-gradient(to top,
+						rgba(52,211,153,.34), rgba(52,211,153,.17) 26%,
+						rgba(52,211,153,.05) 58%, rgba(52,211,153,0)),
+					linear-gradient(to right,
+						rgba(139,92,246,.34), rgba(139,92,246,.17) 26%,
+						rgba(139,92,246,.05) 58%, rgba(139,92,246,0)),
+					linear-gradient(to left,
+						rgba(245,158,11,.26), rgba(245,158,11,.13) 26%,
+						rgba(245,158,11,.04) 58%, rgba(245,158,11,0));
+				background-repeat: no-repeat;
+				background-size:
+					100% min(30vh, 320px),
+					100% min(30vh, 320px),
+					min(17vw, 220px) 100%,
+					min(17vw, 220px) 100%;
+				background-position: left top, left bottom, left top, right top;
 			}
-			.edge::before {
-				content: ''; position: absolute; left: 50%; top: 50%;
-				/* 外接圆（0.707a）≥ 半对角线即可，0.75 倍对角线留 6% 余量 */
-				width: calc(hypot(100vw, 100vh) * 0.75);
-				height: calc(hypot(100vw, 100vh) * 0.75);
-				margin: calc(hypot(100vw, 100vh) * -0.375) 0 0 calc(hypot(100vw, 100vh) * -0.375);
-				background: conic-gradient(from 0turn, #4f8cff, #8b5cf6, #22d3ee, #34d399, #f59e0b, #4f8cff);
-				animation: hh-rotate 14s linear infinite;
-				will-change: transform;
+			/*
+			 * 流光：四条 3px 细条，条内放一根 200% 长的渐变带做位移。
+			 *
+			 * 为什么不再「旋转一整块大 conic」：那是每帧两百万像素的全屏合成，
+			 * 边框却只有 3px 宽 —— 99% 的合成工作都花在看不见的地方。
+			 * 现在位移只用 transform（走合成，不重绘），条自身 overflow:hidden
+			 * 裁掉溢出，每帧需要填充的面积只有几万像素。
+			 * 渐变图案左右两半完全重复，所以平移 -50% 能无缝循环。
+			 */
+			.ring { position: absolute; inset: 0; pointer-events: none; }
+			.ring i { position: absolute; display: block; overflow: hidden; }
+			.ring .rt, .ring .rb { left: 0; right: 0; height: 3px; }
+			.ring .rt { top: 0; }
+			.ring .rb { bottom: 0; }
+			.ring .rl, .ring .rr { top: 0; bottom: 0; width: 3px; }
+			.ring .rl { left: 0; }
+			.ring .rr { right: 0; }
+			.ring i::before { content: ''; position: absolute; will-change: transform; }
+			.ring .rt::before, .ring .rb::before {
+				top: 0; bottom: 0; left: 0; width: 200%;
+				background: linear-gradient(90deg,
+					rgba(79,140,255,0) 0%, #4f8cff 5%, #8b5cf6 11%, #22d3ee 17%,
+					#34d399 23%, #f59e0b 29%, rgba(245,158,11,0) 35%,
+					rgba(79,140,255,0) 50%, #4f8cff 55%, #8b5cf6 61%, #22d3ee 67%,
+					#34d399 73%, #f59e0b 79%, rgba(245,158,11,0) 85%,
+					rgba(79,140,255,0) 100%);
+				animation: hh-x 7.2s linear infinite;
 			}
-			/* 平静态：动画直接暂停，连不可见的合成开销也省掉 */
-			.glow.calm::before, .glow.calm .edge::before { animation-play-state: paused; }
+			.ring .rl::before, .ring .rr::before {
+				left: 0; right: 0; top: 0; height: 200%;
+				background: linear-gradient(180deg,
+					rgba(79,140,255,0) 0%, #4f8cff 5%, #8b5cf6 11%, #22d3ee 17%,
+					#34d399 23%, #f59e0b 29%, rgba(245,158,11,0) 35%,
+					rgba(79,140,255,0) 50%, #4f8cff 55%, #8b5cf6 61%, #22d3ee 67%,
+					#34d399 73%, #f59e0b 79%, rgba(245,158,11,0) 85%,
+					rgba(79,140,255,0) 100%);
+				animation: hh-y 7.2s linear infinite;
+			}
+			/* 顺时针读感：上边左→右、右边上→下，反向播放即可 */
+			.ring .rt::before, .ring .rr::before { animation-direction: reverse; }
+			@keyframes hh-x { to { transform: translate3d(-50%, 0, 0); } }
+			@keyframes hh-y { to { transform: translate3d(0, -50%, 0); } }
+			/*
+			 * live 门控：默认 paused，注入后由 JS 在页面空闲时点亮。
+			 * paused 时浏览器不会为动画占用合成带宽，页面首屏那几百毫秒
+			 * 正是最吃 GPU 的时候，少抢一点就是少卡一下。
+			 * calm（OCR / 验证码）写在后面对同特异性生效，优先级更高。
+			 *
+			 * ⚠️ 选择器必须和上面的 animation 简写同特异性：简写会把
+			 * play-state 重置成 running，靠「同特异性 + 更靠后」才压得住。
+			 */
+			.ring .rt::before, .ring .rb::before, .ring .rl::before, .ring .rr::before {
+				animation-play-state: paused;
+			}
+			.glow.live .ring i::before { animation-play-state: running; }
+			.glow.calm .ring i::before { animation-play-state: paused; }
 			/*
 			 * 纯色蓝：OCR / 验证码期间替代流光。
 			 * 只用静态边框 + 四边方向渐变，没有任何动画与大面积模糊，
@@ -160,12 +214,16 @@ export function buildOverlayScript(message: string, calm = false): string {
 			.blue {
 				position: absolute; inset: 0; pointer-events: none; opacity: 0;
 				transition: opacity .45s ease;
-				box-shadow: inset 0 0 0 2px #3b82f6, inset 0 0 30px rgba(59,130,246,.34);
-				background:
-					linear-gradient(to right, rgba(59,130,246,.26), rgba(59,130,246,0) 64px),
-					linear-gradient(to left, rgba(59,130,246,.26), rgba(59,130,246,0) 64px),
-					linear-gradient(to bottom, rgba(59,130,246,.20), rgba(59,130,246,0) 56px),
-					linear-gradient(to top, rgba(59,130,246,.20), rgba(59,130,246,0) 56px);
+				box-shadow: inset 0 0 0 2px #3b82f6;
+				/* 边缘带按 background-size 限制，别让四层渐变铺满整屏（那等于白画中间） */
+				background-image:
+					linear-gradient(to right, rgba(59,130,246,.26), rgba(59,130,246,0)),
+					linear-gradient(to left, rgba(59,130,246,.26), rgba(59,130,246,0)),
+					linear-gradient(to bottom, rgba(59,130,246,.20), rgba(59,130,246,0)),
+					linear-gradient(to top, rgba(59,130,246,.20), rgba(59,130,246,0));
+				background-repeat: no-repeat;
+				background-size: 64px 100%, 64px 100%, 100% 56px, 100% 56px;
+				background-position: left top, right top, left top, left bottom;
 			}
 			.pill {
 				position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
@@ -191,15 +249,27 @@ export function buildOverlayScript(message: string, calm = false): string {
 			@keyframes hh-sheen { 0% { transform: translateX(-160%); } 55%,100% { transform: translateX(320%); } }
 			@keyframes hh-in { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 			@media (prefers-reduced-motion: reduce) {
-				.glow::before, .glow .edge::before, .dot, .pill::after { animation: none; }
+				/* 选择器要和 .ring .rt::before 同特异性，否则压不住上面的 animation 简写 */
+				.ring .rt::before, .ring .rb::before, .ring .rl::before, .ring .rr::before,
+				.dot, .pill::after { animation: none; }
 			}
 		\`;
 		var glow = document.createElement('div');
 		glow.className = 'glow';
-		/* 3px 边条容器：静态 mask 环 + 内部旋转方盘，避免矩形旋转在四角露空 */
-		var edge = document.createElement('div');
-		edge.className = 'edge';
-		glow.appendChild(edge);
+		/* 光晕：四条边缘带，静态绘制一次 */
+		var halo = document.createElement('div');
+		halo.className = 'halo';
+		glow.appendChild(halo);
+		/* 3px 流光：四条细条，每条内部是一根做 transform 平移的渐变带 */
+		var ring = document.createElement('div');
+		ring.className = 'ring';
+		var sides = ['rt', 'rb', 'rl', 'rr'];
+		for (var s = 0; s < sides.length; s++) {
+			var bar = document.createElement('i');
+			bar.className = sides[s];
+			ring.appendChild(bar);
+		}
+		glow.appendChild(ring);
 		var blue = document.createElement('div');
 		blue.className = 'blue';
 		var pill = document.createElement('div');
@@ -248,6 +318,21 @@ export function buildOverlayScript(message: string, calm = false): string {
 				/* 先强制算一次样式，否则「挂载 + 改 opacity」在同一帧里会被合并，过渡不触发 */
 				void host.offsetWidth;
 				host.style.opacity = '1';
+				/**
+				 * 流光动画延迟启动：挂在 DOM 上不等于要马上转。
+				 *
+				 * 页面刚 load 完的几百毫秒里，滚动/图片解码/字体替换都还在跑，
+				 * 这时候再开两块全屏图层的旋转，用户的感受就是「这一下卡了」。
+				 * 等一个空闲帧再点亮 live；timeout 兜底，页面一直忙也不会永远不转。
+				 */
+				var live = function () {
+					try {
+						if (window[KEY] !== ctl || !host.isConnected) return;
+						glow.classList.add('live');
+					} catch (e) {}
+				};
+				if (typeof requestIdleCallback === 'function') requestIdleCallback(live, { timeout: 1200 });
+				else setTimeout(live, 700);
 			} catch (e) {}
 		};
 		if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1500 });

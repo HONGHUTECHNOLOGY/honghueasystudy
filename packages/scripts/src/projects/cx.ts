@@ -7,6 +7,7 @@ import {
 	$,
 	StringUtils,
 	createDefaultQuestionResolver,
+	AnswerWrapperHandlerConfig,
 	DefaultWork,
 	splitAnswer,
 	domSearch,
@@ -305,6 +306,22 @@ export const CXProject = Project.create({
 					attrs: { type: 'checkbox', title: '开启：章节测试自动答题' },
 					defaultValue: true
 				},
+				/**
+				 * 不及格重做的总开关（章节测验）
+				 *
+				 * 关掉后提交不及格就停在结果页，不再刷新重做 —— 有些人只想跑一遍，
+				 * 或者 AI 反复给同一组错答案时不想被反复刷新打断。
+				 */
+				enableChapterRedo: {
+					elementClassName: 'config-details',
+					showIf: 'cx.new.study.enables',
+					label: '不及格时 AI 整卷重做',
+					attrs: {
+						type: 'checkbox',
+						title: '开启：章节测验未达到及格线时，把整卷和历次答案发给 AI 重做并重新提交（需先启用「AI答题」）'
+					},
+					defaultValue: true
+				},
 				enableHyperlink: {
 					elementClassName: 'config-details',
 					showIf: 'cx.new.study.enables',
@@ -424,7 +441,34 @@ export const CXProject = Project.create({
 				['考试整卷预览页面', '/mooc2/exam/preview']
 			],
 			namespace: 'cx.new.work',
-			configs: { notes: workNotes },
+			configs: {
+				notes: workNotes,
+				/**
+				 * 不及格重做（作业）
+				 *
+				 * 作业答完会先自动提交、读分数；低于及格线且配置了「AI答题」时，
+				 * 把整卷（题干 + 选项 + 上次答案）发给 AI 重做，再提交，最多 5 轮。
+				 * 没有配置 AI 答题时保持原来的行为：只作答，不自动提交。
+				 */
+				aiRedoOnFail: {
+					label: '不及格时 AI 整卷重做',
+					attrs: {
+						type: 'checkbox',
+						title: '作业提交后若低于及格线，把整卷和上次答案一起发给 AI 重做并重新提交，最多 5 轮（需先在通用设置里启用 AI 答题）'
+					},
+					defaultValue: true
+				},
+				passScore: {
+					label: '及格线（分）',
+					attrs: { type: 'number', min: '0', max: '100', step: '1' },
+					defaultValue: 60
+				},
+				aiRedoRounds: {
+					label: '最多重做轮数',
+					attrs: { type: 'number', min: '0', max: '5', step: '1' },
+					defaultValue: 5
+				}
+			},
 			async oncomplete() {
 				const isExam = /\/exam\/preview/.test(location.href);
 				commonWork(this, {
@@ -691,20 +735,68 @@ export const CXProject = Project.create({
 					return;
 				}
 
+				/**
+				 * 重做接力：刷新前记下的测验小节，刷新后先回到它
+				 *
+				 * 否则下面的 `autoJumpToUnFinishJob` 会按「目录里第一个未完成」跳走，
+				 * 刚刷新就被带走，测验永远轮不到 —— 这也是「刷新后跑到上一节」的原因之一。
+				 */
+				const redoPlanOnLoad = readRedoPlan();
+				const redoChapter =
+					redoPlanOnLoad && redoPlanOnLoad.chapterId
+						? chapters.find((chapter) => chapter.chapterId === redoPlanOnLoad.chapterId)
+						: undefined;
+				if (redoChapter) {
+					traceRedo(
+						`刷新后接力：目标小节 ${redoChapter.chapterId}，当前${
+							CXAnalyses.isChapterActive(redoChapter) ? '已在' : '不在'
+						}该节`
+					);
+					if (!CXAnalyses.isChapterActive(redoChapter)) {
+						$console.info(`重做接力：回到测验所在小节 ${redoChapter.title || redoChapter.chapterId}`);
+						CXAnalyses.clickChapter(redoChapter);
+						/** 点目录项会整页重载，后面的代码不会执行；新页面会重新走一遍接力 */
+						await $.sleep(1500);
+						return;
+					}
+
+					/**
+					 * 主动切到「学习测验」标签
+					 *
+					 * 只 `return` 是不行的：调度器只负责回到小节，没人会替我们打开测验，
+					 * 结果就是「刷新后停在视频页」或者被当成已完成直接跳过。
+					 */
+					const quizTab = Array.from(
+						document.querySelectorAll<HTMLElement>('#prev_tab .prev_ul li')
+					).find((li) => /测验/.test(li.getAttribute('title') || ''));
+					if (quizTab && !quizTab.classList.contains('active')) {
+						$console.info('重做接力：打开「学习测验」标签');
+						traceRedo('打开学习测验标签');
+						quizTab.click();
+						await $.sleep(2000);
+					} else {
+						traceRedo(quizTab ? '测验标签已激活' : '本节没有找到测验标签');
+					}
+					return;
+				}
+
 				// 寻找需要运行的任务
 				if (CXProject.scripts.study.cfg.autoJumpToUnFinishJob) {
-					// 过滤掉已完成的章节
-					chapters = chapters.filter((chapter) => chapter.unFinishCount !== 0);
+					// 只留真的还有活干的（读完计数读状态，读不到的既不算完成也不算未完成）
+					chapters = chapters.filter((chapter) => CXAnalyses.isChapterUnfinished(chapter));
 
 					if (chapters.length === 0) {
 						$message.warn({ content: '页面任务点数量为空! 请刷新重试!' });
 					} else {
-						const params = new URLSearchParams(window.location.href);
-						const courseId = params.get('courseId');
-						const classId = params.get('clazzid');
+						/** 取目录顺序里第一个还没做完的（和以前一致，不重排：闯关模式靠这个顺序解锁） */
+						const target = chapters[0];
 						//  进入需要进行的章节，并且当前章节未被选中
-						if ($$el(`.posCatalog_active[id="cur${chapters[0].chapterId}"]`).length === 0) {
-							$gm.unsafeWindow.getTeacherAjax(courseId, classId, chapters[0].chapterId);
+						if (!CXAnalyses.isChapterActive(target)) {
+							/**
+							 * 直接点目录项，不再调页面全局 `getTeacherAjax`：
+							 * 新版目录的 onclick 是 `toOld(...)`，根本没有这个函数。
+							 */
+							CXAnalyses.clickChapter(target);
 						}
 						await $.sleep(1000);
 					}
@@ -747,6 +839,674 @@ export const CXProject = Project.create({
 	}
 });
 
+/**
+ * 作业「不及格 → AI 整卷重做」的跨刷新现场
+ *
+ * 存 sessionStorage（同标签页刷新后仍在，关标签页即失效），
+ * 避免把上一份作业的答案带到下一份作业。
+ */
+const WORK_REDO_KEY = 'cx.work.aiRedo';
+
+interface WorkRedoPlan {
+	/** 已经用掉的轮数（0 = 还没重做过） */
+	round: number;
+	/** 题目题干 → 该轮要用的答案 */
+	answers: Record<string, string>;
+	/** 每轮读到的分数，便于日志与排查 */
+	scores: number[];
+	/** 测验所属小节 id：刷新后用它回到这一节，不要跳到别处 */
+	chapterId?: string;
+	/** 写入时间：太久远的计划视为残留，避免一直把页面拽回旧测验 */
+	ts?: number;
+	/**
+	 * 历次作答记录（不含当前这轮）
+	 *
+	 * 只发上一轮的话，AI 看不到自己前几轮给过什么，很容易反复给同一组错误答案，
+	 * 重做三轮等于做了一遍。把历史一起发给它，并明确「这些都不对」。
+	 */
+	history?: { round: number; answers: Record<string, string> }[];
+	/**
+	 * 待重做标记：刷新前只存了整卷快照，答案还没算
+	 *
+	 * 这样提交一判不及格就能立刻刷新，不必把页面干等在结果页上看 AI 算 10 秒；
+	 * 新页面在测验页里重算，用户感知是「提交完马上回到测验」。
+	 */
+	pending?: boolean;
+	/** 刷新前抓的整卷快照，pending 时由新页面拿去问 AI */
+	paper?: PaperQuestion[];
+	/**
+	 * 只重做这些题干（平台批改能指出错题时才有）
+	 *
+	 * 非空表示「部分重做」：名单外的题上次是对的，作答时**一个字都不要动**，
+	 * 免得把蒙对的答案改坏。为空则整卷重做。
+	 */
+	onlyTitles?: string[];
+}
+
+/** 把当前这轮的答案归档进 history（写给下一轮用） */
+function archiveRedoHistory(plan: WorkRedoPlan | undefined): { round: number; answers: Record<string, string> }[] {
+	const history = [...(plan?.history || [])];
+	if (plan && plan.answers && Object.keys(plan.answers).length) {
+		history.push({ round: plan.round || 0, answers: plan.answers });
+	}
+	/** 只留最近 4 轮，避免计划无限膨胀 */
+	return history.slice(-4);
+}
+
+/** 重做计划的有效期（分钟）：超过就当成残留，别再把学习页拽回旧测验 */
+const REDO_PLAN_TTL_MS = 20 * 60 * 1000;
+
+/** 诊断轨迹的存储键（只写不读，供排查时用探针取） */
+const WORK_REDO_TRACE_KEY = 'cx.work.aiRedo.trace';
+
+/** 卷子上的一道题（发给 AI 的整卷快照） */
+interface PaperQuestion {
+	index: number;
+	title: string;
+	type?: string;
+	options: string[];
+	/** 上一轮实际提交的答案 */
+	oldAnswer: string;
+	/** 平台批改标记：这题上次是错的（`marking_cuo`）；没读到标记时保持 undefined */
+	wrong?: boolean;
+}
+
+/**
+ * 让 AI 按「整卷 + 旧答案」重新作答
+ *
+ * 只在已启用「AI答题」时生效：复用它的地址、鉴权与模型，
+ * 但提示词换成整卷模式 —— 单题提问拿不到「哪题错了」的上下文。
+ */
+async function requestPaperRedoByAI(
+	paper: PaperQuestion[],
+	score: number | undefined,
+	passScore: number,
+	round: number,
+	history?: { round: number; answers: Record<string, string> }[]
+): Promise<Record<string, string> | null> {
+	const wrappers = (CommonProject.scripts.settings.cfg.answererWrappers || []) as any[];
+	const aiWrapper = wrappers.find((item) => item && item.name === 'AI答题');
+	if (!aiWrapper) {
+		traceRedo('AI 重做失败：没有找到「AI答题」配置');
+		return null;
+	}
+
+	const typeLabel: Record<string, string> = {
+		single: '单选题',
+		multiple: '多选题',
+		judgement: '判断题',
+		completion: '填空题',
+		unknown: '未标注题型'
+	};
+	/** 某道题在历次重做里都提交过什么（按轮次列出来，AI 才知道哪些组合已经试错） */
+	const pastAnswers = (title: string): string[] => {
+		const items: string[] = [];
+		for (const record of history || []) {
+			const answer = lookupOverrideAnswer(record.answers, title);
+			if (answer) items.push(`第${Number(record.round || 1)}轮=${answer}`);
+		}
+		return items;
+	};
+
+	/**
+	 * 整卷都发，批改结果只作为「重点提示」
+	 *
+	 * 试过只发错题，结果踩了个大坑：平台批改标记**不一定全**（实测 5 题只标了 1 题错，
+	 * 但按 20 分/题算错 1 题该有 80 分、不该不及格），只改这 1 题等于原地踏步。
+	 * 所以答案始终整卷发给 AI 复核，批改结果只用来告诉它「哪题确定错」。
+	 */
+	const markedCount = paper.filter((q) => q.wrong !== undefined).length;
+	const wrongCount = paper.filter((q) => q.wrong === true).length;
+	/** 批改标记可靠时只发错题：prompt 更短、AI 更聚焦，也不会动到上次对的题 */
+	const focus = paper.filter((q) => q.wrong === true);
+	const useFocus = focus.length > 0 && focus.length < paper.length;
+	const targets = useFocus ? focus : paper;
+
+	const lines = targets
+		.map((q) => {
+			const head = `${q.index}. [${typeLabel[q.type || 'unknown'] || q.type || '未标注题型'}] ${q.title}`;
+			/**
+			 * 选项文本自带「A 」「B.」这类前缀（超星 li 的文本就是这样），
+			 * 直接再拼一层编号会变成 `A. A 学习…`，AI 容易看串。这里先剥掉已有的。
+			 */
+			const stripPrefix = (text: string) => {
+				const stripped = String(text || '')
+					.replace(/^[A-H][\s.．、,，:：)）]+/, '')
+					.trim();
+				return stripped || String(text || '').trim();
+			};
+			const options = q.options.length
+				? '\n选项：' +
+				  q.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${stripPrefix(o)}`).join(' | ')
+				: '';
+			const past = pastAnswers(q.title);
+			const pastLine = past.length ? `\n历次作答（均已判错）：${past.join('；')}` : '';
+			const markTag = !useFocus && q.wrong === true ? '【平台批改：错误，必须换答案】' : '';
+			return (
+				head +
+				(markTag ? ' ' + markTag : '') +
+				options +
+				`\n上次作答：${q.oldAnswer || '（空）'}` +
+				pastLine
+			);
+		})
+		.join('\n\n');
+
+	const prompt =
+		`下面是一次在线作业的完整题目、选项、上次提交的答案，以及前几轮重做时用过的答案（都已判错）。\n` +
+		(useFocus
+			? `本次**只需要重做其中 ${targets.length} 道错题**（平台已批改，其余题上次是对的，不要出现在答案里）。\n`
+			: '') +
+		(typeof score === 'number' && score > 0
+			? `上次得分 ${score} 分，及格线 ${passScore} 分，说明里面有错误答案。\n`
+			: `上次没有通过（平台提示未达到及格线 ${passScore} 分），说明里面有错误答案。\n`) +
+		`请重新作答：逐题检查上次的答案，错的改掉，对的保留。\n\n` +
+		`输出要求（必须严格遵守）：\n` +
+		`1. 只输出一个 JSON 数组，不要输出解释、前后缀，也不要包代码块标记。\n` +
+		`2. 数组长度必须等于题目数量 ${targets.length}，顺序与题目一一对应。\n` +
+		`3. 每个元素格式：{"i": 题号数字, "answer": "新答案"}。\n` +
+		`4. answer 规则：**所有选择题（含判断题）统一输出选项字母**。` +
+		`单选输出 1 个字母（如 A）；多选输出字母并用 # 分隔（如 A#C）；` +
+		`判断题输出所选选项的字母（如 B）；填空题输出要填的内容，多个空用 # 分隔。\n` +
+		`5. 判断题也是选择题：禁止输出「对」「错」「正确」「错误」，只输出字母。\n` +
+		`6. 「历次作答」里已经试过且没通过的组合，不要原样重复，换更可能正确的答案。\n\n` +
+		`题目如下：\n${lines}`;
+
+	/** 提示词里的 `${...}` 会被题库占位符替换器当成变量，先拆开 */
+	const safePrompt = prompt.replace(/\$\{/g, '$ {');
+
+	const wrapper: any = {
+		name: 'AI整卷重做',
+		url: aiWrapper.url,
+		method: 'post',
+		type: 'GM_xmlhttpRequest',
+		contentType: 'json',
+		headers: { ...(aiWrapper.headers || {}) },
+		data: {
+			model: aiWrapper.data?.model,
+			temperature: 0,
+			/** 整卷的 JSON 比单题长得多，给足输出预算，免得被截断成不合法 JSON */
+			max_tokens: 16384,
+			messages: [
+				{
+					role: 'system',
+					content:
+						'你是答题助手。用户会给你一整份作业的题目、选项和他上次提交的答案，并告诉你这份卷子没及格。\n' +
+						'你的任务是把错的答案改对、保留对的答案，并按要求的 JSON 格式整卷输出。'
+				},
+				{ role: 'user', content: safePrompt }
+			]
+		},
+		handler:
+			'return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }'
+	};
+
+	$console.info(`第 ${round} 轮重做：把整卷 ${targets.length} 题（含上次答案）发给 AI`);
+
+	/**
+	 * 整卷请求临时放宽超时
+	 *
+	 * `defaultAnswerWrapperHandler` 内部是 `Promise.race([request, sleep(60s)])`，
+	 * 60 秒一到就返回 undefined、判「题库请求超时」—— 实测整卷 5 题配推理模型经常跑过 60 秒，
+	 * 表现就是「AI 一直失败、轮次反复从头来」。这里临时放宽到 180 秒，请求结束再还原。
+	 */
+	const previousTimeout = AnswerWrapperHandlerConfig.timeout_seconds;
+	AnswerWrapperHandlerConfig.timeout_seconds = 180;
+	let infos: Awaited<ReturnType<typeof defaultAnswerWrapperHandler>>;
+	try {
+		infos = await defaultAnswerWrapperHandler([wrapper], {});
+	} finally {
+		AnswerWrapperHandlerConfig.timeout_seconds = previousTimeout;
+	}
+	const content = infos?.[0]?.results?.[0]?.answer || '';
+	if (!content) {
+		const reason = infos?.[0]?.error || '未知原因（返回为空）';
+		$console.warn('AI 整卷重做没有返回内容：' + reason);
+		traceRedo(`AI 重做失败：${String(reason).slice(0, 90)}`);
+		return null;
+	}
+
+	let text = String(content).trim();
+	text = text.replace(/^```[a-zA-Z]*\s*/, '').replace(/```\s*$/, '');
+	const start = text.indexOf('[');
+	const end = text.lastIndexOf(']');
+	if (start === -1 || end <= start) {
+		$console.warn('AI 整卷重做返回的不是 JSON 数组，已忽略：' + text.slice(0, 120));
+		traceRedo(`AI 重做失败：返回非 JSON（${text.slice(0, 60)}）`);
+		return null;
+	}
+
+	let list: any;
+	try {
+		list = JSON.parse(text.slice(start, end + 1));
+	} catch (e: any) {
+		const reason = (e && e.message) || String(e);
+		$console.warn('AI 整卷重做返回的 JSON 解析失败：' + reason);
+		traceRedo(`AI 重做失败：JSON 解析失败（${String(reason).slice(0, 60)}）`);
+		return null;
+	}
+	if (!Array.isArray(list)) return null;
+
+	const answers: Record<string, string> = {};
+	for (const item of list) {
+		if (!item || typeof item !== 'object') continue;
+		const index = Number(item.i ?? item.index ?? item.q);
+		const answer = String(item.answer ?? item.a ?? '').trim();
+		if (!Number.isFinite(index) || !answer) continue;
+		const question = paper[index - 1];
+		if (!question || !question.title) continue;
+		answers[question.title] = answer;
+	}
+	if (Object.keys(answers).length === 0) {
+		$console.warn('AI 整卷重做解析出来的答案是空的');
+		return null;
+	}
+	$console.info(
+		`第 ${round} 轮重做：拿到 ${Object.keys(answers).length}/${targets.length} 道题的新答案${
+			useFocus ? `（只重做 ${targets.length} 道错题）` : ''
+		}`
+	);
+	/** 把整卷答案写进轨迹，方便直接对比「这一轮到底改了什么」 */
+	traceRedo(
+		`第 ${round} 轮答案：` +
+			targets
+				.map((q) => `${q.index}=${answers[q.title] || '—'}${q.wrong ? '✗' : ''}`)
+				.join(' ')
+	);
+	return answers;
+}
+
+/**
+ * 清掉一道题上已经选中的选项
+ *
+ * 重做卷会把上一轮的答案**预选**在卷子上，而答题器只会「补点」不会取消 ——
+ * 结果新答案和旧答案混在一起（多选最明显）。平台自己的取消方式就是
+ * **再点一次那个高亮的选项**（`li[onclick^="addChoice"]` 是 toggle），
+ * 所以这里对着 `[class*="check_answer"]` 的元素点回去，最多试 3 轮。
+ */
+async function clearQuestionSelections(root: HTMLElement | null | undefined): Promise<number> {
+	if (!root) return 0;
+	let clicked = 0;
+	for (let pass = 0; pass < 3; pass++) {
+		const selected = Array.from(root.querySelectorAll<HTMLElement>('[class*="check_answer"]'));
+		if (!selected.length) return clicked;
+		for (const el of selected) {
+			try {
+				const target = el.closest<HTMLElement>('li') || el;
+				target.click();
+				clicked++;
+				await $.sleep(120);
+			} catch {}
+		}
+		await $.sleep(150);
+	}
+	return clicked;
+}
+
+/**
+ * 按题干取 AI 重做答案
+ *
+ * 精确 key 命中直接用；不命中时退到「归一化后互相包含」——题干跨页面可能差一个括号、
+ * 空格或混淆字体，精确比较会整题落空，一落空就回退题库旧答案（等于白重做）。
+ * 短 key（<8 字）不参与模糊匹配，避免「1」「对」这类内容误命中。
+ */
+function lookupOverrideAnswer(answers: Record<string, string>, title: string): string {
+	if (!title) return '';
+	if (answers[title]) return answers[title];
+
+	const normalize = (text: string) =>
+		String(text || '')
+			.replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, '')
+			.toLowerCase();
+	const target = normalize(title);
+	if (target.length < 8) return '';
+
+	for (const key of Object.keys(answers)) {
+		const normalizedKey = normalize(key);
+		if (normalizedKey.length < 8) continue;
+		if (normalizedKey === target || normalizedKey.includes(target) || target.includes(normalizedKey)) {
+			return answers[key];
+		}
+	}
+	return '';
+}
+
+/**
+ * 从已批改的卷面上读出「哪几题错了」
+ *
+ * 超星批改后每题会带 `<span class="marking_dui">`（对）或 `<span class="marking_cuo">`（错），
+ * 和 `paper` 按 `.TiMu` 顺序一一对应。读到就只重做错题：prompt 更短、AI 更聚焦，
+ * 也不会把上次蒙对的题改坏。
+ *
+ * 注意 `.answerCon` 是「**我的答案**」的值（`.answerFont` 才是"我的答案："标签），
+ * 不是标准答案 —— 别拿它当正确答案用。
+ */
+function markWrongQuestions(
+	paper: PaperQuestion[],
+	doc: Document | null | undefined
+): { wrong: number; marked: number } {
+	const none = { wrong: 0, marked: 0 };
+	if (!doc || !paper.length) return none;
+	const nodes = Array.from(doc.querySelectorAll('.TiMu'));
+	if (nodes.length !== paper.length) return none;
+
+	let wrong = 0;
+	let marked = 0;
+	paper.forEach((question, index) => {
+		const node = nodes[index];
+		const isWrong = !!node.querySelector('.marking_cuo');
+		const isRight = !!node.querySelector('.marking_dui');
+		if (isWrong) {
+			question.wrong = true;
+			wrong++;
+			marked++;
+		} else if (isRight) {
+			question.wrong = false;
+			marked++;
+		} else {
+			/** 没标记的题（另一种练习形态）：保持 undefined，不能当成「对」 */
+			question.wrong = undefined;
+		}
+	});
+	return { wrong, marked };
+}
+
+/** 这个选项当前是不是选中态（页面自己的 check_answer / check_answer_dx） */
+function isOptionPicked(option: HTMLElement | null | undefined): boolean {
+	if (!option) return false;
+	if (option.matches?.('[class*="check_answer"]')) return true;
+	if (option.querySelector?.('[class*="check_answer"]')) return true;
+	const li = option.closest?.('li');
+	return !!li?.querySelector('[class*="check_answer"]');
+}
+
+/**
+ * 点选并确认真的选中了（幂等）
+ *
+ * 为什么光 `option.click()` 不够：测验 iframe 刚加载时 DOM 已经在了，但平台的
+ * `addChoice/addMultipleChoice` 还没绑上（或还没执行完），点击就是空点 ——
+ * 解析层却认为「这题答完了」，最终整卷一个字没选就提交。这就是那个**概率性白卷**的来源。
+ * 这里点完立刻验证选中态，没选中就再点，已经选中就不重复点（避免 toggle 把它取消）。
+ */
+async function ensureOptionPicked(option: HTMLElement | null | undefined, retries = 4): Promise<boolean> {
+	if (!option) return false;
+	for (let i = 0; i < retries; i++) {
+		if (isOptionPicked(option)) return true;
+		try {
+			option.click();
+		} catch {}
+		await $.sleep(160);
+	}
+	return isOptionPicked(option);
+}
+
+/**
+ * 等测验页面真正可交互
+ *
+ * 判据不是「有没有 .TiMu」，而是「选项有没有绑定 onclick」——
+ * 题目先渲染、事件后绑定，中间那段窗口正是点空的高发期。
+ */
+async function waitQuizInteractive(win: Window | null | undefined, timeout = 15000): Promise<boolean> {
+	if (!win) return false;
+	const deadline = Date.now() + timeout;
+	while (Date.now() < deadline) {
+		try {
+			const doc = win.document;
+			const questions = doc.querySelectorAll('.TiMu').length;
+			const clickable = doc.querySelectorAll('li[onclick], a[onclick], .after[onclick]').length;
+			if (questions > 0 && clickable > 0) return true;
+		} catch {}
+		await $.sleep(400);
+	}
+	return false;
+}
+
+/**
+ * 数一数卷面上有多少选择题一个字都没选
+ *
+ * 为什么需要这道检查：`resolver` 只要「解析到答案」就返回 `finish: true`，
+ * 哪怕 `options` 是空的（选项选择器没匹配到、DOM 结构变了），handler 收到
+ * `undefined` 直接 return，一个字都没点 —— 完成率却仍然算 100%，于是**交白卷**。
+ * 提交前用它兜一道，白卷一律不提交。
+ */
+function countUnansweredQuestions(doc: Document | null | undefined): { total: number; unanswered: number } {
+	if (!doc) return { total: 0, unanswered: 0 };
+	const questions = Array.from(doc.querySelectorAll('.TiMu'));
+	let unanswered = 0;
+	for (const question of questions) {
+		/** 填空 / 连线这类非选择题另有输入控件，不参与统计 */
+		if (question.querySelector('textarea, select, .filling_answer')) continue;
+		if (question.querySelectorAll('[class*="check_answer"]').length === 0) unanswered++;
+	}
+	return { total: questions.length, unanswered };
+}
+
+/** 题干是否命中名单（归一化后互相包含，容忍标点/空格差异） */
+function titleInList(list: string[], title: string): boolean {
+	if (!title) return false;
+	const normalize = (text: string) =>
+		String(text || '')
+			.replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, '')
+			.toLowerCase();
+	const target = normalize(title);
+	if (target.length < 6) return list.indexOf(title) !== -1;
+	return list.some((item) => {
+		const key = normalize(item);
+		return key.length >= 6 && (key === target || key.includes(target) || target.includes(key));
+	});
+}
+
+/**
+ * 把 AI 给的答案映射到卷面上的选项元素
+ *
+ * 为什么重做轮不用现成的 resolver：
+ *   `resolveJudgement` 只认「对/错/是/否/√/×」这些词，AI 一旦按选择题习惯给字母（A / B），
+ *   它直接返回 `finish: false` —— 那题一个字都不会点，白丢分（实测连续两轮都是这个原因，
+ *   两道判断题全空，整卷必挂）。所以这里自己映射，不猜：
+ *     · 去掉分隔符是纯字母 → 按序号取（A → 第 1 项）
+ *     · 否则按文字归一化后包含匹配（「对」能命中「A 对」，「宿舍」能命中「A 宿舍」）
+ */
+function pickRedoOptions(options: HTMLElement[], answer: string): HTMLElement[] {
+	const raw = String(answer || '').trim();
+	if (!raw || !options || !options.length) return [];
+
+	const letters = raw.replace(/[#，,、;；\s]+/g, '').toUpperCase();
+	if (/^[A-H]{1,8}$/.test(letters)) {
+		const byLetter = letters
+			.split('')
+			.map((ch) => options[ch.charCodeAt(0) - 65])
+			.filter(Boolean);
+		if (byLetter.length) return byLetter;
+	}
+
+	const normalize = (text: string) =>
+		String(text || '')
+			.replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, '')
+			.toLowerCase();
+
+	const targets = raw
+		.split(/[#，,、;；\n]+/)
+		.map((item) => normalize(item))
+		.filter(Boolean);
+	if (!targets.length) return [];
+
+	/**
+	 * 取选项的可读文字
+	 *
+	 * 超星判断题的选项是 `<a class="fl after">`，**自身 innerText 是空的**，
+	 * 文字（对/错）在父级 `li` 上。只看 `option.innerText` 会全部匹配失败 → 一个字不点。
+	 */
+	const textOf = (option: HTMLElement) => {
+		const own = String(option.innerText || option.textContent || '').trim();
+		if (own) return own;
+		const li = option.closest('li');
+		return String(li?.innerText || li?.textContent || '').trim();
+	};
+
+	const picked: HTMLElement[] = [];
+	for (const target of targets) {
+		const exact = options.find((option) => normalize(textOf(option)) === target);
+		const fuzzy =
+			exact ||
+			options.find((option) => {
+				const text = normalize(textOf(option));
+				return !!text && (text.includes(target) || target.includes(text));
+			});
+		if (fuzzy && picked.indexOf(fuzzy) === -1) picked.push(fuzzy);
+	}
+	return picked;
+}
+
+/** 读重做计划（sessionStorage：同标签页刷新后仍在，关标签页即失效） */
+/**
+ * 重做计划的三处存储
+ *
+ * 主存 `localStorage`：整页刷新、甚至客户端重启（浏览器恢复会话）都不丢 ——
+ * sessionStorage 一旦碰上重启就没了，表现就是「刷新后直接拿旧答案提交」。
+ * 同时写一份 sessionStorage 作为兼容，读的时候两边都看。
+ * 靠 `ts`（20 分钟）收敛，过期即失效，不会长期把页面拽回旧测验。
+ */
+function readRedoPlan(): WorkRedoPlan | undefined {
+	/** 两处都看，取 ts 较新的那份：旧记录不能压过刚写入的新计划 */
+	let best: WorkRedoPlan | undefined;
+	for (const store of [localStorage, sessionStorage]) {
+		try {
+			const raw = store.getItem(WORK_REDO_KEY);
+			if (!raw) continue;
+			const plan = JSON.parse(raw) as WorkRedoPlan;
+			if (!plan || typeof plan !== 'object' || !plan.answers) continue;
+			if (plan.ts && Date.now() - Number(plan.ts) > REDO_PLAN_TTL_MS) {
+				try {
+					store.removeItem(WORK_REDO_KEY);
+				} catch {}
+				continue;
+			}
+			if (!best || Number(plan.ts || 0) > Number(best.ts || 0)) best = plan;
+		} catch {}
+	}
+	return best;
+}
+
+function writeRedoPlan(plan: WorkRedoPlan) {
+	const payload = JSON.stringify({ ...plan, ts: Date.now() });
+	for (const store of [localStorage, sessionStorage]) {
+		try {
+			store.setItem(WORK_REDO_KEY, payload);
+		} catch {}
+	}
+	traceRedo(`写入计划 round=${plan.round} 题数=${Object.keys(plan.answers).length} 小节=${plan.chapterId || '-'}`);
+}
+
+function clearRedoPlan() {
+	for (const store of [localStorage, sessionStorage]) {
+		try {
+			store.removeItem(WORK_REDO_KEY);
+		} catch {}
+	}
+}
+
+/**
+ * 重做流程的诊断轨迹
+ *
+ * 只要 `localStorage['cx.work.aiRedo.trace']` 还在，事后就能读出「计划有没有读到、
+ * 每题有没有命中答案、点了几项、为什么放弃」。以前全靠 `$console`，页面一刷新就没了。
+ */
+function traceRedo(message: string) {
+	try {
+		const key = WORK_REDO_TRACE_KEY;
+		const list = JSON.parse(localStorage.getItem(key) || '[]') as string[];
+		list.push(`${new Date().toLocaleTimeString()} ${message}`);
+		localStorage.setItem(key, JSON.stringify(list.slice(-80)));
+	} catch {}
+}
+
+/**
+ * 把「这一轮实际作答的整卷」抓成快照
+ *
+ * 题目、选项、以及上一轮真的用了哪个答案 —— 后者来自 `ctx.searchInfos`，
+ * 是真正写进卷子的答案，比去 DOM 里反查选中态可靠。
+ * 标题处理函数由调用方传入：作业/考试和章节测验的题干清洗规则不一样，
+ * 必须和 `answerer` 里用的是同一个，否则 AI 给的答案回填时对不上题干。
+ */
+function buildPaperSnapshotFromResults(
+	results: any[],
+	titleTransform: (titles: (HTMLElement | undefined)[]) => string
+): PaperQuestion[] {
+	return results
+		.map((item, i) => {
+			const ctx = item && item.ctx;
+			const title = ctx ? titleTransform(ctx.elements.title || []) : '';
+			const options = (ctx?.elements?.options || []).map((option: HTMLElement) =>
+				optimizationElementWithImage(option, true).innerText.trim()
+			);
+			/**
+			 * 「上次作答」优先从**卷面选中态**读
+			 *
+			 * 不能用 `searchInfos[0]`：那可能是题库缓存 / 上一轮 AI 的答案，
+			 * 和真正提交进卷子的答案不一定一致。传给 AI 的旧答案错了，它就会照着错的信息改。
+			 */
+			const picked = ((ctx?.elements?.options || []) as HTMLElement[])
+				.map((option, index) => {
+					const hit =
+						option.matches?.('[class*="check_answer"]') || option.querySelector?.('[class*="check_answer"]');
+					return hit ? String.fromCharCode(65 + index) : '';
+				})
+				.filter(Boolean);
+			const oldAnswer = picked.length
+				? picked.join('#')
+				: String(
+						(ctx?.searchInfos || []).map((info: any) => info?.results?.[0]?.answer).find((answer: any) => answer) || ''
+				  ).trim();
+			return { index: i + 1, title, type: ctx?.type as string | undefined, options, oldAnswer };
+		})
+		.filter((question) => !!question.title)
+		.map((question, i) => ({ ...question, index: i + 1 }));
+}
+
+/**
+ * 读平台自己弹的「不及格」提示
+ *
+ * 超星这套弹层是通用的 `popup(content, ok, cancel, okcallback)`：
+ * 内容写在 `#popcontent`，外层是 `#workpop.maskDiv`。
+ * 实测文案：`未达到及格线，请重做`（脚本里还有 `很遗憾，未达到及格线，请重做` 的变体）。
+ * 这是唯一可靠的判定：弹窗里没有分数，只有这句话。
+ */
+function readPopupText(): { text: string; visible: boolean } {
+	try {
+		const doc = top?.document;
+		if (!doc) return { text: '', visible: false };
+		const box = doc.querySelector<HTMLElement>('#workpop');
+		const content = doc.querySelector<HTMLElement>('#popcontent');
+		const text = (content?.textContent || '').replace(/\s+/g, ' ').trim();
+		const visible = box ? getComputedStyle(box).display !== 'none' : false;
+		return { text, visible };
+	} catch {
+		return { text: '', visible: false };
+	}
+}
+
+/**
+ * 等平台把判定弹窗弹出来
+ *
+ * 同一个 `#workpop` 会被复用：先弹「确认提交？」，提交后才换成
+ * 「未达到及格线，请重做」或「提交成功」。所以只能轮询等，读一次就是空的。
+ * 等到明确的不及格/成功文案就返回；超时返回空（按未知处理，不重做）。
+ */
+async function waitFailPopupText(timeout = 6000): Promise<string> {
+	const fail = /(未达到及格线|不及格|未及格|成绩不合格|请重做)/;
+	const pass = /(提交成功|已完成|保存成功|作业已提交)/;
+	const deadline = Date.now() + timeout;
+	while (Date.now() < deadline) {
+		const { text, visible } = readPopupText();
+		if (visible && text) {
+			if (fail.test(text)) return text;
+			if (pass.test(text)) return '';
+		}
+		await $.sleep(400);
+	}
+	return '';
+}
+
 function workOrExam(
 	type: 'work' | 'exam' = 'work',
 	{
@@ -766,6 +1526,30 @@ function workOrExam(
 	if (preview_mode) {
 		CommonProject.scripts.workResults.methods.init({
 			questionPositionSyncHandlerType: 'cx'
+		});
+	}
+
+	/**
+	 * 「不及格 → AI 整卷重做」的现场状态
+	 *
+	 * 重做必须回到一张干净的卷子（已选项只能加不能减），所以每一轮都是
+	 * 「提交 → 读分 → AI 重算 → reload 重进卷子 → 用新答案再答一遍」。
+	 * 跨 reload 的上下文只能落在 sessionStorage：同一标签页刷新后还在，
+	 * 关掉标签页就自动消失，不会把上一份作业的旧答案带到下一份作业里。
+	 */
+	const redoCfg = (CXProject.scripts.work?.cfg || {}) as any;
+	const redoEnabled = type === 'work' && redoCfg.aiRedoOnFail !== false;
+	const passScore = Number(redoCfg.passScore ?? 60);
+	const maxRedoRounds = Math.max(0, Math.min(5, Number(redoCfg.aiRedoRounds ?? 5)));
+
+	const redoPlan = readRedoPlan();
+	/** 本轮要用的「整卷答案」：只有重做轮才非空，普通答题一律走题库 / AI 单题 */
+	const aiOverride: Record<string, string> = (redoPlan && redoPlan.answers) || {};
+	const hasOverride = Object.keys(aiOverride).length > 0;
+	if (hasOverride) {
+		$message.info({
+			content: `正在用 AI 的第 ${(redoPlan?.round || 1) + 1} 轮答案重新作答（上次 ${(redoPlan?.scores || []).join(' / ') || '?'} 分）`,
+			duration: 0
 		});
 	}
 
@@ -839,7 +1623,11 @@ function workOrExam(
 				if (title) {
 					const typeInput = elements.type[0] as HTMLInputElement;
 					const type = (typeInput ? getQuestionType(parseInt(typeInput.value)) : undefined) || 'unknown';
-					return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
+					/**
+					 * 重做轮：直接用 AI 给的新答案，不再走题库 / 单题 AI。
+					 * 用题干做 key —— 引擎按顺序回调不保证，题干是这里唯一稳定的锚点。
+					 */
+					const searchFresh = async () => {
 						await $.sleep((period ?? 3) * 1000);
 						return defaultAnswerWrapperHandler(answererWrappers, {
 							type,
@@ -849,7 +1637,24 @@ function workOrExam(
 									? ''
 									: ctx.elements.options.map((o) => optimizationElementWithImage(o, true).innerText).join('\n')
 						});
-					});
+					};
+
+					if (hasOverride) {
+						const redoAnswer = lookupOverrideAnswer(aiOverride, title);
+						if (redoAnswer) {
+							return [
+								{
+									name: 'AI整卷重做',
+									homepage: '#',
+									results: [{ question: title, answer: redoAnswer }]
+								}
+							];
+						}
+						/** 重做轮没匹配上：走真实搜索，不查题库缓存（缓存里是上一轮的答案） */
+						return searchFresh();
+					}
+
+					return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, searchFresh);
 				} else {
 					throw new Error('题目为空，请查看题目是否为空，或者忽略此题');
 				}
@@ -867,6 +1672,69 @@ function workOrExam(
 				parseInt(elements.type.find((t) => t.getAttribute('name')?.match(/type\d+/))?.getAttribute('value') || '-1')
 			);
 
+			/**
+			 * 重做轮：清掉预选的旧答案，然后按 AI 答案直接点选
+			 *
+			 * 和章节测验同一套处理：判断题的 resolver 只认「对/错」这类词，
+			 * AI 给字母时它会 `finish: false`，那题就空着判错 —— 这里自己映射更稳。
+			 */
+			if (hasOverride) {
+				const redoTitle = workOrExamQuestionTitleTransform(elements.title || []);
+				const redoAnswer = lookupOverrideAnswer(aiOverride, redoTitle);
+
+				if (redoAnswer && type && type !== 'completion') {
+					/** 先匹配、再清空：匹配不上就一个字都不动，免得把题弄空 */
+					const picked = pickRedoOptions(elements.options as HTMLElement[], redoAnswer);
+					if (picked.length) {
+						const root =
+							(ctx as any).root ||
+							(elements.options[0]?.closest<HTMLElement>('.questionLi') as HTMLElement | undefined) ||
+							null;
+						const cleared = await clearQuestionSelections(root);
+						if (cleared) $console.info(`重做：已取消 ${cleared} 个旧选项`);
+
+						for (const option of picked) {
+							await ensureOptionPicked(option);
+						}
+						$console.info(`重做：AI 答案「${redoAnswer}」→ 点选 ${picked.length} 项`);
+						traceRedo(`题「${redoTitle.slice(0, 18)}」答案=${redoAnswer} 取消${cleared}项 点选${picked.length}项`);
+						return { finish: true, options: picked.map((option) => option.innerText) };
+					}
+					$console.warn(`重做：AI 答案「${redoAnswer}」对不上任何选项，保留原答案并回退题库`);
+					traceRedo(`题「${redoTitle.slice(0, 18)}」答案=${redoAnswer} 对不上选项，保留原答案`);
+				} else if (!redoAnswer) {
+					$console.warn('重做：本题题干没匹配上 AI 答案，保留原答案并回退题库');
+					traceRedo(`题「${redoTitle.slice(0, 18)}」没匹配上计划 key，保留原答案`);
+				}
+			}
+
+			/**
+			 * 第一次做：直接按答案点选（和章节测验同一套理由）
+			 *
+			 * `resolveJudgement` 只认「对/错」这类词，AI 给字母就 `finish: false`、一个字不点。
+			 */
+			if (!hasOverride && type && (type === 'single' || type === 'multiple' || type === 'judgement')) {
+				const candidates = (searchInfos || [])
+					.flatMap((info) => (info?.results || []).map((item: any) => String(item?.answer || '').trim()))
+					.filter(Boolean);
+				for (const candidate of candidates) {
+					const picked = pickRedoOptions(elements.options as HTMLElement[], candidate);
+					if (!picked.length) continue;
+
+					const root =
+						(ctx as any).root ||
+						(elements.options[0]?.closest<HTMLElement>('.questionLi') as HTMLElement | undefined) ||
+						null;
+					const cleared = await clearQuestionSelections(root);
+					if (cleared) $console.info(`作答：已取消 ${cleared} 个旧选项`);
+					for (const option of picked) {
+						await ensureOptionPicked(option);
+					}
+					$console.info(`作答：答案「${candidate}」→ 点选 ${picked.length} 项`);
+					return { finish: true, options: picked.map((option) => option.innerText) };
+				}
+			}
+
 			if (type && (type === 'completion' || type === 'multiple' || type === 'judgement' || type === 'single')) {
 				const resolver = createDefaultQuestionResolver(ctx)[type];
 				return await resolver(
@@ -875,10 +1743,8 @@ function workOrExam(
 					async (type, answer, option) => {
 						// 如果存在已经选择的选项
 						if (type === 'judgement' || type === 'single' || type === 'multiple') {
-							if (option?.parentElement && $$el('[class*="check_answer"]', option.parentElement).length === 0) {
-								option.click();
-								await $.sleep(500);
-							}
+							/** 用幂等点选：已选就不点，没点上会重试（防事件未绑定的空点） */
+							await ensureOptionPicked(option);
 						} else if (type === 'completion' && answer.trim()) {
 							const text = option?.querySelector('textarea');
 							const textareaFrame = option?.querySelector('iframe');
@@ -961,11 +1827,311 @@ function workOrExam(
 		}
 	});
 
+	/**
+	 * 把「这一轮实际提交的整卷」抓成快照
+	 *
+	 * 题目、选项、以及上一轮真的用了哪个答案 —— 后者来自 `ctx.searchInfos`，
+	 * 是真正写进卷子的答案，比去 DOM 里反查选中态可靠。
+	 */
+	const buildPaperSnapshot = (results: any[]): PaperQuestion[] =>
+		buildPaperSnapshotFromResults(results, workOrExamQuestionTitleTransform);
+
+	/** 提交整卷：先调页面自带的提交函数，没有按钮就点一下，再确认一次 */
+	const submitWorkPaper = async () => {
+		const callPageFn = (name: string) => {
+			for (const scope of [window as any, top as any]) {
+				try {
+					if (typeof scope[name] === 'function') {
+						scope[name]();
+						return true;
+					}
+				} catch {}
+			}
+			return false;
+		};
+		if (!callPageFn('btnBlueSubmit')) {
+			document.querySelector<HTMLElement>('#tiJiao, .btnSubmit, [onclick*="btnBlueSubmit"]')?.click();
+		}
+		await $.sleep(3000);
+		callPageFn('submitCheckTimes');
+		/**
+		 * 这里**不要**急着关弹窗：`未达到及格线，请重做` 就写在 `#workpop #popcontent` 里，
+		 * 关掉等于把唯一的判定信号抹掉（之前就是这么写的，所以永远读不到不及格）。
+		 */
+		await $.sleep(3000);
+	};
+
+	/**
+	 * 收集页面上「可能是弹窗 / 结果区」的文本（当前帧与 top 都看）
+	 *
+	 * 不用「整页 innerText」：作业页的说明书里就有「及格线 60 分」这类字，
+	 * 一旦拿去匹配，任何一次提交都会被判成「不及格」。
+	 */
+	const collectDialogTexts = (): string[] => {
+		const selector = [
+			'#workpop',
+			'.popDiv',
+			'.maskDiv',
+			'.layui-layer',
+			'.layer',
+			'.modal',
+			'.dialog',
+			'.result',
+			'.mark_table',
+			'.mark_score',
+			'.score',
+			'.scoreNum',
+			'.tipDiv'
+		].join(',');
+		const texts: string[] = [];
+		for (const scope of [document, top?.document]) {
+			try {
+				for (const el of Array.from(scope?.querySelectorAll(selector) || []) as HTMLElement[]) {
+					const text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+					/** 太长的容器多半是整页套壳，不是弹窗 */
+					if (text && text.length <= 600) texts.push(text);
+				}
+			} catch {}
+		}
+		return texts;
+	};
+
+	/**
+	 * 读这次提交的分数
+	 *
+	 * 只认「得分 / 成绩」这类明确写法且带冒号的形式，其它情况一律返回 undefined。
+	 * 宁可读不到（交给弹窗判定），也不能把「及格线 60 分」当成本次得分 ——
+	 * 那个错会直接把不及格判成及格，重做就永远不触发。
+	 */
+	const readWorkScore = (): number | undefined => {
+		const scoreText = /(?:本次得分|本次成绩|作业得分|作业成绩|试卷得分|总得分|得分|成绩)\s*[:：]\s*(\d+(?:\.\d+)?)/;
+		for (const text of collectDialogTexts()) {
+			const matched = scoreText.exec(text);
+			if (matched) return Number(matched[1]);
+		}
+		for (const scope of [document, top?.document]) {
+			try {
+				const text = (scope?.body?.innerText || '').replace(/\s+/g, ' ');
+				const matched = /本次[^。；]{0,12}?(?:得分|成绩)\s*[:：]\s*(\d+(?:\.\d+)?)/.exec(text);
+				if (matched) return Number(matched[1]);
+			} catch {}
+		}
+		return undefined;
+	};
+
+	/**
+	 * 提交期间的弹窗「录像机」
+	 *
+	 * 超星的提示层有时只挂两三秒，等提交函数里那几个 sleep 走完再去找，
+	 * 弹窗早就没了。所以从点提交那一刻起每 300ms 采一次文本，去重留存，
+	 * 判定时先看这段历史，再看当前 DOM。
+	 */
+	const createDialogRecorder = () => {
+		const seen: string[] = [];
+		let stop = false;
+		const task = (async () => {
+			while (!stop) {
+				try {
+					for (const text of collectDialogTexts()) {
+						if (!seen.includes(text) && seen.length < 24) seen.push(text);
+					}
+				} catch {}
+				await $.sleep(300);
+			}
+		})();
+		return {
+			stop: () => {
+				stop = true;
+				void task;
+			},
+			get texts() {
+				return seen;
+			}
+		};
+	};
+
+	/**
+	 * 提交后的及格判定 —— **以平台弹窗为准**
+	 *
+	 * 不及格时超星会弹「未达到及格线，需要重做」这类提示，这比读分数可靠得多：
+	 * 弹窗里出现的「60 分」往往是及格线而不是得分，按分数读会把不及格读成及格。
+	 * 所以顺序是：先找不及格弹窗 → 再读明确写法的得分 → 最后才看「提交成功」。
+	 * 什么都没读到算「未知」，按及格处理（不做重做），避免误交多份卷子。
+	 */
+	const readSubmitVerdict = async (
+		recorder?: { texts: string[] }
+	): Promise<{ failed: boolean; score?: number; reason: string }> => {
+		const FAIL =
+			/(未达到及格线|未达到及格|没有达到及格线|没有达到及格|未及格|不及格|成绩不合格|低于及格|未通过|分数过低|成绩偏低)/;
+		const FAIL_REDO = /(重做|再做一次|重新作答|重新答题)/;
+		const SCORE_WORD = /(及格|分数|成绩|得分)/;
+		/**
+		 * 不及格的两种写法都要认：
+		 * 一种是直接说「未达到及格线 / 不及格」，另一种是「未达到 60 分，是否重做？」
+		 * —— 后者没有「及格」二字，只出现分数和「重做」，必须组合判断，
+		 * 免得把普通弹窗里孤零零一个「重做」按钮当成本次不及格。
+		 */
+		const isFailText = (text: string) =>
+			FAIL.test(text) ||
+			/未达到\s*\d{1,3}(?:\.\d+)?\s*分/.test(text) ||
+			(FAIL_REDO.test(text) && SCORE_WORD.test(text));
+		const PASS = /(提交成功|已提交|作业已完成|完成作业|已保存)/;
+		/** 客观题判分是异步的，弹窗可能晚一两秒，轮询 8 秒 */
+		for (let i = 0; i < 16; i++) {
+			const texts = collectDialogTexts();
+			/** 当前 DOM + 录像机拍到的历史一起看：弹窗已经消失也能认出来 */
+			for (const text of [...(recorder?.texts || []), ...texts]) {
+				if (isFailText(text)) {
+					/** 把原文打进日志：弹窗一闪而过也能事后核对写法 */
+					$console.info('判定不及格，弹窗原文：' + text.slice(0, 160));
+					return { failed: true, reason: text.slice(0, 120) };
+				}
+			}
+			const score = readWorkScore();
+			if (score !== undefined) {
+				return { failed: score < passScore, score, reason: `得分 ${score}` };
+			}
+			if (i >= 3 && texts.some((text) => PASS.test(text))) {
+				return { failed: false, reason: texts.find((text) => PASS.test(text))!.slice(0, 120) };
+			}
+			await $.sleep(500);
+		}
+		const captured = (recorder?.texts || []).slice(0, 4).join(' || ');
+		$console.warn('提交后没有读到及格判定，抓到的弹窗文本：' + (captured || '（没抓到弹窗）'));
+		return { failed: false, reason: 'unknown' };
+	};
+
+	/**
+	 * 点弹窗里的「重做 / 再做一次 / 重新答题」
+	 *
+	 * 命中就说明平台自己会带我们回卷子，比 reload 更贴合平台流程；
+	 * 点完等卷子出现，等不到再由调用方回退成 reload。
+	 */
+	const clickRedoButton = async (): Promise<boolean> => {
+		const REDO = /^(重做|再做一次|重新答题|重新作答|重新做)$/;
+		for (const scope of [document, top?.document]) {
+			try {
+				const candidates = Array.from(
+					scope?.querySelectorAll('a, button, input[type="button"], .popDiv span, .layui-layer-btn a') || []
+				) as HTMLElement[];
+				for (const el of candidates) {
+					const label = ((el.innerText || (el as HTMLInputElement).value || el.textContent || '') as string)
+						.replace(/\s+/g, '')
+						.trim();
+					if (!label || label.length > 8 || !REDO.test(label)) continue;
+					el.click();
+					await $.sleep(1500);
+					return true;
+				}
+			} catch {}
+		}
+		return false;
+	};
+
+	/**
+	 * 提交作业；不及格且配置了 AI 答题时整卷重做
+	 *
+	 * 流程：提交 → 读分 → 不及格就把「整卷 + 上次答案」发给 AI → reload 重进卷子
+	 * → 用 AI 的新答案再答一遍 → 再提交……最多 `aiRedoRounds` 轮。
+	 * 为什么每轮都要 reload：卷子上的选项只能加不能减，同一页上换答案是改不干净的。
+	 */
+	const submitAndRedoIfFailed = async (results: any[]) => {
+		const aiConfigured = ((CommonProject.scripts.settings.cfg.answererWrappers || []) as any[]).some(
+			(wrapper) => wrapper && wrapper.name === 'AI答题'
+		);
+		/** 考试不自动交卷；没开「不及格重做」或没配 AI 时保持原来的「自己检查后提交」 */
+		if (type !== 'work' || !redoEnabled || !aiConfigured) {
+			if (hasOverride) clearRedoPlan();
+			return;
+		}
+
+		const round = redoPlan?.round || 0;
+		const paper = buildPaperSnapshot(results);
+		if (paper.length === 0) {
+			$console.warn('整卷重做：没有从页面上取到题目，跳过');
+			clearRedoPlan();
+			return;
+		}
+
+		$message.info({ content: '正在提交作业…', duration: 3 });
+		const recorder = createDialogRecorder();
+		await submitWorkPaper();
+		const verdict = await readSubmitVerdict(recorder);
+		recorder.stop();
+		$console.info(
+			`作业提交结果：${verdict.failed ? '未达到及格线' : '已及格 / 未读到判定'} · ${verdict.reason || '无弹窗文本'}`
+		);
+
+		if (!verdict.failed) {
+			clearRedoPlan();
+			try {
+				(top as any).$?.('#workpop')?.hide?.();
+			} catch {}
+			$message.success({
+				content: verdict.score !== undefined ? `作业得分 ${verdict.score}，已及格。` : '作业已提交。',
+				duration: 0
+			});
+			return;
+		}
+
+		if (round >= maxRedoRounds) {
+			clearRedoPlan();
+			$modal.alert({
+				content: `作业未达到及格线（${verdict.reason || '平台提示需重做'}），已经重做 ${round} 轮，不再重试。`
+			});
+			return;
+		}
+
+		/**
+		 * AI 进度提示：拿句柄，算完立刻关掉
+		 *
+		 * `duration: 0` 在 easy-us 里等于「永不自动关闭」，算完不手动 remove 就会一直挂在页面上，
+		 * 内容还停在「正在重算」。这里同时给 120 秒兜底，万一异常没走到 remove 也会自己消失。
+		 */
+		const aiTip = $message.info({ content: `AI 正在重算整卷（${paper.length} 题），通常 5~20 秒…`, duration: 120 });
+		const aiStartedAt = Date.now();
+		const answers = await requestPaperRedoByAI(paper, verdict.score ?? 0, passScore, round + 1, redoPlan?.history);
+		const aiCost = Date.now() - aiStartedAt;
+		$console.info(`第 ${round + 1} 轮重做：AI 用时 ${aiCost}ms`);
+		aiTip?.remove();
+		if (!answers) {
+			clearRedoPlan();
+			$modal.alert({ content: `作业未达到及格线，但 AI 没有给出可用的新答案，已停止重做。` });
+			return;
+		}
+
+		writeRedoPlan({
+			round: round + 1,
+			answers,
+			scores: [...(redoPlan?.scores || []), verdict.score ?? 0],
+			history: archiveRedoHistory(redoPlan)
+		});
+		$message.info({ content: `第 ${round + 1} 轮重做：正在重新打开卷子`, duration: 5 });
+		await $.sleep(1200);
+
+		/**
+		 * 优先点平台弹窗里的「重做」：超星有些作业只认这个入口，
+		 * 直接刷新反而停在「已提交」的结果页。
+		 */
+		const clicked = await clickRedoButton();
+		if (clicked) {
+			$message.info({ content: '已点击平台的重做按钮，等待卷子重新打开…', duration: 0 });
+			await $.sleep(4000);
+		}
+		/** 没点按钮 / 点了没反应 / 点的不是重开卷子：自己刷新，plan 在 sessionStorage 里接力 */
+		location.reload();
+	};
+
 	if (preview_mode) {
 		worker
 			.doWork()
-			.then(() => {
+			.then(async (results) => {
 				$message.info({ content: '作业/考试完成，请自行检查后保存或提交。', duration: 0 });
+				try {
+					await submitAndRedoIfFailed(results || []);
+				} catch (error: any) {
+					$console.error('提交 / 重做流程出错：' + ((error && error.message) || error));
+				}
 				worker.emit('done');
 			})
 			.catch((err) => {
@@ -1083,6 +2249,31 @@ async function loadTyprMapping() {
 /**
  * cx分析工具
  */
+/** 目录里的一条章节（新版 .chapter_item 与老版 getTeacherAjax 都归一到这里） */
+interface ChapterInfo {
+	/** 点击入口：目录里带 onclick 的那个节点（老版是 `span.posCatalog_name`） */
+	element: HTMLElement;
+	/** 条目容器：`div#cur<chapterId>.posCatalog_select`，id 与「当前选中」类都在它身上 */
+	container: HTMLElement;
+	chapterId: string;
+	title: string;
+	/** 目录里的原始位置，用于同组内保持平台给的先后（闯关模式下不能重排） */
+	order: number;
+	/** 所属「章」的标题，例如 `1 必修部分`；读不到为空 */
+	group: string;
+	/** 组优先级：必修 0 / 选修 1 / 其它 2 */
+	rank: number;
+	/** 剩余任务点；NaN 表示这一条读不到 —— 只是「不知道」，既不代表完成也不代表未完成 */
+	unFinishCount: number;
+	/** 整页是否用「完成图标」体系（新版 `icon_Completed`）：是的话，没图标就等于没做完 */
+	pageUsesIcons?: boolean;
+	/** 平台自己标的「已完成」（`icon_yiwanc` / `icon_Completed`） */
+	done: boolean;
+	/** 完成状态原文（已完成 / 待完成 / 未开始 …），计数读不到时作为第二判据 */
+	stateText: string;
+	clickable: boolean;
+}
+
 const CXAnalyses = {
 	/** 是否处于闯关模式或者解锁模式 */
 	isInSpecialMode() {
@@ -1133,16 +2324,218 @@ const CXAnalyses = {
 	},
 	/** 是否完成全部章节 */
 	isFinishedAllChapters() {
-		return this.getChapterInfos().every((chapter) => chapter.unFinishCount === 0);
+		const infos = this.getChapterInfos();
+		if (!infos.length) return false;
+		return !infos.some((chapter) => this.isChapterUnfinished(chapter));
 	},
-	/** 获取所有章节信息 */
-	getChapterInfos() {
-		return Array.from(top?.document.querySelectorAll('[onclick^="getTeacherAjax"]') || []).map((el) => ({
-			element: el as HTMLElement,
-			chapterId: el.getAttribute('onclick')?.match(/\('(.*)','(.*)','(.*)'\)/)?.[3],
-			// @ts-ignore
-			unFinishCount: parseInt(el.parentElement.querySelector('.jobUnfinishCount')?.value || '0')
+	/**
+	 * 获取所有章节信息
+	 *
+	 * 两代目录都要认：
+	 * - 新版（mooc2）：`<div class="chapter_item" id="cur<chapterId>" onclick="toOld(...)">`，
+	 *   任务点数写在 `input.knowledgeJobCount`；
+	 * - 老版：`onclick="getTeacherAjax('courseId','clazzId','<chapterId>')"`，
+	 *   任务点数写在 `input.jobUnfinishCount`。
+	 *
+	 * 以前只认老版（`getTeacherAjax` + `.jobUnfinishCount`），新版目录读出来是空数组 ——
+	 * 「完成后跳转未完成任务点」在现网课上等于失效，只能退回平台自带的「下一节」，
+	 * 而那个只按 DOM 顺序走，不认必修/选修。
+	 */
+	getChapterInfos(): ChapterInfo[] {
+		const doc = top?.document;
+		if (!doc) return [];
+
+		/**
+		 * 分组（必修部分 / 选修部分 / 模拟考试 …）
+		 *
+		 * 页面结构：`li > div.posCatalog_select.firstLayer` 与子项所在的 `ul` 是**兄弟**关系，
+		 * 也就是说分组节点并不是条目的祖先 —— `closest('.firstLayer')` 永远返回 null。
+		 * 所以只能按**文档顺序**判断归属：条目上方最近的那个分组节点就是它的组。
+		 */
+		const groups = Array.from(doc.querySelectorAll<HTMLElement>('.posCatalog_select.firstLayer')).map((el) => ({
+			el,
+			title: (el.querySelector('.posCatalog_title')?.getAttribute('title') || el.textContent || '')
+				.replace(/\s+/g, ' ')
+				.trim()
 		}));
+		const groupOf = (el: HTMLElement) => {
+			let title = '';
+			for (const group of groups) {
+				if (group.el === el) continue;
+				/** 分组在条目前面（文档顺序）才算这一组的 */
+				if (group.el.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) title = group.title;
+			}
+			return title;
+		};
+
+		/**
+		 * 条目的点击入口是内部的 `span.posCatalog_name[onclick]`，
+		 * 而「id / 当前选中态」在外层 `div#cur<chapterId>.posCatalog_select` 上。
+		 * 两个都要拿：容器用来认状态，点击入口用来跳转。
+		 */
+		const clickEls = Array.from(
+			doc.querySelectorAll<HTMLElement>(
+				'[onclick^="getTeacherAjax"], [onclick^="toOld"], .chapter_item[id^="cur"] [onclick]'
+			)
+		);
+		const seen = new Set<HTMLElement>();
+		const infos: ChapterInfo[] = [];
+		/** 新版目录用 `icon_Completed` 标完成：整页只要出现一个，就说明判据是图标而不是任务点数 */
+		const pageUsesIcons = clickEls.some(
+			(el) => !!el.closest('.posCatalog_select')?.querySelector('[class*="icon_Completed"]')
+		);
+
+		for (const clickEl of clickEls) {
+			const container = (clickEl.closest('.posCatalog_select') as HTMLElement) || clickEl;
+			if (seen.has(container)) continue;
+			seen.add(container);
+
+			const onclick = clickEl.getAttribute('onclick') || container.getAttribute('onclick') || '';
+			const fromCur = /^cur(\d+)$/.exec(container.id || '');
+			let chapterId = fromCur ? fromCur[1] : '';
+			if (!chapterId) {
+				const args = /(?:getTeacherAjax|toOld)\s*\(([^)]*)\)/.exec(onclick);
+				if (args) {
+					const parts = args[1].split(',').map((s) => s.replace(/["'\s]/g, ''));
+					/* getTeacherAjax(courseId, clazzId, chapterId) / toOld(courseId, chapterId, clazzId, …) */
+					chapterId = /toOld/.test(onclick) ? parts[1] || '' : parts[2] || parts[1] || '';
+				}
+			}
+			if (!chapterId) continue;
+
+			/**
+			 * 任务点数：新版在条目内部（`input.knowledgeJobCount`），
+			 * 老版是条目的兄弟节点（`input.jobUnfinishCount`），所以先自己找、再退到父节点找。
+			 */
+			const countEl =
+				container.querySelector<HTMLInputElement>('input.knowledgeJobCount, input.jobUnfinishCount') ||
+				clickEl.querySelector<HTMLInputElement>('input.knowledgeJobCount, input.jobUnfinishCount') ||
+				container.parentElement?.querySelector<HTMLInputElement>(
+					'input.knowledgeJobCount, input.jobUnfinishCount'
+				);
+			const raw = countEl ? String(countEl.value ?? '') : '';
+			const unFinishCount = raw === '' ? NaN : Number(raw);
+
+			/** 所属组：先按 firstLayer 分组节点，再退回新版目录的 `.chapter_unit` 章名 */
+			let group = groupOf(container);
+			if (!group) {
+				const unit = container.closest('.chapter_unit');
+				const headEl = unit ? (unit.querySelector(':scope > .chapter_item') as HTMLElement | null) : null;
+				group = (headEl?.textContent || '').replace(/\s+/g, ' ').trim();
+			}
+
+			const nameEl =
+				container.querySelector('.posCatalog_name') ||
+				container.querySelector('.catalog_name') ||
+				clickEl ||
+				container;
+			const noEl = container.querySelector('.catalog_sbar, .posCatalog_sbar');
+			const no = (noEl?.textContent || '').trim();
+			const fullName = (nameEl.textContent || '').replace(/\s+/g, ' ').trim();
+			const title = no && fullName.startsWith(no) ? fullName.slice(no.length).trim() : fullName;
+
+			/**
+			 * 平台自己的完成标记
+			 *
+			 * 两代目录两套类名：老版 `.catalog_state.icon_yiwanc`，
+			 * 新版直接把 `icon_Completed` 放在条目容器里（`class="icon_Completed prevTips"`）。
+			 * 只认老版的话，新版目录里**所有章节都会被当成没做完**，于是永远从第一节挑。
+			 */
+			const stateEl = container.querySelector('.catalog_state');
+			const stateCls = stateEl ? String(stateEl.className || '') : '';
+			const stateText = (stateEl?.textContent || '').replace(/\s+/g, ' ').trim();
+			const completedIcon = container.querySelector('[class*="icon_Completed"], [class*="icon_yiwanc"]');
+			const done = !!completedIcon || /icon_yiwanc|icon_Completed/.test(stateCls) || /已完成/.test(stateText);
+
+			infos.push({
+				element: clickEl,
+				container,
+				chapterId,
+				title,
+				order: infos.length,
+				group,
+				rank: group.indexOf('必修') >= 0 ? 0 : group.indexOf('选修') >= 0 ? 1 : 2,
+				unFinishCount,
+				done,
+				stateText,
+				clickable: !!onclick || !!container.querySelector('[onclick]'),
+				pageUsesIcons
+			});
+		}
+		return infos;
+	},
+	/**
+	 * 这一条到底还有没有活干
+	 *
+	 * 判据按可信度排：
+	 *   1. 平台标了「已完成」→ 一定没活干；
+	 *   2. 读到了任务点数 → 以它为准；
+	 *   3. 读不到计数 → 只有状态文字明说「待完成 / 未完成 / 未开始」才算有活干。
+	 *
+	 * ⚠️「读不到」不能当成「未完成」：实测老目录里**没有计数 input 就等于做完了**，
+	 * 当成未完成会让人反复跳回已经学完的章节。
+	 */
+	isChapterUnfinished(info: ChapterInfo): boolean {
+		if (info.done) return false;
+		if (!isNaN(info.unFinishCount)) return info.unFinishCount > 0;
+		/**
+		 * 读不到任务点数时看目录体系：
+		 * - 新版目录用 `icon_Completed` 标完成 → 没图标就是**没做完**；
+		 * - 老版目录没有图标、也没有计数 → 视为已完成（实测老目录「没有计数 input = 做完了」）。
+		 */
+		if (info.pageUsesIcons) return true;
+		return /(待完成|未完成|未开始|进行中)/.test(info.stateText);
+	},
+	/**
+	 * 这个条目是不是「当前正在学的」
+	 *
+	 * 老目录的条目没有 `id="cur<chapterId>"`，所以不能用
+	 * `.posCatalog_active[id="cur…"]` 判断（那个选择器永远不命中，
+	 * 会让「进入未完成章节」每次都当成没进去，反复重进同一章）。
+	 */
+	isChapterActive(info: ChapterInfo): boolean {
+		const el = info.container;
+		return el.classList.contains('posCatalog_active') || !!el.parentElement?.classList.contains('posCatalog_active');
+	},
+	/** 目录里有没有「必修/选修」分组：有的话，模拟考试之类不参与刷课 */
+	hasNamedGroups(infos: ChapterInfo[]): boolean {
+		return infos.some((info) => info.rank === 0 || info.rank === 1);
+	},
+	/**
+	 * 找「排在当前章节**后面**、而且还有活干」的章节
+	 *
+	 * 为什么不用平台自带的 `PCount.next`：它的 `cur` 是页面闭包变量，程序化调用时是
+	 * `undefined`，`parseInt(undefined)` → NaN，索引算错就会**往回跳**。
+	 * 实测在 1.7.2 上调用，直接退回 1.7（往前两个条目），用户看到的就是
+	 * 「一进去就被跳走两节课」。
+	 *
+	 * 这里只认目录顺序（必修 0 → 选修 1 → 其它 2，同组按目录先后），
+	 * 并且**只往后**，绝不往回 —— 往回跳是之前踩过的另一个坑。
+	 */
+	pickNextUnfinishedChapter(currentChapterId: string): ChapterInfo | null {
+		if (!currentChapterId) return null;
+		const infos = this.getChapterInfos();
+		const current = infos.find((item) => item.chapterId === currentChapterId);
+		if (!current) return null;
+
+		const named = this.hasNamedGroups(infos);
+		const candidates = infos.filter((item) => {
+			if (!item.clickable || !item.chapterId) return false;
+			if (item.container === current.container) return false;
+			/** 有必修/选修分组时，模拟考试之类的分组不参与刷课 */
+			if (named && item.rank === 2) return false;
+			if (!this.isChapterUnfinished(item)) return false;
+			return item.rank > current.rank || (item.rank === current.rank && item.order > current.order);
+		});
+		if (!candidates.length) return null;
+		return candidates.sort((a, b) => a.rank - b.rank || a.order - b.order)[0];
+	},
+	/** 点目录里的条目：onclick 可能挂在整行，也可能挂在名字上 */
+	clickChapter(info: ChapterInfo) {
+		const target = info.element.hasAttribute('onclick')
+			? info.element
+			: info.element.querySelector<HTMLElement>('[onclick]') || info.element;
+		target.click();
 	},
 	scrollToActiveChapter() {
 		const activeChapter = top?.document.querySelector<HTMLElement>('.posCatalog_active');
@@ -1415,7 +2808,7 @@ export async function study(
 			const curClazzId = $el<HTMLInputElement>('#curClazzId', top?.document);
 			const count = $$el('#prev_tab .prev_ul li', top?.document);
 
-			// 自动下一个小节（点击下一节）
+			// 自动下一个小节
 			if (curChapterId && curCourseId && curClazzId) {
 				// @ts-ignore
 				top._preChapterId = curChapterId.value;
@@ -1424,9 +2817,34 @@ export async function study(
 				await $.sleep(200);
 
 				/**
-				 * count, chapterId, courseId, clazzid, knowledgestr, checkType
-				 * checkType 就是询问当前章节还有任务点未完成，是否完成，这里直接不传，默认下一章
+				 * 优先按目录往后找
+				 *
+				 * 平台 `PCount.next` 依赖页面闭包里的 `cur`，程序化调用时它是 undefined，
+				 * 索引算错会**往回跳**（实测 1.7.2 → 1.7）。目录驱动只看顺序，方向永远向后。
 				 */
+				const nextChapter = CXAnalyses.pickNextUnfinishedChapter(curChapterId.value);
+				if (nextChapter) {
+					const msg = `下一节：${nextChapter.title || nextChapter.chapterId}`;
+					$console.info(msg);
+					$message.info({ content: msg, duration: 4 });
+					CXAnalyses.clickChapter(nextChapter);
+					return;
+				}
+
+				/**
+				 * 目录能读、但后面没有未完成的了 → 停在这里，**不要**回退平台函数
+				 *
+				 * 平台 `PCount.next` 在程序化调用时会往回跳，回退它等于把刚修好的问题再犯一遍。
+				 * 只有目录完全读不出来（元素结构变了）才退回平台，属于最后兜底。
+				 */
+				const infos = CXAnalyses.getChapterInfos();
+				if (infos.length > 0) {
+					$console.log('本节之后的章节都已完成，不再跳转');
+					$message.info({ content: '本节之后的章节都已完成', duration: 6 });
+					return;
+				}
+
+				$console.warn('目录没读出来，回退平台的下一节（可能跳转位置不准）');
 				// @ts-ignore
 				top?.PCount.next(count.length.toString(), curChapterId.value, curCourseId.value, curClazzId.value, '');
 			} else {
@@ -1910,26 +3328,156 @@ const JobRunner = {
 	/**
 	 * 章节测验
 	 */
-	async chapter(
-		frame: HTMLIFrameElement,
-		{
-			answererWrappers,
-			period,
-			upload,
-			thread,
-			stopSecondWhenFinish,
-			redundanceWordsText,
-			answerSeparators
-		}: CommonWorkOptions
-	) {
+	async chapter(frame: HTMLIFrameElement, options: CommonWorkOptions): Promise<void> {
+		const { answererWrappers, period, upload, thread, stopSecondWhenFinish, redundanceWordsText, answerSeparators } =
+			options;
 		if (answererWrappers === undefined || answererWrappers.length === 0) {
-			return answerWrapperEmptyWarning(0);
+			answerWrapperEmptyWarning(0);
+			return;
 		}
 
 		$console.info('开始章节测试');
 		const visual_state = CommonProject.scripts.render.cfg.visual;
 
+		/**
+		 * 不及格重做：上一轮 AI 给的整卷答案从 sessionStorage 里接力过来
+		 *
+		 * 章节测验提交后如果是 `未达到及格线，请重做`，就把整卷发给 AI 重算，
+		 * 存好答案再刷新页面重进测验 —— 卷子上的选项只能加不能减，
+		 * 只有重进一张干净卷子才能换答案。
+		 */
+		let chapterRedoPlan = readRedoPlan();
+		const chapterRedoCfg = (CXProject.scripts.work?.cfg || {}) as any;
+		/** 面板上的「不及格时 AI 整卷重做」开关（学习脚本自己那一份，默认开） */
+		const chapterRedoEnabled = (CXProject.scripts.study.cfg as any).enableChapterRedo !== false;
+		const chapterPassScore = Number(chapterRedoCfg.passScore ?? 60);
+		const chapterMaxRounds = Math.max(0, Math.min(5, Number(chapterRedoCfg.aiRedoRounds ?? 5)));
+
+		let chapterOverride: Record<string, string> = (chapterRedoPlan && chapterRedoPlan.answers) || {};
+
+		/**
+		 * 「待重做」计划：上一轮提交判完不及格就立刻刷新了，AI 还没算
+		 *
+		 * 在这里补算而不是在结果页等，是为了让提交后马上跳回测验页；
+		 * 代价是 AI 计算期间用户会看到旧卷面，所以先给一条进度提示。
+		 */
+		if (chapterRedoPlan && chapterRedoPlan.pending && (chapterRedoPlan.paper || []).length) {
+			if (!chapterRedoEnabled) {
+				clearRedoPlan();
+				chapterOverride = {};
+				chapterRedoPlan = undefined;
+				traceRedo('重做开关已关闭，丢弃待重做快照');
+			} else {
+				const paper = chapterRedoPlan.paper as PaperQuestion[];
+				const roundNo = chapterRedoPlan.round || 1;
+
+				/**
+				 * 再读一次批改标记
+				 *
+				 * 提交那一刻的结果页可能还没渲染出 `marking_dui/marking_cuo`，
+				 * 而刷新后的重做卷上一定有 —— 所以以这一次为准，只重做错题。
+				 */
+				const marks = markWrongQuestions(paper, frame.contentWindow?.document || null);
+				if (marks.marked === 0) {
+					/** 另一种练习形态：不给正误 → 整卷重做（必须把旧答案全换掉） */
+					chapterRedoPlan.onlyTitles = undefined;
+					traceRedo('重做卷没有批改标记，整卷重做');
+				} else {
+					const refreshTitles =
+						marks.wrong > 0 && marks.wrong < paper.length
+							? paper.filter((q) => q.wrong).map((q) => q.title)
+							: undefined;
+					chapterRedoPlan.onlyTitles = refreshTitles;
+					traceRedo(
+						refreshTitles
+							? `重做卷批改：${marks.wrong}/${paper.length} 题错，只重做这 ${refreshTitles.length} 题`
+							: `重做卷批改：${marks.wrong}/${paper.length} 题错（全错或无错），整卷重做`
+					);
+				}
+
+				const focusCount = paper.filter((q) => q.wrong).length;
+				const todoCount = focusCount > 0 && focusCount < paper.length ? focusCount : paper.length;
+				traceRedo(`在测验页重算第 ${roundNo} 轮（${todoCount} 题 / 共 ${paper.length} 题）`);
+				/** 拿句柄是为了算完立刻关掉（`duration: 0` 会一直挂着不消失） */
+				const aiTip = $message.info({
+					content: `AI 正在重算${todoCount < paper.length ? ` ${todoCount} 道错题` : `整卷 ${paper.length} 题`}，通常 10~60 秒…`,
+					duration: 120
+				});
+				const aiStartedAt = Date.now();
+				const answers = await requestPaperRedoByAI(
+					paper,
+					undefined,
+					chapterPassScore,
+					roundNo,
+					chapterRedoPlan.history
+				);
+				const aiCost = Date.now() - aiStartedAt;
+				$console.info(`第 ${roundNo} 轮重做：AI 用时 ${aiCost}ms`);
+				traceRedo(`AI 用时 ${aiCost}ms`);
+				aiTip?.remove();
+
+				if (answers) {
+					const prevAnswers = chapterRedoPlan.history?.[chapterRedoPlan.history.length - 1]?.answers || {};
+					const identical =
+						Object.keys(answers).length === Object.keys(prevAnswers).length &&
+						Object.keys(answers).every((key) => answers[key] === prevAnswers[key]);
+					if (identical) {
+						$console.warn('AI 这一轮的答案与上一轮完全相同（已把历次作答一并给它，仍未改动）');
+						traceRedo('AI 答案与上一轮完全相同');
+					}
+					writeRedoPlan({
+						...chapterRedoPlan,
+						answers,
+						pending: false,
+						paper: undefined
+					});
+					chapterOverride = answers;
+					traceRedo(`AI 返回 ${Object.keys(answers).length} 题答案，开始作答`);
+				} else {
+					/**
+					 * 失败时**只清 pending，绝不清轮次**
+					 *
+					 * 清掉整个计划会让 round 归零，下一轮又从「第 1 轮」开始，
+					 * 于是永远撞不到上限 → 无限刷新（实测 AI 跑 82 秒失败一次，十几分钟刷了四遍）。
+					 * 保留 round，让它照常往上走，到 5 轮自然会停。
+					 */
+					writeRedoPlan({
+						...chapterRedoPlan,
+						answers: {},
+						pending: false,
+						paper: undefined
+					});
+					chapterOverride = {};
+					traceRedo(`AI 没有给出可用答案，保留第 ${chapterRedoPlan.round} 轮计数，本轮改用题库`);
+					$modal.alert({ content: 'AI 没能给出可用的新答案，本轮改用题库答案作答（轮次保留，不会无限重试）。' });
+				}
+			}
+			/** 重新读一次，后续用最新的 round / answers */
+			chapterRedoPlan = readRedoPlan();
+		}
+
+		const hasChapterOverride = Object.keys(chapterOverride).length > 0;
+		if (hasChapterOverride) {
+			const msg = `章节测验：使用 AI 第 ${chapterRedoPlan?.round || 1} 轮答案重新作答（${Object.keys(chapterOverride).length} 题）`;
+			$console.info(msg);
+			traceRedo(msg);
+		} else {
+			traceRedo('章节测验：没有读到重做答案，按普通流程（卷面已有答案会直接提交）');
+		}
+
 		const frameWindow = frame.contentWindow;
+
+		/**
+		 * 先等测验页面可交互
+		 *
+		 * 题目 DOM 先渲染、平台的事件（`addChoice/addMultipleChoice`）后绑定，
+		 * 中间那段窗口里点击是空点 —— 这是「概率性一题不选就提交」的根源。
+		 */
+		if (!(await waitQuizInteractive(frameWindow))) {
+			$console.warn('测验页面没有进入可交互状态（题目或事件未就绪），答题可能不完整');
+			traceRedo('测验页面未就绪：等待超时');
+		}
+
 		const { TiMu } = domSearchAll({ TiMu: '.TiMu' }, frameWindow!.document);
 
 		// 最大化面板
@@ -1988,7 +3536,8 @@ const JobRunner = {
 					const typeInput = elements.type[0] as HTMLInputElement;
 					const type = (typeInput ? getQuestionType(parseInt(typeInput.value)) : undefined) || 'unknown';
 
-					return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
+					/** 重做轮：直接用 AI 给的新答案，用题干做锚点（引擎回调顺序不保证） */
+					const searchFresh = async () => {
 						await $.sleep((period ?? 3) * 1000);
 						return defaultAnswerWrapperHandler(answererWrappers, {
 							type,
@@ -1998,7 +3547,30 @@ const JobRunner = {
 									? ''
 									: ctx.elements.options.map((o) => optimizationElementWithImage(o, true).innerText).join('\n')
 						});
-					});
+					};
+
+					if (hasChapterOverride) {
+						const redoAnswer = lookupOverrideAnswer(chapterOverride, title);
+						if (redoAnswer) {
+							return [
+								{
+									name: 'AI整卷重做',
+									homepage: '#',
+									results: [{ question: title, answer: redoAnswer }]
+								}
+							];
+						}
+						/**
+						 * 重做轮但没匹配上：**绝不能查题库缓存**
+						 *
+						 * 缓存里存的是上一轮实际提交的答案，命中就等于把这个答案原样再交一次
+						 * —— 面板上会显示「题库缓存」，用户看到的就是「答案一个字没变」。
+						 * 这里直接走真实搜索。
+						 */
+						return searchFresh();
+					}
+
+					return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, searchFresh);
 				} else {
 					throw new Error('题目为空，请查看题目是否为空，或者忽略此题');
 				}
@@ -2009,20 +3581,119 @@ const JobRunner = {
 				const typeInput = elements.type[0] as HTMLInputElement;
 				const type = typeInput ? getQuestionType(parseInt(typeInput.value)) : undefined;
 
+				/**
+				 * 重做轮：清掉预选的旧答案，然后**按 AI 答案直接点选**
+				 *
+				 * 为什么不交给下面的 resolver：
+				 *   `resolveJudgement` 的词表只有「对/错/是/否/√/×」，AI 一旦按选择题习惯
+				 *   给字母（A / B），它就返回 `finish: false` —— 那题一个字都不会点，直接判错。
+				 *   实测连续两轮都栽在这里（两道判断题全空）。
+				 * 所以重做轮自己映射：字母按序号取、文字按归一化包含匹配，任何格式都能落地。
+				 */
+				if (hasChapterOverride) {
+					const redoTitle = chapterTestTaskQuestionTitleTransform(elements.title);
+
+					/**
+					 * 只重做错题：名单外的题上次是对的，保持原答案
+					 *
+					 * 批改标记是准的（这门课要求全对才及格，只标 1 题错就真的只错 1 题），
+					 * 所以对题连清空都不要做 —— 清空后万一匹配不上，会把本来对的题弄空。
+					 * 注意：跳过时 answerer 必须绕开题库缓存，否则那题会拿缓存里的旧答案再交一次。
+					 */
+					const partialTitles = chapterRedoPlan?.onlyTitles || [];
+					if (partialTitles.length && redoTitle && !titleInList(partialTitles, redoTitle)) {
+						return { finish: true };
+					}
+
+					const redoAnswer = lookupOverrideAnswer(chapterOverride, redoTitle);
+
+					if (redoAnswer && type && type !== 'completion') {
+						/**
+						 * **先算目标选项，能匹配上才清空**
+						 *
+						 * 顺序反了会出事：原来是「先清空 → 再匹配」，一旦匹配失败，
+						 * 这道题就空着交上去了 —— 表现就是「AI 答题一题不选就提交」，比保留旧答案还差。
+						 * 现在匹配不上就一个都不清，旧答案原样留着，再交给题库兜底。
+						 */
+						const picked = pickRedoOptions(elements.options as HTMLElement[], redoAnswer);
+						if (picked.length) {
+							const root =
+								(ctx as any).root ||
+								(elements.options[0]?.closest<HTMLElement>('.TiMu') as HTMLElement | undefined) ||
+								null;
+							const cleared = await clearQuestionSelections(root);
+							if (cleared) $console.info(`重做：已取消 ${cleared} 个旧选项`);
+
+							for (const option of picked) {
+								await ensureOptionPicked(option);
+							}
+							$console.info(`重做：AI 答案「${redoAnswer}」→ 点选 ${picked.length} 项`);
+							traceRedo(
+								`题「${redoTitle.slice(0, 18)}」答案=${redoAnswer} 取消${cleared}项 点选${picked.length}项`
+							);
+							return { finish: true, options: picked.map((option) => option.innerText) };
+						}
+						/** 一个都匹配不上：不动卷面，回退题库（题库逻辑「已选就跳过」，不会破坏原答案） */
+						$console.warn(`重做：AI 答案「${redoAnswer}」对不上任何选项，保留原答案并回退题库`);
+						traceRedo(`题「${redoTitle.slice(0, 18)}」答案=${redoAnswer} 对不上选项，保留原答案`);
+					} else if (!redoAnswer) {
+						$console.warn('重做：本题题干没匹配上 AI 答案，保留原答案并回退题库');
+						traceRedo(`题「${redoTitle.slice(0, 18)}」没匹配上计划 key，保留原答案`);
+					}
+				}
+
+				/**
+				 * 第一次做也直接按答案点选，不走 resolver 的字面匹配
+				 *
+				 * `resolveJudgement` 只认「对/错/是/否/√/×」，AI 一给字母（A/B）就 `finish: false`，
+				 * 那题一个字都不点 —— 判断题尤其容易中招，表现就是「一题没选就提交」。
+				 * 这里把题库/AI 给的每个候选答案都拿 `pickRedoOptions` 试一遍，第一个匹配上的直接用。
+				 */
+				if (!hasChapterOverride && type && type !== 'completion' && type !== 'line') {
+					const candidates = (searchInfos || [])
+						.flatMap((info) => (info?.results || []).map((item: any) => String(item?.answer || '').trim()))
+						.filter(Boolean);
+					for (const candidate of candidates) {
+						const picked = pickRedoOptions(elements.options as HTMLElement[], candidate);
+						if (!picked.length) continue;
+
+						const root =
+							(ctx as any).root ||
+							(elements.options[0]?.closest<HTMLElement>('.TiMu') as HTMLElement | undefined) ||
+							null;
+						const cleared = await clearQuestionSelections(root);
+						if (cleared) $console.info(`作答：已取消 ${cleared} 个旧选项`);
+						for (const option of picked) {
+							await ensureOptionPicked(option);
+						}
+						$console.info(`作答：答案「${candidate}」→ 点选 ${picked.length} 项`);
+						traceRedo(
+							`作答「${chapterTestTaskQuestionTitleTransform(elements.title).slice(0, 16)}」答案=${candidate} 点选${picked.length}项`
+						);
+						return { finish: true, options: picked.map((option) => option.innerText) };
+					}
+				}
+
 				if (type && (type === 'completion' || type === 'multiple' || type === 'judgement' || type === 'single')) {
 					const resolver = createDefaultQuestionResolver(ctx)[type];
 
-					const handler: DefaultWork<any>['handler'] = (type, answer, option, ctx) => {
+					const handler: DefaultWork<any>['handler'] = async (type, answer, option, ctx) => {
 						if (type === 'judgement' || type === 'single' || type === 'multiple') {
-							// 检查是否已经选择
+							/**
+							 * 「是否已选」以页面自己的 `check_answer` 为准：
+							 * 上一轮清空后 `aria-checked` / `label input` 可能还是旧值，
+							 * 只看它们会把该点的选项当成已选直接跳过。
+							 */
 							const checked =
+								!!option?.parentElement?.querySelector('[class*="check_answer"]') ||
 								option?.parentElement?.querySelector('label input')?.getAttribute('checked') === 'checked' ||
 								// 适配2023/9月最新版本
 								option?.parentElement?.getAttribute('aria-checked') === 'true';
 							if (checked) {
 								// 跳过
 							} else {
-								option?.click();
+								/** 幂等点选：没点上会重试，防测验事件还没绑定的空点 */
+								await ensureOptionPicked(option);
 							}
 						} else if (type === 'completion' && answer.trim()) {
 							const text = option?.parentElement?.querySelector('textarea');
@@ -2179,6 +3850,150 @@ const JobRunner = {
 		$message.info({ content: msg, duration: stopSecondWhenFinish });
 		await $.sleep(stopSecondWhenFinish * 1000);
 
+		/**
+		 * 等测验 iframe 变成一张新卷子
+		 *
+		 * 只看 `.TiMu` 存在是不够的：刷新前后旧 DOM 还在，会立刻误判成「已就绪」。
+		 * 所以拿刷新前的 document 做锚，等 `win.document` 变成另一个对象再判断。
+		 */
+		const waitFreshQuiz = async (
+			win: Window,
+			oldDoc: Document | null,
+			oldUrl: string,
+			timeout = 20000
+		): Promise<boolean> => {
+			const deadline = Date.now() + timeout;
+			while (Date.now() < deadline) {
+				await $.sleep(600);
+				try {
+					const doc = win.document;
+					if (doc.readyState !== 'complete') continue;
+					/** 文档和地址都没变 = 还停在结果页，不是新卷子 */
+					const sameDoc = oldDoc ? doc === oldDoc : false;
+					const sameUrl = win.location.href === oldUrl;
+					if (sameDoc && sameUrl) continue;
+					if (doc.querySelectorAll('.TiMu').length === 0) continue;
+					/** 光有 .TiMu 不够：只读的结果页也有题目，必须能作答 */
+					const answerable =
+						doc.querySelectorAll('li[onclick^="addChoice"]').length > 0 ||
+						doc.querySelectorAll('.answerBg .answer_p').length > 0;
+					if (answerable) return true;
+				} catch {}
+			}
+			return false;
+		};
+		/**
+		 * 不及格 → AI 整卷重做（章节测验）
+		 *
+		 * 只刷新**测验自己的 iframe**，绝不动整个课程页：
+		 * 测验是课程页里的一个任务点标签，刷课程页会把标签状态丢掉，回到默认的「上一节」。
+		 * 返回 true 表示新卷子已经就绪，调用方可以递归重答一轮。
+		 */
+		const prepareChapterRedo = async (failText: string): Promise<boolean> => {
+			const round = chapterRedoPlan?.round || 0;
+			$console.info(`章节测验判定：${failText}（已完成 ${round} 轮重做）`);
+			traceRedo(`判定不及格（已完成 ${round} 轮）：${failText}`);
+
+			if (!chapterRedoEnabled) {
+				clearRedoPlan();
+				traceRedo('重做开关已关闭，停在结果页不重做');
+				return false;
+			}
+
+			const aiConfigured = ((CommonProject.scripts.settings.cfg.answererWrappers || []) as any[]).some(
+				(wrapper) => wrapper && wrapper.name === 'AI答题'
+			);
+			if (!aiConfigured) {
+				$console.warn('没有启用 AI 答题，跳过硬做');
+				traceRedo('没有配置 AI 答题，放弃重做');
+				return false;
+			}
+			if (round >= chapterMaxRounds) {
+				clearRedoPlan();
+				traceRedo(`已重做 ${round} 轮，达到上限 ${chapterMaxRounds}，放弃`);
+				$modal.alert({ content: `章节测验${failText}，已经重做 ${round} 轮，不再重试。` });
+				return false;
+			}
+
+			const paper = buildPaperSnapshotFromResults(results, chapterTestTaskQuestionTitleTransform);
+			if (!paper.length) {
+				$console.warn('章节测验重做：没有取到题目，跳过');
+				traceRedo('没有取到整卷快照，放弃重做');
+				return false;
+			}
+			/**
+			 * 平台批改能指出哪题错：只重做这些，对题一个字都不动
+			 *
+			 * `.answerCon` 是「我的答案」的值，不是标准答案；判断对错只看
+			 * `marking_dui` / `marking_cuo`。
+			 */
+			const marks = markWrongQuestions(paper, frameWindow?.document || null);
+			const onlyTitles =
+				marks.wrong > 0 && marks.wrong < paper.length
+					? paper.filter((q) => q.wrong).map((q) => q.title)
+					: undefined;
+			traceRedo(
+				onlyTitles
+					? `平台批改：${marks.wrong}/${paper.length} 题错，只重做这 ${onlyTitles.length} 题`
+					: marks.marked > 0
+					? `平台批改：${marks.wrong}/${paper.length} 题错，整卷重做`
+					: '没有读到批改标记（另一种练习），整卷重做'
+			);
+			traceRedo(`整卷快照 ${paper.length} 题`);
+
+			/**
+			 * 记下测验所属小节：刷新后学习脚本要靠它回到这一节
+			 *
+			 * 不记的话，刷新后 `autoJumpToUnFinishJob` 会按「目录里第一个未完成」跳走，
+			 * 人就离开测验了 —— 这就是之前「刷新后跑到上一节」的另一半原因。
+			 */
+			const quizChapterId = (() => {
+				try {
+					return $el<HTMLInputElement>('#curChapterId', top?.document)?.value || '';
+				} catch {
+					return '';
+				}
+			})();
+
+			/**
+			 * 存快照就刷新，**AI 留到新页面再算**
+			 *
+			 * 以前是「算完 AI（5~20 秒）→ 再等 1.2 秒 → 刷新」，页面一直停在
+			 * 「已提交」的结果页上，看起来像死机。现在提交判完不及格就立刻往回跳，
+			 * 新页面在测验页里显示进度并重算，感知上是「一提交就回到测验」。
+			 */
+			writeRedoPlan({
+				round: round + 1,
+				answers: {},
+				pending: true,
+				paper,
+				onlyTitles,
+				scores: [...(chapterRedoPlan?.scores || []), 0],
+				chapterId: quizChapterId,
+				history: archiveRedoHistory(chapterRedoPlan)
+			});
+			traceRedo(`写入待重做快照（第 ${round + 1} 轮），立即刷新，AI 在测验页重算`);
+			$message.info({ content: `第 ${round + 1} 轮重做：返回测验页，AI 将在那里重算`, duration: 5 });
+			try {
+				(top as any).$?.('#workpop')?.hide?.();
+			} catch {}
+			/** 只留一点点时间让提示条渲染，不再等 AI */
+			await $.sleep(400);
+
+			$console.info(`第 ${round + 1} 轮重做：刷新课程页，回到小节 ${quizChapterId || '(未知)'}`);
+			try {
+				top?.location.reload();
+			} catch (e: any) {
+				$console.warn('刷新失败：' + ((e && e.message) || e));
+				clearRedoPlan();
+				return false;
+			}
+			return true;
+		};
+
+		/** 非空表示这次提交没及格，需要在 uploadHandler 之后重做一轮 */
+		let pendingRedo = '';
+
 		// 处理提交
 		await worker.uploadHandler({
 			type: upload,
@@ -2187,6 +4002,22 @@ const JobRunner = {
 				const msg = `完成率 ${finishedRate.toFixed(2)}% :  ${uploadable ? '3秒后将自动提交' : '3秒后将自动保存'} `;
 				$console.info(msg);
 				$message.success({ content: msg, duration: 3 });
+
+				/**
+				 * 白卷拦截
+				 *
+				 * 完成率是「解析到答案的比例」，不是「卷面真的选了的比例」——
+				 * 选项选择器没匹配到时解析依然算成功，于是会出现「一题没选就提交」。
+				 * 只有**一道选择题都没选**才拦（部分未答仍按 upload 阈值走）。
+				 */
+				const blank = countUnansweredQuestions(frameWindow?.document);
+				if (uploadable && blank.total > 0 && blank.unanswered === blank.total) {
+					$modal.alert({
+						content: `检测到 ${blank.total} 道题一道都没选中（可能是选项结构变化或答案未生效），已取消自动提交，避免交白卷。`
+					});
+					traceRedo(`白卷拦截：${blank.unanswered}/${blank.total} 题未选，取消提交`);
+					return;
+				}
 
 				await $.sleep(3000);
 
@@ -2198,6 +4029,20 @@ const JobRunner = {
 					/** 确定按钮 */
 					// @ts-ignore 确定
 					frameWindow.submitCheckTimes();
+					/** 只要一点点延迟让弹窗有机会出现，剩下的交给下面的轮询，不要在这里干等 */
+					await $.sleep(600);
+
+					/**
+					 * 先读弹窗再关：`未达到及格线，请重做` 就写在 `#popcontent` 里。
+					 * 以前这里直接 hide，等于把唯一的判定信号抹掉了。
+					 */
+					const failText = await waitFailPopupText();
+					if (failText) {
+						/** 交给 uploadHandler 之后处理：那里才好递归重答一轮 */
+						pendingRedo = failText;
+						return;
+					}
+
 					// @ts-ignore 2024/4 更新后上方函数无法关闭弹窗，需要手动关闭确定弹窗
 					top.$('#workpop').hide();
 				} else {
@@ -2212,6 +4057,18 @@ const JobRunner = {
 		// 还原尺寸状态
 		if (visual_state === 'minimize' && CommonProject.scripts.render.cfg.visual !== 'minimize') {
 			CORSUtils.panelMinimize();
+		}
+
+		/**
+		 * 不及格：准备好新一轮答案、把测验 iframe 刷成新卷子，然后递归重答
+		 *
+		 * 只刷新测验 iframe，页面停在测验上；收尾（关面板 / emit done）交给新一轮，
+		 * 所以这里直接 return，不再往下走。
+		 */
+		if (pendingRedo) {
+			const scheduled = await prepareChapterRedo(pendingRedo);
+			/** 已经安排重做：页面马上刷新，收尾交给新页面 */
+			if (scheduled) return;
 		}
 
 		worker.emit('done');
