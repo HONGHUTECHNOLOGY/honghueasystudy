@@ -261,6 +261,17 @@ function mount(startConfig) {
             // 挂载全局提示元素
             elements_1.$elements.tooltipContainer && win.container.append(elements_1.$elements.tooltipContainer);
             exports.$win = win;
+            /**
+             * 暴露给同源子 frame 直接调用
+             *
+             * iframe 里的 `$message` 原本只能走 `cors.emit`（chrome.storage 往返，
+             * 至少 100ms 才轮到监听），而学习脚本的提示几乎都紧跟着页面跳转 ——
+             * 消息还在路上页面就卸载了，用户看到的就是「有时候通知不显示」。
+             * 同源时直接调顶层的方法，即时显示。
+             */
+            try {
+                window.__HH_UI_WIN__ = win;
+            } catch (e) {}
         }
     });
 }

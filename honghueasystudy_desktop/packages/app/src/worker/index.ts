@@ -3262,7 +3262,16 @@ export function extractCatalogInPage(arg: { kind: CatalogKind }): {
 			if (!title) continue;
 
 			const stateEl = el.querySelector('.catalog_state');
-			const stateCls = stateEl ? String(stateEl.className || '') : '';
+			const completedIcon = el.querySelector('[class*="icon_Completed"], [class*="icon_yiwanc"]') as HTMLElement | null;
+			/**
+			 * 完成态可能写在三个地方：条目自身（新版 `class="chapter_item icon_Completed"`）、
+			 * `.catalog_state`（老版 `icon_yiwanc`）、或内部任意子元素。都拼进来一起判。
+			 */
+			const stateCls = [
+				String(el.className || ''),
+				stateEl ? String(stateEl.className || '') : '',
+				completedIcon ? String(completedIcon.className || '') : ''
+			].join(' ');
 			/**
 			 * 剩余任务点：新版目录写在 `input.knowledgeJobCount`，老版写在 `input.jobUnfinishCount`。
 			 * 两个都读不到时 `pending` 为 0，只能靠状态图标判断（下面 status 的 else 分支）。
@@ -3297,13 +3306,20 @@ export function extractCatalogInPage(arg: { kind: CatalogKind }): {
 				status = 'locked';
 				state = '未解锁';
 				hint = taskText || '需先完成前面的闯关任务点';
-			} else if (/icon_yiwanc/.test(stateCls)) {
-				status = 'done';
-				state = '已完成';
 			} else if (pending > 0) {
+				/**
+				 * 剩余任务点数优先于完成图标
+				 *
+				 * 平台会给「视频做完、测验没做」的小节也打 `icon_Completed`，
+				 * 但它的剩余任务点仍然是 1。先判图标的话这种小节会被当成已完成、
+				 * 自动刷课直接跳过 —— 测验就永远轮不到。
+				 */
 				status = 'todo';
 				state = '待完成';
 				hint = pending + ' 个任务点未完成';
+			} else if (/icon_yiwanc|icon_Completed/.test(stateCls)) {
+				status = 'done';
+				state = '已完成';
 			} else if (/chuangguan/.test(stateCls)) {
 				status = 'locked';
 				state = '未解锁';

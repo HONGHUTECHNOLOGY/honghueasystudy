@@ -136,6 +136,20 @@ function _message(type, attrs) {
         return start_1.$win === null || start_1.$win === void 0 ? void 0 : start_1.$win.message(type, attrs);
     }
     else {
+        /**
+         * 同源子 frame：直接调顶层的方法，即时显示
+         *
+         * 走 `cors.emit` 要经过 chrome.storage 往返 + 后台广播（至少 100ms），
+         * 而学习脚本的提示几乎都紧跟着页面跳转 —— 消息还在路上页面就卸载了，
+         * 表现就是「有时候通知不显示」。同源时没有这个窗口期。
+         * 跨域会抛 SecurityError，落到下面的 cors 通道。
+         */
+        try {
+            const topWin = window.top && window.top.__HH_UI_WIN__;
+            if (topWin && typeof topWin.message === 'function') {
+                return topWin.message(type, attrs);
+            }
+        } catch (e) {}
         if (typeof attrs === 'string') {
             attrs = { content: attrs };
         }
@@ -143,6 +157,9 @@ function _message(type, attrs) {
         else if (typeof attrs.content !== 'string') {
             attrs.content = attrs.content.innerHTML;
         }
+        try {
+            console.log('[鸿鹄] 跨帧消息发送:', type, typeof attrs.content === 'string' ? attrs.content : '');
+        } catch (e) {}
         interfaces_1.cors.emit('message', [type, attrs]);
     }
 }

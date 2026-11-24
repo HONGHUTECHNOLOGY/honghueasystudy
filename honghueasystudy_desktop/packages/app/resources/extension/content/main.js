@@ -2997,7 +2997,10 @@ try {
       const initCorsMessageSystem = () => {
         _1.cors.on("message", (args) => __awaiter$1(this, void 0, void 0, function* () {
           const [type, attrs] = args || [];
-          console.log("message", type, attrs);
+          try {
+            console.log("[鸿鹄] 跨帧消息到达:", type, attrs && typeof attrs.content === "string" ? attrs.content : "");
+          } catch (e) {
+          }
           this.message(type, attrs);
         }));
       };
@@ -3156,6 +3159,16 @@ try {
     message(type, attrs) {
       if (typeof attrs === "string") {
         attrs = { content: attrs };
+      }
+      const hidden = this.container.classList.contains("hidden");
+      if (hidden) {
+        if (this.messageContainer.parentElement !== document.body) {
+          this.messageContainer.style.cssText = "position:fixed;top:12px;left:50%;transform:translateX(-50%);bottom:auto;width:auto;min-width:300px;z-index:2147483647";
+          document.body.append(this.messageContainer);
+        }
+      } else if (this.messageContainer.parentElement !== this.container) {
+        this.messageContainer.style.cssText = "";
+        this.container.append(this.messageContainer);
       }
       const message2 = (0, utils_1.h)("message-element", Object.assign({ type }, attrs));
       this.messageContainer.append(message2);
@@ -3500,6 +3513,10 @@ try {
         win.mount(startConfig.mountElement || document.body);
         elements_1.$elements.tooltipContainer && win.container.append(elements_1.$elements.tooltipContainer);
         start$1.$win = win;
+        try {
+          window.__HH_UI_WIN__ = win;
+        } catch (e) {
+        }
       }
     });
   }
@@ -3620,10 +3637,21 @@ try {
       if (self === top) {
         return start_12.$win === null || start_12.$win === void 0 ? void 0 : start_12.$win.message(type, attrs);
       } else {
+        try {
+          const topWin = window.top && window.top.__HH_UI_WIN__;
+          if (topWin && typeof topWin.message === "function") {
+            return topWin.message(type, attrs);
+          }
+        } catch (e) {
+        }
         if (typeof attrs === "string") {
           attrs = { content: attrs };
         } else if (typeof attrs.content !== "string") {
           attrs.content = attrs.content.innerHTML;
+        }
+        try {
+          console.log("[鸿鹄] 跨帧消息发送:", type, typeof attrs.content === "string" ? attrs.content : "");
+        } catch (e) {
         }
         interfaces_1.cors.emit("message", [type, attrs]);
       }
@@ -16726,11 +16754,18 @@ try {
         async oncomplete() {
           CommonProject.scripts.render.methods.pin(CXProject.scripts.study);
           let chapters = await CXAnalyses.waitForChapterInfos();
-          const params = new URLSearchParams(window.location.href);
+          traceRedo(`调度器启动：目录 ${chapters.length} 条`);
+          const unfinishedNow = chapters.filter((chapter) => CXAnalyses.isChapterUnfinished(chapter));
+          traceRedo(
+            `判定未完成 ${unfinishedNow.length}/${chapters.length}：` + unfinishedNow.slice(0, 12).map(
+              (chapter) => `${chapter.title || chapter.chapterId}(count=${chapter.unFinishCount}${chapter.done ? ",icon" : ""})`
+            ).join(" / ")
+          );
+          const params = new URLSearchParams(window.location.search);
           const mooc = params.get("mooc2");
           if (mooc === null) {
             params.set("mooc2", "1");
-            window.location.replace(decodeURIComponent(params.toString()));
+            window.location.replace(window.location.pathname + "?" + params.toString());
             return;
           }
           const redoPlanOnLoad = readRedoPlan();
@@ -16758,13 +16793,73 @@ try {
             }
             return;
           }
+          const waitTaskTabs = async (timeout = 6e3) => {
+            const deadline = Date.now() + timeout;
+            while (Date.now() < deadline) {
+              try {
+                if (((top$1 == null ? void 0 : top$1.document.querySelectorAll("#prev_tab .prev_ul li")) || []).length > 0)
+                  return true;
+              } catch {
+              }
+              await $.sleep(300);
+            }
+            return false;
+          };
+          await waitTaskTabs();
+          const waitCurChapter = async (timeout = 5e3) => {
+            var _a;
+            const deadline = Date.now() + timeout;
+            while (Date.now() < deadline) {
+              const id = ((_a = lib.$el("#curChapterId", top$1 == null ? void 0 : top$1.document)) == null ? void 0 : _a.value) || "";
+              if (id)
+                return id;
+              await $.sleep(300);
+            }
+            return "";
+          };
+          const curChapterId = await waitCurChapter();
+          const activeChapter = (curChapterId ? chapters.find((chapter) => chapter.chapterId === curChapterId) : void 0) || chapters.find((chapter) => CXAnalyses.isChapterActive(chapter));
+          if (!activeChapter) {
+            const msg2 = `认不出当前小节（cur=${curChapterId || "空"}），不做自动切换`;
+            $console.warn("[自动刷课] " + msg2);
+            traceRedo(msg2);
+            return;
+          }
+          if (CXAnalyses.isChapterUnfinished(activeChapter) || !CXAnalyses.isInFinalTab()) {
+            const msg2 = `当前小节还没学完，留在：${activeChapter.title || activeChapter.chapterId}`;
+            $console.info("[自动刷课] " + msg2);
+            traceRedo(msg2);
+            return;
+          }
+          const urlChapterId = (() => {
+            try {
+              return new URL(location.href).searchParams.get("chapterId") || "";
+            } catch {
+              return "";
+            }
+          })();
+          if (urlChapterId && chapters.some((chapter) => chapter.chapterId === urlChapterId)) {
+            traceRedo(`已指定小节 ${urlChapterId}，不做自动切换`);
+            return;
+          }
           if (CXProject.scripts.study.cfg.autoJumpToUnFinishJob) {
             chapters = chapters.filter((chapter) => CXAnalyses.isChapterUnfinished(chapter));
             if (chapters.length === 0) {
               lib.$message.warn({ content: "页面任务点数量为空! 请刷新重试!" });
             } else {
-              const target = chapters[0];
+              const maxDepth = Math.max(...chapters.map((chapter) => chapter.depth || 0));
+              if (maxDepth > 1) {
+                chapters = chapters.filter((chapter) => (chapter.depth || 0) === maxDepth);
+              }
+              const current = chapters.find((chapter) => chapter.chapterId === curChapterId);
+              const after = current ? chapters.filter(
+                (chapter) => chapter.rank > current.rank || chapter.rank === current.rank && chapter.order > current.order
+              ) : [];
+              const target = after[0] || chapters[0];
               if (!CXAnalyses.isChapterActive(target)) {
+                const msg2 = `自动切换到未完成小节：${target.title || target.chapterId}`;
+                $console.info("[自动刷课] " + msg2);
+                traceRedo(msg2);
                 CXAnalyses.clickChapter(target);
               }
               await $.sleep(1e3);
@@ -17000,15 +17095,25 @@ ${lines}`;
     const none = { wrong: 0, marked: 0 };
     if (!doc || !paper.length)
       return none;
-    const nodes = Array.from(doc.querySelectorAll(".TiMu"));
-    if (nodes.length !== paper.length)
+    const roots = [];
+    for (const root2 of Array.from(doc.querySelectorAll(".TiMu"))) {
+      const items2 = Array.from(root2.querySelectorAll(".readCompreHensionItem"));
+      if (items2.length > 0)
+        roots.push(...items2);
+      else
+        roots.push(root2);
+    }
+    if (roots.length !== paper.length) {
+      traceRedo(`批改标记：题数对不上（卷面 ${roots.length} / 快照 ${paper.length}），只能整卷重做`);
       return none;
+    }
     let wrong = 0;
     let marked = 0;
     paper.forEach((question, index) => {
-      const node = nodes[index];
-      const isWrong = !!node.querySelector(".marking_cuo");
-      const isRight = !!node.querySelector(".marking_dui");
+      const node = roots[index];
+      const isHalfWrong = !!node.querySelector(".marking_bandui");
+      const isWrong = isHalfWrong || !!node.querySelector(".marking_cuo");
+      const isRight = !isWrong && !!node.querySelector(".marking_dui");
       if (isWrong) {
         question.wrong = true;
         wrong++;
@@ -17794,6 +17899,39 @@ ${lines}`;
       }
       return tabs[tabs.length - 1].classList.contains("active");
     },
+    clickPlatformNext() {
+      const btn = this.findPlatformNext();
+      if (!btn)
+        return false;
+      btn.click();
+      return true;
+    },
+    findPlatformNext() {
+      const doc = top$1 == null ? void 0 : top$1.document;
+      if (!doc)
+        return null;
+      const norm = (value) => String(value || "").replace(/\s+/g, "");
+      const isNextText = (el) => {
+        const text = norm(el.textContent);
+        const title = norm(el.getAttribute("title"));
+        return text === "下一节" || title === "下一节" || text.length <= 10 && text.startsWith("下一节");
+      };
+      const hits = Array.from(doc.querySelectorAll("a, div, span, button")).filter(isNextText);
+      const byText = hits.find((el) => !Array.from(el.children).some((child) => isNextText(child))) || hits[0];
+      if (byText)
+        return byText;
+      const byOnclick = Array.from(doc.querySelectorAll('[onclick*="PCount.next"]')).filter((el) => {
+        if (/上一节/.test(norm(el.textContent)))
+          return false;
+        const args = /PCount\.next\(([^)]*)\)/.exec(norm(el.getAttribute("onclick")));
+        if (!args)
+          return true;
+        const parts = args[1].split(",").map((item) => item.replace(/["'\s]/g, ""));
+        const dir = parts[4] || "";
+        return dir === "";
+      });
+      return byOnclick[0] || null;
+    },
     isInFinalChapter() {
       var _a;
       return (_a = Array.from((top$1 == null ? void 0 : top$1.document.querySelectorAll(".posCatalog_select")) || []).pop()) == null ? void 0 : _a.classList.contains("posCatalog_active");
@@ -17833,11 +17971,9 @@ ${lines}`;
       );
       const seen = /* @__PURE__ */ new Set();
       const infos = [];
+      const hasDoneIcon = (el) => !!el && (/icon_Completed|icon_yiwanc/.test(String(el.className || "")) || !!el.querySelector('[class*="icon_Completed"], [class*="icon_yiwanc"]'));
       const pageUsesIcons = clickEls.some(
-        (el) => {
-          var _a2;
-          return !!((_a2 = el.closest(".posCatalog_select")) == null ? void 0 : _a2.querySelector('[class*="icon_Completed"]'));
-        }
+        (el) => hasDoneIcon(el.closest(".posCatalog_select")) || hasDoneIcon(el)
       );
       for (const clickEl of clickEls) {
         const container2 = clickEl.closest(".posCatalog_select") || clickEl;
@@ -17876,13 +18012,14 @@ ${lines}`;
         const stateCls = stateEl ? String(stateEl.className || "") : "";
         const stateText = ((stateEl == null ? void 0 : stateEl.textContent) || "").replace(/\s+/g, " ").trim();
         const completedIcon = container2.querySelector('[class*="icon_Completed"], [class*="icon_yiwanc"]');
-        const done = !!completedIcon || /icon_yiwanc|icon_Completed/.test(stateCls) || /已完成/.test(stateText);
+        const done = !!completedIcon || hasDoneIcon(container2) || /icon_yiwanc|icon_Completed/.test(stateCls) || /已完成/.test(stateText);
         infos.push({
           element: clickEl,
           container: container2,
           chapterId,
           title,
           order: infos.length,
+          depth: no ? no.split(".").filter(Boolean).length : 0,
           group,
           rank: group.indexOf("必修") >= 0 ? 0 : group.indexOf("选修") >= 0 ? 1 : 2,
           unFinishCount,
@@ -17892,16 +18029,26 @@ ${lines}`;
           pageUsesIcons
         });
       }
+      const doneWithZero = infos.some((info) => info.done && info.unFinishCount === 0);
+      const doneWithPositive = infos.some((info) => info.done && info.unFinishCount > 0);
+      const countIsRemaining = doneWithZero || !doneWithPositive;
+      for (const info of infos)
+        info.countIsRemaining = countIsRemaining;
       return infos;
     },
     isChapterUnfinished(info) {
+      const hasCount = !isNaN(info.unFinishCount);
+      if (hasCount && info.countIsRemaining)
+        return info.unFinishCount > 0;
+      if (/(待完成|未完成|未开始|进行中)/.test(info.stateText))
+        return true;
       if (info.done)
         return false;
-      if (!isNaN(info.unFinishCount))
-        return info.unFinishCount > 0;
+      if (hasCount)
+        return false;
       if (info.pageUsesIcons)
         return true;
-      return /(待完成|未完成|未开始|进行中)/.test(info.stateText);
+      return false;
     },
     isChapterActive(info) {
       var _a;
@@ -17910,29 +18057,6 @@ ${lines}`;
     },
     hasNamedGroups(infos) {
       return infos.some((info) => info.rank === 0 || info.rank === 1);
-    },
-    pickNextUnfinishedChapter(currentChapterId) {
-      if (!currentChapterId)
-        return null;
-      const infos = this.getChapterInfos();
-      const current = infos.find((item) => item.chapterId === currentChapterId);
-      if (!current)
-        return null;
-      const named = this.hasNamedGroups(infos);
-      const candidates = infos.filter((item) => {
-        if (!item.clickable || !item.chapterId)
-          return false;
-        if (item.container === current.container)
-          return false;
-        if (named && item.rank === 2)
-          return false;
-        if (!this.isChapterUnfinished(item))
-          return false;
-        return item.rank > current.rank || item.rank === current.rank && item.order > current.order;
-      });
-      if (!candidates.length)
-        return null;
-      return candidates.sort((a, b) => a.rank - b.rank || a.order - b.order)[0];
     },
     clickChapter(info) {
       const target = info.element.hasAttribute("onclick") ? info.element : info.element.querySelector("[onclick]") || info.element;
@@ -17945,18 +18069,28 @@ ${lines}`;
       }
     },
     waitForChapterInfos(timeout = 10) {
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
+        let lastCount = -1;
+        let stable = 0;
         const interval = setInterval(() => {
           const res = this.getChapterInfos();
           if (res.length > 0) {
-            clearInterval(interval);
-            clearInterval(to);
-            resolve(res);
+            if (res.length === lastCount)
+              stable += 1;
+            else {
+              lastCount = res.length;
+              stable = 0;
+            }
+            if (stable >= 1) {
+              clearInterval(interval);
+              clearTimeout(to);
+              resolve(res);
+            }
           }
-        }, 1e3);
+        }, 800);
         const to = setTimeout(() => {
           clearInterval(interval);
-          resolve([]);
+          resolve(this.getChapterInfos());
         }, timeout * 1e3);
       });
     },
@@ -18077,6 +18211,22 @@ ${lines}`;
       }
     };
     await runJobs();
+    const attachmentsOnLoad = lib.$gm.unsafeWindow.attachments || [];
+    const pendingJobs = attachmentsOnLoad.filter((item) => item && item.job).length;
+    if (pendingJobs > 0 && searchedJobs.length === 0) {
+      const msg2 = `本节还有 ${pendingJobs} 个未完成任务点，但一个都没加载出来，再等最多 15 秒`;
+      $console.warn("[自动刷课] " + msg2);
+      traceRedo(msg2);
+      const deadline = Date.now() + 15e3;
+      while (Date.now() < deadline && searchedJobs.length === 0) {
+        searching = true;
+        setTimeout(() => {
+          searching = false;
+        }, 3e3);
+        await runJobs();
+        await $.sleep(500);
+      }
+    }
     top$1._preChapterId = "";
     const next2 = async () => {
       if (CXAnalyses.isInFinalTab()) {
@@ -18086,7 +18236,7 @@ ${lines}`;
           });
         }
       }
-      if (CXAnalyses.isInFinalChapter()) {
+      if (CXAnalyses.isInFinalChapter() && CXAnalyses.isInFinalTab()) {
         let content = "";
         if (opts.backToFirstWhenFinish) {
           content = "已经抵达最后一个章节，10秒后返回第一个章节重新开始。";
@@ -18109,6 +18259,16 @@ ${lines}`;
         });
         return;
       }
+      if (CXAnalyses.findPlatformNext()) {
+        const msg2 = "本节任务点已完成，点击平台「下一节」";
+        $console.info("[自动刷课] " + msg2);
+        traceRedo(msg2);
+        lib.$message.info({ content: msg2, duration: 4 });
+        await $.sleep(900);
+        if (CXAnalyses.clickPlatformNext())
+          return;
+      }
+      $console.warn("没有找到平台「下一节」按钮，回退目录跳转（可能跳转位置不准）");
       if (CXProject.scripts.study.cfg.mode === "job") {
         if (CXAnalyses.isInFinalTab()) {
           const elements2 = CXAnalyses.getChapterInfos().filter((el) => {
@@ -18144,21 +18304,7 @@ ${lines}`;
           top$1._preChapterId = curChapterId.value;
           CXAnalyses.scrollToActiveChapter();
           await $.sleep(200);
-          const nextChapter = CXAnalyses.pickNextUnfinishedChapter(curChapterId.value);
-          if (nextChapter) {
-            const msg2 = `下一节：${nextChapter.title || nextChapter.chapterId}`;
-            $console.info(msg2);
-            lib.$message.info({ content: msg2, duration: 4 });
-            CXAnalyses.clickChapter(nextChapter);
-            return;
-          }
-          const infos = CXAnalyses.getChapterInfos();
-          if (infos.length > 0) {
-            $console.log("本节之后的章节都已完成，不再跳转");
-            lib.$message.info({ content: "本节之后的章节都已完成", duration: 6 });
-            return;
-          }
-          $console.warn("目录没读出来，回退平台的下一节（可能跳转位置不准）");
+          $console.warn("回退平台 PCount.next 跳转（按钮没找到，位置可能不准）");
           top$1 == null ? void 0 : top$1.PCount.next(count.length.toString(), curChapterId.value, curCourseId.value, curClazzId.value, "");
         } else {
           $console.warn("参数错误，无法跳转下一章，请尝试手动切换。");
@@ -18364,6 +18510,18 @@ ${lines}`;
             return false;
           if (isChoiceSelected(el))
             return true;
+          const input = el.querySelector('input[type="radio"], input[type="checkbox"]');
+          if (input) {
+            input.click();
+            await $.sleep(150);
+            if (isChoiceSelected(el))
+              return true;
+            input.checked = true;
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+            await $.sleep(150);
+            if (isChoiceSelected(el))
+              return true;
+          }
           el.click();
           await $.sleep(150);
           if (isChoiceSelected(el))
@@ -18372,9 +18530,9 @@ ${lines}`;
           await $.sleep(150);
           return isChoiceSelected(el);
         };
-        const answerByAI = async (list) => {
+        const answerByAI = async (list, root2) => {
           var _a;
-          const container2 = doc.querySelector("#video .ans-videoquiz") || doc.querySelector(".ans-videoquiz") || list[0].parentElement;
+          const container2 = root2 || doc.querySelector("#video .ans-videoquiz") || doc.querySelector(".ans-videoquiz") || list[0].parentElement;
           if (!container2)
             return { ok: false, hasAnswer: false };
           $console.info("正在使用 AI 题库作答视频内题目...");
@@ -18402,17 +18560,24 @@ ${lines}`;
           return { ok: false, hasAnswer: false };
         };
         let lastAnsweredKey = "";
+        let pickRetry = 0;
         const loop = async () => {
-          var _a;
+          var _a, _b, _c, _d;
           while (true) {
             const submitBtn = () => doc.querySelector("#videoquiz-submit");
             if (submitBtn()) {
-              const list = Array.from(doc.querySelectorAll(".ans-videoquiz-opt label"));
+              const itemEls = Array.from(doc.querySelectorAll(".ans-videoquiz .tkItem"));
+              const activeItem2 = itemEls.find((el) => el.offsetHeight > 0) || itemEls[0];
+              const scope = activeItem2 || doc;
+              const list = Array.from(scope.querySelectorAll(".ans-videoquiz-opt label"));
               if (list.length === 0) {
                 await $.sleep(3e3);
                 continue;
               }
-              const key = list.map((el) => (el.textContent || "").trim()).join("|");
+              const stem = (((_a = activeItem2 == null ? void 0 : activeItem2.querySelector(".tkItem_title")) == null ? void 0 : _a.textContent) || "").replace(/\s+/g, " ").trim();
+              const boxId = (((_b = doc.querySelector(".ans-videoquiz")) == null ? void 0 : _b.id) || "").trim();
+              const rightNum = (((_c = doc.querySelector("#rightNum")) == null ? void 0 : _c.textContent) || "").trim();
+              const key = `${boxId}|${stem}|${rightNum}|` + list.map((el) => (el.textContent || "").trim()).join("|");
               if (key && key === lastAnsweredKey) {
                 await $.sleep(3e3);
                 continue;
@@ -18420,7 +18585,7 @@ ${lines}`;
               let answered = false;
               let hasAnswer = false;
               if (strategy === "ai") {
-                const ret = await answerByAI(list);
+                const ret = await answerByAI(list, activeItem2);
                 answered = ret.ok;
                 hasAnswer = ret.hasAnswer;
               }
@@ -18428,9 +18593,22 @@ ${lines}`;
                 const answer = list[Math.floor(Math.random() * list.length)];
                 await clickOption(answer);
               }
+              const anyPicked = list.some((el) => isChoiceSelected(el));
+              if (!anyPicked) {
+                pickRetry += 1;
+                const warn = `视频弹题：选项没有回显选中态，暂不提交（第 ${pickRetry} 次）`;
+                $console.warn(warn);
+                traceRedo(warn);
+                if (pickRetry < 5) {
+                  await $.sleep(3e3);
+                  continue;
+                }
+                $console.error("视频弹题：连续 5 次都没能选中选项，跳过这题");
+              }
               if (key)
                 lastAnsweredKey = key;
-              (_a = submitBtn()) == null ? void 0 : _a.click();
+              pickRetry = 0;
+              (_d = submitBtn()) == null ? void 0 : _d.click();
               await $.sleep(3e3);
               const container2 = doc.querySelector("#video .ans-videoquiz");
               const components = Array.from(doc.querySelectorAll(".x-component-default"));
@@ -18602,6 +18780,36 @@ ${lines}`;
         traceRedo("测验页面未就绪：等待超时");
       }
       const { TiMu } = domSearchAll({ TiMu: ".TiMu" }, frameWindow.document);
+      const questionRoots = [];
+      for (const root2 of TiMu) {
+        const items2 = Array.from(root2.querySelectorAll(".readCompreHensionItem"));
+        if (items2.length > 0)
+          questionRoots.push(...items2);
+        else
+          questionRoots.push(root2);
+      }
+      if (questionRoots.length !== TiMu.length) {
+        const msg22 = `检测到共用案例题：${TiMu.length} 个大题拆成 ${questionRoots.length} 道子题分别作答`;
+        $console.info(msg22);
+        traceRedo(msg22);
+      }
+      const resolveQuestionType = (elements2) => {
+        var _a2;
+        const typeInput = (_a2 = elements2.type) == null ? void 0 : _a2[0];
+        const byInput = typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0;
+        if (byInput && byInput !== "reader")
+          return byInput;
+        const label = (elements2.title || []).map((el) => el ? el.textContent || "" : "").join(" ");
+        if (/多选/.test(label))
+          return "multiple";
+        if (/单选/.test(label))
+          return "single";
+        if (/判断/.test(label))
+          return "judgement";
+        if (/填空/.test(label))
+          return "completion";
+        return byInput || "unknown";
+      };
       CORSUtils.panelNormal();
       CommonProject.scripts.workResults.methods.init();
       CORSUtils.pinWorkPanel();
@@ -18610,13 +18818,14 @@ ${lines}`;
           titles.map((t) => t ? optimizationElementWithImage(t, true).innerText : "").join(","),
           redundanceWordsText.split("\n")
         );
-        return removed.trim().replace(/^\d+[。、.]/, "").replace(/（\d+\.\d+分）/, "").replace(/\(..题, \d+?分\)/, "").replace(/\(..题, \d+\.\d+分\)/, "").replace(/[[(【（](..题|名词解释|完形填空|阅读理解)[\])】）]/, "").trim();
+        return removed.trim().replace(/^\d+[。、.]/, "").replace(/^\(\d+\)\s*/, "").replace(/（\d+\.\d+分）/, "").replace(/\(..题, \d+?分\)/, "").replace(/\(..题, \d+\.\d+分\)/, "").replace(/[[(【（](..题|名词解释|完形填空|阅读理解)[\])】）]/, "").trim();
       };
       const worker = new HonghuWorker({
-        root: TiMu,
+        root: questionRoots,
         elements: {
           title: [
             (root2) => lib.$el(".Zy_TItle .clearfix", root2),
+            (root2) => lib.$el(".clear .clearfix", root2),
             (root2) => lib.$el(".firstUlList", root2),
             (root2) => lib.$el(".secondUlList", root2)
           ],
@@ -18629,8 +18838,7 @@ ${lines}`;
         answerer: (elements2, ctx) => {
           const title = chapterTestTaskQuestionTitleTransform(elements2.title);
           if (title) {
-            const typeInput = elements2.type[0];
-            const type = (typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0) || "unknown";
+            const type = resolveQuestionType(elements2);
             const searchFresh = async () => {
               await $.sleep((period != null ? period : 3) * 1e3);
               return defaultAnswerWrapperHandler(answererWrappers, {
@@ -18660,8 +18868,7 @@ ${lines}`;
         work: async (ctx) => {
           var _a2, _b2, _c2;
           const { elements: elements2, searchInfos } = ctx;
-          const typeInput = elements2.type[0];
-          const type = typeInput ? getQuestionType$1(parseInt(typeInput.value)) : void 0;
+          const type = resolveQuestionType(elements2);
           if (hasChapterOverride) {
             const redoTitle = chapterTestTaskQuestionTitleTransform(elements2.title);
             const partialTitles = (chapterRedoPlan == null ? void 0 : chapterRedoPlan.onlyTitles) || [];

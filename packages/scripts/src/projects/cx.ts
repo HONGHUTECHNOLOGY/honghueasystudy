@@ -725,13 +725,44 @@ export const CXProject = Project.create({
 				CommonProject.scripts.render.methods.pin(CXProject.scripts.study);
 
 				let chapters = await CXAnalyses.waitForChapterInfos();
+				traceRedo(`调度器启动：目录 ${chapters.length} 条`);
+				/**
+				 * 目录判定快照（排查用）
+				 *
+				 * 完成态判定出问题时会表现为「某些小节永远不被进入」，而现场只有用户那台机器有数据。
+				 * 把每条小节的 `计数 / 完成图标 / 状态文字` 一起记下来：`count>0` 是未完成，
+				 * `done` 是平台打的完成图标。两者冲突（count>0 且 done）正是「视频完成、测验未做」
+				 * 的小节，也是之前被误判成已完成、永远跳不到测验的那一类。
+				 */
+				const unfinishedNow = chapters.filter((chapter) => CXAnalyses.isChapterUnfinished(chapter));
+				traceRedo(
+					`判定未完成 ${unfinishedNow.length}/${chapters.length}：` +
+						unfinishedNow
+							.slice(0, 12)
+							.map(
+								(chapter) =>
+									`${chapter.title || chapter.chapterId}(count=${chapter.unFinishCount}${
+										chapter.done ? ',icon' : ''
+									})`
+							)
+							.join(' / ')
+				);
 
-				const params = new URLSearchParams(window.location.href);
+				const params = new URLSearchParams(window.location.search);
 				const mooc = params.get('mooc2');
 				/** 切换新版 */
 				if (mooc === null) {
 					params.set('mooc2', '1');
-					window.location.replace(decodeURIComponent(params.toString()));
+					/**
+					 * 必须带上 pathname
+					 *
+					 * `params.toString()` 只是 query string，直接丢给 `location.replace` 会被当成
+					 * **相对地址**，导航到 `/mycourse/chapterId=...&mooc2=1` 这种不存在的路径，
+					 * 平台再一重定向 —— 用户看到的就是「明明点了这一节，却被送到别的课去了」。
+					 * 另外不要再 `decodeURIComponent`：`enc`、`openc` 这类参数本身是编码过的，
+					 * 解一次再拼回去会破坏服务端签名。
+					 */
+					window.location.replace(window.location.pathname + '?' + params.toString());
 					return;
 				}
 
@@ -780,6 +811,94 @@ export const CXProject = Project.create({
 					return;
 				}
 
+				/**
+				 * 当前小节还有任务点没做完 → 留在原地，别跳走
+				 *
+				 * 两条判据任一成立就留守：
+				 *  1. 目录里这一条还有剩余任务点 —— **计数优先，不信完成图标**
+				 *     （平台会给「视频做完、测验没做」的小节打上 `icon_Completed`）；
+				 *  2. 任务点栏显示当前还没走到最后一个任务点。
+				 *
+				 * 以前只判 2：页面刚加载、任务点栏还没渲染时 `isInFinalTab()` 会返回 true，
+				 * 于是刚进来就被下面的 `autoJumpToUnFinishJob` 拽到别的章节去了。
+				 */
+				const waitTaskTabs = async (timeout = 6000) => {
+					const deadline = Date.now() + timeout;
+					while (Date.now() < deadline) {
+						try {
+							if ((top?.document.querySelectorAll('#prev_tab .prev_ul li') || []).length > 0) return true;
+						} catch {}
+						await $.sleep(300);
+					}
+					return false;
+				};
+				await waitTaskTabs();
+				/**
+				 * 认「当前小节」：优先用平台自己的隐藏域 `#curChapterId`
+				 *
+				 * `isChapterActive` 只看 `posCatalog_active`，两代目录里 active 类可能挂在
+				 * 别的祖先上（`li.active`、`chapter_item.active`），一旦认不出来，
+				 * 下面的 autoJump 就把人正在看的、明明还没学完的小节抢走 ——
+				 * 用户看到的就是「我选的是没完成的课，却给我跳到别的课」。
+				 * `#curChapterId` 是平台自己写的当前小节 id，比任何 CSS 类都准。
+				 *
+				 * 页面刚打开时这个隐藏域可能**还没写入**（平台是异步初始化目录的），
+				 * 这时直接去判「当前在哪一节」必然认不出来，所以要等一会儿。
+				 */
+				const waitCurChapter = async (timeout = 5000) => {
+					const deadline = Date.now() + timeout;
+					while (Date.now() < deadline) {
+						const id = $el<HTMLInputElement>('#curChapterId', top?.document)?.value || '';
+						if (id) return id;
+						await $.sleep(300);
+					}
+					return '';
+				};
+				const curChapterId = await waitCurChapter();
+				const activeChapter =
+					(curChapterId ? chapters.find((chapter) => chapter.chapterId === curChapterId) : undefined) ||
+					chapters.find((chapter) => CXAnalyses.isChapterActive(chapter));
+
+				/**
+				 * 认不出当前小节 → 什么都不做
+				 *
+				 * 这是「页面刚打开、脚本刚开始跑就自动定位到别的节」的最后一道闸：
+				 * 没有当前节就没有「留守」的依据，继续往下走只会按目录盲挑一个目标跳过去。
+				 * 宁可停在原地（用户自己点一下就正常了），也不能把人正在看的小节扔掉。
+				 */
+				if (!activeChapter) {
+					const msg = `认不出当前小节（cur=${curChapterId || '空'}），不做自动切换`;
+					$console.warn('[自动刷课] ' + msg);
+					traceRedo(msg);
+					return;
+				}
+				if (CXAnalyses.isChapterUnfinished(activeChapter) || !CXAnalyses.isInFinalTab()) {
+					const msg = `当前小节还没学完，留在：${activeChapter.title || activeChapter.chapterId}`;
+					$console.info('[自动刷课] ' + msg);
+					traceRedo(msg);
+					return;
+				}
+
+				/**
+				 * URL 里已经点名了某一节 → 不自动切换
+				 *
+				 * 用户从目录点的每一节、以及平台「下一节」跳转，URL 都带 `chapterId=…`。
+				 * 这种「有人明确指定了位置」的情况下再按目录挑一个「未完成」的跳过去，
+				 * 等于把人正在学的节扔掉 —— 这就是「跳到别的课」的直接原因。
+				 * 推进交给平台「下一节」，autoJump 只在真正没指定小节时（从课程页进来）生效。
+				 */
+				const urlChapterId = (() => {
+					try {
+						return new URL(location.href).searchParams.get('chapterId') || '';
+					} catch {
+						return '';
+					}
+				})();
+				if (urlChapterId && chapters.some((chapter) => chapter.chapterId === urlChapterId)) {
+					traceRedo(`已指定小节 ${urlChapterId}，不做自动切换`);
+					return;
+				}
+
 				// 寻找需要运行的任务
 				if (CXProject.scripts.study.cfg.autoJumpToUnFinishJob) {
 					// 只留真的还有活干的（读完计数读状态，读不到的既不算完成也不算未完成）
@@ -788,14 +907,42 @@ export const CXProject = Project.create({
 					if (chapters.length === 0) {
 						$message.warn({ content: '页面任务点数量为空! 请刷新重试!' });
 					} else {
-						/** 取目录顺序里第一个还没做完的（和以前一致，不重排：闯关模式靠这个顺序解锁） */
-						const target = chapters[0];
+						/**
+						 * 只保留最细层级（`1.7.3`）
+						 *
+						 * 平台把「章 1.7」「节 1.7.1」「小节 1.7.3」混在同一个列表里，
+						 * 挑到章节点点下去会被带到该章第一节 —— 用户看到的就是
+						 * 「明明选的是 1.7.3，却跳到了别的节」。按编号段数取最深那层最稳。
+						 */
+						const maxDepth = Math.max(...chapters.map((chapter) => chapter.depth || 0));
+						if (maxDepth > 1) {
+							chapters = chapters.filter((chapter) => (chapter.depth || 0) === maxDepth);
+						}
+						/**
+						 * 优先「当前小节之后」的未完成章节
+						 *
+						 * 直接取 `chapters[0]` 是目录里第一个未完成的，人学到 1.7 时
+						 * 前面 1.2 没做完就会被拉回去（用户报的「一进去就往前跳」）。
+						 * 后面没有未完成的（已经在尾部，前面有漏）再回头补。
+						 */
+						const current = chapters.find((chapter) => chapter.chapterId === curChapterId);
+						const after = current
+							? chapters.filter(
+									(chapter) =>
+										chapter.rank > current.rank ||
+										(chapter.rank === current.rank && chapter.order > current.order)
+							  )
+							: [];
+						const target = after[0] || chapters[0];
 						//  进入需要进行的章节，并且当前章节未被选中
 						if (!CXAnalyses.isChapterActive(target)) {
 							/**
 							 * 直接点目录项，不再调页面全局 `getTeacherAjax`：
 							 * 新版目录的 onclick 是 `toOld(...)`，根本没有这个函数。
 							 */
+							const msg = `自动切换到未完成小节：${target.title || target.chapterId}`;
+							$console.info('[自动刷课] ' + msg);
+							traceRedo(msg);
 							CXAnalyses.clickChapter(target);
 						}
 						await $.sleep(1000);
@@ -1187,15 +1334,41 @@ function markWrongQuestions(
 ): { wrong: number; marked: number } {
 	const none = { wrong: 0, marked: 0 };
 	if (!doc || !paper.length) return none;
-	const nodes = Array.from(doc.querySelectorAll('.TiMu'));
-	if (nodes.length !== paper.length) return none;
+
+	/**
+	 * 题目单元必须和答题器保持一致：共用案例题按子问题拆
+	 *
+	 * 共用案例题是「一个 `.TiMu` 里塞多个 `readCompreHensionItem`」，
+	 * 而 `paper` 是按子问题存的（4 条）。这里如果只按 `.TiMu` 数（1 个）去对，
+	 * 题数永远不等，函数直接返回 `{wrong:0, marked:0}` —— 上层看到「没有批改标记」
+	 * 就把**整卷**重做，用户看到的就是「明明只错一题，却重做整卷」。
+	 */
+	const roots: HTMLElement[] = [];
+	for (const root of Array.from(doc.querySelectorAll<HTMLElement>('.TiMu'))) {
+		const items = Array.from(root.querySelectorAll<HTMLElement>('.readCompreHensionItem'));
+		if (items.length > 0) roots.push(...items);
+		else roots.push(root);
+	}
+	if (roots.length !== paper.length) {
+		traceRedo(`批改标记：题数对不上（卷面 ${roots.length} / 快照 ${paper.length}），只能整卷重做`);
+		return none;
+	}
 
 	let wrong = 0;
 	let marked = 0;
 	paper.forEach((question, index) => {
-		const node = nodes[index];
-		const isWrong = !!node.querySelector('.marking_cuo');
-		const isRight = !!node.querySelector('.marking_dui');
+		const node = roots[index];
+		/**
+		 * 半对（`marking_bandui`）也必须算错
+		 *
+		 * 多选题少选时平台给的是「半对」而不是红叉：界面上只有一个红叉，
+		 * 用户以为「就一题错了」，但这门课要求全对才及格，半对的题一样要重做。
+		 * 只认 `marking_cuo` 的话，半对的题会被当成「没标记」保留原答案，
+		 * 重做一轮下来分数还是不够。
+		 */
+		const isHalfWrong = !!node.querySelector('.marking_bandui');
+		const isWrong = isHalfWrong || !!node.querySelector('.marking_cuo');
+		const isRight = !isWrong && !!node.querySelector('.marking_dui');
 		if (isWrong) {
 			question.wrong = true;
 			wrong++;
@@ -2259,6 +2432,14 @@ interface ChapterInfo {
 	title: string;
 	/** 目录里的原始位置，用于同组内保持平台给的先后（闯关模式下不能重排） */
 	order: number;
+	/**
+	 * 编号层级（按 `1.7.3` 的段数算）
+	 *
+	 * 平台把「章 1.7」「节 1.7.1」「小节 1.7.3」全塞在同一个列表里，
+	 * 挑目标时必须只取最细那层 —— 挑到 `1.7` 这种章节点，点下去会被带到该章第一节，
+	 * 表现就是「明明选的是 1.7.3，却跳到了别的节」。
+	 */
+	depth: number;
 	/** 所属「章」的标题，例如 `1 必修部分`；读不到为空 */
 	group: string;
 	/** 组优先级：必修 0 / 选修 1 / 其它 2 */
@@ -2267,6 +2448,14 @@ interface ChapterInfo {
 	unFinishCount: number;
 	/** 整页是否用「完成图标」体系（新版 `icon_Completed`）：是的话，没图标就等于没做完 */
 	pageUsesIcons?: boolean;
+	/**
+	 * `unFinishCount` 的语义是否真的是「剩余任务点数」
+	 *
+	 * 两代目录的隐藏域名字不同（`knowledgeJobCount` / `jobUnfinishCount`），语义只能反推：
+	 * 只要页面上存在「带完成图标 且 计数为 0」的小节，就说明它是剩余数；
+	 * 反过来满页都是「带图标 且 计数 > 0」，更像总数，那就不能拿它否掉图标。
+	 */
+	countIsRemaining?: boolean;
 	/** 平台自己标的「已完成」（`icon_yiwanc` / `icon_Completed`） */
 	done: boolean;
 	/** 完成状态原文（已完成 / 待完成 / 未开始 …），计数读不到时作为第二判据 */
@@ -2315,6 +2504,60 @@ const CXAnalyses = {
 			return true;
 		}
 		return tabs[tabs.length - 1].classList.contains('active');
+	},
+	/**
+	 * 点平台自己的「下一节」按钮
+	 *
+	 * 这个按钮背后就是 `PCount.next`，语义是**任务点级**推进：
+	 * 本节还有任务点就切下一个任务点（视频→测验→…），全部做完才进下一小节。
+	 * 章节顺序、任务点索引、courseId/clazzId 这些参数都是平台渲染时算好写在 onclick 里的，
+	 * 比自己拼参数调 `PCount.next` 安全 —— 手拼参数正是之前「往回跳两节」的原因。
+	 *
+	 * 也不用「点任务点标签」：标签只是把界面切过去，测验内容并不会被学习脚本当成任务点
+	 * （实测切过去后一条答题记录都没有，10 秒后就被当成没活跳走）。
+	 *
+	 * @returns 是否点到了按钮
+	 */
+	clickPlatformNext(): boolean {
+		const btn = this.findPlatformNext();
+		if (!btn) return false;
+		btn.click();
+		return true;
+	},
+	/** 找到页面上的「下一节」按钮（找不到返回 null，调用方可以先发提示再点） */
+	findPlatformNext(): HTMLElement | null {
+		const doc = top?.document;
+		if (!doc) return null;
+		const norm = (value: string | null | undefined) => String(value || '').replace(/\s+/g, '');
+
+		/**
+		 * ① 文本/标题就是「下一节」的最内层元素
+		 *
+		 * 先按文字找，再退回 onclick —— 只按 `PCount.next` 找的话，
+		 * 有些页面的「上一节」也是调 `PCount.next`（靠最后一个参数区分方向），
+		 * 一旦点错就变成往回跳，用户看到的就是「明明选的是这节，却跳到别处」。
+		 */
+		const isNextText = (el: HTMLElement) => {
+			const text = norm(el.textContent);
+			const title = norm(el.getAttribute('title'));
+			return text === '下一节' || title === '下一节' || (text.length <= 10 && text.startsWith('下一节'));
+		};
+		const hits = Array.from(doc.querySelectorAll<HTMLElement>('a, div, span, button')).filter(isNextText);
+		const byText =
+			hits.find((el) => !Array.from(el.children).some((child) => isNextText(child as HTMLElement))) || hits[0];
+		if (byText) return byText;
+
+		/** ② 退回 onclick：`PCount.next(...)`，并排除方向参数像「上一节」的 */
+		const byOnclick = Array.from(doc.querySelectorAll<HTMLElement>('[onclick*="PCount.next"]')).filter((el) => {
+			if (/上一节/.test(norm(el.textContent))) return false;
+			const args = /PCount\.next\(([^)]*)\)/.exec(norm(el.getAttribute('onclick')));
+			if (!args) return true;
+			const parts = args[1].split(',').map((item) => item.replace(/["'\s]/g, ''));
+			/** 第 5 个参数是方向（空串 = 下一节，其余多为上一节/重学） */
+			const dir = parts[4] || '';
+			return dir === '';
+		});
+		return byOnclick[0] || null;
 	},
 	/** 是否处于最后一个章节 */
 	isInFinalChapter() {
@@ -2380,9 +2623,18 @@ const CXAnalyses = {
 		);
 		const seen = new Set<HTMLElement>();
 		const infos: ChapterInfo[] = [];
+		/**
+		 * 完成图标可能挂在条目**自身**（新版 `class="chapter_item posCatalog_select icon_Completed"`），
+		 * 也可能挂在内部子元素上。`querySelector` 不匹配自身，只查内部会漏 —— 新版目录
+		 * 就会变成「一条已完成的都认不出来」，于是每次刷课都从第一节开始。
+		 */
+		const hasDoneIcon = (el: HTMLElement | null | undefined) =>
+			!!el &&
+			(/icon_Completed|icon_yiwanc/.test(String(el.className || '')) ||
+				!!el.querySelector('[class*="icon_Completed"], [class*="icon_yiwanc"]'));
 		/** 新版目录用 `icon_Completed` 标完成：整页只要出现一个，就说明判据是图标而不是任务点数 */
 		const pageUsesIcons = clickEls.some(
-			(el) => !!el.closest('.posCatalog_select')?.querySelector('[class*="icon_Completed"]')
+			(el) => hasDoneIcon(el.closest('.posCatalog_select') as HTMLElement) || hasDoneIcon(el)
 		);
 
 		for (const clickEl of clickEls) {
@@ -2445,7 +2697,11 @@ const CXAnalyses = {
 			const stateCls = stateEl ? String(stateEl.className || '') : '';
 			const stateText = (stateEl?.textContent || '').replace(/\s+/g, ' ').trim();
 			const completedIcon = container.querySelector('[class*="icon_Completed"], [class*="icon_yiwanc"]');
-			const done = !!completedIcon || /icon_yiwanc|icon_Completed/.test(stateCls) || /已完成/.test(stateText);
+			const done =
+				!!completedIcon ||
+				hasDoneIcon(container) ||
+				/icon_yiwanc|icon_Completed/.test(stateCls) ||
+				/已完成/.test(stateText);
 
 			infos.push({
 				element: clickEl,
@@ -2453,6 +2709,7 @@ const CXAnalyses = {
 				chapterId,
 				title,
 				order: infos.length,
+				depth: no ? no.split('.').filter(Boolean).length : 0,
 				group,
 				rank: group.indexOf('必修') >= 0 ? 0 : group.indexOf('选修') >= 0 ? 1 : 2,
 				unFinishCount,
@@ -2462,29 +2719,65 @@ const CXAnalyses = {
 				pageUsesIcons
 			});
 		}
+
+		/**
+		 * 反推 `unFinishCount` 的语义（剩余数 / 总数）
+		 *
+		 * - 存在「带完成图标 且 计数为 0」的小节 → 这是剩余数（已完成 = 剩 0 个），可信；
+		 * - 只有「带图标 且 计数 > 0」→ 更像总数，不能拿它否掉完成图标，
+		 *   否则整门课都会被判成没做完，每次刷课从第一节重来。
+		 */
+		const doneWithZero = infos.some((info) => info.done && info.unFinishCount === 0);
+		const doneWithPositive = infos.some((info) => info.done && info.unFinishCount > 0);
+		const countIsRemaining = doneWithZero || !doneWithPositive;
+		for (const info of infos) info.countIsRemaining = countIsRemaining;
+
 		return infos;
 	},
 	/**
 	 * 这一条到底还有没有活干
 	 *
 	 * 判据按可信度排：
-	 *   1. 平台标了「已完成」→ 一定没活干；
-	 *   2. 读到了任务点数 → 以它为准；
-	 *   3. 读不到计数 → 只有状态文字明说「待完成 / 未完成 / 未开始」才算有活干。
+	 *   1. 剩余任务点数（且已确认是「剩余数」语义）→ 以它为准，能压过完成图标；
+	 *   2. 平台标了「已完成」→ 没活干；
+	 *   3. 读不到计数 → 新版目录看有没有完成图标（没图标=没做完），
+	 *      老版目录没有图标也没有计数 → 视为已完成。
 	 *
-	 * ⚠️「读不到」不能当成「未完成」：实测老目录里**没有计数 input 就等于做完了**，
+	 * ⚠️「读不到」不能直接当成「未完成」：实测老目录里**没有计数 input 就等于做完了**，
 	 * 当成未完成会让人反复跳回已经学完的章节。
 	 */
 	isChapterUnfinished(info: ChapterInfo): boolean {
+		const hasCount = !isNaN(info.unFinishCount);
+		/**
+		 * ⚠️ 计数排在完成图标**前面**，但要先确认这个计数是「剩余数」而不是「总数」
+		 *
+		 * 平台对「任务点做完了、测验还没做」的小节经常已经打了 `icon_Completed`，
+		 * 但它的剩余任务点数仍然是 1。以前这里第一行 `if (info.done) return false`
+		 * 一票否决，这种节就被当成已完成：自动刷课直接跳过、永远不会进那一节，
+		 * 测验也就永远不做 —— 这正是「视频完成的、测验未完成的那节永远跳不到测试页」的根因。
+		 *
+		 * 但反过来，如果 `knowledgeJobCount` 存的是**任务点总数**，照它判会让整门课
+		 * 永远「未完成」（每次从第一节开始）。所以先看 `countIsRemaining`
+		 * （页级反推，见 `getChapterInfos` 末尾）：只有确认是剩余数时才敢压过图标。
+		 */
+		if (hasCount && info.countIsRemaining) return info.unFinishCount > 0;
+		/**
+		 * 状态文字明说「待完成 / 未完成 / 未开始」→ 一定有活
+		 *
+		 * 平台打完成图标有时是滞后的（任务点做完了就点亮，测验还没做），
+		 * 而状态文字是按真实进度写的，两者冲突时信文字。
+		 */
+		if (/(待完成|未完成|未开始|进行中)/.test(info.stateText)) return true;
 		if (info.done) return false;
-		if (!isNaN(info.unFinishCount)) return info.unFinishCount > 0;
+		/** 计数是「总数」时不能拿来判完成 */
+		if (hasCount) return false;
 		/**
 		 * 读不到任务点数时看目录体系：
 		 * - 新版目录用 `icon_Completed` 标完成 → 没图标就是**没做完**；
 		 * - 老版目录没有图标、也没有计数 → 视为已完成（实测老目录「没有计数 input = 做完了」）。
 		 */
 		if (info.pageUsesIcons) return true;
-		return /(待完成|未完成|未开始|进行中)/.test(info.stateText);
+		return false;
 	},
 	/**
 	 * 这个条目是不是「当前正在学的」
@@ -2500,35 +2793,6 @@ const CXAnalyses = {
 	/** 目录里有没有「必修/选修」分组：有的话，模拟考试之类不参与刷课 */
 	hasNamedGroups(infos: ChapterInfo[]): boolean {
 		return infos.some((info) => info.rank === 0 || info.rank === 1);
-	},
-	/**
-	 * 找「排在当前章节**后面**、而且还有活干」的章节
-	 *
-	 * 为什么不用平台自带的 `PCount.next`：它的 `cur` 是页面闭包变量，程序化调用时是
-	 * `undefined`，`parseInt(undefined)` → NaN，索引算错就会**往回跳**。
-	 * 实测在 1.7.2 上调用，直接退回 1.7（往前两个条目），用户看到的就是
-	 * 「一进去就被跳走两节课」。
-	 *
-	 * 这里只认目录顺序（必修 0 → 选修 1 → 其它 2，同组按目录先后），
-	 * 并且**只往后**，绝不往回 —— 往回跳是之前踩过的另一个坑。
-	 */
-	pickNextUnfinishedChapter(currentChapterId: string): ChapterInfo | null {
-		if (!currentChapterId) return null;
-		const infos = this.getChapterInfos();
-		const current = infos.find((item) => item.chapterId === currentChapterId);
-		if (!current) return null;
-
-		const named = this.hasNamedGroups(infos);
-		const candidates = infos.filter((item) => {
-			if (!item.clickable || !item.chapterId) return false;
-			if (item.container === current.container) return false;
-			/** 有必修/选修分组时，模拟考试之类的分组不参与刷课 */
-			if (named && item.rank === 2) return false;
-			if (!this.isChapterUnfinished(item)) return false;
-			return item.rank > current.rank || (item.rank === current.rank && item.order > current.order);
-		});
-		if (!candidates.length) return null;
-		return candidates.sort((a, b) => a.rank - b.rank || a.order - b.order)[0];
 	},
 	/** 点目录里的条目：onclick 可能挂在整行，也可能挂在名字上 */
 	clickChapter(info: ChapterInfo) {
@@ -2549,19 +2813,36 @@ const CXAnalyses = {
 	 * - 超时后返回空数组
 	 */
 	waitForChapterInfos(timeout = 10) {
-		return new Promise<any[]>((resolve, reject) => {
+		return new Promise<any[]>((resolve) => {
+			let lastCount = -1;
+			let stable = 0;
 			const interval = setInterval(() => {
 				const res = this.getChapterInfos();
 				if (res.length > 0) {
-					clearInterval(interval);
-					clearInterval(to);
-					resolve(res);
+					/**
+					 * 目录是**分批塞进 DOM** 的
+					 *
+					 * 第一次读到非空时，往往只有前几条、或者只有章级条目（1.1、1.2…），
+					 * 拿这份不完整的列表去挑「未完成章节」，就会挑到错的位置 ——
+					 * 用户看到的就是「页面刚打开、脚本刚开始跑，就自动定位到别的节」。
+					 * 连续两次读到的条数一致才认为渲染完成。
+					 */
+					if (res.length === lastCount) stable += 1;
+					else {
+						lastCount = res.length;
+						stable = 0;
+					}
+					if (stable >= 1) {
+						clearInterval(interval);
+						clearTimeout(to);
+						resolve(res);
+					}
 				}
-			}, 1000);
+			}, 800);
 
 			const to = setTimeout(() => {
 				clearInterval(interval);
-				resolve([]);
+				resolve(this.getChapterInfos());
 			}, timeout * 1000);
 		});
 	},
@@ -2731,11 +3012,50 @@ export async function study(
 
 	await runJobs();
 
+	/**
+	 * 跳转前的二次确认：本节明明还有活、却一个任务点都没搜到 → 再等一轮
+	 *
+	 * `runJobs` 的搜索窗口只有 `3 + attachmentCount * 2` 秒（上限 10 秒）。
+	 * 网络慢、iframe 还没渲染完、平台把任务点内容延迟加载时，这 10 秒里什么都搜不到，
+	 * 脚本就会认为「本节任务点已完成」直接点「下一节」走人 —— 用户看到的正是
+	 * 「一开网页、脚本刚开始跑，就自动定位到别的节」。
+	 *
+	 * 判据来自平台自己的任务点数据（`top.attachments`）：
+	 * 有 `job=true`（未完成任务点）却一个都没识别出来，八成是还没加载好，再给 15 秒。
+	 * 任务点都已完成（没有 job=true）时不等待，不影响正常跳转速度。
+	 */
+	const attachmentsOnLoad = (($gm.unsafeWindow as any).attachments || []) as any[];
+	const pendingJobs = attachmentsOnLoad.filter((item) => item && item.job).length;
+	if (pendingJobs > 0 && searchedJobs.length === 0) {
+		const msg = `本节还有 ${pendingJobs} 个未完成任务点，但一个都没加载出来，再等最多 15 秒`;
+		$console.warn('[自动刷课] ' + msg);
+		traceRedo(msg);
+		const deadline = Date.now() + 15000;
+		while (Date.now() < deadline && searchedJobs.length === 0) {
+			searching = true;
+			setTimeout(() => {
+				searching = false;
+			}, 3000);
+			await runJobs();
+			await $.sleep(500);
+		}
+	}
+
 	// @ts-ignore
 	top._preChapterId = '';
 
 	// 下一章
 	const next = async () => {
+		/**
+		 * ① 交给平台自己的「下一节」驱动（唯一主路径）
+		 *
+		 * 平台按钮背后是 `PCount.next`，任务点级推进：本节还有任务点就切下一个任务点，
+		 * 全部做完才进下一小节。参数由页面渲染时算好，比自己拼更不会出错。
+		 *
+		 * 这里**不自作聪明**地按目录找「下一个未完成小节」：
+		 * 目录里的完成图标 / 剩余任务点数都不可靠（「视频完成、测验未做」的节会被标成完成），
+		 * 按目录跳就会跳过一个真正有测验的小节，用户看到的就是「跳到了另一个」。
+		 */
 		if (CXAnalyses.isInFinalTab()) {
 			if (await CXAnalyses.isStuckInBreakingMode()) {
 				return $modal.alert({
@@ -2745,7 +3065,11 @@ export async function study(
 			}
 		}
 
-		if (CXAnalyses.isInFinalChapter()) {
+		/**
+		 * 最后一章 + 最后一个任务点：平台按钮点了也是弹「已经是最后一节」，
+		 * 这里先给出脚本自己的收尾提示，避免停在原地反复点。
+		 */
+		if (CXAnalyses.isInFinalChapter() && CXAnalyses.isInFinalTab()) {
 			let content = '';
 
 			if (opts.backToFirstWhenFinish) {
@@ -2772,6 +3096,24 @@ export async function study(
 			return;
 		}
 
+		/**
+		 * 平台「下一节」：先提示、留出显示时间、再点
+		 *
+		 * 平台按钮点下去页面立刻跳转，而 `$message` 在 iframe 里要到顶层才能显示
+		 * （跨域时还得走 chrome.storage 往返）。先点后发，消息会被跳转直接带走
+		 * —— 用户看到的就是「有时候通知不显示」。
+		 */
+		if (CXAnalyses.findPlatformNext()) {
+			const msg = '本节任务点已完成，点击平台「下一节」';
+			$console.info('[自动刷课] ' + msg);
+			traceRedo(msg);
+			$message.info({ content: msg, duration: 4 });
+			await $.sleep(900);
+			if (CXAnalyses.clickPlatformNext()) return;
+		}
+
+		/** ② 兜底：页面结构变了、找不到「下一节」按钮时才按目录找 */
+		$console.warn('没有找到平台「下一节」按钮，回退目录跳转（可能跳转位置不准）');
 		if (CXProject.scripts.study.cfg.mode === 'job') {
 			// 检测当前章节是否完成，如果已经完成则下一章
 			// 如果没有需要完成的章节，则暂停运行
@@ -2817,34 +3159,12 @@ export async function study(
 				await $.sleep(200);
 
 				/**
-				 * 优先按目录往后找
+				 * 兜底：退回平台 `PCount.next`（和 git 原版一致的参数）
 				 *
-				 * 平台 `PCount.next` 依赖页面闭包里的 `cur`，程序化调用时它是 undefined，
-				 * 索引算错会**往回跳**（实测 1.7.2 → 1.7）。目录驱动只看顺序，方向永远向后。
+				 * 只在页面上找不到「下一节」按钮时才会走到这里（结构改版）。
+				 * 参数用原版那套：第一个是本节任务点数量，后面是 course/clazz/chapter id。
 				 */
-				const nextChapter = CXAnalyses.pickNextUnfinishedChapter(curChapterId.value);
-				if (nextChapter) {
-					const msg = `下一节：${nextChapter.title || nextChapter.chapterId}`;
-					$console.info(msg);
-					$message.info({ content: msg, duration: 4 });
-					CXAnalyses.clickChapter(nextChapter);
-					return;
-				}
-
-				/**
-				 * 目录能读、但后面没有未完成的了 → 停在这里，**不要**回退平台函数
-				 *
-				 * 平台 `PCount.next` 在程序化调用时会往回跳，回退它等于把刚修好的问题再犯一遍。
-				 * 只有目录完全读不出来（元素结构变了）才退回平台，属于最后兜底。
-				 */
-				const infos = CXAnalyses.getChapterInfos();
-				if (infos.length > 0) {
-					$console.log('本节之后的章节都已完成，不再跳转');
-					$message.info({ content: '本节之后的章节都已完成', duration: 6 });
-					return;
-				}
-
-				$console.warn('目录没读出来，回退平台的下一节（可能跳转位置不准）');
+				$console.warn('回退平台 PCount.next 跳转（按钮没找到，位置可能不准）');
 				// @ts-ignore
 				top?.PCount.next(count.length.toString(), curChapterId.value, curCourseId.value, curClazzId.value, '');
 			} else {
@@ -3133,13 +3453,32 @@ const JobRunner = {
 			/**
 			 * 点击一个选项并回读选中态
 			 *
-			 * 超星的选项在 iframe 里、由 Vue 组件托管，`el.click()` 合成事件可能被吞掉：
-			 * 旧实现发一次点击就当成功，日志打「作答成功」而页面上什么都没选中。
-			 * 这里点完回读，没选中就补一次完整鼠标序列（pointerdown/mousedown/pointerup/mouseup/click）。
+			 * 超星视频弹题的选项是
+			 * `<li class="ans-videoquiz-opt"><label><span class="tkRadio"><input type="radio"><i></i></span>A、可以</label></li>`，
+			 * 真正的 `input[type=radio]` 被 `opacity:0` 藏在圆圈下面（尺寸 18px，`display:block`）。
+			 *
+			 * `label.click()` 只有**真实用户点击**时才会触发浏览器「label → 控件的隐式激活」；
+			 * 脚本用 `el.click()` / `dispatchEvent` 派发的合成事件不走这条路径 ——
+			 * 实测点完 `input.checked` 仍是 `false`，页面看起来「题目没选上」，
+			 * 而下面的提交逻辑照样点了「提交」，等于交白卷。
+			 * `input.click()` 是原生方法，直接切换 checked 并派发 change，稳定生效。
 			 */
 			const clickOption = async (el: HTMLElement | undefined) => {
 				if (!el) return false;
 				if (isChoiceSelected(el)) return true;
+
+				const input = el.querySelector<HTMLInputElement>('input[type="radio"], input[type="checkbox"]');
+				if (input) {
+					input.click();
+					await $.sleep(150);
+					if (isChoiceSelected(el)) return true;
+					/** 框架拦了 change 时兜底：直接置位再通知一次 */
+					input.checked = true;
+					input.dispatchEvent(new Event('change', { bubbles: true }));
+					await $.sleep(150);
+					if (isChoiceSelected(el)) return true;
+				}
+
 				el.click();
 				await $.sleep(150);
 				if (isChoiceSelected(el)) return true;
@@ -3149,8 +3488,19 @@ const JobRunner = {
 			};
 
 			/** 使用 AI 题库作答；返回是否真的选中，以及题库是否给出了答案 */
-			const answerByAI = async (list: HTMLElement[]): Promise<{ ok: boolean; hasAnswer: boolean }> => {
+			const answerByAI = async (
+				list: HTMLElement[],
+				root?: HTMLElement
+			): Promise<{ ok: boolean; hasAnswer: boolean }> => {
+				/**
+				 * 题干必须从**当前这一题**的容器里提取
+				 *
+				 * 一次弹题可能是「共 2 题」，容器里有两组选项。整块 `.ans-videoquiz`
+				 * 当 root 会把两题的选项混在一起，题干也只取到第一题的 ——
+				 * 答案自然对不上。这里用调用方传进来的单题容器。
+				 */
 				const container =
+					root ||
 					doc.querySelector<HTMLElement>('#video .ans-videoquiz') ||
 					doc.querySelector<HTMLElement>('.ans-videoquiz') ||
 					list[0].parentElement;
@@ -3191,13 +3541,26 @@ const JobRunner = {
 			// 3 秒后重入会把这题再答一遍（日志反复「作答成功」，随机策略下还会覆盖已选答案）。
 			// 用选项文字拼指纹，指纹没变就只等容器消失，不再重复作答和提交。
 			let lastAnsweredKey = '';
+			/** 同一题的「点了但没选中」重试计数 */
+			let pickRetry = 0;
 
 			const loop = async () => {
 				// 原本靠尾部递归实现「每 3 秒检测一次」，会无限堆积调用栈，改成普通循环
 				while (true) {
 					const submitBtn = () => doc.querySelector<HTMLElement>('#videoquiz-submit');
 					if (submitBtn()) {
-						const list = Array.from(doc.querySelectorAll<HTMLElement>('.ans-videoquiz-opt label'));
+						/**
+						 * 只取「当前这一题」的选项
+						 *
+						 * 视频弹题可能是**一次两题**（容器里写着「共 2 题，已答对 1 题」）。
+						 * 直接在整块 `.ans-videoquiz` 里取 `.ans-videoquiz-opt`，会把两题的选项
+						 * 混成一组（4 个），而题干只取到第一题的 —— 答案错位、点选也不会对上。
+						 * 这里定位到当前可见的那个 `.tkItem`，只在这一题里取选项和题干。
+						 */
+						const itemEls = Array.from(doc.querySelectorAll<HTMLElement>('.ans-videoquiz .tkItem'));
+						const activeItem = itemEls.find((el) => el.offsetHeight > 0) || itemEls[0];
+						const scope: ParentNode = activeItem || doc;
+						const list = Array.from(scope.querySelectorAll<HTMLElement>('.ans-videoquiz-opt label'));
 
 						// 选项还没渲染出来时不要提交空答案，等下一轮
 						if (list.length === 0) {
@@ -3205,7 +3568,21 @@ const JobRunner = {
 							continue;
 						}
 
-						const key = list.map((el) => (el.textContent || '').trim()).join('|');
+						/**
+						 * 去重指纹：题干 + 选项 + 平台的「已答对数」
+						 *
+						 * 旧指纹只有选项文字。两题的选项**完全一样**时（超星这种情况很常见，
+						 * 比如都是「A、可以 / B、不可以」），第二题会被当成本节已作答的同一题
+						 * 直接 `continue` 跳过 —— 弹题就一直停在那里没人选。
+						 */
+						const stem = (activeItem?.querySelector('.tkItem_title')?.textContent || '')
+							.replace(/\s+/g, ' ')
+							.trim();
+						const boxId =
+							(doc.querySelector<HTMLElement>('.ans-videoquiz')?.id || '').trim();
+						const rightNum = (doc.querySelector('#rightNum')?.textContent || '').trim();
+						const key =
+							`${boxId}|${stem}|${rightNum}|` + list.map((el) => (el.textContent || '').trim()).join('|');
 						if (key && key === lastAnsweredKey) {
 							// 这道题已经答过并提交过，等平台的题目容器自己消失
 							await $.sleep(3000);
@@ -3215,7 +3592,7 @@ const JobRunner = {
 						let answered = false;
 						let hasAnswer = false;
 						if (strategy === 'ai') {
-							const ret = await answerByAI(list);
+							const ret = await answerByAI(list, activeItem);
 							answered = ret.ok;
 							hasAnswer = ret.hasAnswer;
 						}
@@ -3226,7 +3603,28 @@ const JobRunner = {
 							await clickOption(answer);
 						}
 
+						/**
+						 * 提交前回读：必须真的有一项被选中
+						 *
+						 * 旧逻辑不管有没有点中都会点「提交」—— 页面上就是「题目没选上」却已经交卷，
+						 * 这题判错，还会被 `lastAnsweredKey` 标记成「已作答」，再也不会重试。
+						 * 一个都没选中就先不提交，3 秒后重来（最多 5 次，避免真点不动时卡死）。
+						 */
+						const anyPicked = list.some((el) => isChoiceSelected(el));
+						if (!anyPicked) {
+							pickRetry += 1;
+							const warn = `视频弹题：选项没有回显选中态，暂不提交（第 ${pickRetry} 次）`;
+							$console.warn(warn);
+							traceRedo(warn);
+							if (pickRetry < 5) {
+								await $.sleep(3000);
+								continue;
+							}
+							$console.error('视频弹题：连续 5 次都没能选中选项，跳过这题');
+						}
+
 						if (key) lastAnsweredKey = key;
+						pickRetry = 0;
 						submitBtn()?.click();
 						await $.sleep(3000);
 						// 隐藏视频内题目元素
@@ -3480,6 +3878,60 @@ const JobRunner = {
 
 		const { TiMu } = domSearchAll({ TiMu: '.TiMu' }, frameWindow!.document);
 
+		/**
+		 * 题目单元拆分：共用案例题必须按「子问题」分别作答
+		 *
+		 * 超星的共用案例题是**一个 `.TiMu` 里塞多个 `readCompreHensionItem`**：
+		 *
+		 * ```html
+		 * <div class="TiMu">
+		 *   <div class="Zy_TItle">1 【共用案例题】看以下…视频，回答问题。</div>
+		 *   <div class="readCompreHensio…">
+		 *     <div class="readCompreHensionItem">(1) [多选题] …<ul><li onclick="addMultipleChoice">A …</li></ul></div>
+		 *     <div class="readCompreHensionItem">(2) [多选题] …<ul>…</ul></div>
+		 *     …
+		 *   </div>
+		 * </div>
+		 * ```
+		 *
+		 * 把 `.TiMu` 当一题的话：题干只拿到那句共用材料，选项却是**所有子题选项的合集**，
+		 * 最后只点中其中一个选项，其余子题一个都没答 —— 提交后就是「测验未完成」。
+		 * 这里把每个 `readCompreHensionItem` 当成独立题目交给答题器。
+		 */
+		const questionRoots: HTMLElement[] = [];
+		for (const root of TiMu as HTMLElement[]) {
+			const items = Array.from(root.querySelectorAll<HTMLElement>('.readCompreHensionItem'));
+			if (items.length > 0) questionRoots.push(...items);
+			else questionRoots.push(root);
+		}
+		if (questionRoots.length !== (TiMu as HTMLElement[]).length) {
+			const msg = `检测到共用案例题：${TiMu.length} 个大题拆成 ${questionRoots.length} 道子题分别作答`;
+			$console.info(msg);
+			traceRedo(msg);
+		}
+
+		/**
+		 * 题型判定
+		 *
+		 * 普通题看隐藏域 `input[id^="answertype"]`；共用案例题的每个子题**没有**这个隐藏域
+		 * （整块只有一个 `answertype=15`，会被 `getQuestionType` 判成 `reader`），
+		 * 题型只写在 `(1) [多选题]` 这种标签里，只能从题干文本兜底推断。
+		 */
+		const resolveQuestionType = (elements: any) => {
+			const typeInput = elements.type?.[0] as HTMLInputElement | undefined;
+			const byInput = typeInput ? getQuestionType(parseInt(typeInput.value)) : undefined;
+			if (byInput && byInput !== 'reader') return byInput;
+
+			const label = ((elements.title || []) as (HTMLElement | undefined)[])
+				.map((el) => (el ? el.textContent || '' : ''))
+				.join(' ');
+			if (/多选/.test(label)) return 'multiple' as const;
+			if (/单选/.test(label)) return 'single' as const;
+			if (/判断/.test(label)) return 'judgement' as const;
+			if (/填空/.test(label)) return 'completion' as const;
+			return byInput || ('unknown' as const);
+		};
+
 		// 最大化面板
 		CORSUtils.panelNormal();
 		CommonProject.scripts.workResults.methods.init();
@@ -3497,6 +3949,8 @@ const JobRunner = {
 					.trim()
 					/** 超星旧版作业题目冗余数据 */
 					.replace(/^\d+[。、.]/, '')
+					/** 共用案例题的「(1)」子题编号：不影响匹配，但会污染题干 */
+					.replace(/^\(\d+\)\s*/, '')
 					.replace(/（\d+\.\d+分）/, '')
 					.replace(/\(..题, \d+?分\)/, '')
 					.replace(/\(..题, \d+\.\d+分\)/, '')
@@ -3507,10 +3961,12 @@ const JobRunner = {
 
 		/** 新建答题器 */
 		const worker = new HonghuWorker({
-			root: TiMu,
+			root: questionRoots,
 			elements: {
 				title: [
 					(root) => $el('.Zy_TItle .clearfix', root),
+					/** 共用案例题的子问题：题干在 `i.index` 右侧的 `.clearfix` 里 */
+					(root) => $el('.clear .clearfix', root),
 					// /** 连线题第一组 */
 					(root) => $el('.firstUlList', root),
 					// /** 连线题第二组 */
@@ -3533,8 +3989,7 @@ const JobRunner = {
 			answerer: (elements, ctx) => {
 				const title = chapterTestTaskQuestionTitleTransform(elements.title);
 				if (title) {
-					const typeInput = elements.type[0] as HTMLInputElement;
-					const type = (typeInput ? getQuestionType(parseInt(typeInput.value)) : undefined) || 'unknown';
+					const type = resolveQuestionType(elements);
 
 					/** 重做轮：直接用 AI 给的新答案，用题干做锚点（引擎回调顺序不保证） */
 					const searchFresh = async () => {
@@ -3578,8 +4033,7 @@ const JobRunner = {
 
 			work: async (ctx) => {
 				const { elements, searchInfos } = ctx;
-				const typeInput = elements.type[0] as HTMLInputElement;
-				const type = typeInput ? getQuestionType(parseInt(typeInput.value)) : undefined;
+				const type = resolveQuestionType(elements);
 
 				/**
 				 * 重做轮：清掉预选的旧答案，然后**按 AI 答案直接点选**

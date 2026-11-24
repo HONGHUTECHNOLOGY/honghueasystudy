@@ -110,7 +110,17 @@ class CustomWindow {
             // 添加 modals 监听队列
             _1.cors.on('message', (args) => __awaiter(this, void 0, void 0, function* () {
                 const [type, attrs] = args || [];
-                console.log('message', type, attrs);
+                /**
+                 * 留痕：跨帧消息到达顶层
+                 *
+                 * 排查「通知有时候不显示」时，日志里只有发送端没有到达端，
+                 * 就说明卡在 storage 往返上（页面跳转把消息带走了）；两端都有
+                 * 却看不见，才是显示层的问题（面板被隐藏 / 位置在视口外）。
+                 * 前缀必须是 `[鸿鹄]`，桌面端只转发带这个前缀的 console。
+                 */
+                try {
+                    console.log('[鸿鹄] 跨帧消息到达:', type, attrs && typeof attrs.content === 'string' ? attrs.content : '');
+                } catch (e) {}
                 this.message(type, attrs);
             }));
         };
@@ -301,6 +311,23 @@ class CustomWindow {
     message(type, attrs) {
         if (typeof attrs === 'string') {
             attrs = { content: attrs };
+        }
+        /**
+         * 面板被隐藏（Ctrl+O / 配置里 visual=hidden）时，`message-container` 在
+         * `container` 内部，会跟着 `container-element.hidden { display: none }` 一起消失
+         * —— 通知就彻底看不见了，用户会以为「消息有时候不显示」。
+         * 这里把消息容器临时挪到 body 上做 fixed 定位，面板恢复可见时再挪回去。
+         */
+        const hidden = this.container.classList.contains('hidden');
+        if (hidden) {
+            if (this.messageContainer.parentElement !== document.body) {
+                this.messageContainer.style.cssText =
+                    'position:fixed;top:12px;left:50%;transform:translateX(-50%);bottom:auto;width:auto;min-width:300px;z-index:2147483647';
+                document.body.append(this.messageContainer);
+            }
+        } else if (this.messageContainer.parentElement !== this.container) {
+            this.messageContainer.style.cssText = '';
+            this.container.append(this.messageContainer);
         }
         const message = (0, utils_1.h)('message-element', Object.assign({ type }, attrs));
         this.messageContainer.append(message);

@@ -118,78 +118,109 @@ export function buildOverlayScript(message: string, calm = false): string {
 				 */
 			}
 			/*
-			 * 光晕：四条边缘带各一段线性渐变，只覆盖真正看得见的边带。
-			 * 旧实现是一整块 conic 方盘被 mask 裁成边缘 —— 中间 70% 面积纯属白画，
-			 * 而且方盘边长按视口对角线算，1080p 下就是 270 万像素的图层。
+			 * 光晕：==原版那种 conic 旋转==，但不旋转元素
+			 *
+			 * 旧实现把一块「边长 0.75×视口对角线」的 conic 方盘整块旋转，再拿整屏 mask 裁出边缘：
+			 * 视觉效果对，但方盘 1080p 下就是 270 万像素、每帧重算，是「刷课页面加载卡」的根因。
+			 *
+			 * 现在把 conic 直接画在**视口大小**的层上，用 @property 让 --hh-angle 做角度动画
+			 * （角度可插值 → 颜色绕着边缘整圈轮转，观感和旧版完全一致），
+			 * 边缘衰减仍交给四边叠加的静态 mask。
+			 * 每帧重绘面积从 540 万降到 97 万（1080p），而且不再有超大图层。
+			 *
+			 * 色彩频率和旧版同源：conic 一圈 6 个色相，视口每条边只截到一小段角度，
+			 * 所以过渡是平缓的大片渐变，不会碎成一条条。
 			 */
+			@property --hh-angle {
+				syntax: '<angle>';
+				initial-value: 0deg;
+				inherits: false;
+			}
 			.halo {
 				position: absolute; inset: 0; pointer-events: none;
+				background: conic-gradient(from var(--hh-angle, 0deg) at 50% 50%,
+					#4f8cff, #8b5cf6, #22d3ee, #34d399, #f59e0b, #4f8cff);
 				/*
-				 * 每边都用多段衰减（而不是「有色 → 透明」两段）。
-				 * 单段线性衰减在屏幕上会读出一条生硬的等值线，旧版 mask 之所以柔和
-				 * 就是因为它是 0.95/0.52/0.16/0 的四段曲线；这里用三段曲线复刻。
+				 * 四边衰减叠加（对应旧版 mask 的 0.95 / 0.52 / 0.16 / 0 曲线）。
+				 * mask 是静态的：只在合成时应用，不参与每帧的渐变重算。
 				 */
-				background-image:
-					linear-gradient(to bottom,
-						rgba(79,140,255,.40), rgba(79,140,255,.20) 26%,
-						rgba(79,140,255,.06) 58%, rgba(79,140,255,0)),
-					linear-gradient(to top,
-						rgba(52,211,153,.34), rgba(52,211,153,.17) 26%,
-						rgba(52,211,153,.05) 58%, rgba(52,211,153,0)),
-					linear-gradient(to right,
-						rgba(139,92,246,.34), rgba(139,92,246,.17) 26%,
-						rgba(139,92,246,.05) 58%, rgba(139,92,246,0)),
-					linear-gradient(to left,
-						rgba(245,158,11,.26), rgba(245,158,11,.13) 26%,
-						rgba(245,158,11,.04) 58%, rgba(245,158,11,0));
-				background-repeat: no-repeat;
-				background-size:
-					100% min(30vh, 320px),
-					100% min(30vh, 320px),
-					min(17vw, 220px) 100%,
-					min(17vw, 220px) 100%;
-				background-position: left top, left bottom, left top, right top;
+				-webkit-mask:
+					linear-gradient(to right, rgba(0,0,0,.95), rgba(0,0,0,.52) min(9%, 100px), rgba(0,0,0,.16) min(17%, 190px), transparent min(30%, 330px)),
+					linear-gradient(to left, rgba(0,0,0,.95), rgba(0,0,0,.52) min(9%, 100px), rgba(0,0,0,.16) min(17%, 190px), transparent min(30%, 330px)),
+					linear-gradient(to bottom, rgba(0,0,0,.95), rgba(0,0,0,.52) min(11%, 90px), rgba(0,0,0,.16) min(21%, 175px), transparent min(34%, 280px)),
+					linear-gradient(to top, rgba(0,0,0,.95), rgba(0,0,0,.52) min(11%, 90px), rgba(0,0,0,.16) min(21%, 175px), transparent min(34%, 280px));
+				mask:
+					linear-gradient(to right, rgba(0,0,0,.95), rgba(0,0,0,.52) min(9%, 100px), rgba(0,0,0,.16) min(17%, 190px), transparent min(30%, 330px)),
+					linear-gradient(to left, rgba(0,0,0,.95), rgba(0,0,0,.52) min(9%, 100px), rgba(0,0,0,.16) min(17%, 190px), transparent min(30%, 330px)),
+					linear-gradient(to bottom, rgba(0,0,0,.95), rgba(0,0,0,.52) min(11%, 90px), rgba(0,0,0,.16) min(21%, 175px), transparent min(34%, 280px)),
+					linear-gradient(to top, rgba(0,0,0,.95), rgba(0,0,0,.52) min(11%, 90px), rgba(0,0,0,.16) min(21%, 175px), transparent min(34%, 280px));
+				animation: hh-halo-spin 34s linear infinite;
+				opacity: .62;
+			}
+			@keyframes hh-halo-spin { to { --hh-angle: 360deg; } }
+			@media (prefers-reduced-motion: reduce) {
+				.halo { animation: none; }
 			}
 			/*
-			 * 流光：四条 3px 细条，条内放一根 200% 长的渐变带做位移。
+			 * 流光：四条 4px 细条，条内放一根 200% 长的渐变带做位移。
 			 *
 			 * 为什么不再「旋转一整块大 conic」：那是每帧两百万像素的全屏合成，
-			 * 边框却只有 3px 宽 —— 99% 的合成工作都花在看不见的地方。
+			 * 边框却只有几像素宽 —— 99% 的合成工作都花在看不见的地方。
 			 * 现在位移只用 transform（走合成，不重绘），条自身 overflow:hidden
 			 * 裁掉溢出，每帧需要填充的面积只有几万像素。
 			 * 渐变图案左右两半完全重复，所以平移 -50% 能无缝循环。
 			 */
 			.ring { position: absolute; inset: 0; pointer-events: none; }
-			.ring i { position: absolute; display: block; overflow: hidden; }
-			.ring .rt, .ring .rb { left: 0; right: 0; height: 3px; }
+			.ring i {
+				position: absolute; display: block; overflow: hidden;
+				/*
+				 * 只在这 4px 细条上做辉光：扩散范围几十像素高，不是整屏层。
+				 * 别把这条挪到 .glow / .ring 上 —— 那是整屏尺寸，会回到「每帧大面积合成」的老问题。
+				 */
+				box-shadow: 0 0 10px rgba(99,160,255,.55), 0 0 3px rgba(255,255,255,.35);
+			}
+			.ring .rt, .ring .rb { left: 0; right: 0; height: 4px; }
 			.ring .rt { top: 0; }
 			.ring .rb { bottom: 0; }
-			.ring .rl, .ring .rr { top: 0; bottom: 0; width: 3px; }
+			.ring .rl, .ring .rr { top: 0; bottom: 0; width: 4px; }
 			.ring .rl { left: 0; }
 			.ring .rr { right: 0; }
 			.ring i::before { content: ''; position: absolute; will-change: transform; }
 			.ring .rt::before, .ring .rb::before {
 				top: 0; bottom: 0; left: 0; width: 200%;
 				background: linear-gradient(90deg,
-					rgba(79,140,255,0) 0%, #4f8cff 5%, #8b5cf6 11%, #22d3ee 17%,
-					#34d399 23%, #f59e0b 29%, rgba(245,158,11,0) 35%,
-					rgba(79,140,255,0) 50%, #4f8cff 55%, #8b5cf6 61%, #22d3ee 67%,
-					#34d399 73%, #f59e0b 79%, rgba(245,158,11,0) 85%,
+					rgba(79,140,255,0) 0%, #4f8cff 5%, #8b5cf6 9%, #22d3ee 13%,
+					#34d399 17%, #f59e0b 21%, rgba(245,158,11,0) 25%,
+					rgba(79,140,255,0) 50%, #4f8cff 55%, #8b5cf6 59%, #22d3ee 63%,
+					#34d399 67%, #f59e0b 71%, rgba(245,158,11,0) 75%,
 					rgba(79,140,255,0) 100%);
-				animation: hh-x 7.2s linear infinite;
+				animation: hh-x 5s linear infinite;
 			}
 			.ring .rl::before, .ring .rr::before {
 				left: 0; right: 0; top: 0; height: 200%;
 				background: linear-gradient(180deg,
-					rgba(79,140,255,0) 0%, #4f8cff 5%, #8b5cf6 11%, #22d3ee 17%,
-					#34d399 23%, #f59e0b 29%, rgba(245,158,11,0) 35%,
-					rgba(79,140,255,0) 50%, #4f8cff 55%, #8b5cf6 61%, #22d3ee 67%,
-					#34d399 73%, #f59e0b 79%, rgba(245,158,11,0) 85%,
+					rgba(79,140,255,0) 0%, #4f8cff 5%, #8b5cf6 9%, #22d3ee 13%,
+					#34d399 17%, #f59e0b 21%, rgba(245,158,11,0) 25%,
+					rgba(79,140,255,0) 50%, #4f8cff 55%, #8b5cf6 59%, #22d3ee 63%,
+					#34d399 67%, #f59e0b 71%, rgba(245,158,11,0) 75%,
 					rgba(79,140,255,0) 100%);
-				animation: hh-y 7.2s linear infinite;
+				animation: hh-y 5s linear infinite;
 			}
-			/* 顺时针读感：上边左→右、右边上→下，反向播放即可 */
+			/*
+			 * 顺时针绕圈：上边左→右、右边上→下、下边右→左、左边下→上。
+			 * 四条边各自的周期与延迟由 JS 按**边长比例**算好写进变量，
+			 * 这样线速度一致、相位首尾相接，看起来是一束光沿着边框跑一圈，
+			 * 而不是四条边各跑各的。
+			 */
 			.ring .rt::before, .ring .rr::before { animation-direction: reverse; }
+			/*
+			 * 相位四等分：上 0 → 右 -1.25s → 下 -2.5s → 左 -3.75s（周期 5s）。
+			 * 这样四条边的光带依次出现在「上→右→下→左」，读起来是一束光绕着边框跑，
+			 * 而不是四条边各跑各的。用负延迟让光带从一开始就分布在四条边上。
+			 */
+			.ring .rr::before { animation-delay: -1.25s; }
+			.ring .rb::before { animation-delay: -2.5s; }
+			.ring .rl::before { animation-delay: -3.75s; }
 			@keyframes hh-x { to { transform: translate3d(-50%, 0, 0); } }
 			@keyframes hh-y { to { transform: translate3d(0, -50%, 0); } }
 			/*
@@ -201,11 +232,12 @@ export function buildOverlayScript(message: string, calm = false): string {
 			 * ⚠️ 选择器必须和上面的 animation 简写同特异性：简写会把
 			 * play-state 重置成 running，靠「同特异性 + 更靠后」才压得住。
 			 */
-			.ring .rt::before, .ring .rb::before, .ring .rl::before, .ring .rr::before {
+			.ring .rt::before, .ring .rb::before, .ring .rl::before, .ring .rr::before,
+			.halo {
 				animation-play-state: paused;
 			}
-			.glow.live .ring i::before { animation-play-state: running; }
-			.glow.calm .ring i::before { animation-play-state: paused; }
+			.glow.live .ring i::before, .glow.live .halo { animation-play-state: running; }
+			.glow.calm .ring i::before, .glow.calm .halo { animation-play-state: paused; }
 			/*
 			 * 纯色蓝：OCR / 验证码期间替代流光。
 			 * 只用静态边框 + 四边方向渐变，没有任何动画与大面积模糊，
@@ -257,6 +289,24 @@ export function buildOverlayScript(message: string, calm = false): string {
 		var glow = document.createElement('div');
 		glow.className = 'glow';
 		/* 光晕：四条边缘带，静态绘制一次 */
+		/*
+		 * 显式注册 --hh-angle
+		 *
+		 * 样式表在 closed shadow root 里，里面的 @property 规则注册不上，
+		 * var(--hh-angle) 取不到值会让整条 background 声明失效（conic 直接不画）。
+		 * 这里在文档级注册一次；重复注册会抛错，吞掉即可。
+		 */
+		try {
+			if (typeof CSS !== 'undefined' && CSS.registerProperty) {
+				CSS.registerProperty({
+					name: '--hh-angle',
+					syntax: '<angle>',
+					inherits: false,
+					initialValue: '0deg'
+				});
+			}
+		} catch (e) {}
+
 		var halo = document.createElement('div');
 		halo.className = 'halo';
 		glow.appendChild(halo);
