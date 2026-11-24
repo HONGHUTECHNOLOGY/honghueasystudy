@@ -3745,6 +3745,29 @@ const JobRunner = {
 		 * 只有重进一张干净卷子才能换答案。
 		 */
 		let chapterRedoPlan = readRedoPlan();
+
+		/**
+		 * 重做计划只在**它所属的那一节**有效
+		 *
+		 * 计划里存的是「上一轮这张卷子的题干 → 答案」。如果把它带到别的小节去用：
+		 * 题干一条都对不上 → 一道题都点不中 → 被白卷拦截 → 直接跳到下一节，
+		 * 这一节的测验/练习就被整体跳过（实测 1.7.7 的计划污染了 1.7.8：
+		 * 5 道题一道没选，随后 `本节任务点已完成，点击平台「下一节」` 走人）。
+		 */
+		const currentChapterIdForRedo = $el<HTMLInputElement>('#curChapterId', top?.document)?.value || '';
+		if (
+			chapterRedoPlan &&
+			chapterRedoPlan.chapterId &&
+			currentChapterIdForRedo &&
+			chapterRedoPlan.chapterId !== currentChapterIdForRedo
+		) {
+			const msg = `丢弃其它小节的重做计划（计划=${chapterRedoPlan.chapterId} 当前=${currentChapterIdForRedo}）`;
+			$console.warn('[自动刷课] ' + msg);
+			traceRedo(msg);
+			clearRedoPlan();
+			chapterRedoPlan = undefined;
+		}
+
 		const chapterRedoCfg = (CXProject.scripts.work?.cfg || {}) as any;
 		/** 面板上的「不及格时 AI 整卷重做」开关（学习脚本自己那一份，默认开） */
 		const chapterRedoEnabled = (CXProject.scripts.study.cfg as any).enableChapterRedo !== false;
@@ -4466,6 +4489,15 @@ const JobRunner = {
 				 */
 				const blank = countUnansweredQuestions(frameWindow?.document);
 				if (uploadable && blank.total > 0 && blank.unanswered === blank.total) {
+					/**
+					 * 白卷 + 有重做计划 → 大概率是「计划里的答案跟这张卷子对不上」，
+					 * 直接清掉，下一次进来按普通流程作答。不清的话每次都会拿同一批
+					 * 答案再空点一遍，然后被拦、被跳走，这一节永远做不完。
+					 */
+					if (chapterRedoPlan) {
+						clearRedoPlan();
+						traceRedo('白卷拦截：已清空重做计划，下次按普通流程作答');
+					}
 					$modal.alert({
 						content: `检测到 ${blank.total} 道题一道都没选中（可能是选项结构变化或答案未生效），已取消自动提交，避免交白卷。`
 					});

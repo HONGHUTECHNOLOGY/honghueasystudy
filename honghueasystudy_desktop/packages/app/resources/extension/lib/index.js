@@ -18289,7 +18289,7 @@ ${lines}`;
       await $.sleep(5e3);
     },
     async chapter(frame, options) {
-      var _a, _b, _c, _d, _e, _f;
+      var _a, _b, _c, _d, _e, _f, _g;
       const { answererWrappers, period, upload, thread, stopSecondWhenFinish, redundanceWordsText, answerSeparators } = options;
       if (answererWrappers === void 0 || answererWrappers.length === 0) {
         answerWrapperEmptyWarning(0);
@@ -18298,10 +18298,18 @@ ${lines}`;
       $console.info("开始章节测试");
       const visual_state = CommonProject.scripts.render.cfg.visual;
       let chapterRedoPlan = readRedoPlan();
-      const chapterRedoCfg = ((_a = CXProject.scripts.work) == null ? void 0 : _a.cfg) || {};
+      const currentChapterIdForRedo = ((_a = lib.$el("#curChapterId", top$1 == null ? void 0 : top$1.document)) == null ? void 0 : _a.value) || "";
+      if (chapterRedoPlan && chapterRedoPlan.chapterId && currentChapterIdForRedo && chapterRedoPlan.chapterId !== currentChapterIdForRedo) {
+        const msg22 = `丢弃其它小节的重做计划（计划=${chapterRedoPlan.chapterId} 当前=${currentChapterIdForRedo}）`;
+        $console.warn("[自动刷课] " + msg22);
+        traceRedo(msg22);
+        clearRedoPlan();
+        chapterRedoPlan = void 0;
+      }
+      const chapterRedoCfg = ((_b = CXProject.scripts.work) == null ? void 0 : _b.cfg) || {};
       const chapterRedoEnabled = CXProject.scripts.study.cfg.enableChapterRedo !== false;
-      const chapterPassScore = Number((_b = chapterRedoCfg.passScore) != null ? _b : 60);
-      const chapterMaxRounds = Math.max(0, Math.min(5, Number((_c = chapterRedoCfg.aiRedoRounds) != null ? _c : 5)));
+      const chapterPassScore = Number((_c = chapterRedoCfg.passScore) != null ? _c : 60);
+      const chapterMaxRounds = Math.max(0, Math.min(5, Number((_d = chapterRedoCfg.aiRedoRounds) != null ? _d : 5)));
       let chapterOverride = chapterRedoPlan && chapterRedoPlan.answers || {};
       if (chapterRedoPlan && chapterRedoPlan.pending && (chapterRedoPlan.paper || []).length) {
         if (!chapterRedoEnabled) {
@@ -18312,7 +18320,7 @@ ${lines}`;
         } else {
           const paper = chapterRedoPlan.paper;
           const roundNo = chapterRedoPlan.round || 1;
-          const marks = markWrongQuestions(paper, ((_d = frame.contentWindow) == null ? void 0 : _d.document) || null);
+          const marks = markWrongQuestions(paper, ((_e = frame.contentWindow) == null ? void 0 : _e.document) || null);
           if (marks.marked === 0) {
             chapterRedoPlan.onlyTitles = void 0;
             traceRedo("重做卷没有批改标记，整卷重做");
@@ -18343,7 +18351,7 @@ ${lines}`;
           traceRedo(`AI 用时 ${aiCost}ms`);
           aiTip == null ? void 0 : aiTip.remove();
           if (answers) {
-            const prevAnswers = ((_f = (_e = chapterRedoPlan.history) == null ? void 0 : _e[chapterRedoPlan.history.length - 1]) == null ? void 0 : _f.answers) || {};
+            const prevAnswers = ((_g = (_f = chapterRedoPlan.history) == null ? void 0 : _f[chapterRedoPlan.history.length - 1]) == null ? void 0 : _g.answers) || {};
             const identical = Object.keys(answers).length === Object.keys(prevAnswers).length && Object.keys(answers).every((key) => answers[key] === prevAnswers[key]);
             if (identical) {
               $console.warn("AI 这一轮的答案与上一轮完全相同（已把历次作答一并给它，仍未改动）");
@@ -18527,7 +18535,7 @@ ${lines}`;
           if (type && (type === "completion" || type === "multiple" || type === "judgement" || type === "single")) {
             const resolver = createDefaultQuestionResolver(ctx)[type];
             const handler = async (type2, answer, option, ctx2) => {
-              var _a3, _b3, _c3, _d2, _e2, _f2, _g, _h;
+              var _a3, _b3, _c3, _d2, _e2, _f2, _g2, _h;
               if (type2 === "judgement" || type2 === "single" || type2 === "multiple") {
                 const checked = !!((_a3 = option == null ? void 0 : option.parentElement) == null ? void 0 : _a3.querySelector('[class*="check_answer"]')) || ((_c3 = (_b3 = option == null ? void 0 : option.parentElement) == null ? void 0 : _b3.querySelector("label input")) == null ? void 0 : _c3.getAttribute("checked")) === "checked" || ((_d2 = option == null ? void 0 : option.parentElement) == null ? void 0 : _d2.getAttribute("aria-checked")) === "true";
                 if (checked)
@@ -18544,7 +18552,7 @@ ${lines}`;
                 if (textareaFrame == null ? void 0 : textareaFrame.contentDocument) {
                   textareaFrame.contentDocument.body.innerHTML = answer;
                 }
-                if ((_g = option == null ? void 0 : option.parentElement) == null ? void 0 : _g.parentElement) {
+                if ((_g2 = option == null ? void 0 : option.parentElement) == null ? void 0 : _g2.parentElement) {
                   (_h = lib.$el("[onclick*=saveQuestion]", option.parentElement.parentElement)) == null ? void 0 : _h.click();
                 }
               }
@@ -18586,7 +18594,7 @@ ${lines}`;
           return { finish: false };
         },
         async onResultsUpdate(curr, _, res) {
-          var _a2, _b2, _c2, _d2, _e2, _f2, _g, _h, _i, _j;
+          var _a2, _b2, _c2, _d2, _e2, _f2, _g2, _h, _i, _j;
           CommonProject.scripts.workResults.methods.setResults(
             simplifyWorkResult(res, chapterTestTaskQuestionTitleTransform)
           );
@@ -18604,7 +18612,7 @@ ${lines}`;
             if (commonSetting["randomWork-choice"] && (type === "judgement" || type === "single" || type === "multiple")) {
               $console.log("正在随机作答");
               const option = options2[Math.floor(Math.random() * options2.length)];
-              (_h = (_g = option == null ? void 0 : option.parentElement) == null ? void 0 : _g.querySelector("a,label")) == null ? void 0 : _h.click();
+              (_h = (_g2 = option == null ? void 0 : option.parentElement) == null ? void 0 : _g2.querySelector("a,label")) == null ? void 0 : _h.click();
             } else if (commonSetting["randomWork-complete"] && type === "completion") {
               $console.log("正在随机作答");
               for (const option of options2) {
@@ -18740,6 +18748,10 @@ ${lines}`;
           lib.$message.success({ content: msg22, duration: 3 });
           const blank = countUnansweredQuestions(frameWindow == null ? void 0 : frameWindow.document);
           if (uploadable && blank.total > 0 && blank.unanswered === blank.total) {
+            if (chapterRedoPlan) {
+              clearRedoPlan();
+              traceRedo("白卷拦截：已清空重做计划，下次按普通流程作答");
+            }
             lib.$modal.alert({
               content: `检测到 ${blank.total} 道题一道都没选中（可能是选项结构变化或答案未生效），已取消自动提交，避免交白卷。`
             });

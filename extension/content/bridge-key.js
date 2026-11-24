@@ -1,2 +1,2 @@
 /* 鸿鹄易学 · 构建时随机通道名（自动生成，请勿手改） */
-globalThis.__HH_BRIDGE_KEY__ = "bee5d518-0359-44c8-b9de-c25000e47595";
+globalThis.__HH_BRIDGE_KEY__ = "45ff4347-14f1-4dbd-b488-01b7207e5617";
