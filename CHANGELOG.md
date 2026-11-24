@@ -1,6 +1,23 @@
 # Changelog
 
 
+## [5.8.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.7.2...v5.8.0) (2026-11-24)
+
+
+### ✨ 新功能
+
+* **config:** 扩展支持使用桌面端统一题库与 AI 配置 ([a3388a6](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/a3388a6d826dce4fa21d8a820b3381a37bab7eeb))
+* **cx:** 不及格 AI 重做 + 修正章节跳转方向 ([722a088](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/722a0883e8e7953dbc4323e541a8eb4c86bb9e5c))
+* **yooc:** 新增易班优课平台与内置学生手册题库 ([b3036ad](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/b3036adc826846a9c6b9951555a16259d21bd7ad))
+
+
+### 🐛 问题修复
+
+* **cx:** 重做计划必须绑定小节，避免污染下一节造成白卷跳过 ([7379ce6](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/7379ce68761a7724e40eab8b4455bb4aa2e4a6d2))
+* **cx:** 章节跳转改回平台驱动，修复共用案例题/视频弹题/通知丢失 ([edc76ed](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/edc76ed48f36266927772d123af9f42c9a82c50a))
+* **desktop:** 修复光效边框在方形视口四角缺失 ([daa96fe](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/daa96fee7e51d2f5901ba1248a95b68099e54a6e))
+* **main-world:** 修正沙箱构造器判定，修复页面包装原生方法导致的注入中断 ([9cd0c71](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/9cd0c7102148fc707f4bb7c376eef022f0d1b81d))
+
 ## [5.7.2](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.7.1...v5.7.2) (2026-11-20)
 
 
