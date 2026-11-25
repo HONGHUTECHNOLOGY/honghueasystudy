@@ -1,6 +1,16 @@
 # Changelog
 
 
+## [5.8.5](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.8.0...v5.8.5) (2026-11-25)
+
+
+* 发布 5.8.5 ([a689b3e](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/a689b3e84858e9a3dfeeb8307dce10fd2b172329))
+
+
+### ✨ 新功能
+
+* **desktop:** 题库与 AI 配置改为桌面端统一维护（单向下发） ([795db26](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/795db26ac5ea2cbf74b1c7128a3dc9e5ef495337))
+
 ## [5.8.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.7.2...v5.8.0) (2026-11-24)
 
 
