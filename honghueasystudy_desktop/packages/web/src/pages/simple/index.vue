@@ -183,6 +183,14 @@
 				>
 					<SettingPanel simple />
 				</div>
+
+				<!-- 题库与 AI 配置（与扩展面板共用的统一配置） -->
+				<div
+					v-show="state.activeTab === 'answer'"
+					class="panel-in"
+				>
+					<AnswerConfigPanel />
+				</div>
 			</div>
 		</div>
 	</CommonEditActionDropdown>
@@ -194,21 +202,33 @@ import Icon from '../../components/Icon.vue';
 import Tags from '../../components/Tags.vue';
 import BrowserOperators from '../../components/browsers/BrowserOperators.vue';
 import CommonEditActionDropdown from '../../components/CommonEditActionDropdown.vue';
-import { store } from '../../store';
+import { store, simpleActiveTab } from '../../store';
 import { root } from '../../fs/folder';
 import { Browser } from '../../fs/browser';
 import { BrowserOptions } from '../../fs/interface';
 import { newBrowserOrInit } from '../../utils/browser';
 import EmptyBrowserCard from '../../components/EmptyBrowserCard.vue';
 import SettingPanel from '../../components/SettingPanel.vue';
+import AnswerConfigPanel from '../../components/AnswerConfigPanel.vue';
 import { lang } from '../../store/index';
 import UsageAlertCollapse from '../../components/UsageAlertCollapse.vue';
 import ScriptsPage from '../../components/ScriptsPage.vue';
 import SigninPanel from '../../components/signin/SigninPanel.vue';
 import EnvironmentAlert from '../../components/EnvironmentAlert.vue';
 
+/**
+ * 页面局部状态
+ *
+ * `activeTab` 代理到模块级的 `simpleActiveTab`：扩展面板的跳转按钮要用 IPC 切页签，
+ * 局部 `reactive` 外部拿不到。其余字段仍留在本组件内。
+ */
 const state = reactive({
-	activeTab: 'browsers'
+	get activeTab() {
+		return simpleActiveTab.value;
+	},
+	set activeTab(v: string) {
+		simpleActiveTab.value = v;
+	}
 });
 
 /**
@@ -221,7 +241,8 @@ const tabs = computed(() => [
 	{ key: 'browsers', label: '浏览器', icon: 'web', badge: allBrowsers.value.length || '' },
 	{ key: 'signin', label: '签到', icon: 'fact_check', badge: '' },
 	{ key: 'scripts', label: '脚本', icon: 'code', badge: '' },
-	{ key: 'setting', label: '软件设置', icon: 'settings', badge: '' }
+	{ key: 'setting', label: '软件设置', icon: 'settings', badge: '' },
+	{ key: 'answer', label: '题库与 AI', icon: 'quiz', badge: '' }
 ]);
 
 /** 滚动容器（.simple-page 自己滚，不是里面那个 div） */

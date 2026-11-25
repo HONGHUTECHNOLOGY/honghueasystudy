@@ -77,6 +77,22 @@ export const config = reactive({
 						icon: 'settings',
 						title: '软件设置'
 					}
+				},
+				{
+					/**
+					 * 题库与 AI 配置
+					 *
+					 * 和「签到助手」「脚本列表」同级：都在专业模式的侧边栏里，共用一个布局组件。
+					 * 扩展面板在「使用桌面端统一配置」开启时不提供编辑入口，
+					 * 「前往桌面端配置」按钮通过 `/api/open-settings` 跳到这里。
+					 */
+					name: 'answer-config',
+					path: 'answer-config',
+					component: () => import('@/pages/answer-config/index.vue'),
+					meta: {
+						icon: 'quiz',
+						title: '题库与 AI 配置'
+					}
 				}
 			]
 		},

@@ -93,7 +93,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue';
-import { store } from './store';
+import { store, simpleActiveTab } from './store';
 import { remote } from './utils/remote';
 import { root } from './fs/folder';
 import { electron } from './utils/node';
@@ -259,6 +259,26 @@ onMounted(async () => {
 
 	/** 全局唯一关闭处理 */
 	let isExiting = false;
+	/**
+	 * 扩展面板「前往桌面端配置」按钮
+	 *
+	 * 扩展那边用 `new Image().src` 打一下 `/api/open-settings`（不受 CORS 限制），
+	 * 主进程把窗口提到前台再发这个事件，这里直接改 hash 跳到「软件设置」。
+	 * 用 hash 而不是 router 实例：这是 `createWebHashHistory`，改 hash 等效于路由跳转。
+	 */
+	ipcRenderer.on('open-settings', () => {
+		/**
+		 * 停在简洁模式时切页签，不要跳路由
+		 *
+		 * `#/answer-config` 是专业模式下的子路由，跳过去整个布局会从简洁模式切成侧边栏模式。
+		 * 用户点的是「去配置题库」，不该顺带把模式也换了。
+		 */
+		if (window.location.hash.includes('/simple')) {
+			simpleActiveTab.value = 'answer';
+			return;
+		}
+		window.location.hash = '#/answer-config';
+	});
 	ipcRenderer.on('close', async () => {
 		// 防重入：避免重复点击关闭按钮或 window.close 循环导致并发触发关闭流程、重复弹窗
 		if (isExiting) return;

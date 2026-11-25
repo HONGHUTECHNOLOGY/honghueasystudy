@@ -13,6 +13,8 @@ export function request<T extends 'json' | 'text'>(
 		responseType?: T;
 		headers?: Record<string, string>;
 		data?: Record<string, any>;
+		/** 超时（毫秒）。不传时 polyfill 默认 30 秒；桌面端本地接口这类必须短超时，否则一次挂起会卡死整条同步链 */
+		timeout?: number;
 	}
 ): Promise<T extends 'json' ? any : string> {
 	return new Promise((resolve, reject) => {
@@ -39,6 +41,10 @@ export function request<T extends 'json' | 'text'>(
 						data: requestData,
 						headers: Object.keys(headers).length ? headers : undefined,
 						responseType: responseType === 'json' ? 'json' : undefined,
+						timeout: opts.timeout,
+						ontimeout: () => {
+							reject(new Error(`请求超时：${url}`));
+						},
 						onload: (response) => {
 							if (response.status === 200) {
 								if (responseType === 'json') {

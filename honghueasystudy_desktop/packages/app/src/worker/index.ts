@@ -3517,6 +3517,128 @@ function loggerPrefix() {
 	return `[鸿鹄易学] ${new Date().toLocaleTimeString()}`;
 }
 
+/** 答题 / AI 配置的键（扩展与桌面端两侧都用这几个） */
+const ANSWER_CONFIG_KEYS = [
+	'common.settings.answererWrappers',
+	'common.settings.disabledAnswererWrapperNames',
+	'common.ai-settings.aiEndpoint',
+	'common.ai-settings.aiApiKey',
+	'common.ai-settings.aiModel',
+	'common.ai-settings.referenceDocs'
+];
+
+/**
+ * 桌面端配置变化 → 实时同步进扩展（下行轮询）
+ *
+ * 启动时只注入一次，浏览器一直开着时用户在桌面端改了配置就不生效 —— 这里补上实时性。
+ *
+ * 方向是单向的：**桌面端是唯一编辑源**（扩展面板在开关开启时不提供编辑入口）。
+ * 因此这里不需要处理上行，也不会有两边互相覆盖的问题；
+ * 如果用户在本浏览器关了「使用桌面端统一配置」，就停止下发，让本地配置独立生效。
+ *
+ * 5 秒一轮：比 8 秒更跟手，CDP 往返只有几十毫秒，开销可忽略。
+ */
+function watchDesktopConfigChanges(browser: BrowserContext, serverPort: number) {
+	/** 上一次下发的快照，避免每轮都重复写 storage */
+	let last = '';
+	const timer = setInterval(async () => {
+		try {
+			const worker = browser.serviceWorkers()[0];
+			if (!worker) return;
+
+			/** 开关关了就停手：本浏览器要用自己的配置 */
+			const flag = await worker.evaluate(() => {
+				/* @ts-ignore 该回调在扩展的 service worker 上下文里执行 */
+				return chrome.storage.local.get(['common.settings.useDesktopAnswerConfig']);
+			});
+			if (flag && flag['common.settings.useDesktopAnswerConfig'] === false) return;
+
+			const res = await fetch(`http://127.0.0.1:${serverPort}/api/answer-config?scope=shared`, {
+				signal: AbortSignal.timeout(2000)
+			}).then((r) => r.json());
+			const config = res?.config;
+			if (!config || !Object.keys(config).length) return;
+
+			const patch: Record<string, any> = {};
+			for (const key of ANSWER_CONFIG_KEYS) {
+				if (key in config) patch[key] = config[key];
+			}
+			if (!Object.keys(patch).length) return;
+
+			const json = JSON.stringify(patch);
+			if (json === last) return;
+			last = json;
+
+			await worker.evaluate((data: Record<string, any>) => {
+				/* @ts-ignore 该回调在扩展的 service worker 上下文里执行 */
+				return chrome.storage.local.set(data);
+			}, patch);
+
+			const brief = Object.keys(patch)
+				.map((k) => `${k.split('.').pop()}=${Array.isArray(patch[k]) ? `[${patch[k].length}]` : patch[k] ? '有值' : '空'}`)
+				.join(', ');
+			console.log(`[配置] 桌面端改动已实时同步到扩展：${brief}`);
+		} catch (e) {
+			// 扩展没起、页面正在跳转时读不到，忽略这一轮
+		}
+	}, 5000);
+	browser.once('close', () => clearInterval(timer));
+}
+
+/**
+ * 把答题 / AI 配置直接写进扩展的 `chrome.storage.local`（启动时注入一次）
+ *
+ * 扩展侧原本自己探测桌面端（`GM_xmlhttpRequest` → `localhost:15319`），但那条链在伪 Window
+ * 沙箱里换不回来回包：bridge 的定时器、后台的 AbortController、polyfill 的 timeout 全试过，
+ * 最后一样卡在「正在检测桌面端…」不动 —— 配置同步从此没成功过，面板只能显示本地默认值。
+ *
+ * worker 是纯 Node 进程，没有这层限制，所以反过来做：
+ *   ① 直接 fetch 桌面端接口拿配置（Node fetch 不受浏览器沙箱限制）；
+ *   ② 用 CDP 连上扩展的 service worker，`chrome.storage.local.set` 写进去。
+ * 扩展一启动 storage 里就是对的，面板天然显示正确，不依赖它自己去请求。
+ *
+ * @returns 实际写入的配置（作为上行轮询的初始快照，避免立刻把刚注入的值又推回去）
+ */
+async function syncAnswerConfigToExtension(browser: BrowserContext, serverPort: number): Promise<Record<string, any>> {
+	try {
+		const res = await fetch(`http://127.0.0.1:${serverPort}/api/answer-config?scope=shared`, {
+			signal: AbortSignal.timeout(2500)
+		}).then((r) => r.json());
+		const config = res?.config;
+		if (!config || !Object.keys(config).length) {
+			console.log('[启动] 桌面端没有答题配置，跳过注入');
+			return {};
+		}
+
+		const patch: Record<string, any> = {};
+		for (const key of ANSWER_CONFIG_KEYS) {
+			if (key in config) patch[key] = config[key];
+		}
+		if (!Object.keys(patch).length) {
+			console.log('[启动] 桌面端答题配置为空，跳过注入');
+			return {};
+		}
+
+		/** 扩展的 service worker 可能还没起来，等一会儿（最多 4 秒） */
+		let worker = browser.serviceWorkers()[0];
+		if (!worker) {
+			worker = await browser.waitForEvent('serviceworker', { timeout: 4000 });
+		}
+		await worker.evaluate((data: Record<string, any>) => {
+			/* @ts-ignore 该回调在扩展的 service worker 上下文里执行，主进程的类型环境里没有 chrome */
+			return chrome.storage.local.set(data);
+		}, patch);
+		const brief = Object.keys(patch)
+			.map((k) => `${k.split('.').pop()}=${Array.isArray(patch[k]) ? `[${patch[k].length}]` : patch[k] ? '有值' : '空'}`)
+			.join(', ');
+		console.log(`[启动] 已注入 ${Object.keys(patch).length} 项答题配置到扩展：${brief}`);
+		return patch;
+	} catch (e: any) {
+		console.log('[启动] 注入答题配置失败：' + (e?.message || e));
+		return {};
+	}
+}
+
 /**
  * 运行脚本
  */
@@ -3618,6 +3740,21 @@ export async function launchBrowser({
 
 				// 处理浏览器初始
 				handleBrowserInit(browser, { enable_dialog: config?.enable_dialog, userDataDir });
+
+				/**
+				 * 把答题/AI 配置写进扩展 storage
+				 *
+				 * 放在 onLaunch/resolve 之前：扩展一加载页面读的就是这份，
+				 * 否则面板会先渲染一次「未配置」。函数内部全程 try/catch + 超时，失败不影响启动。
+				 */
+				await syncAnswerConfigToExtension(browser, serverPort);
+				/**
+				 * 下行实时同步：浏览器开着时在桌面端改配置也要能生效
+				 *
+				 * 单向：桌面端是唯一编辑源。上行轮询（扩展→桌面端）已停用 ——
+				 * 扩展面板在开关开启时不提供编辑入口，没有需要上传的改动。
+				 */
+				watchDesktopConfigChanges(browser, serverPort);
 
 				// 浏览器进程已就绪：立即触发 onLaunch 并 resolve，
 				// 否则导航页加载、开发者模式、自动化脚本任何一步抛错/卡住

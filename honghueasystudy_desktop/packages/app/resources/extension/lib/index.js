@@ -488,6 +488,10 @@
               data: requestData,
               headers: Object.keys(headers).length ? headers : void 0,
               responseType: responseType === "json" ? "json" : void 0,
+              timeout: opts.timeout,
+              ontimeout: () => {
+                reject(new Error(`请求超时：${url}`));
+              },
               onload: (response) => {
                 if (response.status === 200) {
                   if (responseType === "json") {
@@ -2767,9 +2771,9 @@
       }
       const hidden = this.container.classList.contains("hidden");
       if (hidden) {
-        if (this.messageContainer.parentElement !== document.body) {
+        if (this.messageContainer.parentElement !== this.root) {
           this.messageContainer.style.cssText = "position:fixed;top:12px;left:50%;transform:translateX(-50%);bottom:auto;width:auto;min-width:300px;z-index:2147483647";
-          document.body.append(this.messageContainer);
+          this.root.appendChild(this.messageContainer);
         }
       } else if (this.messageContainer.parentElement !== this.container) {
         this.messageContainer.style.cssText = "";
@@ -6650,184 +6654,6 @@
       });
     }
   };
-  const ANSWER_CONFIG_KEYS = [
-    "common.settings.answererWrappers",
-    "common.settings.disabledAnswererWrapperNames",
-    "common.ai-settings.aiEndpoint",
-    "common.ai-settings.aiApiKey",
-    "common.ai-settings.aiModel",
-    "common.ai-settings.referenceDocs"
-  ];
-  function isBlank(v) {
-    if (v === void 0 || v === null)
-      return true;
-    if (typeof v === "string")
-      return v.trim() === "";
-    if (Array.isArray(v))
-      return v.length === 0;
-    if (typeof v === "object")
-      return Object.keys(v).length === 0;
-    return false;
-  }
-  function planMerge(remote, local) {
-    const apply = {};
-    const push = {};
-    for (const key of ANSWER_CONFIG_KEYS) {
-      const r = remote == null ? void 0 : remote[key];
-      const l = local == null ? void 0 : local[key];
-      if (!isBlank(r)) {
-        if (JSON.stringify(r) !== JSON.stringify(l))
-          apply[key] = r;
-      } else if (!isBlank(l)) {
-        push[key] = l;
-      }
-    }
-    return { apply, push };
-  }
-  const SERVER = "http://localhost:15319";
-  const PUSH_DEBOUNCE_MS = 400;
-  let applying = false;
-  let browserUid = "";
-  let currentScope = "shared";
-  let desktopAvailable = false;
-  let inited = false;
-  const pending = {};
-  let pushTimer = null;
-  async function probeDesktop() {
-    try {
-      const res = await request(`${SERVER}/state`, {
-        type: "GM_xmlhttpRequest",
-        method: "get",
-        responseType: "json"
-      });
-      return !!(res == null ? void 0 : res.project);
-    } catch (e) {
-      return false;
-    }
-  }
-  async function fetchBrowserUid() {
-    try {
-      const res = await request("/hh-environment", { type: "fetch", method: "get" });
-      return typeof (res == null ? void 0 : res.browserUid) === "string" ? res.browserUid : "";
-    } catch (e) {
-      return "";
-    }
-  }
-  async function readRemoteConfig() {
-    try {
-      const qs = currentScope === "browser" ? `&uid=${encodeURIComponent(browserUid)}` : "";
-      const res = await request(`${SERVER}/api/answer-config?scope=${currentScope}${qs}`, {
-        type: "GM_xmlhttpRequest",
-        method: "get",
-        responseType: "json"
-      });
-      return (res == null ? void 0 : res.config) && typeof res.config === "object" ? res.config : {};
-    } catch (e) {
-      return null;
-    }
-  }
-  async function writeRemoteConfig(patch) {
-    if (!Object.keys(patch).length)
-      return;
-    try {
-      await request(`${SERVER}/api/answer-config`, {
-        type: "GM_xmlhttpRequest",
-        method: "post",
-        responseType: "json",
-        headers: { "Content-Type": "application/json" },
-        data: { scope: currentScope, uid: browserUid, config: patch }
-      });
-    } catch (e) {
-      const msg2 = e instanceof Error ? e.message : String(e);
-      console.warn(`[鸿鹄] [配置同步] 写入桌面端失败：${msg2}`);
-    }
-  }
-  function schedulePush() {
-    if (applying)
-      return;
-    clearTimeout(pushTimer);
-    pushTimer = setTimeout(() => {
-      const patch = {};
-      for (const k of Object.keys(pending)) {
-        patch[k] = pending[k];
-        delete pending[k];
-      }
-      void writeRemoteConfig(patch);
-    }, PUSH_DEBOUNCE_MS);
-  }
-  async function pullAndMerge() {
-    const remote = await readRemoteConfig();
-    if (!remote)
-      return;
-    const local = {};
-    for (const key of ANSWER_CONFIG_KEYS)
-      local[key] = lib.$store.get(key);
-    const { apply, push } = planMerge(remote, local);
-    for (const key of Object.keys(apply))
-      lib.$store.set(key, apply[key]);
-    if (Object.keys(apply).length) {
-      console.log(
-        `[鸿鹄] [配置同步] 已从桌面端载入 ${Object.keys(apply).length} 项配置（${currentScope === "shared" ? "全浏览器共享" : "本浏览器独立"}）`
-      );
-    }
-    if (Object.keys(push).length) {
-      await writeRemoteConfig(push);
-      console.log(`[鸿鹄] [配置同步] 已把本地 ${Object.keys(push).length} 项配置上传到桌面端`);
-    }
-  }
-  async function initAnswerConfigSync(isSharedMode, watchers) {
-    if (inited || !lib.$.isInTopWindow())
-      return;
-    inited = true;
-    desktopAvailable = await probeDesktop();
-    if (!desktopAvailable) {
-      console.log("[鸿鹄] [配置同步] 未检测到鸿鹄易学桌面端，题库与 AI 配置使用本浏览器本地存储");
-      return;
-    }
-    browserUid = await fetchBrowserUid();
-    currentScope = isSharedMode() ? "shared" : "browser";
-    if (currentScope === "browser" && !browserUid) {
-      console.log("[鸿鹄] [配置同步] 未取到浏览器实例标识，改为仅在本浏览器本地保存");
-      desktopAvailable = false;
-      return;
-    }
-    console.log(
-      currentScope === "shared" ? "[鸿鹄] [配置同步] 题库与 AI 配置：使用桌面端统一配置（所有浏览器共享）" : `[鸿鹄] [配置同步] 题库与 AI 配置：本浏览器单独保存（uid=${browserUid}）`
-    );
-    await pullAndMerge();
-    for (const { script: script2, keys } of watchers) {
-      for (const key of keys) {
-        script2.onConfigChange(key, (curr) => {
-          if (applying || !desktopAvailable)
-            return;
-          const fullKey = script2.namespace ? `${script2.namespace}.${key}` : key;
-          pending[fullKey] = curr;
-          schedulePush();
-        });
-      }
-    }
-  }
-  async function reinitAnswerConfigSync(isSharedMode) {
-    if (!desktopAvailable)
-      return;
-    const nextScope = isSharedMode ? "shared" : "browser";
-    if (nextScope === currentScope)
-      return;
-    if (nextScope === "browser" && !browserUid) {
-      console.log("[鸿鹄] [配置同步] 未取到浏览器实例标识，无法切换为独立配置");
-      return;
-    }
-    currentScope = nextScope;
-    applying = true;
-    try {
-      await pullAndMerge();
-      console.log(
-        currentScope === "shared" ? "[鸿鹄] [配置同步] 已切换为桌面端统一配置" : `[鸿鹄] [配置同步] 已切换为本浏览器独立配置（uid=${browserUid}）`
-      );
-    } finally {
-      applying = false;
-    }
-  }
   const TAB_WORK_RESULTS_KEY = "common.work-results.results";
   function issueLinks(prefix) {
     const link = (label, href) => lib.h(
@@ -6984,6 +6810,11 @@
               type: "button"
             },
             onload() {
+              if (isUsingDesktopConfig()) {
+                this.value = "已开启同步桌面端统一配置";
+                this.onclick = () => openDesktopSettings();
+                return;
+              }
               const aws = CommonProject.scripts.settings.cfg.answererWrappers || [];
               this.value = aws.length ? aws.length + " 个可用题库（点击进入配置）" : "点击进入配置";
               this.onclick = () => {
@@ -7311,7 +7142,7 @@
             extra: { appConfigSync: false },
             attrs: {
               type: "checkbox",
-              title: "开启后题库与 AI 配置与桌面端保存的共享配置同步，所有浏览器共享同一份；关闭则本浏览器单独保存一份，互不影响。"
+              title: "开启后题库与 AI 统一在桌面端「题库与 AI 配置」页维护，自动下发到本浏览器；关闭则本浏览器单独配置，不与桌面端同步。"
             }
           },
           upload: {
@@ -7546,14 +7377,6 @@
           this.onConfigChange("answerWrapperHandlerTimeout", (sec) => {
             AnswerWrapperHandlerConfig.timeout_seconds = sec;
           });
-          const isSharedMode = () => this.cfg.useDesktopAnswerConfig !== false;
-          void initAnswerConfigSync(isSharedMode, [
-            { script: this, keys: ["answererWrappers", "disabledAnswererWrapperNames"] },
-            { script: CommonProject.scripts.aiSettings, keys: ["aiEndpoint", "aiApiKey", "aiModel", "referenceDocs"] }
-          ]).catch((e) => console.warn("[鸿鹄] [配置同步] 初始化失败：" + (e instanceof Error ? e.message : String(e))));
-          this.onConfigChange("useDesktopAnswerConfig", () => {
-            void reinitAnswerConfigSync(isSharedMode());
-          });
         },
         onrender({ panel }) {
           if (lib.$gm.isInGMContext()) {
@@ -7715,6 +7538,32 @@
         },
         onrender({ panel }) {
           panel.body.replaceChildren(createAiConfigCard());
+        },
+        onstart() {
+          const syncWrapper = () => {
+            const aiCfg = CommonProject.scripts.aiSettings.cfg;
+            const aws = CommonProject.scripts.settings.cfg.answererWrappers || [];
+            const idx = aws.findIndex((w) => w.name === "AI答题");
+            if (idx === -1)
+              return;
+            const next2 = [...aws];
+            next2[idx] = {
+              ...next2[idx],
+              url: normalizeAiEndpoint(aiCfg.aiEndpoint),
+              headers: {
+                ...next2[idx].headers || {},
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + aiCfg.aiApiKey
+              },
+              data: { ...next2[idx].data || {}, messages: buildAiMessages(aiCfg.referenceDocs || []) }
+            };
+            CommonProject.scripts.settings.cfg.answererWrappers = next2;
+          };
+          syncWrapper();
+          this.onConfigChange("aiApiKey", syncWrapper);
+          this.onConfigChange("aiEndpoint", syncWrapper);
+          this.onConfigChange("aiModel", syncWrapper);
+          this.onConfigChange("referenceDocs", syncWrapper);
         }
       }),
       workResults: new lib.Script({
@@ -8846,7 +8695,39 @@
       }
     });
   }
+  function isUsingDesktopConfig() {
+    return CommonProject.scripts.settings.cfg.useDesktopAnswerConfig !== false;
+  }
+  function openDesktopSettings() {
+    try {
+      const img = new Image();
+      img.src = `http://localhost:15319/api/open-settings?_=${Date.now()}`;
+    } catch (e) {
+    }
+    lib.$message.info({ content: "已切换到桌面端「软件设置」，请在其中配置题库与 AI" });
+  }
+  function createDesktopConfigTip() {
+    return lib.h("div", {}, [
+      lib.h(
+        "div",
+        { className: "secondary", style: { marginBottom: "10px", lineHeight: "1.7" } },
+        "已开启「使用桌面端统一配置」。题库与 AI 在桌面端统一维护，浏览器启动时自动同步，这里不再单独编辑。"
+      ),
+      lib.h("button", "前往桌面端配置", (btn) => {
+        btn.classList.add("base-style-button");
+        btn.onclick = () => openDesktopSettings();
+      }),
+      lib.h(
+        "div",
+        { className: "secondary", style: { marginTop: "10px", fontSize: "12px", lineHeight: "1.6" } },
+        "想在本浏览器单独配置？在「全局设置」里关闭「使用桌面端统一配置」后重新打开面板。"
+      )
+    ]);
+  }
   function createAiConfigCard() {
+    if (isUsingDesktopConfig()) {
+      return createDesktopConfigTip();
+    }
     const aiCfg = CommonProject.scripts.aiSettings.cfg;
     const aiCss = `.ai-cfg-card{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:16px;margin-top:12px;box-shadow:0 1px 3px rgba(0,0,0,.04);animation:hh-card-in .45s cubic-bezier(0.16,1,0.3,1) both;}
 .ai-cfg-title{font-size:15px;font-weight:600;margin-bottom:4px;color:#1d1d1f;}
@@ -17787,7 +17668,7 @@ ${lines}`;
     }
   }
   async function study(opts) {
-    var _a;
+    var _a, _b, _c, _d;
     await $.sleep(3e3);
     const searchedJobs = [];
     let searching = true;
@@ -17830,6 +17711,28 @@ ${lines}`;
         }, 3e3);
         await runJobs();
         await $.sleep(500);
+      }
+      if (searchedJobs.length === 0 && pendingJobs > 0) {
+        try {
+          const frames = searchIFrame(lib.$gm.unsafeWindow.document);
+          let tiMu = 0;
+          const frameInfo = [];
+          for (const frame of frames) {
+            const doc = (_b = frame.contentWindow) == null ? void 0 : _b.document;
+            if (!doc)
+              continue;
+            const n = doc.querySelectorAll(".TiMu").length;
+            tiMu += n;
+            const data = frame.getAttribute("data") || "";
+            const jobid = ((_c = /"jobid"\s*:\s*"?(\d+)/.exec(data)) == null ? void 0 : _c[1]) || ((_d = /_jobid"?\s*:\s*"?(\d+)/.exec(data)) == null ? void 0 : _d[1]) || "";
+            frameInfo.push(`${n}题/jobid=${jobid || "无"}`);
+          }
+          const msg22 = `本节仍有 ${pendingJobs} 个未完成任务点没识别到：iframe ${frames.length} 个，卷面 .TiMu ${tiMu} 个，明细 ${frameInfo.slice(0, 4).join(" ; ") || "(无)"}`;
+          $console.warn("[自动刷课] " + msg22);
+          traceRedo(msg22);
+        } catch (error) {
+          $console.warn("[自动刷课] 任务点诊断失败：" + ((error == null ? void 0 : error.message) || String(error)));
+        }
       }
     }
     top$1._preChapterId = "";

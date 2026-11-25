@@ -3039,6 +3039,35 @@ export async function study(
 			await runJobs();
 			await $.sleep(500);
 		}
+
+		/**
+		 * 等完还是没有 → 把现场记下来
+		 *
+		 * 「测验 tab 明明已经激活、attachments 里也有 job=true，但一个任务点都搜不到」
+		 * 这种情况光看代码猜不出来，把 iframe 数量、卷面题数、以及有没有 jobid 写进日志，
+		 * 下次直接能定位是「内容没加载」还是「searchJob 的 jobid 判定把它挡了」。
+		 */
+		if (searchedJobs.length === 0 && pendingJobs > 0) {
+			try {
+				const frames = searchIFrame($gm.unsafeWindow.document);
+				let tiMu = 0;
+				const frameInfo: string[] = [];
+				for (const frame of frames) {
+					const doc = frame.contentWindow?.document;
+					if (!doc) continue;
+					const n = doc.querySelectorAll('.TiMu').length;
+					tiMu += n;
+					const data = frame.getAttribute('data') || '';
+					const jobid = /"jobid"\s*:\s*"?(\d+)/.exec(data)?.[1] || /_jobid"?\s*:\s*"?(\d+)/.exec(data)?.[1] || '';
+					frameInfo.push(`${n}题/jobid=${jobid || '无'}`);
+				}
+				const msg = `本节仍有 ${pendingJobs} 个未完成任务点没识别到：iframe ${frames.length} 个，卷面 .TiMu ${tiMu} 个，明细 ${frameInfo.slice(0, 4).join(' ; ') || '(无)'}`;
+				$console.warn('[自动刷课] ' + msg);
+				traceRedo(msg);
+			} catch (error) {
+				$console.warn('[自动刷课] 任务点诊断失败：' + ((error as any)?.message || String(error)));
+			}
+		}
 	}
 
 	// @ts-ignore

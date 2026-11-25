@@ -206,15 +206,32 @@ var GM = (function () {
 		});
 	}
 
-	var readyPromise = send('storageInit', undefined, { timeout: 120, retry: 25 }).then(function (
+	/**
+	 * 全量配置拉取
+	 *
+	 * 超时原来是 120ms × 25（约 3 秒）。`chrome.storage.local.get(null)` 现在有一千多个键、
+	 * 六十多 KB，页面加载高峰时（同时注入脚本、渲染目录）经常跑不完 —— 一旦超时，
+	 * `store` 就是空的，脚本读到的是**默认配置**（比如 `answererWrappers = []`），
+	 * 面板上看起来就是「配置被重置」，而用户此时随便改点什么都会把这份默认值推给桌面端。
+	 * 这里放宽到 400ms × 40（约 16 秒），并且失败时明确留痕。
+	 */
+	var readyPromise = send('storageInit', undefined, { timeout: 400, retry: 40 }).then(function (
 		res
 	) {
-		if (!res || !res.data) return;
+		if (!res || !res.data) {
+			console.warn('[鸿鹄] 配置读取失败（背景脚本未响应），本次使用默认配置，请刷新页面');
+			return;
+		}
 		var data = res.data;
+		var count = 0;
 		for (var key in data) {
 			if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
 			if (key.indexOf('__ocs_tab_') === 0) continue;
 			store[key] = data[key];
+			count += 1;
+		}
+		if (count === 0) {
+			console.warn('[鸿鹄] 扩展配置为空（首次使用或存储被清），如需统一配置请到桌面端设置');
 		}
 	});
 
@@ -274,6 +291,15 @@ var GM = (function () {
 		GM_xmlhttpRequest: function (details) {
 			var onload = details.onload;
 			var onerror = details.onerror;
+			var ontimeout = details.ontimeout;
+			/**
+			 * 透传调用方的 timeout
+			 *
+			 * 原来固定 300000（5 分钟），调用方传的 `timeout` 被完全忽略 ——
+			 * 一次探测挂住就要等五分钟，期间同步逻辑全卡在这一句上。
+			 * 这里把调用方的超时传下去（bridge 的等待略长于请求超时，让后台先超时回包）。
+			 */
+			var reqTimeout = typeof details.timeout === 'number' && details.timeout > 0 ? details.timeout : 30000;
 			send(
 				'xhr',
 				{
@@ -281,15 +307,21 @@ var GM = (function () {
 					method: details.method,
 					headers: details.headers,
 					data: details.data,
-					responseType: details.responseType
+					responseType: details.responseType,
+					timeout: reqTimeout
 				},
-				{ retry: 0, timeout: 300000 }
+				{ retry: 0, timeout: reqTimeout + 2000 }
 			).then(function (result) {
 				if (!result) {
-					if (onerror) onerror({ error: 'GM_xmlhttpRequest: no response (bridge unavailable)' });
+					if (ontimeout) ontimeout({ error: 'timeout', timeout: reqTimeout, url: details.url });
+					else if (onerror) onerror({ error: 'GM_xmlhttpRequest: no response (bridge unavailable)' });
 					return;
 				}
 				if (result.error) {
+					if (/超时|timeout/i.test(String(result.error)) && ontimeout) {
+						ontimeout({ error: result.error, url: details.url });
+						return;
+					}
 					if (onerror) onerror({ error: result.error, status: result.status });
 					return;
 				}

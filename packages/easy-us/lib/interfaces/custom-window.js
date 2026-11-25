@@ -315,15 +315,18 @@ class CustomWindow {
         /**
          * 面板被隐藏（Ctrl+O / 配置里 visual=hidden）时，`message-container` 在
          * `container` 内部，会跟着 `container-element.hidden { display: none }` 一起消失
-         * —— 通知就彻底看不见了，用户会以为「消息有时候不显示」。
-         * 这里把消息容器临时挪到 body 上做 fixed 定位，面板恢复可见时再挪回去。
+         * —— 通知就彻底看不见了。
+         *
+         * 挪出去要挂在 **shadow root** 上，不能挂 `document.body`：
+         * 面板是 `mode: 'closed'` 的 shadow DOM，注入的 CSS 全在 shadow 里，
+         * 挂到 body 就脱离了那套样式，消息会退化成没有背景/边框的裸文本。
          */
         const hidden = this.container.classList.contains('hidden');
         if (hidden) {
-            if (this.messageContainer.parentElement !== document.body) {
+            if (this.messageContainer.parentElement !== this.root) {
                 this.messageContainer.style.cssText =
                     'position:fixed;top:12px;left:50%;transform:translateX(-50%);bottom:auto;width:auto;min-width:300px;z-index:2147483647';
-                document.body.append(this.messageContainer);
+                this.root.appendChild(this.messageContainer);
             }
         } else if (this.messageContainer.parentElement !== this.container) {
             this.messageContainer.style.cssText = '';

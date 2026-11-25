@@ -1,4 +1,4 @@
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 import { remote } from '../utils/remote';
 import defaultsDeep from 'lodash/defaultsDeep';
 import type { AppStore, UserScripts } from '@honghu-desktop/app';
@@ -265,6 +265,15 @@ window.store = store;
 
 /** 根目录 */
 export const files = reactive<File[]>([]);
+
+/**
+ * 简洁模式当前页签
+ *
+ * 提到模块级是为了让外部能切页签：扩展面板的「前往桌面端配置」按钮走 IPC 进来时，
+ * 如果当前正停在简洁模式，就切到这个页签（留在简洁模式），而不是跳路由切去专业模式。
+ * 不放 `store.render` 里：那是加密落盘的持久化数据，切个页签没必要写盘。
+ */
+export const simpleActiveTab = ref('browsers');
 
 /** 打开的文件 */
 export const openedFiles = reactive(new Map<string, File>());

@@ -1,4 +1,12 @@
 const TAB_STORE_PREFIX = '__ocs_tab_';
+/**
+ * tabId -> tab uid 的内存缓存
+ *
+ * 跨帧通信（cors）靠 `chrome.storage` 里的 `tab.<uid>.cors.events.*` 做 key，
+ * 两端的 uid 必须一致。uid 只允许由后台生成一次（见 getTab 处理），
+ * 这里用同步 Map 兜住并发，避免多个 frame 各写一个 uuid 互相覆盖。
+ */
+const TAB_UID_CACHE = new Map();
 
 /* ============================================================
  * 把运行时注册到 MAIN world
@@ -332,9 +340,36 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 			sendResponse({ tab: {} });
 			return false;
 		}
+		const storeKey = TAB_STORE_PREFIX + tabId;
 		// session 存储在部分上下文未开访问级别时会直接拒绝，同样必须兜住
-		chrome.storage.session.get([TAB_STORE_PREFIX + tabId]).then(
-			(res) => sendResponse({ tab: res[TAB_STORE_PREFIX + tabId] || {} }),
+		chrome.storage.session.get([storeKey]).then(
+			(res) => {
+				const tab = res[storeKey] || {};
+				/**
+				 * tab uid 必须由后台统一生成
+				 *
+				 * 每个 frame 的 `start()` 都是「`getTab` 读到空就 `setTab` 一个新 uuid」，
+				 * 多个 frame 并发时后写的会覆盖前写的：先写的那一方 `cors.on` 已经用旧 uid
+				 * 注册了监听，而 iframe 的 `cors.emit` 用的是新 uid —— chrome.storage 里的
+				 * key 两端对不上，跨帧消息静默丢失（实测 115 次发送只有 1 次到达，
+				 * 表现就是「面板一直在，但通知几乎不显示」）。
+				 *
+				 * 后台是单线程的，这里用内存缓存 + 落盘把它钉成一份：
+				 * 先查 `TAB_UID_CACHE`（同步、无竞态），没有再看 storage，都没有才生成。
+				 */
+				let uid = TAB_UID_CACHE.get(tabId) || tab._uid_;
+				if (!uid) {
+					uid = typeof crypto !== 'undefined' && crypto.randomUUID
+						? crypto.randomUUID().replace(/-/g, '')
+						: String(Date.now()) + Math.random().toString(36).slice(2, 10);
+				}
+				TAB_UID_CACHE.set(tabId, uid);
+				if (tab._uid_ !== uid) {
+					tab._uid_ = uid;
+					chrome.storage.session.set({ [storeKey]: tab });
+				}
+				sendResponse({ tab });
+			},
 			(err) => sendResponse({ tab: {}, error: String(err && err.message ? err.message : err) })
 		);
 		return true;
@@ -345,10 +380,26 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 			sendResponse({ ok: true });
 			return false;
 		}
-		chrome.storage.session.set({ [TAB_STORE_PREFIX + tabId]: payload.tab }).then(
-			() => sendResponse({ ok: true }),
-			(err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) })
-		);
+		const storeKey = TAB_STORE_PREFIX + tabId;
+		const incoming = payload.tab || {};
+		chrome.storage.session.get([storeKey]).then((res) => {
+			/**
+			 * 合并写入，且 uid 以已存在的为准
+			 *
+			 * `saveTab` 传的是整个 tab 对象。两个 frame 并发保存时直接覆盖会丢字段；
+			 * 更糟的是如果某个 frame 手里的 tab 还没有 uid，覆盖就把后台生成的 uid 抹掉了，
+			 * 跨帧 key 又对不上。这里只合并、不允许改 uid。
+			 */
+			const existing = res[storeKey] || {};
+			const merged = Object.assign({}, existing, incoming);
+			if (existing._uid_) {
+				merged._uid_ = existing._uid_;
+			}
+			chrome.storage.session.set({ [storeKey]: merged }).then(
+				() => sendResponse({ ok: true }),
+				(err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) })
+			);
+		}, (err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) }));
 		return true;
 	}
 	/**
@@ -382,10 +433,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 async function handleXhr(details, sendResponse) {
+	/**
+	 * 请求必须有超时
+	 *
+	 * `fetch` 默认不超时。端口没起、或对端接了连接不回包时，这个 Promise 会一直悬着，
+	 * 内容脚本那边的 `GM_xmlhttpRequest` 就永远等不到回执 ——
+	 * 实测「配置同步」就是这么卡死的：探测 `localhost:15319` 之后没有任何后续日志。
+	 */
+	const limit = Number(details.timeout) > 0 ? Number(details.timeout) : 30000;
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), limit);
 	try {
 		const init = {
 			method: (details.method || 'GET').toUpperCase(),
-			headers: Object.assign({}, details.headers || {})
+			headers: Object.assign({}, details.headers || {}),
+			signal: controller.signal
 		};
 		if (init.method !== 'GET' && init.method !== 'HEAD' && details.data != null) {
 			init.body = details.data;
@@ -413,7 +475,10 @@ async function handleXhr(details, sendResponse) {
 			finalUrl: res.url
 		});
 	} catch (err) {
-		sendResponse({ error: String(err && err.message ? err.message : err) });
+		const msg = err && err.name === 'AbortError' ? `请求超时（${limit}ms）` : String(err && err.message ? err.message : err);
+		sendResponse({ error: msg });
+	} finally {
+		clearTimeout(timer);
 	}
 }
 

@@ -19,7 +19,6 @@ import { RenderScript } from '../render';
 import { dropdownStyle } from '../utils/configs';
 import { trustedClick } from '../utils/safe-click';
 import { OFFICIAL_SITE, GITHUB_REPO, GITCODE_REPO, GITHUB_ISSUES, GITCODE_ISSUES } from '../utils/links';
-import { initAnswerConfigSync, reinitAnswerConfigSync } from '../utils/answer-config-sync';
 
 const TAB_WORK_RESULTS_KEY = 'common.work-results.results';
 
@@ -209,6 +208,12 @@ export const CommonProject = Project.create({
 						type: 'button'
 					},
 					onload() {
+						/** 统一配置模式：只给提示和跳转，不给编辑入口 */
+						if (isUsingDesktopConfig()) {
+							this.value = '已开启同步桌面端统一配置';
+							this.onclick = () => openDesktopSettings();
+							return;
+						}
 						const aws: any[] = CommonProject.scripts.settings.cfg.answererWrappers || [];
 						this.value = aws.length ? aws.length + ' 个可用题库（点击进入配置）' : '点击进入配置';
 
@@ -572,10 +577,11 @@ export const CommonProject = Project.create({
 					}
 				},
 				/**
-				 * 题库 + AI 配置是否跟随桌面端的共享配置
+				 * 题库 + AI 配置是否使用桌面端的统一配置
 				 *
-				 * 打开（默认）：与桌面端保存的共享配置双向同步，所有浏览器读到和改的都是同一份；
-				 * 关闭：只保存本浏览器的独立配置。两种方式都落在桌面端，只有桌面端不可用时才退回本地。
+				 * 打开（默认）：扩展面板不提供编辑入口，配置统一在桌面端「题库与 AI 配置」页维护。
+				 *   客户端启动浏览器时注入一次；浏览器运行期间桌面端有改动，5 秒内下发到扩展。
+				 * 关闭：本浏览器单独配置，不与桌面端同步，桌面端也不再下发。
 				 * 开关本身是「这台浏览器怎么用」的本地决定，所以不参与全量同步。
 				 */
 				useDesktopAnswerConfig: {
@@ -584,7 +590,7 @@ export const CommonProject = Project.create({
 					extra: { appConfigSync: false },
 					attrs: {
 						type: 'checkbox',
-						title: '开启后题库与 AI 配置与桌面端保存的共享配置同步，所有浏览器共享同一份；关闭则本浏览器单独保存一份，互不影响。'
+						title: '开启后题库与 AI 统一在桌面端「题库与 AI 配置」页维护，自动下发到本浏览器；关闭则本浏览器单独配置，不与桌面端同步。'
 					}
 				},
 				upload: {
@@ -861,21 +867,6 @@ export const CommonProject = Project.create({
 				this.onConfigChange('answerWrapperHandlerTimeout', (sec) => {
 					AnswerWrapperHandlerConfig.timeout_seconds = sec;
 				});
-
-				/**
-				 * 题库 / AI 配置与桌面端同步
-				 *
-				 * 不 await：同步失败也只是退回本地存储，不该拖慢页面上的其它脚本。
-				 */
-				const isSharedMode = () => this.cfg.useDesktopAnswerConfig !== false;
-				void initAnswerConfigSync(isSharedMode, [
-					{ script: this, keys: ['answererWrappers', 'disabledAnswererWrapperNames'] },
-					{ script: CommonProject.scripts.aiSettings, keys: ['aiEndpoint', 'aiApiKey', 'aiModel', 'referenceDocs'] }
-				]).catch((e) => console.warn('[鸿鹄] [配置同步] 初始化失败：' + (e instanceof Error ? e.message : String(e))));
-
-				this.onConfigChange('useDesktopAnswerConfig', () => {
-					void reinitAnswerConfigSync(isSharedMode());
-				});
 			},
 			onrender({ panel }) {
 				// 因为需要用到 GM_xhr 所以判断是否处于用户脚本环境
@@ -1053,6 +1044,44 @@ export const CommonProject = Project.create({
 	},
 		onrender({ panel }) {
 			panel.body.replaceChildren(createAiConfigCard());
+		},
+		/**
+		 * 把 AI 配置写进「AI答题」wrapper
+		 *
+		 * 答题时实际用的是 `answererWrappers` 里 `AI答题` 那一项的 `url` /
+		 * `headers.Authorization` / `data.messages`，不是 `aiApiKey` 这些配置项。
+		 * 原来只在 AI 配置卡片渲染时（`updateBtns()`）才同步一次 ——
+		 * 但统一配置模式下那张卡片被提示卡替代，不再渲染，
+		 * 结果就是「桌面端改了 key、扩展里 wrapper 还挂着旧 key」，答题一直失败。
+		 *
+		 * 现在改成配置项一变就同步，和面板是否渲染无关。
+		 */
+		onstart() {
+			const syncWrapper = () => {
+				const aiCfg = CommonProject.scripts.aiSettings.cfg;
+				const aws = CommonProject.scripts.settings.cfg.answererWrappers || [];
+				const idx = aws.findIndex((w: any) => w.name === 'AI答题');
+				/** 没有 AI wrapper 说明用户没启用 AI 答题，不主动创建 */
+				if (idx === -1) return;
+				const next = [...aws];
+				next[idx] = {
+					...next[idx],
+					url: normalizeAiEndpoint(aiCfg.aiEndpoint),
+					headers: {
+						...(next[idx].headers || {}),
+						'Content-Type': 'application/json',
+						Authorization: 'Bearer ' + aiCfg.aiApiKey
+					},
+					data: { ...(next[idx].data || {}), messages: buildAiMessages((aiCfg.referenceDocs as any) || []) }
+				};
+				CommonProject.scripts.settings.cfg.answererWrappers = next;
+			};
+
+			syncWrapper();
+			this.onConfigChange('aiApiKey', syncWrapper);
+			this.onConfigChange('aiEndpoint', syncWrapper);
+			this.onConfigChange('aiModel', syncWrapper);
+			this.onConfigChange('referenceDocs', syncWrapper);
 		}
 	}),
 	workResults: new Script({
@@ -2370,7 +2399,57 @@ function aiTestConnection(endpoint: string, apiKey: string, model: string) {
 	});
 }
 
+/**
+ * 是否使用「桌面端统一配置」（开关默认开启）
+ *
+ * 开启时题库 / AI 一律在桌面端维护，由客户端启动浏览器时单向注入扩展 storage；
+ * 关闭时回到本浏览器独立配置（只存在本地）。
+ */
+function isUsingDesktopConfig() {
+	return CommonProject.scripts.settings.cfg.useDesktopAnswerConfig !== false;
+}
+
+/**
+ * 唤起桌面端「软件设置」
+ *
+ * 用 `new Image().src` 发请求：img 不受 CORS / Private Network Access 限制，
+ * 也不需要读返回值 —— 这正是绕开沙箱里 `fetch` 不 settle 的办法。
+ */
+function openDesktopSettings() {
+	try {
+		const img = new Image();
+		img.src = `http://localhost:15319/api/open-settings?_=${Date.now()}`;
+	} catch (e) {
+		/* 桌面端没启动时静默失败，下面的提示仍然会给出去设置页的路径 */
+	}
+	$message.info({ content: '已切换到桌面端「软件设置」，请在其中配置题库与 AI' });
+}
+
+/** 开启统一配置时，替换掉题库 / AI 的编辑区 */
+function createDesktopConfigTip() {
+	return h('div', {}, [
+		h(
+			'div',
+			{ className: 'secondary', style: { marginBottom: '10px', lineHeight: '1.7' } },
+			'已开启「使用桌面端统一配置」。题库与 AI 在桌面端统一维护，浏览器启动时自动同步，这里不再单独编辑。'
+		),
+		h('button', '前往桌面端配置', (btn: HTMLButtonElement) => {
+			btn.classList.add('base-style-button');
+			btn.onclick = () => openDesktopSettings();
+		}),
+		h(
+			'div',
+			{ className: 'secondary', style: { marginTop: '10px', fontSize: '12px', lineHeight: '1.6' } },
+			'想在本浏览器单独配置？在「全局设置」里关闭「使用桌面端统一配置」后重新打开面板。'
+		)
+	]);
+}
+
 function createAiConfigCard() {
+	/** 统一配置模式下不提供编辑入口：单向同步，避免两条通道互相覆盖 */
+	if (isUsingDesktopConfig()) {
+		return createDesktopConfigTip();
+	}
 	const aiCfg = CommonProject.scripts.aiSettings.cfg;
 	const aiCss = `.ai-cfg-card{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:16px;margin-top:12px;box-shadow:0 1px 3px rgba(0,0,0,.04);animation:hh-card-in .45s cubic-bezier(0.16,1,0.3,1) both;}
 .ai-cfg-title{font-size:15px;font-weight:600;margin-bottom:4px;color:#1d1d1f;}

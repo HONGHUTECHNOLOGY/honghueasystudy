@@ -172,6 +172,17 @@ export async function startupServer() {
 		res.setHeader('Access-Control-Allow-Credentials', 'true');
 		res.setHeader('Access-Control-Allow-Headers', 'Content-Type, request-id, if-none-match');
 		res.setHeader('Access-Control-Allow-Methods', '*');
+		/**
+		 * Private Network Access 预检
+		 *
+		 * 网课页面是公网域名（HTTPS），请求 `http://localhost:15319` 属于「公网 → 本地网络」，
+		 * Chrome/Edge 127+ 会先发一个带 `Access-Control-Request-Private-Network: true` 的预检，
+		 * 服务端不回这个头就直接判失败。加上之后扩展才能用页面原生 `fetch` 直连本地服务，
+		 * 不必再走 `GM_xmlhttpRequest` 那条（bridge 在沙箱里换不回来回包）。
+		 */
+		if (req.headers['access-control-request-private-network'] === 'true') {
+			res.setHeader('Access-Control-Allow-Private-Network', 'true');
+		}
 		if (req.method === 'OPTIONS') {
 			res.sendStatus(204);
 			return;
@@ -224,6 +235,60 @@ export async function startupServer() {
 			return;
 		}
 		res.json({ scope, uid, config: readAnswerConfig(getDecryptedRenderData(store), scope, uid) });
+	});
+
+	/**
+	 * 打开主窗口并跳到「软件设置」
+	 *
+	 * 供扩展面板的「前往桌面端配置」按钮调用。扩展那边用 `new Image().src` 发一下请求即可
+	 * （img 不受 CORS / PNA 限制，也不需要读返回值），这里把窗口提到前台再通知渲染端切页。
+	 */
+	app.get('/api/open-settings', (req, res) => {
+		try {
+			moveWindowToTop();
+			getCurrentWebContents()?.send('open-settings');
+			res.json({ ok: true });
+		} catch (e: any) {
+			res.status(500).json({ error: String(e?.message || e) });
+		}
+	});
+
+	/**
+	 * 测试 AI 连接
+	 *
+	 * 渲染进程受 CORS 限制，直接请求 api.deepseek.com 之类的第三方接口会被拦，
+	 * 所以由主进程代发（Node fetch 没有跨域限制）。
+	 */
+	app.post('/api/test-ai', async (req, res) => {
+		const { endpoint, apiKey, model } = req.body || {};
+		if (!endpoint || !apiKey || !model) {
+			res.status(400).json({ ok: false, error: '请先填写完整的接口地址、API Key、模型名称' });
+			return;
+		}
+		/** 与扩展侧 normalizeAiEndpoint 保持一致：域名自动补 /v1/chat/completions */
+		let ep = String(endpoint).trim().replace(/\/+$/, '');
+		if (!/\/chat\/completions$/i.test(ep)) {
+			ep = /\/v\d+$/i.test(ep) ? ep + '/chat/completions' : ep + '/v1/chat/completions';
+		}
+		try {
+			const r = await fetch(ep, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${apiKey}`
+				},
+				body: JSON.stringify({
+					model: String(model),
+					messages: [{ role: 'user', content: '你好' }],
+					max_tokens: 8
+				}),
+				signal: AbortSignal.timeout(20000)
+			});
+			const text = await r.text();
+			res.json({ ok: r.ok, status: r.status, body: text.slice(0, 400) });
+		} catch (e: any) {
+			res.json({ ok: false, status: 0, error: String(e?.message || e) });
+		}
 	});
 
 	/** 写入答题 / AI 配置（合并式写入，只覆盖传入的键） */
