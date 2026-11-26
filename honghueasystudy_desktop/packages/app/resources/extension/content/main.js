@@ -14,7 +14,7 @@
 	'use strict';
 
 	/* ===== 1/4 resources（构建生成） ===== */
-var __HH_RESOURCES__ = {"version":"5.8.0","metadata":{"name":"鸿鹄易学","version":"5.8.0","description":"鸿鹄易学 - 在线网络课程辅助工具","author":"enncy","license":"MIT","namespace":"https://honghueasystudy","homepage":"https://easystudy.honghutech.eu.org","source":"https://easystudy.honghutech.eu.org","icon":"https://easystudy.honghutech.eu.org/assets/img/icon.png","run-at":"document-start"},"resources":{"STYLE":"/** 默认字体 */\n/** 输入框默认边距 */\nul,\nol {\n  line-height: 26px;\n  padding-left: 22px;\n  margin: 0px;\n}\na {\n  color: #1890ff;\n}\nhr {\n  border-style: solid;\n  border-color: #63636346;\n  border-width: 0px;\n  border-bottom: 1px solid #63636346;\n  margin-block-start: 1em;\n  margin-block-end: 1em;\n}\n.base-style-active-form-control {\n  border: 1px solid #ffffff00;\n}\n.base-style-active-form-control:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.base-style-active-form-control:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.base-style-active-form-control:hover {\n  background-color: #ebeef4;\n}\n.base-style-input {\n  outline: none;\n  border: 1px solid #ffffff00;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n}\n.base-style-input::placeholder {\n  color: #bababa;\n}\n.base-style-switch {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.base-style-switch:checked {\n  background: #1890ff;\n}\n.base-style-switch:disabled {\n  background-color: #f7f7f78b;\n}\n.base-style-switch:checked::before {\n  transform: translate(24px, 0px);\n}\n.base-style-switch::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.base-style-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.base-style-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button + .base-style-button {\n  margin-left: 12px;\n}\n.base-style-button:hover {\n  background-color: #7abbff24;\n}\n.base-style-button.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button:disabled:active {\n  box-shadow: none;\n}\n.base-style-button-secondary {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\n.base-style-button-secondary:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button-secondary + .base-style-button-secondary {\n  margin-left: 12px;\n}\n.base-style-button-secondary:hover {\n  background-color: #7abbff24;\n}\n.base-style-button-secondary.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button-secondary:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button-secondary.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button-secondary:disabled:active {\n  box-shadow: none;\n}\ncontainer-element.hidden {\n  display: none;\n}\ncontainer-element.minimize {\n  min-width: unset;\n}\ncontainer-element {\n  position: fixed;\n  top: 10%;\n  left: 10%;\n  z-index: 99999;\n  text-align: left;\n  min-width: 300px;\n  -webkit-font-smoothing: antialiased;\n  -moz-osx-font-smoothing: grayscale;\n  color: #636363;\n  box-shadow: 0 0 24px -12px #3f3f3f;\n  border-radius: 8px;\n  letter-spacing: 0.5px;\n  border: 1px solid #c1c1c1;\n}\nheader-element {\n  display: flex;\n  align-items: center;\n  background-color: white;\n  border-radius: 8px 8px 0px 0px;\n  user-select: none;\n  padding: 4px;\n  padding-bottom: 0px;\n}\nheader-element .extra-menu-bar {\n  width: 100%;\n  padding: 4px;\n  padding-bottom: 0px;\n  margin-top: 4px;\n  border-top: 1px solid #e8e8e8;\n  /** 默认隐藏，一直到需要激活的时候再更改 */\n  display: none;\n}\nheader-element .extra-menu-bar .script-panel-link {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n  padding-bottom: 2px;\n  margin-bottom: 0px;\n}\nheader-element .extra-menu-bar .script-panel-link:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nheader-element .extra-menu-bar .script-panel-link + header-element .extra-menu-bar .script-panel-link {\n  margin-left: 12px;\n}\nheader-element .extra-menu-bar .script-panel-link:hover {\n  background-color: #7abbff24;\n}\nheader-element .extra-menu-bar .script-panel-link.danger:hover {\n  background-color: #ffdede86;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nheader-element .extra-menu-bar .script-panel-link.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled:active {\n  box-shadow: none;\n}\nheader-element .extra-menu-bar .script-panel-link.active {\n  background-color: #1890ff1a;\n  border-color: #1890ff;\n  color: #1890ff;\n}\nheader-element .extra-menu-bar .script-panel-link + .script-panel-link {\n  margin-left: 4px;\n}\nheader-element .profile {\n  flex: 1;\n  cursor: move;\n}\nheader-element .switch:hover,\nheader-element .dropdown:hover {\n  background-color: #f3f3f3;\n}\nheader-element .close:hover {\n  background-color: #ff000038;\n}\nheader-element .switch,\nheader-element .close {\n  cursor: pointer;\n}\nheader-element .dropdown {\n  line-height: 24px;\n  text-decoration: underline;\n}\nheader-element .switch,\nheader-element .close,\nheader-element .profile {\n  display: inline-flex;\n  align-items: center;\n  padding: 0px 8px;\n}\n.logo {\n  width: 18px;\n  height: 18px;\n  cursor: pointer;\n}\n.project-selector {\n  display: flex;\n  align-items: center;\n}\n.project-selector select {\n  background: #ffffff00;\n  border-radius: 4px;\n  border: 1px solid #63636346;\n  padding: 4px;\n}\n.project-selector.expand-all {\n  display: none;\n}\n.body {\n  overflow: auto;\n  width: auto;\n  height: 100%;\n}\nscript-panel-element {\n  display: block;\n  background-color: white;\n  border-radius: 0px 0px 8px 8px;\n  padding: 0px 8px 12px 8px;\n  overflow: auto;\n}\nscript-panel-element .script-panel-body {\n  padding: 0px 8px;\n}\nscript-panel-element + script-panel-element {\n  margin-top: 12px;\n}\n.card + .card {\n  margin-top: 12px;\n}\n.card {\n  background-color: white;\n  border-radius: 2px;\n  padding: 0px 8px;\n}\n.notes {\n  background: #0099ff0e;\n  border-left: 4px solid #0099ff65;\n  width: -webkit-fill-available;\n  margin: 0px 8px;\n  line-height: 26px;\n  letter-spacing: 1px;\n}\n.secondary {\n  font-size: 12px;\n  color: #8b8b8b;\n}\n.tooltip-container {\n  z-index: 99999999999999;\n  margin: 12px 0px 0px 12px;\n  padding: 4px;\n  color: black;\n  background: #f0f0f0;\n  box-shadow: 0px 0px 4px #949494;\n  position: fixed;\n  white-space: normal;\n  max-width: 200px;\n  height: auto;\n  border-radius: 2px;\n  line-height: 18px;\n}\n.configs-container.lock {\n  filter: blur(1px);\n  user-select: none;\n  -webkit-user-select: none;\n  -moz-user-select: none;\n  -ms-user-select: none;\n}\n.configs-container .lock-wrapper {\n  cursor: not-allowed !important;\n  border-radius: 4px;\n  position: absolute;\n  left: 0px;\n  z-index: 1;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n}\n.configs-container .lock-message {\n  background-color: #ffffff7d;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #6a6a6a98;\n  padding: 2px;\n}\n.configs {\n  display: table;\n  background: #e1e1e107;\n  width: -webkit-fill-available;\n}\n.configs .configs-body {\n  display: table-row-group;\n}\n.configs .configs-body config-element + config-element label {\n  padding-top: 4px;\n}\n.configs .configs-body config-element + config-element .config-wrapper {\n  padding-top: 4px;\n}\n.configs .configs-body config-element {\n  width: 100%;\n  display: table-row;\n  line-height: 26px;\n}\n.configs .configs-body config-element label {\n  white-space: nowrap;\n  color: #4e5969;\n  display: table-cell;\n  padding-right: 12px;\n  text-align: left;\n  vertical-align: top;\n  margin-right: 12px;\n}\n.configs .configs-body config-element .config-wrapper {\n  display: table-cell;\n  vertical-align: middle;\n  /** check box 的样式 */\n}\n.configs .configs-body config-element .config-wrapper select {\n  outline: none;\n  border: none;\n  border: 1px solid #e4e4e4;\n  border-radius: 4px;\n  padding: 2px 8px;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper select:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper select:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper select:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper textarea {\n  padding: 2px 8px;\n  outline: none;\n  border: none;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper textarea:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']) {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button'])::placeholder {\n  color: #bababa;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  padding: 0px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] + .configs .configs-body config-element .config-wrapper input[type='button'] {\n  margin-left: 12px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:hover {\n  background-color: #7abbff24;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger:hover {\n  background-color: #ffdede86;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled:active {\n  box-shadow: none;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked {\n  background: #1890ff;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:disabled {\n  background-color: #f7f7f78b;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked::before {\n  transform: translate(24px, 0px);\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.configs .configs-body config-element .config-wrapper input:not([type='checkbox'], [type='radio']),\n.configs .configs-body config-element .config-wrapper textarea,\n.configs .configs-body config-element .config-wrapper select {\n  width: -webkit-fill-available;\n  font-size: inherit;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'],\n.configs .configs-body config-element .config-wrapper input[type='radio'],\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  accent-color: #0e8ee2;\n}\n.configs .configs-body config-element .config-wrapper > *:not(.tooltip) {\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  float: right;\n}\n.configs .configs-body config-element .config-wrapper > *:disabled {\n  cursor: not-allowed;\n  background-color: #f7f7f78b;\n}\n.message-container {\n  margin-bottom: 4px;\n  position: absolute;\n  bottom: 100%;\n  left: 50%;\n  width: 100%;\n  transform: translate(-50%, 0px);\n  min-width: 300px;\n}\n.message-container message-element {\n  display: flex;\n  border-radius: 4px;\n  padding: 4px 12px;\n  margin-bottom: 4px;\n}\n.message-container message-element .message-content-container {\n  margin-right: 8px;\n  flex: auto;\n}\n.message-container message-element .message-text {\n  letter-spacing: 1px;\n  font-weight: bold;\n}\n.message-container message-element .message-closer {\n  width: 18px;\n  min-width: 18px;\n  cursor: pointer;\n  background-color: #ffffffb3;\n  color: #a1a1a1;\n  border-radius: 100%;\n  text-align: center;\n  height: 18px;\n  vertical-align: middle;\n  font-size: 12px;\n}\n.message-container message-element.error {\n  background-color: #ffe6e6;\n  color: #c70208;\n  border: 1px solid #ff6b6ded;\n}\n.message-container message-element.info {\n  background-color: #c9e7ff;\n  color: #004d95;\n  border: 1px solid #1890ff69;\n}\n.message-container message-element.success {\n  background-color: #e8ffe0;\n  color: #3e8d0d;\n  border: 1px solid #6fd91d;\n}\n.message-container message-element.warn {\n  background-color: #ffefc8;\n  color: #9b7400;\n  border: 1px solid #ffc107;\n}\nmodal-element {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  background-color: white;\n  border-radius: 4px;\n  box-shadow: 0px 0px 24px -12px black;\n  border: 1px solid #929292;\n  height: fit-content;\n  transform: translate(-50%, -50%);\n  padding: 12px 18px 18px 18px;\n  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;\n  z-index: 99999999999;\n  line-height: 24px;\n}\nmodal-element .modal-profile {\n  zoom: 0.9;\n  color: #969696;\n  user-select: none;\n  margin-bottom: 4px;\n}\nmodal-element .modal-title {\n  font-size: 18px;\n  font-weight: bold;\n  user-select: none;\n}\nmodal-element .modal-body {\n  margin: 12px 0px;\n  overflow: auto;\n}\nmodal-element .modal-footer {\n  display: flex;\n  white-space: nowrap;\n  justify-content: end;\n  align-items: end;\n}\nmodal-element .modal-footer > * + * {\n  margin-left: 12px;\n}\nmodal-element .modal-input {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n  width: -webkit-fill-available;\n}\nmodal-element .modal-input::placeholder {\n  color: #bababa;\n}\nmodal-element .modal-input:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\nmodal-element .modal-input:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\nmodal-element .modal-input:hover {\n  background-color: #ebeef4;\n}\nmodal-element .modal-cancel-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\nmodal-element .modal-cancel-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-cancel-button + modal-element .modal-cancel-button {\n  margin-left: 12px;\n}\nmodal-element .modal-cancel-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-cancel-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-cancel-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-cancel-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-cancel-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element .modal-confirm-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\nmodal-element .modal-confirm-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-confirm-button + modal-element .modal-confirm-button {\n  margin-left: 12px;\n}\nmodal-element .modal-confirm-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-confirm-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-confirm-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-confirm-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-confirm-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element.alert .modal-input,\nmodal-element.alert .modal-cancel-button {\n  display: none;\n}\nmodal-element.alert .modal-confirm-button {\n  margin: 0;\n}\nmodal-element.prompt .modal-input,\nmodal-element.prompt .modal-cancel-button,\nmodal-element.prompt .modal-confirm-button {\n  display: block;\n}\nmodal-element.confirm .modal-input {\n  display: none;\n}\n.modal-wrapper {\n  width: 100%;\n  height: 100%;\n  z-index: 9999;\n  position: fixed;\n  top: 0px;\n  left: 0px;\n  z-index: 9999999;\n  background-color: rgba(0, 0, 0, 0.265);\n  color: #636363;\n  font: 14px Menlo, Monaco, Consolas, 'Courier New', monospace;\n}\n.pointer {\n  cursor: pointer;\n}\n.separator {\n  display: flex;\n  align-items: center;\n  text-align: center;\n  padding: 4px 0px 8px 0px;\n}\n.separator::before,\n.separator::after {\n  content: '';\n  flex: 1;\n  border-bottom: 1px solid #63636346;\n}\n.separator:not(:empty)::before {\n  margin-right: 0.25em;\n}\n.separator:not(:empty)::after {\n  margin-left: 0.25em;\n}\ncontainer-element.minimize .body,\ncontainer-element.minimize header-element .dropdown,\ncontainer-element.minimize .footer {\n  display: none;\n}\ncontainer-element.minimize header-element {\n  padding: 8px;\n  border-radius: 8px;\n  box-shadow: 0px 0px 24px -12px black;\n}\n.user-guide > li {\n  padding: 4px 0px;\n}\n.search-infos-num {\n  width: 26px;\n  margin: 2px;\n  height: 20px;\n  border-radius: 4px;\n  display: inline-block;\n  background-color: white;\n  text-align: center;\n  cursor: pointer;\n  border: 1px solid #b6b6b6;\n}\n.search-infos-num.requested {\n  border: 1px solid #63b4ff;\n  color: #63b4ff;\n}\n.search-infos-num.active {\n  background-color: #127de1 !important;\n  color: white;\n}\n.search-infos-num.error {\n  border: 1px solid #ff8789ed;\n  background-color: #ff6b6ded;\n  color: white;\n}\n.search-infos-num.finish {\n  background-color: #63b4ff;\n  border: 1px solid #63b4ff;\n  color: white;\n}\nsearch-infos-element {\n  display: block;\n  overflow: auto;\n}\nsearch-infos-element .search-result {\n  margin-bottom: 12px;\n  padding-left: 12px;\n}\nsearch-infos-element .search-result .question {\n  font-weight: bold;\n  max-height: 200px;\n  overflow: auto;\n}\nsearch-infos-element .search-result .answer {\n  color: #7c7c7c;\n}\nsearch-infos-element .search-result .answer code {\n  border-bottom: 1px solid #dcdcdc;\n  padding: 2px 0px;\n  border-radius: 2px;\n  margin: 4px;\n  line-height: 22px;\n}\nsearch-infos-element .search-result .answer code + code {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag {\n  padding: 2px 6px;\n  border-radius: 2px;\n  font-size: 12px;\n  cursor: pointer;\n  margin-right: 6px;\n}\nsearch-infos-element .search-result .search-result-answer-tag + .search-result-answer-tag {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag.blue {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n}\nsearch-infos-element .search-result .search-result-answer-tag.green {\n  background-color: #f6ffed;\n  border: 1px solid #b7eb8f;\n  color: #52c41a;\n}\nsearch-infos-element .search-result .search-result-answer-tag.gray {\n  background-color: #fafafa;\n  border: 1px solid #d9d9d9;\n  color: #595959;\n}\nsearch-infos-element .search-result .search-result-answer-tag.red {\n  background-color: #fff1f0;\n  border: 1px solid #ffa39e;\n  color: #ff4d4f;\n}\nsearch-infos-element .search-result .search-result-answer-tag.yellow {\n  background-color: #fffbe6;\n  border: 1px solid #ffe58f;\n  color: #faad14;\n}\nsearch-infos-element .search-result-question-type {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n  margin-right: 8px;\n  padding: 0px 4px;\n  border-radius: 4px;\n}\nsearch-infos-element .error {\n  color: #ff6b6ded;\n  display: inline-block;\n  padding-left: 12px;\n}\n.copy,\n.question-title-extra-btn {\n  margin-left: 4px;\n  padding: 2px 4px;\n  border-radius: 2px;\n  box-shadow: 0 0 4px #b1b1b1;\n  cursor: pointer !important;\n  font-weight: normal;\n  font-size: 12px;\n}\n.work-result-question-container {\n  position: absolute;\n  width: 400px;\n  left: -100%;\n  top: 0px;\n  background: white;\n  border: 1px solid #cbcbcb;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #d1cfcf;\n  padding: 12px;\n}\n.work-result-question-container .close-search-result {\n  font-size: 12px;\n  margin-left: 8px;\n  text-decoration: underline;\n  color: gray;\n  cursor: pointer;\n}\n.work-result-list {\n  max-height: 400px;\n  overflow: auto;\n  margin: 12px 0px;\n  padding: 6px;\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n}\n.search-info-title {\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  margin-bottom: 12px;\n  line-height: 20px;\n  overflow: auto;\n}\n.search-info-title .title-content {\n  max-height: 200px;\n  overflow: auto;\n}\n.search-info-details {\n  margin-left: 4px;\n}\n.console {\n  max-height: 300px;\n  max-width: 400px;\n  overflow: auto;\n  background-color: #292929;\n  padding: 12px 6px;\n  color: #ececec;\n  font-size: 12px;\n}\n.console .item {\n  padding: 3px 0px;\n  border-radius: 2px;\n}\n.console .item .time {\n  color: #757575;\n}\n.console .item .info {\n  background-color: #2196f3a3;\n}\n.console .item .warn {\n  background-color: #ffc107db;\n}\n.console .item .error {\n  background-color: #f36c71cc;\n}\n.console .item .debug,\n.console .item .log {\n  background-color: #9e9e9ec4;\n}\n.console *::selection {\n  background-color: #ffffff6b;\n}\n.markdown {\n  max-width: 400px;\n  max-height: 50vh;\n  overflow: auto;\n}\n.markdown code {\n  padding: 2px 4px;\n  background-color: #f0f0f0;\n  border-radius: 6px;\n  font-size: 12px;\n}\n.markdown blockquote {\n  padding: 4px 4px 4px 12px;\n  margin: 0px;\n  color: #b5b5b5;\n  border-left: #ababab 2px solid;\n}\n.markdown blockquote p {\n  margin: 0px;\n}\n.markdown h1,\n.markdown h2,\n.markdown h3,\n.markdown h4,\n.markdown h5,\n.markdown h6,\n.markdown p {\n  margin: 8px 0px;\n}\n.dropdown {\n  position: relative;\n  display: inline-block;\n}\n.dropdown.active .dropdown-trigger-element {\n  color: #1890ff;\n}\n.dropdown-trigger-element {\n  cursor: pointer;\n}\n.dropdown-content {\n  display: none;\n  position: absolute;\n  background-color: #ffffff;\n  overflow: auto;\n  box-shadow: 0px 8px 16px 0px #00000033;\n  z-index: 1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  min-width: 120px;\n}\n.dropdown-content.show {\n  display: block;\n}\n.dropdown-content {\n  cursor: pointer;\n  z-index: 999;\n}\n.dropdown-content .dropdown-option {\n  padding-left: 4px;\n  white-space: nowrap;\n}\n.dropdown-content .dropdown-option:hover {\n  background-color: #f3f3f3;\n}\n.dropdown-content .dropdown-option.active {\n  background-color: #1890ff1a;\n  color: #1890ff;\n}\n.space {\n  display: inline-flex;\n}\n.config-details {\n  animation: fade-in 0.5s;\n}\n.config-details label {\n  padding-left: 12px;\n}\n.alert-info-wrapper {\n  margin-bottom: 8px;\n}\n.alert-info-wrapper .result-info {\n  padding: 12px;\n  text-align: center;\n  border-radius: 6px;\n}\n.alert-info-wrapper .unresolved {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .no-answer {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .error {\n  color: #ff4d4f;\n  background-color: #fff1f0;\n}\nmessage-element {\n  animation: show 0.5s;\n}\nscript-panel-element > div,\nscript-panel-link,\ncontainer-element,\nmodal-element {\n  animation: fade-in 0.3s;\n}\n@keyframes show {\n  0% {\n    transform: translateY(20px);\n    opacity: 0;\n  }\n  100% {\n    transform: translateY(0);\n    opacity: 1;\n  }\n}\n@keyframes fade-in {\n  0% {\n    opacity: 0;\n  }\n  100% {\n    opacity: 1;\n  }\n}\n@keyframes fade-out {\n  0% {\n    opacity: 1;\n  }\n  100% {\n    opacity: 0;\n  }\n}\n.checkbox-label {\n  display: inline-block !important;\n  position: relative;\n  cursor: pointer;\n  font-size: 16px;\n  color: #2c3e50;\n}\n/* 隐藏原始复选框 */\n.checkbox-input {\n  position: absolute;\n  opacity: 0;\n  width: 0;\n  height: 0;\n}\n/* 自定义按钮样式 */\n.checkbox-label::after {\n  content: '';\n  display: inline-block;\n  border-radius: 50%;\n  transition: all 0.1s ease;\n  position: relative;\n  margin-left: 4px;\n  vertical-align: middle;\n}\n/* 向下箭头（未选中状态） */\n.checkbox-label::before {\n  content: '🔽';\n  position: absolute;\n  width: 0;\n  height: 0;\n  right: 8px;\n  transition: all 0.1s ease;\n  z-index: 2;\n}\n/* 向上箭头（选中状态） */\n.checked .checkbox-label::before {\n  content: '🔼';\n}\n/* ==================== Apple Design Style Override ==================== */\ncontainer-element,\ncontainer-element * {\n  font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"SF Pro Display\",\n    \"Helvetica Neue\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif !important;\n  letter-spacing: 0 !important;\n}\ncontainer-element {\n  background: rgba(255, 255, 255, 0.86) !important;\n  backdrop-filter: saturate(180%) blur(24px) !important;\n  -webkit-backdrop-filter: saturate(180%) blur(24px) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 14px !important;\n  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06) !important;\n  color: #1d1d1f !important;\n}\nheader-element {\n  background: transparent !important;\n  border-radius: 14px 14px 0 0 !important;\n  padding: 10px 12px 8px !important;\n  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar {\n  gap: 4px !important;\n}\nheader-element .extra-menu-bar button {\n  background: transparent !important;\n  border: none !important;\n  border-radius: 7px !important;\n  padding: 5px 12px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  color: #1d1d1f !important;\n  transition: background 0.15s ease !important;\n}\nheader-element .extra-menu-bar button:hover {\n  background: rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar button.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\nheader-element .profile {\n  font-weight: 600 !important;\n  font-size: 14px !important;\n  color: #1d1d1f !important;\n}\n.base-style-button {\n  background: #007aff !important;\n  color: #fff !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 7px 16px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease, transform 0.1s ease !important;\n}\n.base-style-button:hover {\n  background: #0066d6 !important;\n}\n.base-style-button:active {\n  transform: scale(0.97) !important;\n}\n.base-style-button-secondary {\n  background: rgba(0, 0, 0, 0.05) !important;\n  color: #1d1d1f !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 6px 14px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease !important;\n}\n.base-style-button-secondary:hover {\n  background: rgba(0, 0, 0, 0.1) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  border: 1px solid rgba(0, 0, 0, 0.1) !important;\n  border-radius: 8px !important;\n  background: #fff !important;\n  padding: 7px 10px !important;\n  font-size: 13px !important;\n  color: #1d1d1f !important;\n  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;\n  outline: none !important;\n}\n.base-style-active-form-control:focus,\n.base-style-input:focus {\n  border-color: #007aff !important;\n  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.16) !important;\n  background: #fff !important;\n}\n.base-style-active-form-control:hover,\n.base-style-input:hover {\n  background: #fff !important;\n}\n.card {\n  background: #fff !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 12px !important;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;\n}\n.configs-container {\n  border: none !important;\n  box-shadow: none !important;\n}\n.notes {\n  color: #6e6e73 !important;\n  line-height: 1.6 !important;\n}\n.secondary {\n  color: #6e6e73 !important;\n}\n.separator {\n  border-color: rgba(0, 0, 0, 0.06) !important;\n}\n.dropdown-content {\n  border-radius: 10px !important;\n  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  overflow: hidden !important;\n}\n.dropdown-option {\n  border-radius: 6px !important;\n  transition: background 0.12s ease !important;\n}\n.dropdown-option:hover {\n  background: rgba(0, 0, 0, 0.05) !important;\n}\n.dropdown-option.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\n.modal-wrapper {\n  border-radius: 14px !important;\n  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\n.message-container {\n  gap: 6px !important;\n}\n/* 面板留白 */\nscript-panel-element {\n  padding: 4px 2px !important;\n}\n/* 滚动条苹果风格 */\ncontainer-element ::-webkit-scrollbar {\n  width: 8px !important;\n  height: 8px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb {\n  background: rgba(0, 0, 0, 0.18) !important;\n  border-radius: 4px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb:hover {\n  background: rgba(0, 0, 0, 0.3) !important;\n}\ncontainer-element ::-webkit-scrollbar-track {\n  background: transparent !important;\n}\n/* ==================== Silky Animations ==================== */\ncontainer-element {\n  scroll-behavior: smooth !important;\n}\ncontainer-element * {\n  scroll-behavior: smooth !important;\n}\n@keyframes hh-panel-in {\n  from {\n    opacity: 0;\n    transform: translateY(10px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\n@keyframes hh-card-in {\n  from {\n    opacity: 0;\n    transform: translateY(8px) scale(0.99);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0) scale(1);\n  }\n}\n@keyframes hh-modal-in {\n  from {\n    opacity: 0;\n    transform: scale(0.9) translateY(12px);\n  }\n  to {\n    opacity: 1;\n    transform: scale(1) translateY(0);\n  }\n}\n@keyframes hh-dropdown-in {\n  from {\n    opacity: 0;\n    transform: scaleY(0.92) translateY(-6px);\n  }\n  to {\n    opacity: 1;\n    transform: scaleY(1) translateY(0);\n  }\n}\n@keyframes hh-msg-in {\n  from {\n    opacity: 0;\n    transform: translateX(24px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n@keyframes hh-cfg-in {\n  from {\n    opacity: 0;\n    transform: translateY(6px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\nscript-panel-element {\n  animation: hh-panel-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.base-style-button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease !important;\n  will-change: transform !important;\n}\n.base-style-button:hover {\n  transform: translateY(-1px) !important;\n  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.28) !important;\n}\n.base-style-button:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\n.base-style-button-secondary {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  will-change: transform !important;\n}\n.base-style-button-secondary:hover {\n  transform: translateY(-1px) !important;\n}\n.base-style-button-secondary:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\nheader-element .extra-menu-bar button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease,\n    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\nheader-element .extra-menu-bar button:active {\n  transform: scale(0.92) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),\n    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease !important;\n}\n.card {\n  animation: hh-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.modal-wrapper {\n  animation: hh-modal-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\n.dropdown-content {\n  animation: hh-dropdown-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  transform-origin: top center !important;\n}\n.message-container > * {\n  animation: hh-msg-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.configs-container > * {\n  animation: hh-cfg-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.configs-container > *:nth-child(1) {\n  animation-delay: 0s !important;\n}\n.configs-container > *:nth-child(2) {\n  animation-delay: 0.05s !important;\n}\n.configs-container > *:nth-child(3) {\n  animation-delay: 0.1s !important;\n}\n.configs-container > *:nth-child(4) {\n  animation-delay: 0.15s !important;\n}\n.configs-container > *:nth-child(5) {\n  animation-delay: 0.2s !important;\n}\n.configs-container > *:nth-child(6) {\n  animation-delay: 0.25s !important;\n}\n.configs-container > *:nth-child(7) {\n  animation-delay: 0.3s !important;\n}\n.configs-container > *:nth-child(8) {\n  animation-delay: 0.35s !important;\n}\n.base-style-switch {\n  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n.base-style-switch::before {\n  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\na {\n  transition: color 0.2s ease, opacity 0.2s ease !important;\n}\n.dropdown-option {\n  transition: background 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n"}};
+var __HH_RESOURCES__ = {"version":"5.8.5","metadata":{"name":"鸿鹄易学","version":"5.8.5","description":"鸿鹄易学 - 在线网络课程辅助工具","author":"enncy","license":"MIT","namespace":"https://honghueasystudy","homepage":"https://easystudy.honghutech.eu.org","source":"https://easystudy.honghutech.eu.org","icon":"https://easystudy.honghutech.eu.org/assets/img/icon.png","run-at":"document-start"},"resources":{"STYLE":"/** 默认字体 */\n/** 输入框默认边距 */\nul,\nol {\n  line-height: 26px;\n  padding-left: 22px;\n  margin: 0px;\n}\na {\n  color: #1890ff;\n}\nhr {\n  border-style: solid;\n  border-color: #63636346;\n  border-width: 0px;\n  border-bottom: 1px solid #63636346;\n  margin-block-start: 1em;\n  margin-block-end: 1em;\n}\n.base-style-active-form-control {\n  border: 1px solid #ffffff00;\n}\n.base-style-active-form-control:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.base-style-active-form-control:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.base-style-active-form-control:hover {\n  background-color: #ebeef4;\n}\n.base-style-input {\n  outline: none;\n  border: 1px solid #ffffff00;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n}\n.base-style-input::placeholder {\n  color: #bababa;\n}\n.base-style-switch {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.base-style-switch:checked {\n  background: #1890ff;\n}\n.base-style-switch:disabled {\n  background-color: #f7f7f78b;\n}\n.base-style-switch:checked::before {\n  transform: translate(24px, 0px);\n}\n.base-style-switch::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.base-style-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.base-style-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button + .base-style-button {\n  margin-left: 12px;\n}\n.base-style-button:hover {\n  background-color: #7abbff24;\n}\n.base-style-button.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button:disabled:active {\n  box-shadow: none;\n}\n.base-style-button-secondary {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\n.base-style-button-secondary:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.base-style-button-secondary + .base-style-button-secondary {\n  margin-left: 12px;\n}\n.base-style-button-secondary:hover {\n  background-color: #7abbff24;\n}\n.base-style-button-secondary.danger:hover {\n  background-color: #ffdede86;\n}\n.base-style-button-secondary:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.base-style-button-secondary.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.base-style-button-secondary:disabled:active {\n  box-shadow: none;\n}\ncontainer-element.hidden {\n  display: none;\n}\ncontainer-element.minimize {\n  min-width: unset;\n}\ncontainer-element {\n  position: fixed;\n  top: 10%;\n  left: 10%;\n  z-index: 99999;\n  text-align: left;\n  min-width: 300px;\n  -webkit-font-smoothing: antialiased;\n  -moz-osx-font-smoothing: grayscale;\n  color: #636363;\n  box-shadow: 0 0 24px -12px #3f3f3f;\n  border-radius: 8px;\n  letter-spacing: 0.5px;\n  border: 1px solid #c1c1c1;\n}\nheader-element {\n  display: flex;\n  align-items: center;\n  background-color: white;\n  border-radius: 8px 8px 0px 0px;\n  user-select: none;\n  padding: 4px;\n  padding-bottom: 0px;\n}\nheader-element .extra-menu-bar {\n  width: 100%;\n  padding: 4px;\n  padding-bottom: 0px;\n  margin-top: 4px;\n  border-top: 1px solid #e8e8e8;\n  /** 默认隐藏，一直到需要激活的时候再更改 */\n  display: none;\n}\nheader-element .extra-menu-bar .script-panel-link {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n  padding-bottom: 2px;\n  margin-bottom: 0px;\n}\nheader-element .extra-menu-bar .script-panel-link:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nheader-element .extra-menu-bar .script-panel-link + header-element .extra-menu-bar .script-panel-link {\n  margin-left: 12px;\n}\nheader-element .extra-menu-bar .script-panel-link:hover {\n  background-color: #7abbff24;\n}\nheader-element .extra-menu-bar .script-panel-link.danger:hover {\n  background-color: #ffdede86;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nheader-element .extra-menu-bar .script-panel-link.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nheader-element .extra-menu-bar .script-panel-link:disabled:active {\n  box-shadow: none;\n}\nheader-element .extra-menu-bar .script-panel-link.active {\n  background-color: #1890ff1a;\n  border-color: #1890ff;\n  color: #1890ff;\n}\nheader-element .extra-menu-bar .script-panel-link + .script-panel-link {\n  margin-left: 4px;\n}\nheader-element .profile {\n  flex: 1;\n  cursor: move;\n}\nheader-element .switch:hover,\nheader-element .dropdown:hover {\n  background-color: #f3f3f3;\n}\nheader-element .close:hover {\n  background-color: #ff000038;\n}\nheader-element .switch,\nheader-element .close {\n  cursor: pointer;\n}\nheader-element .dropdown {\n  line-height: 24px;\n  text-decoration: underline;\n}\nheader-element .switch,\nheader-element .close,\nheader-element .profile {\n  display: inline-flex;\n  align-items: center;\n  padding: 0px 8px;\n}\n.logo {\n  width: 18px;\n  height: 18px;\n  cursor: pointer;\n}\n.project-selector {\n  display: flex;\n  align-items: center;\n}\n.project-selector select {\n  background: #ffffff00;\n  border-radius: 4px;\n  border: 1px solid #63636346;\n  padding: 4px;\n}\n.project-selector.expand-all {\n  display: none;\n}\n.body {\n  overflow: auto;\n  width: auto;\n  height: 100%;\n}\nscript-panel-element {\n  display: block;\n  background-color: white;\n  border-radius: 0px 0px 8px 8px;\n  padding: 0px 8px 12px 8px;\n  overflow: auto;\n}\nscript-panel-element .script-panel-body {\n  padding: 0px 8px;\n}\nscript-panel-element + script-panel-element {\n  margin-top: 12px;\n}\n.card + .card {\n  margin-top: 12px;\n}\n.card {\n  background-color: white;\n  border-radius: 2px;\n  padding: 0px 8px;\n}\n.notes {\n  background: #0099ff0e;\n  border-left: 4px solid #0099ff65;\n  width: -webkit-fill-available;\n  margin: 0px 8px;\n  line-height: 26px;\n  letter-spacing: 1px;\n}\n.secondary {\n  font-size: 12px;\n  color: #8b8b8b;\n}\n.tooltip-container {\n  z-index: 99999999999999;\n  margin: 12px 0px 0px 12px;\n  padding: 4px;\n  color: black;\n  background: #f0f0f0;\n  box-shadow: 0px 0px 4px #949494;\n  position: fixed;\n  white-space: normal;\n  max-width: 200px;\n  height: auto;\n  border-radius: 2px;\n  line-height: 18px;\n}\n.configs-container.lock {\n  filter: blur(1px);\n  user-select: none;\n  -webkit-user-select: none;\n  -moz-user-select: none;\n  -ms-user-select: none;\n}\n.configs-container .lock-wrapper {\n  cursor: not-allowed !important;\n  border-radius: 4px;\n  position: absolute;\n  left: 0px;\n  z-index: 1;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n}\n.configs-container .lock-message {\n  background-color: #ffffff7d;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #6a6a6a98;\n  padding: 2px;\n}\n.configs {\n  display: table;\n  background: #e1e1e107;\n  width: -webkit-fill-available;\n}\n.configs .configs-body {\n  display: table-row-group;\n}\n.configs .configs-body config-element + config-element label {\n  padding-top: 4px;\n}\n.configs .configs-body config-element + config-element .config-wrapper {\n  padding-top: 4px;\n}\n.configs .configs-body config-element {\n  width: 100%;\n  display: table-row;\n  line-height: 26px;\n}\n.configs .configs-body config-element label {\n  white-space: nowrap;\n  color: #4e5969;\n  display: table-cell;\n  padding-right: 12px;\n  text-align: left;\n  vertical-align: top;\n  margin-right: 12px;\n}\n.configs .configs-body config-element .config-wrapper {\n  display: table-cell;\n  vertical-align: middle;\n  /** check box 的样式 */\n}\n.configs .configs-body config-element .config-wrapper select {\n  outline: none;\n  border: none;\n  border: 1px solid #e4e4e4;\n  border-radius: 4px;\n  padding: 2px 8px;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper select:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper select:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper select:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper textarea {\n  padding: 2px 8px;\n  outline: none;\n  border: none;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper textarea:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper textarea:hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']) {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button'])::placeholder {\n  color: #bababa;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\n.configs .configs-body config-element .config-wrapper input:not([type='button']):hover {\n  background-color: #ebeef4;\n}\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  padding: 0px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'] + .configs .configs-body config-element .config-wrapper input[type='button'] {\n  margin-left: 12px;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:hover {\n  background-color: #7abbff24;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger:hover {\n  background-color: #ffdede86;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\n.configs .configs-body config-element .config-wrapper input[type='button'].danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\n.configs .configs-body config-element .config-wrapper input[type='button']:disabled:active {\n  box-shadow: none;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'] {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  width: fit-content;\n  min-width: 48px;\n  height: 20px;\n  border-radius: 100px;\n  display: flex;\n  align-items: center;\n  padding: 2px 4px;\n  transition: all 0.2s ease-in-out;\n  width: auto;\n  background: gainsboro;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked {\n  background: #1890ff;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:disabled {\n  background-color: #f7f7f78b;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']:checked::before {\n  transform: translate(24px, 0px);\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox']::before {\n  background-color: #fff;\n  border-radius: 9px;\n  box-shadow: 0 2px 4px #00230b33;\n  width: 14px;\n  height: 14px;\n  content: '';\n}\n.configs .configs-body config-element .config-wrapper input:not([type='checkbox'], [type='radio']),\n.configs .configs-body config-element .config-wrapper textarea,\n.configs .configs-body config-element .config-wrapper select {\n  width: -webkit-fill-available;\n  font-size: inherit;\n}\n.configs .configs-body config-element .config-wrapper input[type='checkbox'],\n.configs .configs-body config-element .config-wrapper input[type='radio'],\n.configs .configs-body config-element .config-wrapper input[type='range'] {\n  accent-color: #0e8ee2;\n}\n.configs .configs-body config-element .config-wrapper > *:not(.tooltip) {\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  float: right;\n}\n.configs .configs-body config-element .config-wrapper > *:disabled {\n  cursor: not-allowed;\n  background-color: #f7f7f78b;\n}\n.message-container {\n  margin-bottom: 4px;\n  position: absolute;\n  bottom: 100%;\n  left: 50%;\n  width: 100%;\n  transform: translate(-50%, 0px);\n  min-width: 300px;\n}\n.message-container message-element {\n  display: flex;\n  border-radius: 4px;\n  padding: 4px 12px;\n  margin-bottom: 4px;\n}\n.message-container message-element .message-content-container {\n  margin-right: 8px;\n  flex: auto;\n}\n.message-container message-element .message-text {\n  letter-spacing: 1px;\n  font-weight: bold;\n}\n.message-container message-element .message-closer {\n  width: 18px;\n  min-width: 18px;\n  cursor: pointer;\n  background-color: #ffffffb3;\n  color: #a1a1a1;\n  border-radius: 100%;\n  text-align: center;\n  height: 18px;\n  vertical-align: middle;\n  font-size: 12px;\n}\n.message-container message-element.error {\n  background-color: #ffe6e6;\n  color: #c70208;\n  border: 1px solid #ff6b6ded;\n}\n.message-container message-element.info {\n  background-color: #c9e7ff;\n  color: #004d95;\n  border: 1px solid #1890ff69;\n}\n.message-container message-element.success {\n  background-color: #e8ffe0;\n  color: #3e8d0d;\n  border: 1px solid #6fd91d;\n}\n.message-container message-element.warn {\n  background-color: #ffefc8;\n  color: #9b7400;\n  border: 1px solid #ffc107;\n}\nmodal-element {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  background-color: white;\n  border-radius: 4px;\n  box-shadow: 0px 0px 24px -12px black;\n  border: 1px solid #929292;\n  height: fit-content;\n  transform: translate(-50%, -50%);\n  padding: 12px 18px 18px 18px;\n  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;\n  z-index: 99999999999;\n  line-height: 24px;\n}\nmodal-element .modal-profile {\n  zoom: 0.9;\n  color: #969696;\n  user-select: none;\n  margin-bottom: 4px;\n}\nmodal-element .modal-title {\n  font-size: 18px;\n  font-weight: bold;\n  user-select: none;\n}\nmodal-element .modal-body {\n  margin: 12px 0px;\n  overflow: auto;\n}\nmodal-element .modal-footer {\n  display: flex;\n  white-space: nowrap;\n  justify-content: end;\n  align-items: end;\n}\nmodal-element .modal-footer > * + * {\n  margin-left: 12px;\n}\nmodal-element .modal-input {\n  outline: none;\n  padding: 2px 8px;\n  margin: 0px;\n  background-color: #eef2f7;\n  border-radius: 2px;\n  color: black;\n  border: 1px solid #ffffff00;\n  width: -webkit-fill-available;\n}\nmodal-element .modal-input::placeholder {\n  color: #bababa;\n}\nmodal-element .modal-input:focus {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n}\nmodal-element .modal-input:focus:not([type='checkbox'], [type='radio']) {\n  border: 1px solid #0e8de290;\n  box-shadow: 0px 0px 4px #0e8de252;\n  background-color: white !important;\n}\nmodal-element .modal-input:hover {\n  background-color: #ebeef4;\n}\nmodal-element .modal-cancel-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n  color: gray;\n  background-color: white;\n  border: 1px solid #dcdcdc;\n}\nmodal-element .modal-cancel-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-cancel-button + modal-element .modal-cancel-button {\n  margin-left: 12px;\n}\nmodal-element .modal-cancel-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-cancel-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-cancel-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-cancel-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-cancel-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element .modal-confirm-button {\n  appearance: none;\n  -moz-appearance: none;\n  -webkit-appearance: none;\n  border-radius: 4px;\n  background-color: white;\n  border: 1px solid #2c92ff;\n  color: #409eff;\n  cursor: pointer !important;\n  margin-bottom: 4px;\n}\nmodal-element .modal-confirm-button:active {\n  box-shadow: 0px 0px 8px #0e8de2a5;\n}\nmodal-element .modal-confirm-button + modal-element .modal-confirm-button {\n  margin-left: 12px;\n}\nmodal-element .modal-confirm-button:hover {\n  background-color: #7abbff24;\n}\nmodal-element .modal-confirm-button.danger:hover {\n  background-color: #ffdede86;\n}\nmodal-element .modal-confirm-button:disabled {\n  background-color: white;\n  border: 1px solid #c0c0c0;\n  color: #aeaeae;\n  cursor: not-allowed;\n}\nmodal-element .modal-confirm-button.danger {\n  color: #f36669;\n  border-color: #dd5a5d;\n}\nmodal-element .modal-confirm-button:disabled:active {\n  box-shadow: none;\n}\nmodal-element.alert .modal-input,\nmodal-element.alert .modal-cancel-button {\n  display: none;\n}\nmodal-element.alert .modal-confirm-button {\n  margin: 0;\n}\nmodal-element.prompt .modal-input,\nmodal-element.prompt .modal-cancel-button,\nmodal-element.prompt .modal-confirm-button {\n  display: block;\n}\nmodal-element.confirm .modal-input {\n  display: none;\n}\n.modal-wrapper {\n  width: 100%;\n  height: 100%;\n  z-index: 9999;\n  position: fixed;\n  top: 0px;\n  left: 0px;\n  z-index: 9999999;\n  background-color: rgba(0, 0, 0, 0.265);\n  color: #636363;\n  font: 14px Menlo, Monaco, Consolas, 'Courier New', monospace;\n}\n.pointer {\n  cursor: pointer;\n}\n.separator {\n  display: flex;\n  align-items: center;\n  text-align: center;\n  padding: 4px 0px 8px 0px;\n}\n.separator::before,\n.separator::after {\n  content: '';\n  flex: 1;\n  border-bottom: 1px solid #63636346;\n}\n.separator:not(:empty)::before {\n  margin-right: 0.25em;\n}\n.separator:not(:empty)::after {\n  margin-left: 0.25em;\n}\ncontainer-element.minimize .body,\ncontainer-element.minimize header-element .dropdown,\ncontainer-element.minimize .footer {\n  display: none;\n}\ncontainer-element.minimize header-element {\n  padding: 8px;\n  border-radius: 8px;\n  box-shadow: 0px 0px 24px -12px black;\n}\n.user-guide > li {\n  padding: 4px 0px;\n}\n.search-infos-num {\n  width: 26px;\n  margin: 2px;\n  height: 20px;\n  border-radius: 4px;\n  display: inline-block;\n  background-color: white;\n  text-align: center;\n  cursor: pointer;\n  border: 1px solid #b6b6b6;\n}\n.search-infos-num.requested {\n  border: 1px solid #63b4ff;\n  color: #63b4ff;\n}\n.search-infos-num.active {\n  background-color: #127de1 !important;\n  color: white;\n}\n.search-infos-num.error {\n  border: 1px solid #ff8789ed;\n  background-color: #ff6b6ded;\n  color: white;\n}\n.search-infos-num.finish {\n  background-color: #63b4ff;\n  border: 1px solid #63b4ff;\n  color: white;\n}\nsearch-infos-element {\n  display: block;\n  overflow: auto;\n}\nsearch-infos-element .search-result {\n  margin-bottom: 12px;\n  padding-left: 12px;\n}\nsearch-infos-element .search-result .question {\n  font-weight: bold;\n  max-height: 200px;\n  overflow: auto;\n}\nsearch-infos-element .search-result .answer {\n  color: #7c7c7c;\n}\nsearch-infos-element .search-result .answer code {\n  border-bottom: 1px solid #dcdcdc;\n  padding: 2px 0px;\n  border-radius: 2px;\n  margin: 4px;\n  line-height: 22px;\n}\nsearch-infos-element .search-result .answer code + code {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag {\n  padding: 2px 6px;\n  border-radius: 2px;\n  font-size: 12px;\n  cursor: pointer;\n  margin-right: 6px;\n}\nsearch-infos-element .search-result .search-result-answer-tag + .search-result-answer-tag {\n  margin-left: 4px;\n}\nsearch-infos-element .search-result .search-result-answer-tag.blue {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n}\nsearch-infos-element .search-result .search-result-answer-tag.green {\n  background-color: #f6ffed;\n  border: 1px solid #b7eb8f;\n  color: #52c41a;\n}\nsearch-infos-element .search-result .search-result-answer-tag.gray {\n  background-color: #fafafa;\n  border: 1px solid #d9d9d9;\n  color: #595959;\n}\nsearch-infos-element .search-result .search-result-answer-tag.red {\n  background-color: #fff1f0;\n  border: 1px solid #ffa39e;\n  color: #ff4d4f;\n}\nsearch-infos-element .search-result .search-result-answer-tag.yellow {\n  background-color: #fffbe6;\n  border: 1px solid #ffe58f;\n  color: #faad14;\n}\nsearch-infos-element .search-result-question-type {\n  background-color: #e6f7ff;\n  border: 1px solid #91d5ff;\n  color: #1890ff;\n  margin-right: 8px;\n  padding: 0px 4px;\n  border-radius: 4px;\n}\nsearch-infos-element .error {\n  color: #ff6b6ded;\n  display: inline-block;\n  padding-left: 12px;\n}\n.copy,\n.question-title-extra-btn {\n  margin-left: 4px;\n  padding: 2px 4px;\n  border-radius: 2px;\n  box-shadow: 0 0 4px #b1b1b1;\n  cursor: pointer !important;\n  font-weight: normal;\n  font-size: 12px;\n}\n.work-result-question-container {\n  position: absolute;\n  width: 400px;\n  left: -100%;\n  top: 0px;\n  background: white;\n  border: 1px solid #cbcbcb;\n  border-radius: 4px;\n  box-shadow: 0px 0px 12px #d1cfcf;\n  padding: 12px;\n}\n.work-result-question-container .close-search-result {\n  font-size: 12px;\n  margin-left: 8px;\n  text-decoration: underline;\n  color: gray;\n  cursor: pointer;\n}\n.work-result-list {\n  max-height: 400px;\n  overflow: auto;\n  margin: 12px 0px;\n  padding: 6px;\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n}\n.search-info-title {\n  border: 1px solid #e1e1e1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  margin-bottom: 12px;\n  line-height: 20px;\n  overflow: auto;\n}\n.search-info-title .title-content {\n  max-height: 200px;\n  overflow: auto;\n}\n.search-info-details {\n  margin-left: 4px;\n}\n.console {\n  max-height: 300px;\n  max-width: 400px;\n  overflow: auto;\n  background-color: #292929;\n  padding: 12px 6px;\n  color: #ececec;\n  font-size: 12px;\n}\n.console .item {\n  padding: 3px 0px;\n  border-radius: 2px;\n}\n.console .item .time {\n  color: #757575;\n}\n.console .item .info {\n  background-color: #2196f3a3;\n}\n.console .item .warn {\n  background-color: #ffc107db;\n}\n.console .item .error {\n  background-color: #f36c71cc;\n}\n.console .item .debug,\n.console .item .log {\n  background-color: #9e9e9ec4;\n}\n.console *::selection {\n  background-color: #ffffff6b;\n}\n.markdown {\n  max-width: 400px;\n  max-height: 50vh;\n  overflow: auto;\n}\n.markdown code {\n  padding: 2px 4px;\n  background-color: #f0f0f0;\n  border-radius: 6px;\n  font-size: 12px;\n}\n.markdown blockquote {\n  padding: 4px 4px 4px 12px;\n  margin: 0px;\n  color: #b5b5b5;\n  border-left: #ababab 2px solid;\n}\n.markdown blockquote p {\n  margin: 0px;\n}\n.markdown h1,\n.markdown h2,\n.markdown h3,\n.markdown h4,\n.markdown h5,\n.markdown h6,\n.markdown p {\n  margin: 8px 0px;\n}\n.dropdown {\n  position: relative;\n  display: inline-block;\n}\n.dropdown.active .dropdown-trigger-element {\n  color: #1890ff;\n}\n.dropdown-trigger-element {\n  cursor: pointer;\n}\n.dropdown-content {\n  display: none;\n  position: absolute;\n  background-color: #ffffff;\n  overflow: auto;\n  box-shadow: 0px 8px 16px 0px #00000033;\n  z-index: 1;\n  border-radius: 4px;\n  padding: 8px 12px;\n  min-width: 120px;\n}\n.dropdown-content.show {\n  display: block;\n}\n.dropdown-content {\n  cursor: pointer;\n  z-index: 999;\n}\n.dropdown-content .dropdown-option {\n  padding-left: 4px;\n  white-space: nowrap;\n}\n.dropdown-content .dropdown-option:hover {\n  background-color: #f3f3f3;\n}\n.dropdown-content .dropdown-option.active {\n  background-color: #1890ff1a;\n  color: #1890ff;\n}\n.space {\n  display: inline-flex;\n}\n.config-details {\n  animation: fade-in 0.5s;\n}\n.config-details label {\n  padding-left: 12px;\n}\n.alert-info-wrapper {\n  margin-bottom: 8px;\n}\n.alert-info-wrapper .result-info {\n  padding: 12px;\n  text-align: center;\n  border-radius: 6px;\n}\n.alert-info-wrapper .unresolved {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .no-answer {\n  color: #a1a1a1;\n  background-color: #f7f7f7;\n}\n.alert-info-wrapper .error {\n  color: #ff4d4f;\n  background-color: #fff1f0;\n}\nmessage-element {\n  animation: show 0.5s;\n}\nscript-panel-element > div,\nscript-panel-link,\ncontainer-element,\nmodal-element {\n  animation: fade-in 0.3s;\n}\n@keyframes show {\n  0% {\n    transform: translateY(20px);\n    opacity: 0;\n  }\n  100% {\n    transform: translateY(0);\n    opacity: 1;\n  }\n}\n@keyframes fade-in {\n  0% {\n    opacity: 0;\n  }\n  100% {\n    opacity: 1;\n  }\n}\n@keyframes fade-out {\n  0% {\n    opacity: 1;\n  }\n  100% {\n    opacity: 0;\n  }\n}\n.checkbox-label {\n  display: inline-block !important;\n  position: relative;\n  cursor: pointer;\n  font-size: 16px;\n  color: #2c3e50;\n}\n/* 隐藏原始复选框 */\n.checkbox-input {\n  position: absolute;\n  opacity: 0;\n  width: 0;\n  height: 0;\n}\n/* 自定义按钮样式 */\n.checkbox-label::after {\n  content: '';\n  display: inline-block;\n  border-radius: 50%;\n  transition: all 0.1s ease;\n  position: relative;\n  margin-left: 4px;\n  vertical-align: middle;\n}\n/* 向下箭头（未选中状态） */\n.checkbox-label::before {\n  content: '🔽';\n  position: absolute;\n  width: 0;\n  height: 0;\n  right: 8px;\n  transition: all 0.1s ease;\n  z-index: 2;\n}\n/* 向上箭头（选中状态） */\n.checked .checkbox-label::before {\n  content: '🔼';\n}\n/* ==================== Apple Design Style Override ==================== */\ncontainer-element,\ncontainer-element * {\n  font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"SF Pro Display\",\n    \"Helvetica Neue\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif !important;\n  letter-spacing: 0 !important;\n}\ncontainer-element {\n  background: rgba(255, 255, 255, 0.86) !important;\n  backdrop-filter: saturate(180%) blur(24px) !important;\n  -webkit-backdrop-filter: saturate(180%) blur(24px) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 14px !important;\n  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06) !important;\n  color: #1d1d1f !important;\n}\nheader-element {\n  background: transparent !important;\n  border-radius: 14px 14px 0 0 !important;\n  padding: 10px 12px 8px !important;\n  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar {\n  gap: 4px !important;\n}\nheader-element .extra-menu-bar button {\n  background: transparent !important;\n  border: none !important;\n  border-radius: 7px !important;\n  padding: 5px 12px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  color: #1d1d1f !important;\n  transition: background 0.15s ease !important;\n}\nheader-element .extra-menu-bar button:hover {\n  background: rgba(0, 0, 0, 0.06) !important;\n}\nheader-element .extra-menu-bar button.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\nheader-element .profile {\n  font-weight: 600 !important;\n  font-size: 14px !important;\n  color: #1d1d1f !important;\n}\n.base-style-button {\n  background: #007aff !important;\n  color: #fff !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 7px 16px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease, transform 0.1s ease !important;\n}\n.base-style-button:hover {\n  background: #0066d6 !important;\n}\n.base-style-button:active {\n  transform: scale(0.97) !important;\n}\n.base-style-button-secondary {\n  background: rgba(0, 0, 0, 0.05) !important;\n  color: #1d1d1f !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 6px 14px !important;\n  font-size: 13px !important;\n  font-weight: 500 !important;\n  cursor: pointer !important;\n  transition: background 0.15s ease !important;\n}\n.base-style-button-secondary:hover {\n  background: rgba(0, 0, 0, 0.1) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  border: 1px solid rgba(0, 0, 0, 0.1) !important;\n  border-radius: 8px !important;\n  background: #fff !important;\n  padding: 7px 10px !important;\n  font-size: 13px !important;\n  color: #1d1d1f !important;\n  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;\n  outline: none !important;\n}\n.base-style-active-form-control:focus,\n.base-style-input:focus {\n  border-color: #007aff !important;\n  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.16) !important;\n  background: #fff !important;\n}\n.base-style-active-form-control:hover,\n.base-style-input:hover {\n  background: #fff !important;\n}\n.card {\n  background: #fff !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  border-radius: 12px !important;\n  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;\n}\n.configs-container {\n  border: none !important;\n  box-shadow: none !important;\n}\n.notes {\n  color: #6e6e73 !important;\n  line-height: 1.6 !important;\n}\n.secondary {\n  color: #6e6e73 !important;\n}\n.separator {\n  border-color: rgba(0, 0, 0, 0.06) !important;\n}\n.dropdown-content {\n  border-radius: 10px !important;\n  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n  overflow: hidden !important;\n}\n.dropdown-option {\n  border-radius: 6px !important;\n  transition: background 0.12s ease !important;\n}\n.dropdown-option:hover {\n  background: rgba(0, 0, 0, 0.05) !important;\n}\n.dropdown-option.active {\n  background: #007aff !important;\n  color: #fff !important;\n}\n.modal-wrapper {\n  border-radius: 14px !important;\n  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18) !important;\n  border: 1px solid rgba(0, 0, 0, 0.06) !important;\n}\n.message-container {\n  gap: 6px !important;\n}\n/* 面板留白 */\nscript-panel-element {\n  padding: 4px 2px !important;\n}\n/* 滚动条苹果风格 */\ncontainer-element ::-webkit-scrollbar {\n  width: 8px !important;\n  height: 8px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb {\n  background: rgba(0, 0, 0, 0.18) !important;\n  border-radius: 4px !important;\n}\ncontainer-element ::-webkit-scrollbar-thumb:hover {\n  background: rgba(0, 0, 0, 0.3) !important;\n}\ncontainer-element ::-webkit-scrollbar-track {\n  background: transparent !important;\n}\n/* ==================== Silky Animations ==================== */\ncontainer-element {\n  scroll-behavior: smooth !important;\n}\ncontainer-element * {\n  scroll-behavior: smooth !important;\n}\n@keyframes hh-panel-in {\n  from {\n    opacity: 0;\n    transform: translateY(10px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\n@keyframes hh-card-in {\n  from {\n    opacity: 0;\n    transform: translateY(8px) scale(0.99);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0) scale(1);\n  }\n}\n@keyframes hh-modal-in {\n  from {\n    opacity: 0;\n    transform: scale(0.9) translateY(12px);\n  }\n  to {\n    opacity: 1;\n    transform: scale(1) translateY(0);\n  }\n}\n@keyframes hh-dropdown-in {\n  from {\n    opacity: 0;\n    transform: scaleY(0.92) translateY(-6px);\n  }\n  to {\n    opacity: 1;\n    transform: scaleY(1) translateY(0);\n  }\n}\n@keyframes hh-msg-in {\n  from {\n    opacity: 0;\n    transform: translateX(24px);\n  }\n  to {\n    opacity: 1;\n    transform: translateX(0);\n  }\n}\n@keyframes hh-cfg-in {\n  from {\n    opacity: 0;\n    transform: translateY(6px);\n  }\n  to {\n    opacity: 1;\n    transform: translateY(0);\n  }\n}\nscript-panel-element {\n  animation: hh-panel-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.base-style-button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease !important;\n  will-change: transform !important;\n}\n.base-style-button:hover {\n  transform: translateY(-1px) !important;\n  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.28) !important;\n}\n.base-style-button:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\n.base-style-button-secondary {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1),\n    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  will-change: transform !important;\n}\n.base-style-button-secondary:hover {\n  transform: translateY(-1px) !important;\n}\n.base-style-button-secondary:active {\n  transform: scale(0.95) !important;\n  transition: transform 0.08s ease !important;\n}\nheader-element .extra-menu-bar button {\n  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease,\n    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\nheader-element .extra-menu-bar button:active {\n  transform: scale(0.92) !important;\n}\n.base-style-active-form-control,\n.base-style-input {\n  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),\n    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s ease !important;\n}\n.card {\n  animation: hh-card-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.modal-wrapper {\n  animation: hh-modal-in 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\n.dropdown-content {\n  animation: hh-dropdown-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;\n  transform-origin: top center !important;\n}\n.message-container > * {\n  animation: hh-msg-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;\n}\n.configs-container > * {\n  animation: hh-cfg-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both !important;\n}\n.configs-container > *:nth-child(1) {\n  animation-delay: 0s !important;\n}\n.configs-container > *:nth-child(2) {\n  animation-delay: 0.05s !important;\n}\n.configs-container > *:nth-child(3) {\n  animation-delay: 0.1s !important;\n}\n.configs-container > *:nth-child(4) {\n  animation-delay: 0.15s !important;\n}\n.configs-container > *:nth-child(5) {\n  animation-delay: 0.2s !important;\n}\n.configs-container > *:nth-child(6) {\n  animation-delay: 0.25s !important;\n}\n.configs-container > *:nth-child(7) {\n  animation-delay: 0.3s !important;\n}\n.configs-container > *:nth-child(8) {\n  animation-delay: 0.35s !important;\n}\n.base-style-switch {\n  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n.base-style-switch::before {\n  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;\n}\na {\n  transition: color 0.2s ease, opacity 0.2s ease !important;\n}\n.dropdown-option {\n  transition: background 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;\n}\n"}};
 
 	/* ===== 2/4 GM API polyfill ===== */
 /* 鸿鹄易学 · GM API polyfill
@@ -9836,6 +9836,29 @@ try {
     "studywisdomh5.zhihuishu.com",
     "wisdom-mooc.zhihuishu.com"
   ];
+  const ZHS_MASTERY_RETURN_KEY = "zhs-mastery-return";
+  const ZHS_MASTERY_TIMES_KEY = "zhs-mastery-times";
+  const ZHS_POINT_EXAM_HOST = "studentexamcomh5.zhihuishu.com";
+  const ZHS_POINT_EXAM_PAGE = ZHS_POINT_EXAM_HOST + "/studentReviewTestOrExam";
+  const ZHS_MASTERY_REPORT_PATH = "/masteryHistory/";
+  const ZHS_POINT_RESULT_PATH = "/point/";
+  const ZHS_EXAM_PREVIEW_PATH = "/examPreview/";
+  const ZHS_MASTERY_ANSWERS_KEY = "zhs-mastery-answers";
+  const MASTERY_ANSWER_SOURCE = "[已记录] 解析页";
+  const ZHS_MASTERY_RETRY_KEY = "zhs-mastery-retry";
+  const ZHS_MASTERY_SETTLED_KEY = "zhs-mastery-settled";
+  function smartWorkNotes() {
+    if (location.href.includes(ZHS_POINT_EXAM_HOST)) {
+      return ["答完会自动提交试卷，提交后自动返回课程继续学习。"];
+    }
+    if (remote_not_required_pages.some((domain) => location.href.includes(domain))) {
+      return [];
+    }
+    return ["答题中请勿进行任何操作，如需暂停答题", "请等待全部题目搜索完成并执行自动保存功能后才能操作。"];
+  }
+  let pointExamRunning = false;
+  let previewCollectRunning = false;
+  let masteryReportRunning = false;
   const gxk_read_notes = [
     "如果未开始答题，请尝试刷新页面。",
     "禁止同时打开多个作业/考试页面。",
@@ -9847,6 +9870,355 @@ try {
       return false;
     const text = (el.textContent || "").replace(/\s+/g, "");
     return /已完成|已学完|已看完/.test(text);
+  }
+  function isElementVisible(el) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0)
+      return false;
+    const style = getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+  }
+  function getMasteryImproveButton() {
+    const isImproveText = (el) => /^去提升[→>»›）)]{0,2}$/.test((el.textContent || "").replace(/\s+/g, ""));
+    const isUsable = (el) => {
+      if (el.disabled)
+        return false;
+      if (typeof el.className === "string" && /disabled/i.test(el.className))
+        return false;
+      if (!isImproveText(el))
+        return false;
+      return isElementVisible(el);
+    };
+    const known = Array.from(document.querySelectorAll(".simplified-mastery__action, .to-improve"));
+    const hit = known.find(isUsable);
+    if (hit)
+      return hit;
+    for (const el of Array.from(
+      document.querySelectorAll('button, a, div, span, [role="button"]')
+    )) {
+      if ((el.textContent || "").length > 20)
+        continue;
+      if (!isUsable(el))
+        continue;
+      return el.closest('button, a, [role="button"], [class*="btn"], [class*="button"], .to-improve') || el;
+    }
+    return void 0;
+  }
+  async function waitMasteryImproveButton(timeoutSeconds = 15) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutSeconds * 1e3) {
+      const btn = getMasteryImproveButton();
+      if (btn)
+        return btn;
+      await lib.$.sleep(1e3);
+    }
+    return void 0;
+  }
+  async function advanceToPointExam(firstBtn, maxLayers = 3) {
+    const arrived = () => location.href.includes(ZHS_POINT_EXAM_HOST);
+    let btn = firstBtn;
+    for (let layer = 0; layer < maxLayers; layer++) {
+      if (arrived())
+        return true;
+      if (!btn)
+        btn = await waitMasteryImproveButton(15);
+      if (!btn)
+        return arrived();
+      lib.$message.info({ content: layer === 0 ? "正在进入掌握度练习" : "正在打开掌握度试卷" });
+      await safeClick(btn);
+      btn = void 0;
+      for (let i = 0; i < 15; i++) {
+        await lib.$.sleep(1e3);
+        if (arrived())
+          return true;
+        if (getMasteryImproveButton())
+          break;
+      }
+    }
+    return arrived();
+  }
+  function readStatNumber(label) {
+    const nodes = Array.from(document.querySelectorAll("div, span, p"));
+    for (const el of nodes) {
+      if ((el.textContent || "").trim() !== label)
+        continue;
+      const next2 = el.nextElementSibling;
+      if (!next2)
+        continue;
+      const n = parseInt((next2.textContent || "").trim(), 10);
+      if (Number.isFinite(n))
+        return n;
+    }
+    return null;
+  }
+  function compactQuestion(text) {
+    return (text || "").replace(/https?:\/\/[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+/g, "").replace(/[\s\u3000]+/g, "").replace(/[（(][)）]/g, "").replace(/[_＿]{2,}/g, "").replace(/[，。！？；：""''、（）【】《》,.\-!?;:'"()[\]<>]/g, "").toLowerCase();
+  }
+  async function saveMasteryAnswers(items2) {
+    if (items2.length === 0)
+      return;
+    const now2 = Date.now();
+    const apply = (store2) => {
+      const list = store2.slice();
+      for (const item of items2) {
+        const key = compactQuestion(item.title);
+        if (!key)
+          continue;
+        const record = { title: item.title, answer: item.answer, at: now2 };
+        const idx = list.findIndex((s) => compactQuestion(s.title) === key);
+        if (idx === -1)
+          list.unshift(record);
+        else
+          list[idx] = record;
+      }
+      return list.slice(0, 500);
+    };
+    const tabStore = await lib.$store.getTab(ZHS_MASTERY_ANSWERS_KEY) || [];
+    await lib.$store.setTab(ZHS_MASTERY_ANSWERS_KEY, apply(tabStore));
+    const globalStore = lib.$store.get(ZHS_MASTERY_ANSWERS_KEY) || [];
+    lib.$store.set(ZHS_MASTERY_ANSWERS_KEY, apply(globalStore));
+  }
+  async function lookupMasteryAnswer(title) {
+    const key = compactQuestion(title);
+    if (!key)
+      return void 0;
+    const tabStore = await lib.$store.getTab(ZHS_MASTERY_ANSWERS_KEY) || [];
+    const globalStore = lib.$store.get(ZHS_MASTERY_ANSWERS_KEY) || [];
+    const store2 = [...tabStore, ...globalStore];
+    if (store2.length === 0)
+      return void 0;
+    const exact = store2.find((s) => compactQuestion(s.title) === key);
+    if (exact)
+      return exact.answer;
+    for (const s of store2) {
+      const other = compactQuestion(s.title);
+      if (!other)
+        continue;
+      const shorter = Math.min(other.length, key.length);
+      const longer = Math.max(other.length, key.length);
+      if (shorter < 8 || shorter / longer < 0.75)
+        continue;
+      if (other.includes(key) || key.includes(other))
+        return s.answer;
+    }
+    if (key.length >= 15) {
+      const head = key.slice(0, 15);
+      for (const s of store2) {
+        const other = compactQuestion(s.title);
+        if (other.length >= 15 && other.slice(0, 15) === head)
+          return s.answer;
+      }
+    }
+    return void 0;
+  }
+  async function countMasteryAnswers() {
+    const tabStore = await lib.$store.getTab(ZHS_MASTERY_ANSWERS_KEY) || [];
+    const globalStore = lib.$store.get(ZHS_MASTERY_ANSWERS_KEY) || [];
+    return Math.max(tabStore.length || 0, globalStore.length || 0);
+  }
+  async function markPreviewAnswerBadges() {
+    const items2 = Array.from(document.querySelectorAll(".question-item"));
+    for (const item of items2) {
+      const titleEl = item.querySelector(".quest-title");
+      const title = ((titleEl == null ? void 0 : titleEl.innerText) || "").trim();
+      if (!titleEl || !title)
+        continue;
+      if (item.querySelector(".hh-answer-badge"))
+        continue;
+      const recorded = !!await lookupMasteryAnswer(title);
+      const badge = document.createElement("span");
+      badge.className = "hh-answer-badge";
+      badge.textContent = recorded ? "✓ 已记录答案" : "未记录";
+      badge.style.cssText = [
+        "display:inline-block",
+        "margin-left:8px",
+        "padding:1px 8px",
+        "border-radius:10px",
+        "font-size:12px",
+        "line-height:18px",
+        "vertical-align:middle",
+        "white-space:nowrap",
+        recorded ? "background:#e8f7ee;color:#1a9e4b;border:1px solid #b6e6c9" : "background:#f5f5f5;color:#8c8c8f;border:1px solid #e0e0e0"
+      ].join(";");
+      titleEl.appendChild(badge);
+    }
+  }
+  async function markResultAnswerTip() {
+    const link = document.querySelector(".line1-count-link");
+    if (!link || link.querySelector(".hh-answer-tip"))
+      return;
+    const total = await countMasteryAnswers();
+    if (total === 0)
+      return;
+    const tip = document.createElement("span");
+    tip.className = "hh-answer-tip";
+    tip.textContent = `（答案库已记录 ${total} 题）`;
+    tip.style.cssText = "margin-left:8px;font-size:12px;color:#8c8c8f;font-weight:400;";
+    link.appendChild(tip);
+  }
+  async function collectPreviewAnswersCore(back) {
+    var _a, _b;
+    if (previewCollectRunning)
+      return;
+    previewCollectRunning = true;
+    try {
+      let lastCount = -1;
+      for (let i = 0; i < 15; i++) {
+        const count = document.querySelectorAll(".question-item").length;
+        if (count > 0 && count === lastCount)
+          break;
+        lastCount = count;
+        await lib.$.sleep(1e3);
+      }
+      const items2 = Array.from(document.querySelectorAll(".question-item"));
+      const collected = [];
+      for (const item of items2) {
+        const title = (((_a = item.querySelector(".quest-title")) == null ? void 0 : _a.innerText) || "").trim();
+        const answerText = (((_b = item.querySelector(".answer-title")) == null ? void 0 : _b.innerText) || "").replace(/参考答案[:：]/, "").trim();
+        if (!title || !answerText)
+          continue;
+        collected.push({ title, answer: answerText });
+      }
+      if (collected.length === 0) {
+        lib.$message.warn({ content: "解析页未解析到题目", duration: 0 });
+        $console.warn("[掌握度] 解析页未解析到题目");
+        if (back == null ? void 0 : back.url) {
+          await lib.$store.setTab(ZHS_MASTERY_RETURN_KEY, { ...back, at: Date.now() });
+          await lib.$.sleep(2e3);
+          location.replace(back.url);
+        }
+        return;
+      }
+      await saveMasteryAnswers(collected);
+      await markPreviewAnswerBadges();
+      lib.$message.success({
+        content: `已记录 ${collected.length} 道题的正确答案，正在重做这套题`,
+        duration: 5
+      });
+      $console.log(`[掌握度] 已记录 ${collected.length} 道题的正确答案`);
+      const retry = await lib.$store.getTab(ZHS_MASTERY_RETRY_KEY) || { count: 0 };
+      await lib.$store.setTab(ZHS_MASTERY_RETRY_KEY, { count: (retry.count || 0) + 1 });
+      await lib.$store.setTab(
+        ZHS_MASTERY_RETURN_KEY,
+        back ? { ...back, at: Date.now(), skipReplay: true } : null
+      );
+      await lib.$.sleep(3e3);
+      const remotePage = await BackgroundProject.scripts.dev.methods.getRemotePlaywrightCurrentPage();
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const found = findVisibleClickableByText(/^重新答题$/);
+        if (!found)
+          break;
+        const againBtn = found.closest(".submit") || found;
+        lib.$message.info({
+          content: attempt === 0 ? "正在重做这套题" : `正在重试重做（第 ${attempt + 1} 次）`
+        });
+        $console.log(
+          `[掌握度] 点击「重新答题」第 ${attempt + 1} 次：${againBtn.tagName}.${againBtn.className}（${remotePage ? "Playwright" : "DOM"}）`
+        );
+        await clickElement(remotePage, againBtn);
+        for (let i = 0; i < 6; i++) {
+          await lib.$.sleep(1e3);
+          if (location.href.includes(ZHS_POINT_EXAM_HOST))
+            return;
+        }
+        $console.log("[掌握度] 未进入试卷页，等待接口就绪后重试");
+        await lib.$.sleep(2e3);
+      }
+      lib.$message.warn({
+        content: "答案已记录。若没有自动重做，请手动点右上角「重新答题」（30 秒后返回学习页）",
+        duration: 0
+      });
+      $console.warn("[掌握度] 自动点击「重新答题」未生效，等待手动点击");
+      for (let i = 0; i < 30; i++) {
+        await lib.$.sleep(1e3);
+        if (location.href.includes(ZHS_POINT_EXAM_HOST))
+          return;
+      }
+      await lib.$store.setTab(ZHS_MASTERY_RETRY_KEY, { count: (retry.count || 0) + 1, active: true });
+      await lib.$store.setTab(
+        ZHS_MASTERY_RETURN_KEY,
+        back ? { ...back, at: Date.now(), skipReplay: true } : null
+      );
+      await lib.$.sleep(2e3);
+      if (back == null ? void 0 : back.url)
+        location.replace(back.url);
+    } finally {
+      previewCollectRunning = false;
+    }
+  }
+  function findClickableAncestor(el) {
+    let cur = el;
+    for (let i = 0; i < 4 && cur; i++) {
+      if (isProbablyClickable(cur))
+        return cur;
+      cur = cur.parentElement;
+    }
+    return el;
+  }
+  function isProbablyClickable(el) {
+    const cls = typeof el.className === "string" ? el.className : "";
+    if (/noNext|nopre|no-?next/i.test(cls))
+      return false;
+    const tag = el.tagName;
+    if (tag === "BUTTON" || tag === "A")
+      return true;
+    if (el.getAttribute("role") === "button")
+      return true;
+    if (/btn|button|click|submit|to-improve|next-topic/i.test(cls))
+      return true;
+    try {
+      return getComputedStyle(el).cursor === "pointer";
+    } catch {
+      return false;
+    }
+  }
+  function isDisabledLike(el) {
+    let cur = el;
+    for (let i = 0; i < 4 && cur; i++) {
+      if (cur.disabled)
+        return true;
+      if (cur.getAttribute("aria-disabled") === "true")
+        return true;
+      const cls = typeof cur.className === "string" ? cur.className : "";
+      if (/(^|[\s_-])(noNext|nopre|no-?next|disabled?|forbid|is-disabled)([\s_-]|$)/i.test(cls))
+        return true;
+      try {
+        const style = getComputedStyle(cur);
+        if (style.pointerEvents === "none")
+          return true;
+        if (style.cursor === "not-allowed")
+          return true;
+        const opacity = parseFloat(style.opacity);
+        if (Number.isFinite(opacity) && opacity > 0 && opacity < 0.5)
+          return true;
+      } catch (e) {
+      }
+      cur = cur.parentElement;
+    }
+    return false;
+  }
+  function findVisibleClickableByText(text, root2 = document) {
+    const candidates = Array.from(
+      root2.querySelectorAll('button, a, li, div, span, [role="button"]')
+    );
+    for (const el of candidates) {
+      const raw = (el.textContent || "").replace(/\s+/g, "");
+      if (!raw || raw.length > 12)
+        continue;
+      if (!text.test(raw))
+        continue;
+      if (el.disabled)
+        continue;
+      if (typeof el.className === "string" && /disabled/i.test(el.className))
+        continue;
+      if (!isElementVisible(el))
+        continue;
+      const target = findClickableAncestor(el);
+      if (isDisabledLike(target))
+        continue;
+      return target;
+    }
+    return void 0;
   }
   async function waitJobListSettled(timeout = 6e3, step = 300) {
     const snapshot = () => {
@@ -11020,6 +11392,12 @@ try {
         matches: [
           ["新形态课程学习页面", "smartcoursestudent.zhihuishu.com/learnPage"],
           ["新形态课程新域名学习页面", "ai-smart-course-student-pro.zhihuishu.com/learnPage"],
+          ["新形态课程-知识点学习报告页", "ai-smart-course-student-pro.zhihuishu.com/masteryHistory"],
+          ["新形态课程-知识点学习报告页旧域名", "smartcoursestudent.zhihuishu.com/masteryHistory"],
+          ["新形态课程-知识点练习结果页", "ai-smart-course-student-pro.zhihuishu.com/point/"],
+          ["新形态课程-知识点练习结果页旧域名", "smartcoursestudent.zhihuishu.com/point/"],
+          ["新形态课程-知识点解析页", "ai-smart-course-student-pro.zhihuishu.com/examPreview/"],
+          ["新形态课程-知识点解析页旧域名", "smartcoursestudent.zhihuishu.com/examPreview/"],
           ["新形态课程首页", "smartcoursestudent.zhihuishu.com/singleCourse"],
           ["新形态课程新域名课程首页", "ai-smart-course-student-pro.zhihuishu.com/singleCourse"]
         ],
@@ -11027,7 +11405,8 @@ try {
         configs: {
           notes: {
             defaultValue: lib.$ui.notes([
-              "掌握度和作业请视频看完后自行手动进入",
+              "视频看完会自动点「去提升」做掌握度练习，答完自动提交并返回继续学习（可在设置里关闭）。",
+              "掌握度练习次数可在设置中限制，避免掌握度未满时反复往返。",
               "不要最小化浏览器/关闭电脑屏幕，可能导致脚本暂停。",
               "任意选择一个章节，脚本会自动往下学“必学”课程。",
               "运行中请将浏览器缩放调整至适合的大小，避免元素遮挡，无法点击",
@@ -11056,6 +11435,44 @@ try {
               ["1.25", "1.25 x"],
               ["1.5", "1.5 x"]
             ]
+          },
+          autoImproveMastery: {
+            label: "自动提升掌握度",
+            attrs: {
+              type: "checkbox",
+              title: "视频看完后，若视频下方出现「去提升」按钮，自动进入知识点练习（掌握度）；答完会自动提交并返回继续学习"
+            },
+            defaultValue: true
+          },
+          masteryImproveTimes: {
+            label: "每节掌握度练习次数",
+            defaultValue: 1,
+            attrs: {
+              type: "number",
+              min: 0,
+              step: 1,
+              max: 5,
+              title: "同一个小节自动进入掌握度练习的最大次数，0 表示不自动进入。掌握度未到 100% 时会反复出现「去提升」，限制次数可避免来回往返"
+            }
+          },
+          retryWhenNotFull: {
+            label: "未满分自动重做",
+            attrs: {
+              type: "checkbox",
+              title: "答题提交后若没有全对：自动点「查看作答记录与解析」进入解析页，把正确答案记进题库缓存，再返回重做这套题。开启后练习次数上限改由下面一项控制"
+            },
+            defaultValue: true
+          },
+          retryMaxTimes: {
+            label: "未满分重做上限",
+            defaultValue: 3,
+            attrs: {
+              type: "number",
+              min: 1,
+              step: 1,
+              max: 10,
+              title: "同一小节为了刷满掌握度最多自动重做几次（含第一次）。答完仍不满分就会停在这里，不再无限重刷"
+            }
           }
         },
         oncomplete() {
@@ -11068,7 +11485,142 @@ try {
         },
         methods() {
           return {
+            resumeMasteryReport: async () => {
+              if (masteryReportRunning)
+                return;
+              const pending = await lib.$store.getTab(ZHS_MASTERY_RETURN_KEY);
+              if (!(pending == null ? void 0 : pending.url) || Date.now() - (pending.at || 0) > 5 * 60 * 1e3)
+                return;
+              masteryReportRunning = true;
+              try {
+                CommonProject.scripts.render.methods.pin(this);
+                lib.$message.info({ content: "正在打开掌握度练习试卷" });
+                const ok = await advanceToPointExam();
+                if (!ok) {
+                  lib.$message.warn({
+                    content: "未能自动打开试卷，请手动点击页面上的「去提升」",
+                    duration: 0
+                  });
+                  $console.warn("知识点学习报告页未能进入试卷");
+                }
+              } finally {
+                masteryReportRunning = false;
+              }
+            },
+            afterPointExam: async () => {
+              var _a, _b, _c;
+              if (pointExamRunning)
+                return;
+              const back = await lib.$store.getTab(ZHS_MASTERY_RETURN_KEY);
+              if (!(back == null ? void 0 : back.url))
+                return;
+              pointExamRunning = true;
+              try {
+                CommonProject.scripts.render.methods.pin(this);
+                let total = null;
+                let correct = null;
+                for (let i = 0; i < 15; i++) {
+                  total = readStatNumber("总题数");
+                  correct = readStatNumber("已答对");
+                  if (total !== null && total > 0 && correct !== null)
+                    break;
+                  await lib.$.sleep(1e3);
+                }
+                const full = total !== null && correct !== null && total > 0 && correct >= total;
+                $console.log(
+                  `[掌握度] 本次结果：${correct != null ? correct : "?"}/${total != null ? total : "?"}${full ? "（已满分）" : ""}`
+                );
+                await markResultAnswerTip();
+                if (total === null || correct === null) {
+                  lib.$message.warn({ content: "未能读取本次成绩，即将返回学习页", duration: 5 });
+                } else if (!full && this.cfg.retryWhenNotFull) {
+                  const retry = await lib.$store.getTab(ZHS_MASTERY_RETRY_KEY) || { count: 0 };
+                  const done = retry.count || 0;
+                  const limit = (_a = this.cfg.retryMaxTimes) != null ? _a : 3;
+                  if (done + 1 < limit) {
+                    const link = findVisibleClickableByText(/^查看作答记录与解析$/);
+                    if (link) {
+                      lib.$message.info({
+                        content: `未满分（${correct != null ? correct : "?"}/${total != null ? total : "?"}），正在查看解析抄答案后重做（第 ${done + 2}/${limit} 遍）`
+                      });
+                      await safeClick(link);
+                      for (let i = 0; i < 10; i++) {
+                        await lib.$.sleep(1e3);
+                        if (location.pathname.includes(ZHS_EXAM_PREVIEW_PATH)) {
+                          await collectPreviewAnswersCore(back);
+                          return;
+                        }
+                      }
+                    }
+                    lib.$message.warn({ content: "未能打开解析页，即将返回学习页", duration: 5 });
+                  } else {
+                    lib.$message.warn({
+                      content: `已答 ${done + 1} 遍仍未满分（上限 ${limit} 遍），即将返回学习页`,
+                      duration: 5
+                    });
+                  }
+                }
+                await lib.$store.setTab(ZHS_MASTERY_RETRY_KEY, { count: 0, active: false });
+                const learnKey = (() => {
+                  try {
+                    return new URL(back.url).pathname;
+                  } catch (e) {
+                    return "";
+                  }
+                })();
+                if (learnKey) {
+                  await lib.$store.setTab(ZHS_MASTERY_SETTLED_KEY, { key: learnKey, at: Date.now() });
+                  const times = await lib.$store.getTab(ZHS_MASTERY_TIMES_KEY) || {};
+                  const cap = Math.max(
+                    (_b = this.cfg.retryMaxTimes) != null ? _b : 3,
+                    (_c = this.cfg.masteryImproveTimes) != null ? _c : 1
+                  );
+                  await lib.$store.setTab(ZHS_MASTERY_TIMES_KEY, {
+                    ...times,
+                    [learnKey]: Math.max(times[learnKey] || 0, cap)
+                  });
+                }
+                await lib.$store.setTab(ZHS_MASTERY_RETURN_KEY, { ...back, at: Date.now() });
+                lib.$message.success({ content: "掌握度练习已完成，即将返回课程继续学习", duration: 5 });
+                await lib.$.sleep(3e3);
+                location.replace(back.url);
+              } finally {
+                pointExamRunning = false;
+              }
+            },
+            collectPreviewAnswers: async () => {
+              if (pointExamRunning)
+                return;
+              const back = await lib.$store.getTab(ZHS_MASTERY_RETURN_KEY);
+              if (!(back == null ? void 0 : back.url)) {
+                for (let i = 0; i < 10; i++) {
+                  if (document.querySelectorAll(".question-item").length > 0)
+                    break;
+                  await lib.$.sleep(1e3);
+                }
+                await markPreviewAnswerBadges();
+                lib.$message.info({
+                  content: "已标注每题的答案状态。要重做请点右上角「重新答题」，答案会自动命中",
+                  duration: 8
+                });
+                return;
+              }
+              CommonProject.scripts.render.methods.pin(this);
+              await collectPreviewAnswersCore(back);
+            },
             start: async () => {
+              if (location.pathname.includes(ZHS_EXAM_PREVIEW_PATH)) {
+                await this.methods.collectPreviewAnswers();
+                return;
+              }
+              if (location.pathname.includes(ZHS_POINT_RESULT_PATH)) {
+                await this.methods.afterPointExam();
+                return;
+              }
+              if (location.pathname.includes(ZHS_MASTERY_REPORT_PATH)) {
+                await this.methods.resumeMasteryReport();
+                return;
+              }
               if (location.href.includes("singleCourse")) {
                 lib.$message.info({ content: "请点击任意章节开始进行自动学习", duration: 60 });
                 return;
@@ -11156,6 +11708,63 @@ try {
                 this.onConfigChange("definition", (curr) => {
                   processor.switchLine(curr);
                 });
+                let enteringMastery = false;
+                const tryEnterMasteryImprove = async () => {
+                  var _a, _b;
+                  if (enteringMastery)
+                    return false;
+                  enteringMastery = true;
+                  try {
+                    if (!this.cfg.autoImproveMastery)
+                      return false;
+                    const baseLimit = (_a = this.cfg.masteryImproveTimes) != null ? _a : 1;
+                    if (baseLimit <= 0)
+                      return false;
+                    const settledKey = location.pathname;
+                    const settled = await lib.$store.getTab(ZHS_MASTERY_SETTLED_KEY) || null;
+                    if ((settled == null ? void 0 : settled.key) === settledKey && Date.now() - (settled.at || 0) < 5 * 60 * 1e3) {
+                      await lib.$store.setTab(ZHS_MASTERY_SETTLED_KEY, null);
+                      $console.log("本节刚练完，跳过掌握度练习，继续下一节");
+                      return false;
+                    }
+                    const retryState = await lib.$store.getTab(ZHS_MASTERY_RETRY_KEY) || {};
+                    const limit = retryState.active && this.cfg.retryWhenNotFull ? (_b = this.cfg.retryMaxTimes) != null ? _b : 3 : baseLimit;
+                    const btn = await waitMasteryImproveButton(12);
+                    if (!btn) {
+                      $console.log("未发现「去提升」按钮，继续下一节");
+                      return false;
+                    }
+                    const key = location.pathname;
+                    const times = await lib.$store.getTab(ZHS_MASTERY_TIMES_KEY) || {};
+                    const used = times[key] || 0;
+                    if (used >= limit) {
+                      $console.log(`本节已自动进入掌握度练习 ${used} 次（上限 ${limit}），继续下一节`);
+                      return false;
+                    }
+                    lib.$message.info({ content: "检测到「去提升」，正在进入掌握度练习" });
+                    $console.log("检测到「去提升」，正在进入掌握度练习");
+                    await lib.$store.setTab(ZHS_MASTERY_RETURN_KEY, {
+                      url: location.href,
+                      at: Date.now(),
+                      skipReplay: true
+                    });
+                    await lib.$store.setTab(ZHS_MASTERY_TIMES_KEY, { ...times, [key]: used + 1 });
+                    if (!retryState.active) {
+                      await lib.$store.setTab(ZHS_MASTERY_RETRY_KEY, { count: 0, active: false });
+                    }
+                    await lib.$.sleep(500);
+                    const ok = await advanceToPointExam(btn);
+                    if (ok)
+                      return true;
+                    await lib.$store.setTab(ZHS_MASTERY_RETURN_KEY, null);
+                    await lib.$store.setTab(ZHS_MASTERY_TIMES_KEY, { ...times, [key]: used });
+                    lib.$message.warn({ content: "未能进入掌握度练习页面，继续学习", duration: 5 });
+                    $console.log("未能进入掌握度练习页面，继续学习");
+                    return false;
+                  } finally {
+                    enteringMastery = false;
+                  }
+                };
                 const doWork = async () => {
                   await lib.$.sleep(5 * 1e3);
                   const next2 = async () => {
@@ -11201,6 +11810,12 @@ try {
                       filter: (m) => m.src.length !== 0
                     });
                   } catch {
+                    try {
+                      if (await tryEnterMasteryImprove())
+                        return;
+                    } catch (e) {
+                      $console.warn("非视频任务点进入掌握度练习失败：" + e);
+                    }
                     const msg2 = "未找到学习视频，即将自动下一节！";
                     lib.$message.error(msg2);
                     $console.error(msg2);
@@ -11218,7 +11833,18 @@ try {
                       await lib.$.sleep(1e3);
                       state$8.study.currentMedia = media;
                       if (media) {
-                        media.currentTime = 1;
+                        const pending = await lib.$store.getTab(ZHS_MASTERY_RETURN_KEY);
+                        const justReturned = !!(pending == null ? void 0 : pending.skipReplay) && Date.now() - (pending.at || 0) < 3 * 60 * 1e3;
+                        if (justReturned) {
+                          await lib.$store.setTab(ZHS_MASTERY_RETURN_KEY, null);
+                          for (let i = 0; i < 10 && !Number.isFinite(media.duration); i++) {
+                            await lib.$.sleep(300);
+                          }
+                          const duration = Number.isFinite(media.duration) ? media.duration : 0;
+                          media.currentTime = duration > 2 ? duration - 1 : 1;
+                        } else {
+                          media.currentTime = 1;
+                        }
                         media.volume = this.cfg.volume;
                       }
                       return state$8.study.currentMedia;
@@ -11243,6 +11869,12 @@ try {
                     }
                   };
                   video.onended = async () => {
+                    try {
+                      if (await tryEnterMasteryImprove())
+                        return;
+                    } catch (e) {
+                      $console.warn("进入掌握度练习失败：" + e);
+                    }
                     lib.$message.info({ content: "即将自动跳转下一节" });
                     await lib.$.sleep(3e3);
                     await next2();
@@ -11276,13 +11908,21 @@ try {
               "可以搭配 “通用-在线搜题” 一起使用。",
               "如果没开始答题，请尝试刷新页面。",
               "禁止一次性打开多个作业/考试页面。",
-              ...remote_not_required_pages.some((domain) => location.href.includes(domain)) ? [] : ["答题中请勿进行任何操作，如需暂停答题", "请等待全部题目搜索完成并执行自动保存功能后才能操作。"]
+              ...smartWorkNotes()
             ]).outerHTML
           },
           workDelay: {
             label: "作业答题开始时间延迟（秒）",
             defaultValue: 3,
             attrs: { type: "number", min: 1, step: 1, max: 10 }
+          },
+          autoSubmitPointExam: {
+            label: "掌握度练习自动提交",
+            attrs: {
+              type: "checkbox",
+              title: "仅在新形态课程掌握度练习页（studentexamcomh5）生效：答完自动点「提交」，提交后自动返回课程继续学习。提交不可逆，如担心正确率可关闭此项手动提交"
+            },
+            defaultValue: true
           }
         },
         methods() {
@@ -11292,16 +11932,27 @@ try {
               CommonProject.scripts.render.methods.pin(this);
               let remotePage;
               const remote_not_required = remote_not_required_pages.some((domain) => location.href.includes(domain));
-              remote_not_required ? await waitForElement(".exam-item") : await waitForElement(".questionContent");
+              const is_point_exam = location.href.includes(ZHS_POINT_EXAM_PAGE);
+              if (is_point_exam) {
+                const ready = await waitPointExamReady(60);
+                if (!ready) {
+                  lib.$message.warn({ content: "未检测到题目，请在页面上点一下「开始答题/继续」", duration: 0 });
+                  await waitForElement(".questionContent");
+                }
+              } else {
+                remote_not_required ? await waitForElement(".exam-item") : await waitForElement(".questionContent");
+              }
               if (remote_not_required)
                 ;
               else {
                 remotePage = await BackgroundProject.scripts.dev.methods.getRemotePlaywrightCurrentPage();
-                if (!remotePage) {
+                if (!remotePage && !is_point_exam) {
                   return $playwright.showError();
                 }
-                $render.moveToEdge();
-                lib.$message.warn({ content: "答题完毕之前请勿操作页面！", duration: 0 });
+                if (remotePage) {
+                  $render.moveToEdge();
+                  lib.$message.warn({ content: "答题完毕之前请勿操作页面！", duration: 0 });
+                }
               }
               commonWork(this, {
                 workerProvider: (opts) => {
@@ -11311,7 +11962,14 @@ try {
                     return smartWork(remotePage, opts);
                   }
                 },
-                start_delay_seconds: (_a = this.cfg.workDelay) != null ? _a : 3
+                start_delay_seconds: (_a = this.cfg.workDelay) != null ? _a : 3,
+                onWorkerCreated: (worker) => {
+                  if (!is_point_exam)
+                    return;
+                  worker.once("done", () => {
+                    finishPointExamPractice(this.cfg.autoSubmitPointExam !== false);
+                  });
+                }
               });
             }
           };
@@ -12565,9 +13223,10 @@ try {
     return worker;
   }
   function smartWork(remotePage, { answererWrappers, period, thread, answerSeparators }) {
-    lib.$message.info({ content: "开始作业" });
+    const autoSubmitOnThisPage = location.href.includes(ZHS_POINT_EXAM_HOST);
+    lib.$message.info({ content: autoSubmitOnThisPage ? "开始答题（答完自动提交）" : "开始作业" });
     lib.$message.warn({
-      content: "答题中请勿进行任何操作，如需暂停答题，请等待全部题目搜索完成并执行自动保存功能后才能操作。",
+      content: autoSubmitOnThisPage ? "答题中请勿操作页面，答完会自动提交试卷并返回课程。" : "答题中请勿进行任何操作，如需暂停答题，请等待全部题目搜索完成并执行自动保存功能后才能操作。",
       duration: 0,
       closeable: false
     });
@@ -12587,9 +13246,25 @@ try {
       },
       thread: thread != null ? thread : 1,
       answerSeparators: answerSeparators.split(",").map((s) => s.trim()),
-      answerer: (elements2, ctx) => {
+      answerer: async (elements2, ctx) => {
         const title = titleTransform(elements2.title);
         if (title) {
+          const collected = await lookupMasteryAnswer(title);
+          if (collected) {
+            return [
+              {
+                name: MASTERY_ANSWER_SOURCE,
+                homepage: "",
+                results: [{ question: title, answer: collected, extra_data: { cache: true } }]
+              }
+            ];
+          }
+          if (location.href.includes(ZHS_POINT_EXAM_HOST)) {
+            const total = await countMasteryAnswers();
+            if (total > 0) {
+              $console.log(`[掌握度] 未命中本地答案（表内 ${total} 条）：${title.slice(0, 40)}`);
+            }
+          }
           return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
             await lib.$.sleep((period != null ? period : 3) * 1e3);
             return defaultAnswerWrapperHandler(answererWrappers, {
@@ -12655,9 +13330,13 @@ try {
           resolvedCount++;
         }
         if ((_a = current.result) == null ? void 0 : _a.finish) {
-          CommonProject.scripts.apps.methods.addQuestionCacheFromWorkResult(
-            simplifyWorkResult([current], titleTransform)
+          const swr = simplifyWorkResult([current], titleTransform);
+          const cacheable = swr.filter(
+            (r) => !r.searchInfos.some((i) => i.name === MASTERY_ANSWER_SOURCE)
           );
+          if (cacheable.length) {
+            CommonProject.scripts.apps.methods.addQuestionCacheFromWorkResult(cacheable);
+          }
         }
         CommonProject.scripts.workResults.methods.updateWorkState({
           totalQuestionCount,
@@ -12666,7 +13345,32 @@ try {
         });
       }
     });
-    const getNextBtn = () => document.querySelector(".next-topic.next-t");
+    const getNextBtn = () => {
+      const byClass = document.querySelector(".next-topic.next-t");
+      if (byClass && !/提交|交卷/.test(byClass.textContent || ""))
+        return byClass;
+      const container2 = document.querySelector(".next-topic.next-t, .next-topic.noNext");
+      if (container2 && /noNext/i.test(String(container2.className)))
+        return null;
+      return findVisibleClickableByText(/^下一题$/) || null;
+    };
+    const clearCurrentQuestionSelections = async () => {
+      const root2 = document.querySelector(".questionContent");
+      if (!root2)
+        return;
+      const checked = Array.from(
+        root2.querySelectorAll(
+          ".el-radio__input.is-checked, .el-checkbox__input.is-checked, i.iconfont.checkedIcon"
+        )
+      );
+      if (checked.length === 0)
+        return;
+      for (const el of checked) {
+        await clickElement(remotePage, el);
+        await lib.$.sleep(150);
+      }
+      await lib.$.sleep(300);
+    };
     let next2 = null;
     (async () => {
       const first = document.querySelector('[role="treeitem"] .font-sec-style-node');
@@ -12678,7 +13382,14 @@ try {
         await lib.$.sleep(3e3);
       }
       let count = 0;
+      const cardCount = document.querySelectorAll('[role="treeitem"]').length;
+      const maxRounds = cardCount > 0 ? cardCount + 10 : 100;
       while (worker.isClose === false) {
+        if (count > maxRounds) {
+          $console.log(`答题循环超过 ${maxRounds} 次，强制结束`);
+          break;
+        }
+        await clearCurrentQuestionSelections();
         await worker.doWork({ enable_debug: BackgroundProject.scripts.dev.cfg.enable_answerer_debug });
         next2 = getNextBtn();
         if (!next2) {
@@ -12689,17 +13400,94 @@ try {
           await remotePage.click(next2);
         else
           trustedClick(next2);
-        await lib.$.sleep(1e3);
+        await lib.$.sleep(1500);
         count++;
       }
       lib.$message.info({
-        content: "作业/考试完成，请自行检查后保存或提交。",
-        duration: count > 10 ? 0 : 30
+        content: autoSubmitOnThisPage ? "答题完成，正在自动提交试卷…" : "作业/考试完成，请自行检查后保存或提交。",
+        duration: autoSubmitOnThisPage ? 8 : count > 10 ? 0 : 30
       });
       worker.emit("done");
       CommonProject.scripts.workResults.cfg.questionPositionSyncHandlerType = "zhs-smart";
     })();
     return worker;
+  }
+  async function waitPointExamReady(timeoutSeconds = 60) {
+    const startedAt = Date.now();
+    let triedStart = false;
+    while (Date.now() - startedAt < timeoutSeconds * 1e3) {
+      if (document.querySelector(".questionContent"))
+        return true;
+      if (!triedStart) {
+        const start2 = findVisibleClickableByText(/^(开始答题|开始练习|继续答题|进入练习|立即开始|开始作答)$/);
+        if (start2) {
+          triedStart = true;
+          lib.$message.info({ content: "正在进入掌握度练习" });
+          await safeClick(start2);
+          await lib.$.sleep(3e3);
+          continue;
+        }
+      }
+      await lib.$.sleep(1e3);
+    }
+    return !!document.querySelector(".questionContent");
+  }
+  async function submitPointExamPaper() {
+    var _a;
+    await lib.$.sleep(2e3);
+    const submitText = /^(提交作业|提交试卷|提交答卷|提交答案|提交|交卷)$/;
+    const submit = findVisibleClickableByText(submitText);
+    if (!submit) {
+      lib.$message.warn({ content: "未找到「提交作业」按钮，请手动提交", duration: 0 });
+      return false;
+    }
+    dispatchMouseSequence(submit);
+    trustedClick(submit);
+    await lib.$.sleep(1500);
+    const dialog = document.querySelector(".el-message-box, .el-dialog, .confirm-dialog-component");
+    const confirm = dialog ? findVisibleClickableByText(/^(确定|确认|提交作业|提交|继续提交)$/, dialog) : void 0;
+    if (confirm) {
+      dispatchMouseSequence(confirm);
+      trustedClick(confirm);
+      await lib.$.sleep(1e3);
+    }
+    for (let i = 0; i < 20; i++) {
+      await lib.$.sleep(1e3);
+      if (!findVisibleClickableByText(submitText)) {
+        lib.$message.success({ content: "掌握度练习已提交", duration: 5 });
+        return true;
+      }
+      if (/提交成功|交卷成功|试卷已提交|提交完成/.test(((_a = document.body) == null ? void 0 : _a.innerText) || "")) {
+        lib.$message.success({ content: "掌握度练习已提交", duration: 5 });
+        return true;
+      }
+    }
+    lib.$message.warn({ content: "未能确认提交结果，请手动检查后返回学习页", duration: 0 });
+    return false;
+  }
+  async function finishPointExamPractice(autoSubmit) {
+    const saved = await lib.$store.getTab(ZHS_MASTERY_RETURN_KEY);
+    const back = (saved == null ? void 0 : saved.url) && Date.now() - (saved.at || 0) < 2 * 60 * 60 * 1e3 ? saved : null;
+    if (!back) {
+      lib.$message.info({ content: "练习已完成，请手动检查后提交。", duration: 0 });
+      return;
+    }
+    if (!autoSubmit) {
+      lib.$message.warn({ content: "已关闭自动提交，请手动提交试卷后返回学习页", duration: 0 });
+      return;
+    }
+    const ok = await submitPointExamPaper();
+    if (!ok)
+      return;
+    for (let i = 0; i < 15; i++) {
+      await lib.$.sleep(1e3);
+      if (!location.href.includes(ZHS_POINT_EXAM_HOST))
+        return;
+    }
+    await lib.$store.setTab(ZHS_MASTERY_RETURN_KEY, { ...back, at: Date.now() });
+    lib.$message.success({ content: "掌握度练习已完成，即将返回课程继续学习", duration: 5 });
+    await lib.$.sleep(2e3);
+    location.replace(back.url);
   }
   function smartExam(remotePage, { answererWrappers, period, thread, answerSeparators }) {
     lib.$message.info({ content: "开始作业" });

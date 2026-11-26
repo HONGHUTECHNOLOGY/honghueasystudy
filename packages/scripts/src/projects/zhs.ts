@@ -49,6 +49,112 @@ const remote_not_required_pages = [
 	'wisdom-mooc.zhihuishu.com'
 ];
 
+/**
+ * 掌握度练习（视频下方「去提升」）的往返标记。
+ *
+ * learnPage 点「去提升」是 `window.location.href` 整页跳到 studentexamcomh5，
+ * 两个域名不同源，localStorage / sessionStorage 都不通，只能借扩展的 tab 级存储传递：
+ * `{ url: 学习页地址, at: 跳转时间, skipReplay: 返回后不要重播当前视频 }`。
+ */
+const ZHS_MASTERY_RETURN_KEY = 'zhs-mastery-return';
+
+/** 掌握度练习次数 `{ [pathname]: count }`，达到配置上限后不再自动进入，避免反复往返 */
+const ZHS_MASTERY_TIMES_KEY = 'zhs-mastery-times';
+
+/** 掌握度练习页（学生端试卷页），走 smartWork 答题，允许没有桌面端 remotePage */
+const ZHS_POINT_EXAM_HOST = 'studentexamcomh5.zhihuishu.com';
+const ZHS_POINT_EXAM_PAGE = ZHS_POINT_EXAM_HOST + '/studentReviewTestOrExam';
+
+/**
+ * 知识点学习报告页（掌握度练习的第二层入口）
+ *
+ * 新形态课程把「去提升」拆成了两步：学习页视频下方按钮 → 本报告页 → 再点一次「去提升」
+ * 才 `location.href` 跳到试卷页。报告页是学习页 SPA 的路由 `/masteryHistory/:courseId/:classId/:nodeUid`。
+ */
+const ZHS_MASTERY_REPORT_PATH = '/masteryHistory/';
+
+/**
+ * 知识点练习结果页（提交后平台自己整页跳到这里）
+ * 路由 `/point/:courseId/:examPaperId/:examTestId/:nodeUid/:classId`
+ */
+const ZHS_POINT_RESULT_PATH = '/point/';
+
+/**
+ * 知识点解析页（结果页点「查看作答记录与解析」进来的）
+ * 路由 `/examPreview/:courseId/:examPaperId/:examTestId/:knowledeId/:classId`
+ */
+const ZHS_EXAM_PREVIEW_PATH = '/examPreview/';
+
+/**
+ * 从解析页抄下来的正确答案
+ *
+ * 提交后平台会立刻整页跳到结果页，本页脚本当场销毁，
+ * 所以「提交 → 看结果 → 抄答案 → 重做」这条链只能在结果页/解析页重新接管着走。
+ * 存全局（GM_setValue）而不是 tab 级：重做可能换 tab 打开，且题库本来就该跨页面复用。
+ */
+const ZHS_MASTERY_ANSWERS_KEY = 'zhs-mastery-answers';
+
+/**
+ * 命中「解析页抄下来的答案」时，答题结果面板里显示的来源名
+ *
+ * 面板会把它渲染在每道题的来源行，用户一眼能看出这题用的是抄来的答案而不是题库/AI。
+ * `onResultsUpdate` 里也靠这个名字把这类结果排除在 `localQuestionCaches` 之外，
+ * 否则抄来的答案会被二次写进题库缓存，把用户自己攒的 200 条挤掉。
+ */
+const MASTERY_ANSWER_SOURCE = '[已记录] 解析页';
+
+/**
+ * 未满分重做的轮次 `{ count: number, key: string }`
+ *
+ * 重做走「结果页 → 解析页 → 重新答题」，不经过学习页，所以不能复用
+ * `ZHS_MASTERY_TIMES_KEY`（那个是学习页「去提升」的次数）。
+ * 每次从学习页发起新一轮时会清零。
+ */
+const ZHS_MASTERY_RETRY_KEY = 'zhs-mastery-retry';
+
+/**
+ * 「本节刚练完」标记 `{ key, at }`
+ *
+ * 从结果页回学习页时写入，学习页 `tryEnterMasteryImprove` 读到就跳过本次。
+ * 只靠次数上限不够：重做失败退回学习页时会把 `retry.active` 置 true 用重做上限放行，
+ * 一路走下来就有概率又开一轮，用户看到的就是「做完卷子回学习页又进去了」。
+ */
+const ZHS_MASTERY_SETTLED_KEY = 'zhs-mastery-settled';
+
+/** 掌握度练习页 / 作业页 / AI 助教页各用一套提示，别把「请自行保存或提交」贴到自动交卷的页面上 */
+function smartWorkNotes(): string[] {
+	if (location.href.includes(ZHS_POINT_EXAM_HOST)) {
+		// 掌握度练习页由脚本自动交卷，不需要用户手动保存
+		return ['答完会自动提交试卷，提交后自动返回课程继续学习。'];
+	}
+	if (remote_not_required_pages.some((domain) => location.href.includes(domain))) {
+		return [];
+	}
+	return ['答题中请勿进行任何操作，如需暂停答题', '请等待全部题目搜索完成并执行自动保存功能后才能操作。'];
+}
+
+/** 结果页 / 解析页的接管防重入（oncomplete 与 SPA 的 onhistorychange 会同时触发） */
+let pointExamRunning = false;
+
+/**
+ * 解析页抄答案的去重锁
+ *
+ * 有两条进入路径：结果页流程里点完链接直接接着抄（SPA 不重载），
+ * 以及页面重载后由 `collectPreviewAnswers` 方法接管。
+ * 两条同时进来会重复点「重新答题」，用这个独立锁挡一下
+ * —— 不能复用 `pointExamRunning`：结果页流程持有它的时候，
+ * 解析页那次接管会被自己挡掉，然后两边都不干活，就卡在解析页了。
+ */
+let previewCollectRunning = false;
+
+/**
+ * 报告页接管只跑一次
+ *
+ * 走到 `/masteryHistory/` 时 `oncomplete`（整页跳转）和 `onhistorychange`（SPA 路由 push）
+ * 可能同时触发，重复点「去提升」会连开两张试卷。
+ */
+let masteryReportRunning = false;
+
 const gxk_read_notes = [
 	'如果未开始答题，请尝试刷新页面。',
 	'禁止同时打开多个作业/考试页面。',
@@ -69,6 +175,525 @@ function textSaysFinished(el: HTMLElement | null | undefined): boolean {
 	const text = (el.textContent || '').replace(/\s+/g, '');
 	// 注意不要匹配「未完成」，“未完成”不包含子串“已完成”
 	return /已完成|已学完|已看完/.test(text);
+}
+
+/** 元素纯文本（innerText 在隐藏节点上为空，兜底 textContent） */
+function normalizedText(el: HTMLElement | null | undefined): string {
+	if (!el) return '';
+	return String(el.innerText || el.textContent || '').replace(/\s+/g, '');
+}
+
+/** 元素是否可见（离线/惰性渲染的节点不能被点） */
+function isElementVisible(el: HTMLElement): boolean {
+	const rect = el.getBoundingClientRect();
+	if (rect.width <= 0 || rect.height <= 0) return false;
+	const style = getComputedStyle(el);
+	return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+}
+
+/**
+ * 取页面上的「去提升」入口
+ *
+ * 新形态课程的掌握度入口是两层的，两层的 DOM 完全不同：
+ *
+ * 1. 学习页视频下方 `SimplifiedMasteryLevel` 组件：
+ *    `<button class="simplified-mastery__action"><span>去提升</span></button>`
+ *    —— 点它进的是知识点学习报告页（SPA 路由 `/masteryHistory/...`），**不是**试卷；
+ * 2. 报告页里再一个 `div.to-improve`，文案「去提升 →」
+ *    —— 这个才真正 `location.href` 跳到 studentexamcomh5 的试卷页。
+ *
+ * 另外免考知识点是「去练习」、无题目时是「建设中」、课程结束时按钮 disabled，
+ * 这几种都不能点（点了也进不去试卷），所以只认「去提升」且未禁用。
+ */
+function getMasteryImproveButton(): HTMLElement | undefined {
+	/** 文案是「去提升」或「去提升 →」，忽略末尾箭头 */
+	const isImproveText = (el: HTMLElement) =>
+		/^去提升[→>»›）)]{0,2}$/.test((el.textContent || '').replace(/\s+/g, ''));
+
+	const isUsable = (el: HTMLElement) => {
+		if ((el as HTMLButtonElement).disabled) return false;
+		if (typeof el.className === 'string' && /disabled/i.test(el.className)) return false;
+		// 先用 textContent 粗筛（不触发 reflow），命中的才去量尺寸
+		if (!isImproveText(el)) return false;
+		return isElementVisible(el);
+	};
+
+	// 已知的两个组件类名，优先命中
+	const known = Array.from(document.querySelectorAll<HTMLElement>('.simplified-mastery__action, .to-improve'));
+	const hit = known.find(isUsable);
+	if (hit) return hit;
+
+	/**
+	 * 类名兜底：报告页的「去提升 →」文本可能挂在普通 div 的文本节点上，
+	 * 所以连 div / span 一起扫，命中后返回可点击祖先。
+	 * 用 textContent 长度先剪枝，避免对整棵页面容器反复求文本。
+	 */
+	for (const el of Array.from(
+		document.querySelectorAll<HTMLElement>('button, a, div, span, [role="button"]')
+	)) {
+		if ((el.textContent || '').length > 20) continue;
+		if (!isUsable(el)) continue;
+		return (
+			el.closest<HTMLElement>('button, a, [role="button"], [class*="btn"], [class*="button"], .to-improve') || el
+		);
+	}
+	return undefined;
+}
+
+/** 等「去提升」入口渲染出来（报告页是异步组件，接口回包后才有按钮） */
+async function waitMasteryImproveButton(timeoutSeconds = 15): Promise<HTMLElement | undefined> {
+	const startedAt = Date.now();
+	while (Date.now() - startedAt < timeoutSeconds * 1000) {
+		const btn = getMasteryImproveButton();
+		if (btn) return btn;
+		await $.sleep(1000);
+	}
+	return undefined;
+}
+
+/**
+ * 一路点到试卷页。
+ *
+ * 每一层既可能是 SPA 路由切换（JS 上下文还活着，可以接着点第二层），
+ * 也可能是整页跳转（本脚本当场被销毁）。所以这里按「当前页还有入口就再点一次」推进；
+ * 被整页跳转打断时，由脚本在报告页重新启动后接着走（见 resumeMasteryReport）。
+ */
+async function advanceToPointExam(firstBtn?: HTMLElement, maxLayers = 3): Promise<boolean> {
+	const arrived = () => location.href.includes(ZHS_POINT_EXAM_HOST);
+	let btn = firstBtn;
+
+	for (let layer = 0; layer < maxLayers; layer++) {
+		if (arrived()) return true;
+
+		if (!btn) btn = await waitMasteryImproveButton(15);
+		if (!btn) return arrived();
+
+		$message.info({ content: layer === 0 ? '正在进入掌握度练习' : '正在打开掌握度试卷' });
+		await safeClick(btn);
+		btn = undefined;
+
+		// 等这一层生效：跳走，或者换路由后下一层的入口冒出来
+		for (let i = 0; i < 15; i++) {
+			await $.sleep(1000);
+			if (arrived()) return true;
+			if (getMasteryImproveButton()) break;
+		}
+	}
+
+	return arrived();
+}
+
+/** 读结果页里「总题数 / 已答对」这类「标签 + 兄弟数字」结构 */
+function readStatNumber(label: string): number | null {
+	const nodes = Array.from(document.querySelectorAll<HTMLElement>('div, span, p'));
+	for (const el of nodes) {
+		if ((el.textContent || '').trim() !== label) continue;
+		const next = el.nextElementSibling;
+		if (!next) continue;
+		const n = parseInt((next.textContent || '').trim(), 10);
+		if (Number.isFinite(n)) return n;
+	}
+	return null;
+}
+
+/**
+ * 题干归一化：把「解析页抄的答案」和「答题页题干」对齐
+ *
+ * 两边取文本的路径完全不同（解析页 `.quest-title`，答题页 `.questionName .centent-pre`
+ * 还经过 `optimizationElementWithImage` 处理），实测会造成不匹配的差异有：
+ * - 图片题：答题页题干里被塞进了图片的 src，解析页没有；
+ * - 填空占位符：`（ ）`、`(  )`、`＿＿` 各处写法不一；
+ * - 标点、全半角、空白。
+ */
+function compactQuestion(text: string): string {
+	return (text || '')
+		// 图片地址先抹掉，否则图片题永远匹配不上（只认 URL 合法字符，别把后面的中文一起吃掉）
+		.replace(/https?:\/\/[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+/g, '')
+		.replace(/[\s\u3000]+/g, '')
+		// 填空占位符：去空白后就是（）/()，直接删
+		.replace(/[（(][)）]/g, '')
+		.replace(/[_＿]{2,}/g, '')
+		.replace(/[，。！？；：""''、（）【】《》,.\-!?;:'"()[\]<>]/g, '')
+		.toLowerCase();
+}
+
+interface MasteryAnswerItem {
+	title: string;
+	answer: string;
+	at: number;
+}
+
+/**
+ * 写入从解析页抄到的答案。
+ *
+ * 双写：
+ * - **tab 级优先并 await**：`GM_saveTab` 走 background 的 `sendResponse`，能确认真的落地。
+ *   抄完答案马上就要 `location.replace` 跳到试卷页，全局存储（`GM_setValue` 只发消息、
+ *   不等回执）很可能在页面卸载时丢掉 —— 实测 `chrome.storage.local` 里根本搜不到这个 key，
+ *   重做时自然一条都命不中，界面上就显示成 AI 答的。
+ * - 全局再补一份做持久化（换 tab / 浏览器重启后还能用）。
+ */
+async function saveMasteryAnswers(items: { title: string; answer: string }[]) {
+	if (items.length === 0) return;
+	const now = Date.now();
+
+	const apply = (store: MasteryAnswerItem[]) => {
+		const list = store.slice();
+		for (const item of items) {
+			const key = compactQuestion(item.title);
+			if (!key) continue;
+			const record: MasteryAnswerItem = { title: item.title, answer: item.answer, at: now };
+			const idx = list.findIndex((s) => compactQuestion(s.title) === key);
+			if (idx === -1) list.unshift(record);
+			else list[idx] = record;
+		}
+		return list.slice(0, 500);
+	};
+
+	const tabStore = (((await $store.getTab(ZHS_MASTERY_ANSWERS_KEY)) || []) as MasteryAnswerItem[]) || [];
+	await $store.setTab(ZHS_MASTERY_ANSWERS_KEY, apply(tabStore));
+
+	const globalStore = (($store.get(ZHS_MASTERY_ANSWERS_KEY) as MasteryAnswerItem[]) || []) as MasteryAnswerItem[];
+	$store.set(ZHS_MASTERY_ANSWERS_KEY, apply(globalStore));
+}
+
+/**
+ * 从抄下来的答案里找这道题。
+ *
+ * 分三级：精确 → 包含 → 前缀。级别越往下越容易误命中，
+ * 所以包含要求长度比 ≥ 0.75，前缀要求前 15 个字完全一致（中文 15 字基本能锁定一道题）。
+ * tab 级排在前面 —— 它是最新写入的那份。
+ */
+async function lookupMasteryAnswer(title: string): Promise<string | undefined> {
+	const key = compactQuestion(title);
+	if (!key) return undefined;
+
+	const tabStore = (((await $store.getTab(ZHS_MASTERY_ANSWERS_KEY)) || []) as MasteryAnswerItem[]) || [];
+	const globalStore = (($store.get(ZHS_MASTERY_ANSWERS_KEY) as MasteryAnswerItem[]) || []) as MasteryAnswerItem[];
+	const store = [...tabStore, ...globalStore];
+	if (store.length === 0) return undefined;
+
+	// 1) 归一化后完全一致
+	const exact = store.find((s) => compactQuestion(s.title) === key);
+	if (exact) return exact.answer;
+
+	// 2) 一边包含另一边（应对题号、括号注释、尾部多一句话）
+	for (const s of store) {
+		const other = compactQuestion(s.title);
+		if (!other) continue;
+		const shorter = Math.min(other.length, key.length);
+		const longer = Math.max(other.length, key.length);
+		if (shorter < 8 || shorter / longer < 0.75) continue;
+		if (other.includes(key) || key.includes(other)) return s.answer;
+	}
+
+	// 3) 前 15 个字一致（应对题干尾部标点/注释差异导致长度比不达标）
+	if (key.length >= 15) {
+		const head = key.slice(0, 15);
+		for (const s of store) {
+			const other = compactQuestion(s.title);
+			if (other.length >= 15 && other.slice(0, 15) === head) return s.answer;
+		}
+	}
+
+	return undefined;
+}
+
+/** 本地答案表里一共有多少题（tab 与全局取较大者） */
+async function countMasteryAnswers(): Promise<number> {
+	const tabStore = ((await $store.getTab(ZHS_MASTERY_ANSWERS_KEY)) || []) as MasteryAnswerItem[];
+	const globalStore = (($store.get(ZHS_MASTERY_ANSWERS_KEY) as MasteryAnswerItem[]) || []) as MasteryAnswerItem[];
+	return Math.max(tabStore.length || 0, globalStore.length || 0);
+}
+
+/**
+ * 解析页逐题标注「答案是否已记录」。
+ *
+ * 让用户一眼看出重做时会用哪些答案 —— 已记录的题在重做轮直接命中本地表，
+ * 不会再去 AI 搜题；没记录的才会走题库缓存/搜题。
+ */
+async function markPreviewAnswerBadges() {
+	const items = Array.from(document.querySelectorAll<HTMLElement>('.question-item'));
+	for (const item of items) {
+		const titleEl = item.querySelector<HTMLElement>('.quest-title');
+		const title = (titleEl?.innerText || '').trim();
+		if (!titleEl || !title) continue;
+		if (item.querySelector('.hh-answer-badge')) continue;
+
+		const recorded = !!(await lookupMasteryAnswer(title));
+		const badge = document.createElement('span');
+		badge.className = 'hh-answer-badge';
+		badge.textContent = recorded ? '✓ 已记录答案' : '未记录';
+		badge.style.cssText = [
+			'display:inline-block',
+			'margin-left:8px',
+			'padding:1px 8px',
+			'border-radius:10px',
+			'font-size:12px',
+			'line-height:18px',
+			'vertical-align:middle',
+			'white-space:nowrap',
+			recorded
+				? 'background:#e8f7ee;color:#1a9e4b;border:1px solid #b6e6c9'
+				: 'background:#f5f5f5;color:#8c8c8f;border:1px solid #e0e0e0'
+		].join(';');
+		titleEl.appendChild(badge);
+	}
+}
+
+/** 结果页在「查看作答记录与解析」旁标注答案库规模 */
+async function markResultAnswerTip() {
+	const link = document.querySelector<HTMLElement>('.line1-count-link');
+	if (!link || link.querySelector('.hh-answer-tip')) return;
+
+	const total = await countMasteryAnswers();
+	if (total === 0) return;
+
+	const tip = document.createElement('span');
+	tip.className = 'hh-answer-tip';
+	tip.textContent = `（答案库已记录 ${total} 题）`;
+	tip.style.cssText = 'margin-left:8px;font-size:12px;color:#8c8c8f;font-weight:400;';
+	link.appendChild(tip);
+}
+
+/**
+ * 解析页核心：抄答案 → 点「重新答题」重做这套题。
+ *
+ * 抽成模块级是因为有两条进入路径：
+ *
+ * 1. 结果页流程里点完「查看作答记录与解析」后直接接着做（SPA 路由，页面不重载，
+ *    `onhistorychange` 触发的那次接管会被 `pointExamRunning` 挡掉，必须由结果页自己接上）；
+ * 2. 页面重载后由 `collectPreviewAnswers` 方法接管。
+ *
+ * `back` 可以为空：用户自己在解析页点「抄答案并重做」时没有返回地址，
+ * 这时重做失败就原地提示，不往回跳。
+ */
+async function collectPreviewAnswersCore(back: { url?: string; at?: number } | null): Promise<void> {
+	if (previewCollectRunning) return;
+	previewCollectRunning = true;
+	try {
+		// 题目是异步渲染的：等数量稳定（连续两次相同）再抄，避免只抄到一半
+		let lastCount = -1;
+		for (let i = 0; i < 15; i++) {
+			const count = document.querySelectorAll('.question-item').length;
+			if (count > 0 && count === lastCount) break;
+			lastCount = count;
+			await $.sleep(1000);
+		}
+
+		const items = Array.from(document.querySelectorAll<HTMLElement>('.question-item'));
+		const collected: { title: string; answer: string }[] = [];
+		for (const item of items) {
+			const title = (item.querySelector<HTMLElement>('.quest-title')?.innerText || '').trim();
+			const answerText = (item.querySelector<HTMLElement>('.answer-title')?.innerText || '')
+				.replace(/参考答案[:：]/, '')
+				.trim();
+			if (!title || !answerText) continue;
+			collected.push({ title, answer: answerText });
+		}
+
+		if (collected.length === 0) {
+			// 没抄到答案就重做纯属浪费一次机会，直接回去
+			$message.warn({ content: '解析页未解析到题目', duration: 0 });
+			$console.warn('[掌握度] 解析页未解析到题目');
+			if (back?.url) {
+				await $store.setTab(ZHS_MASTERY_RETURN_KEY, { ...back, at: Date.now() });
+				await $.sleep(2000);
+				location.replace(back.url);
+			}
+			return;
+		}
+
+		// 先 await 保证写进 tab 级存储（有回执），再往下点「重新答题」跳走
+		await saveMasteryAnswers(collected);
+		// 抄完立刻回标：让用户看到每道题的答案状态（重做轮会直接用这些）
+		await markPreviewAnswerBadges();
+		/**
+		 * 只写本地答案表，不往公共题库缓存里塞：
+		 * localQuestionCaches 只有 200 条上限，掌握度题目多的时候
+		 * 会把用户自己攒的题库缓存挤掉。
+		 */
+		$message.success({
+			content: `已记录 ${collected.length} 道题的正确答案，正在重做这套题`,
+			duration: 5
+		});
+		$console.log(`[掌握度] 已记录 ${collected.length} 道题的正确答案`);
+
+		/**
+		 * 抄完答案直接点「重新答题」重做这套题。
+		 *
+		 * 它走的就是「去提升」那套 practiceHandle（同一个 examTestId / paperId），
+		 * 所以题目和选项顺序都不变，抄下来的字母答案可以直接用；
+		 * 比「回学习页 → 再点去提升」少绕两跳，也不会让学习页重播视频。
+		 */
+		const retry = ((await $store.getTab(ZHS_MASTERY_RETRY_KEY)) || { count: 0 }) as { count?: number };
+		await $store.setTab(ZHS_MASTERY_RETRY_KEY, { count: (retry.count || 0) + 1 });
+		// 刷新 at：万一重做这条路走不通退回学习页，标记也不会被判过期
+		await $store.setTab(
+			ZHS_MASTERY_RETURN_KEY,
+			back ? { ...back, at: Date.now(), skipReplay: true } : null
+		);
+
+		/**
+		 * 「重新答题」必须等页面把 `examInfo` 拉回来才点得动。
+		 *
+		 * 解析页 `mounted` 时才调 `startCreatePagerByKenoledgeId` 拿 `examInfo`
+		 *（里面是 examTestId / paperId / questionNum），而题目列表 `.question-item`
+		 * 是另一个接口 `getUserAnswer` 渲染的，通常先出来。这时候点按钮，
+		 * `practiceHandle` 里的 `this.examInfo.questionNum` 还是 undefined，
+		 * `openExam` 拿到空参数直接失败 —— 而且失败是静默的，页面上什么都不显示。
+		 * 所以先等几秒再点，点不动就重试几次。
+		 */
+		await $.sleep(3000);
+
+		// 有桌面端就用 Playwright 真点（最可靠），浏览器独立运行时退回 DOM 点击
+		const remotePage = await BackgroundProject.scripts.dev.methods.getRemotePlaywrightCurrentPage();
+
+		for (let attempt = 0; attempt < 3; attempt++) {
+			const found = findVisibleClickableByText(/^重新答题$/);
+			if (!found) break;
+			// 平台把 onClick 绑在 div.submit 上，优先点它本身
+			const againBtn = found.closest<HTMLElement>('.submit') || found;
+
+			$message.info({
+				content: attempt === 0 ? '正在重做这套题' : `正在重试重做（第 ${attempt + 1} 次）`
+			});
+			$console.log(
+				`[掌握度] 点击「重新答题」第 ${attempt + 1} 次：${againBtn.tagName}.${againBtn.className}（${remotePage ? 'Playwright' : 'DOM'}）`
+			);
+
+			await clickElement(remotePage, againBtn);
+
+			// 整页跳回试卷页，脚本上下文到此结束
+			for (let i = 0; i < 6; i++) {
+				await $.sleep(1000);
+				if (location.href.includes(ZHS_POINT_EXAM_HOST)) return;
+			}
+			$console.log('[掌握度] 未进入试卷页，等待接口就绪后重试');
+			await $.sleep(2000);
+		}
+
+		/**
+		 * 自动点击没生效：答案已经记好了，别白抄 —— 提示用户手动点一下，
+		 * 手动点进去照样能命中刚抄的答案。留 30 秒窗口，没动就回学习页继续刷课。
+		 */
+		$message.warn({
+			content: '答案已记录。若没有自动重做，请手动点右上角「重新答题」（30 秒后返回学习页）',
+			duration: 0
+		});
+		$console.warn('[掌握度] 自动点击「重新答题」未生效，等待手动点击');
+		for (let i = 0; i < 30; i++) {
+			await $.sleep(1000);
+			if (location.href.includes(ZHS_POINT_EXAM_HOST)) return;
+		}
+
+		// 30 秒还没进去：退回学习页重新点「去提升」
+		// 退回学习页：把重做标记置为 active，学习页会用「重做上限」而不是单节练习次数放行
+		await $store.setTab(ZHS_MASTERY_RETRY_KEY, { count: (retry.count || 0) + 1, active: true });
+		await $store.setTab(
+			ZHS_MASTERY_RETURN_KEY,
+			back ? { ...back, at: Date.now(), skipReplay: true } : null
+		);
+		await $.sleep(2000);
+		if (back?.url) location.replace(back.url);
+	} finally {
+		previewCollectRunning = false;
+	}
+}
+
+/** 从文本节点往上找真正带点击行为的容器（最多 4 层） */
+function findClickableAncestor(el: HTMLElement): HTMLElement {
+	let cur: HTMLElement | null = el;
+	for (let i = 0; i < 4 && cur; i++) {
+		if (isProbablyClickable(cur)) return cur;
+		cur = cur.parentElement;
+	}
+	return el;
+}
+
+/** 元素是否像个可点按钮（平台大量用 div + onClick，标签名靠不住） */
+function isProbablyClickable(el: HTMLElement): boolean {
+	const cls = typeof el.className === 'string' ? el.className : '';
+	// 平台用 noNext 表示「已经是最后一题」，容器虽然还带 next-topic 但不能点
+	if (/noNext|nopre|no-?next/i.test(cls)) return false;
+
+	const tag = el.tagName;
+	if (tag === 'BUTTON' || tag === 'A') return true;
+	if (el.getAttribute('role') === 'button') return true;
+
+	if (/btn|button|click|submit|to-improve|next-topic/i.test(cls)) return true;
+
+	try {
+		return getComputedStyle(el).cursor === 'pointer';
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * 元素自身或近亲是否处于「禁用/置灰」态
+ *
+ * 智慧树的置灰不是原生 disabled：最后一题时把 `.next-topic.next-t` 换成
+ * `.next-topic.noNext`（按钮仍是可点的 div，UIA 的 IsEnabled 也还是 true），
+ * 所以只能靠类名 + 计算样式判断，否则兜底选择器会一直找到这个灰按钮，死循环。
+ */
+function isDisabledLike(el: HTMLElement): boolean {
+	let cur: HTMLElement | null = el;
+	for (let i = 0; i < 4 && cur; i++) {
+		if ((cur as HTMLButtonElement).disabled) return true;
+		if (cur.getAttribute('aria-disabled') === 'true') return true;
+
+		const cls = typeof cur.className === 'string' ? cur.className : '';
+		// next-topic 的置灰态：`.next-topic.noNext` / `.pre-topic.nopre`（CSS 里颜色变成 #9c9c9c）
+		if (/(^|[\s_-])(noNext|nopre|no-?next|disabled?|forbid|is-disabled)([\s_-]|$)/i.test(cls)) return true;
+
+		try {
+			const style = getComputedStyle(cur);
+			if (style.pointerEvents === 'none') return true;
+			if (style.cursor === 'not-allowed') return true;
+			// 置灰按钮通常压了透明度；阈值取 0.5，正常按钮不会这么低
+			const opacity = parseFloat(style.opacity);
+			if (Number.isFinite(opacity) && opacity > 0 && opacity < 0.5) return true;
+		} catch (e) {
+			// 拿不到样式就当没禁用，不阻塞点击
+		}
+
+		cur = cur.parentElement;
+	}
+	return false;
+}
+
+/**
+ * 按文案找可见、未禁用的可点击元素
+ *
+ * 智慧树试卷页的「提交作业 / 上一题 / 下一题」都**不是** `<button>`，
+ * 而是绑了 onClick 的 div/span（UI Automation 里只会报成 Text），
+ * 所以不能只扫 `button / .el-button`；这里连普通容器一起扫，
+ * 命中后向上找带 cursor:pointer 或 btn 类名的最近祖先作为点击目标。
+ *
+ * 用 textContent 而不是 innerText 做匹配：innerText 会触发 reflow，
+ * 而这里要把整页扫一遍，代价太大。容器节点的文本很长，用长度剪枝挡掉。
+ */
+function findVisibleClickableByText(text: RegExp, root: ParentNode = document): HTMLElement | undefined {
+	const candidates = Array.from(
+		root.querySelectorAll<HTMLElement>('button, a, li, div, span, [role="button"]')
+	);
+
+	for (const el of candidates) {
+		const raw = (el.textContent || '').replace(/\s+/g, '');
+		// 按钮文案都很短，超过 12 个字基本是容器
+		if (!raw || raw.length > 12) continue;
+		if (!text.test(raw)) continue;
+		if ((el as HTMLButtonElement).disabled) continue;
+		if (typeof el.className === 'string' && /disabled/i.test(el.className)) continue;
+		if (!isElementVisible(el)) continue;
+
+		const target = findClickableAncestor(el);
+		// 命中的可能是置灰按钮（如最后一题的「下一题」），必须排除，否则会一直点它
+		if (isDisabledLike(target)) continue;
+		return target;
+	}
+	return undefined;
 }
 
 /**
@@ -1601,6 +2226,14 @@ export const ZHSProject = Project.create({
 			matches: [
 				['新形态课程学习页面', 'smartcoursestudent.zhihuishu.com/learnPage'],
 				['新形态课程新域名学习页面', 'ai-smart-course-student-pro.zhihuishu.com/learnPage'],
+				// 掌握度练习的第二层入口：整页跳转过来后旧脚本被销毁，靠这里重新接管去点「去提升」
+				['新形态课程-知识点学习报告页', 'ai-smart-course-student-pro.zhihuishu.com/masteryHistory'],
+				['新形态课程-知识点学习报告页旧域名', 'smartcoursestudent.zhihuishu.com/masteryHistory'],
+				// 提交后平台自己跳到结果页/解析页，同样得靠这里接管收尾
+				['新形态课程-知识点练习结果页', 'ai-smart-course-student-pro.zhihuishu.com/point/'],
+				['新形态课程-知识点练习结果页旧域名', 'smartcoursestudent.zhihuishu.com/point/'],
+				['新形态课程-知识点解析页', 'ai-smart-course-student-pro.zhihuishu.com/examPreview/'],
+				['新形态课程-知识点解析页旧域名', 'smartcoursestudent.zhihuishu.com/examPreview/'],
 				['新形态课程首页', 'smartcoursestudent.zhihuishu.com/singleCourse'],
 				['新形态课程新域名课程首页', 'ai-smart-course-student-pro.zhihuishu.com/singleCourse']
 			],
@@ -1608,7 +2241,8 @@ export const ZHSProject = Project.create({
 			configs: {
 				notes: {
 					defaultValue: $ui.notes([
-						'掌握度和作业请视频看完后自行手动进入',
+						'视频看完会自动点「去提升」做掌握度练习，答完自动提交并返回继续学习（可在设置里关闭）。',
+						'掌握度练习次数可在设置中限制，避免掌握度未满时反复往返。',
 						'不要最小化浏览器/关闭电脑屏幕，可能导致脚本暂停。',
 						'任意选择一个章节，脚本会自动往下学“必学”课程。',
 						'运行中请将浏览器缩放调整至适合的大小，避免元素遮挡，无法点击',
@@ -1637,6 +2271,44 @@ export const ZHSProject = Project.create({
 						['1.25', '1.25 x'],
 						['1.5', '1.5 x']
 					]
+				},
+				autoImproveMastery: {
+					label: '自动提升掌握度',
+					attrs: {
+						type: 'checkbox',
+						title: '视频看完后，若视频下方出现「去提升」按钮，自动进入知识点练习（掌握度）；答完会自动提交并返回继续学习'
+					},
+					defaultValue: true
+				},
+				masteryImproveTimes: {
+					label: '每节掌握度练习次数',
+					defaultValue: 1,
+					attrs: {
+						type: 'number',
+						min: 0,
+						step: 1,
+						max: 5,
+						title: '同一个小节自动进入掌握度练习的最大次数，0 表示不自动进入。掌握度未到 100% 时会反复出现「去提升」，限制次数可避免来回往返'
+					}
+				},
+				retryWhenNotFull: {
+					label: '未满分自动重做',
+					attrs: {
+						type: 'checkbox',
+						title: '答题提交后若没有全对：自动点「查看作答记录与解析」进入解析页，把正确答案记进题库缓存，再返回重做这套题。开启后练习次数上限改由下面一项控制'
+					},
+					defaultValue: true
+				},
+				retryMaxTimes: {
+					label: '未满分重做上限',
+					defaultValue: 3,
+					attrs: {
+						type: 'number',
+						min: 1,
+						step: 1,
+						max: 10,
+						title: '同一小节为了刷满掌握度最多自动重做几次（含第一次）。答完仍不满分就会停在这里，不再无限重刷'
+					}
 				}
 			},
 			oncomplete() {
@@ -1649,7 +2321,205 @@ export const ZHSProject = Project.create({
 			},
 			methods() {
 				return {
+					/**
+					 * 知识点学习报告页接管：把页面上的「去提升」点进试卷页。
+					 *
+					 * 学习页点完「去提升」后落在 `/masteryHistory/...`，这一层才是真正
+					 * `location.href` 跳试卷的入口。整页跳转会把学习页那套流程打断，
+					 * 所以由本脚本在新页面重新启动后接着推进（SPA 切换时则直接复用前一段轮询）。
+					 */
+					resumeMasteryReport: async () => {
+						if (masteryReportRunning) return;
+
+						// 只接管从学习页「去提升」跳过来的会话；正常浏览报告页不打扰
+						const pending = (await $store.getTab(ZHS_MASTERY_RETURN_KEY)) as
+							| { url?: string; at?: number }
+							| null;
+						if (!pending?.url || Date.now() - (pending.at || 0) > 5 * 60 * 1000) return;
+
+						masteryReportRunning = true;
+						try {
+							CommonProject.scripts.render.methods.pin(this);
+							$message.info({ content: '正在打开掌握度练习试卷' });
+							const ok = await advanceToPointExam();
+							if (!ok) {
+								$message.warn({
+									content: '未能自动打开试卷，请手动点击页面上的「去提升」',
+									duration: 0
+								});
+								$console.warn('知识点学习报告页未能进入试卷');
+							}
+						} finally {
+							masteryReportRunning = false;
+						}
+					},
+					/**
+					 * 知识点练习结果页收尾。
+					 *
+					 * 提交后平台会立刻整页跳到 `/point/...`，试卷页那套收尾代码当场被销毁，
+					 * 所以「回学习页 / 去解析页抄答案重做」都在这里做：
+					 * - 全对 → 直接回学习页接着刷课；
+					 * - 没全对且开了「未满分自动重做」且没超次数 → 点「查看作答记录与解析」抄答案；
+					 * - 其它情况 → 回学习页，避免无限重刷。
+					 */
+					afterPointExam: async () => {
+						if (pointExamRunning) return;
+
+						const back = (await $store.getTab(ZHS_MASTERY_RETURN_KEY)) as
+							| { url?: string; at?: number }
+							| null;
+						// 不是从学习页「去提升」进来的（用户自己点开的），不接管
+						if (!back?.url) return;
+
+						pointExamRunning = true;
+						try {
+							CommonProject.scripts.render.methods.pin(this);
+
+							// 掌握度是接口回包的，等「总题数 / 已答对」渲染出来
+							let total: number | null = null;
+							let correct: number | null = null;
+							for (let i = 0; i < 15; i++) {
+								total = readStatNumber('总题数');
+								correct = readStatNumber('已答对');
+								if (total !== null && total > 0 && correct !== null) break;
+								await $.sleep(1000);
+							}
+
+							const full = total !== null && correct !== null && total > 0 && correct >= total;
+							$console.log(
+								`[掌握度] 本次结果：${correct ?? '?'}/${total ?? '?'}${full ? '（已满分）' : ''}`
+							);
+							// 在「查看作答记录与解析」旁标出答案库规模，方便判断要不要再抄一遍
+							await markResultAnswerTip();
+
+							if (total === null || correct === null) {
+								// 读不到成绩就别瞎重做，老老实实回学习页
+								$message.warn({ content: '未能读取本次成绩，即将返回学习页', duration: 5 });
+							} else if (!full && this.cfg.retryWhenNotFull) {
+								const retry = ((await $store.getTab(ZHS_MASTERY_RETRY_KEY)) || { count: 0 }) as {
+									count?: number;
+								};
+								const done = retry.count || 0;
+								// 含首次：retryMaxTimes=3 表示这套题最多答 3 遍（首答 + 2 次重做）
+								const limit = this.cfg.retryMaxTimes ?? 3;
+
+								if (done + 1 < limit) {
+									const link = findVisibleClickableByText(/^查看作答记录与解析$/);
+									if (link) {
+										$message.info({
+											content: `未满分（${correct ?? '?'}/${total ?? '?'}），正在查看解析抄答案后重做（第 ${done + 2}/${limit} 遍）`
+										});
+										await safeClick(link);
+										// SPA 路由，等页面切到解析页
+										for (let i = 0; i < 10; i++) {
+											await $.sleep(1000);
+											if (location.pathname.includes(ZHS_EXAM_PREVIEW_PATH)) {
+												/**
+												 * 这里必须自己接着抄答案。
+												 * SPA 切路由不会重载页面，`onhistorychange` 触发的那次接管
+												 * 会被 `pointExamRunning` 挡掉，不接上就卡在解析页了。
+												 */
+												await collectPreviewAnswersCore(back);
+												return;
+											}
+										}
+									}
+									$message.warn({ content: '未能打开解析页，即将返回学习页', duration: 5 });
+								} else {
+									$message.warn({
+										content: `已答 ${done + 1} 遍仍未满分（上限 ${limit} 遍），即将返回学习页`,
+										duration: 5
+									});
+								}
+							}
+
+							// 满分 / 不再重做 → 回学习页继续刷课
+							// 先结束重做状态，否则学习页读到 active 会再开一轮
+							await $store.setTab(ZHS_MASTERY_RETRY_KEY, { count: 0, active: false });
+
+							const learnKey = (() => {
+								try {
+									return new URL(back.url!).pathname;
+								} catch (e) {
+									return '';
+								}
+							})();
+							if (learnKey) {
+								// 明确标记「本节刚练完」：学习页读到就跳过，不再依赖次数计算
+								await $store.setTab(ZHS_MASTERY_SETTLED_KEY, { key: learnKey, at: Date.now() });
+								// 双保险：把本节计次直接顶到上限，即使标记丢了也不会再进
+								const times = ((await $store.getTab(ZHS_MASTERY_TIMES_KEY)) || {}) as Record<
+									string,
+									number
+								>;
+								const cap = Math.max(
+									this.cfg.retryMaxTimes ?? 3,
+									this.cfg.masteryImproveTimes ?? 1
+								);
+								await $store.setTab(ZHS_MASTERY_TIMES_KEY, {
+									...times,
+									[learnKey]: Math.max(times[learnKey] || 0, cap)
+								});
+							}
+
+							// 刷新 at 让学习页知道「刚练完」，把视频进度顶到末尾而不是重播
+							await $store.setTab(ZHS_MASTERY_RETURN_KEY, { ...back, at: Date.now() });
+							$message.success({ content: '掌握度练习已完成，即将返回课程继续学习', duration: 5 });
+							await $.sleep(3000);
+							location.replace(back.url!);
+						} finally {
+							pointExamRunning = false;
+						}
+					},
+					/**
+					 * 知识点解析页接管（页面重载进入时走这里）。
+					 *
+					 * 结果页点完「查看作答记录与解析」是 SPA 路由，页面不重载，
+					 * 那条路径由 `afterPointExam` 直接调 `collectPreviewAnswersCore` 接着做；
+					 * 这里只负责「解析页被整页加载/用户刷新」的情况。
+					 */
+					collectPreviewAnswers: async () => {
+						// 结果页流程正在接管时由它直接接着抄，这里不重复插手
+						if (pointExamRunning) return;
+
+						const back = (await $store.getTab(ZHS_MASTERY_RETURN_KEY)) as
+							| { url?: string; at?: number }
+							| null;
+
+						if (!back?.url) {
+							// 用户自己打开解析页复习：只标一下每题的答案状态，不强制重做
+							for (let i = 0; i < 10; i++) {
+								if (document.querySelectorAll('.question-item').length > 0) break;
+								await $.sleep(1000);
+							}
+							await markPreviewAnswerBadges();
+							$message.info({
+								content: '已标注每题的答案状态。要重做请点右上角「重新答题」，答案会自动命中',
+								duration: 8
+							});
+							return;
+						}
+
+						CommonProject.scripts.render.methods.pin(this);
+						await collectPreviewAnswersCore(back);
+					},
 					start: async () => {
+						// 提交后的解析页 / 结果页：不属于视频学习，单独接管
+						if (location.pathname.includes(ZHS_EXAM_PREVIEW_PATH)) {
+							await this.methods.collectPreviewAnswers();
+							return;
+						}
+						if (location.pathname.includes(ZHS_POINT_RESULT_PATH)) {
+							await this.methods.afterPointExam();
+							return;
+						}
+
+						// 掌握度练习的第二层：知识点学习报告页，不涉及视频学习
+						if (location.pathname.includes(ZHS_MASTERY_REPORT_PATH)) {
+							await this.methods.resumeMasteryReport();
+							return;
+						}
+
 						if (location.href.includes('singleCourse')) {
 							$message.info({ content: '请点击任意章节开始进行自动学习', duration: 60 });
 							return;
@@ -1759,6 +2629,111 @@ export const ZHSProject = Project.create({
 								processor.switchLine(curr);
 							});
 
+							/** 防止 onended 短时间内多次触发时重复进入掌握度练习 */
+							let enteringMastery = false;
+
+							/**
+							 * 视频看完后进入掌握度练习（视频下方「去提升」）
+							 *
+							 * 点「去提升」是 `window.location.href` 整页跳到 studentexamcomh5 的试卷页，
+							 * 本页 JS 当场销毁，所以跳转前必须先把返回地址与「返回后跳过重播」标记写进
+							 * tab 级存储（跨域 localStorage 不通），由试卷页答完提交后再跳回来。
+							 */
+							const tryEnterMasteryImprove = async (): Promise<boolean> => {
+								if (enteringMastery) return false;
+								enteringMastery = true;
+								try {
+									if (!this.cfg.autoImproveMastery) return false;
+									const baseLimit = this.cfg.masteryImproveTimes ?? 1;
+									if (baseLimit <= 0) return false;
+
+									/**
+									 * 刚练完这一节就别再进了。
+									 *
+									 * 只靠次数不够：重做失败退回学习页时会把 retry.active 置 true，
+									 * 学习页就按重做上限放行，一路走下来有概率又开一轮，
+									 * 用户看到的就是「做完卷子回学习页又进去了」。
+									 */
+									const settledKey = location.pathname;
+									const settled = ((await $store.getTab(ZHS_MASTERY_SETTLED_KEY)) || null) as {
+										key?: string;
+										at?: number;
+									} | null;
+									if (
+										settled?.key === settledKey &&
+										Date.now() - (settled.at || 0) < 5 * 60 * 1000
+									) {
+										await $store.setTab(ZHS_MASTERY_SETTLED_KEY, null);
+										$console.log('本节刚练完，跳过掌握度练习，继续下一节');
+										return false;
+									}
+
+									/**
+									 * 「未满分重做」在解析页点不动「重新答题」时会退回学习页，
+									 * 并把这个标记置为 active —— 这时按重做上限放行，
+									 * 否则单节练习次数（默认 1）已经用完，就再也进不去了。
+									 */
+									const retryState = ((await $store.getTab(ZHS_MASTERY_RETRY_KEY)) || {}) as {
+										count?: number;
+										active?: boolean;
+									};
+									const limit =
+										retryState.active && this.cfg.retryWhenNotFull
+											? (this.cfg.retryMaxTimes ?? 3)
+											: baseLimit;
+
+									// 掌握度是接口回包后才渲染的，视频刚结束（或 PPT 刚打开）时可能还没出现，等它一会儿
+									const btn = await waitMasteryImproveButton(12);
+									if (!btn) {
+										$console.log('未发现「去提升」按钮，继续下一节');
+										return false;
+									}
+
+									const key = location.pathname;
+									const times = ((await $store.getTab(ZHS_MASTERY_TIMES_KEY)) || {}) as Record<
+										string,
+										number
+									>;
+									const used = times[key] || 0;
+									if (used >= limit) {
+										$console.log(`本节已自动进入掌握度练习 ${used} 次（上限 ${limit}），继续下一节`);
+										return false;
+									}
+
+									$message.info({ content: '检测到「去提升」，正在进入掌握度练习' });
+									$console.log('检测到「去提升」，正在进入掌握度练习');
+
+									// 先落盘再点击：跳转是整页的，点完之后就没有机会写了
+									await $store.setTab(ZHS_MASTERY_RETURN_KEY, {
+										url: location.href,
+										at: Date.now(),
+										skipReplay: true
+									});
+									await $store.setTab(ZHS_MASTERY_TIMES_KEY, { ...times, [key]: used + 1 });
+									/**
+									 * 只有真正的新一轮才把重做轮次清零。
+									 * 重做路径（active）必须保留轮次，否则结果页的「还能重做几次」
+									 * 永远从 0 算起，会无限重刷。
+									 */
+									if (!retryState.active) {
+										await $store.setTab(ZHS_MASTERY_RETRY_KEY, { count: 0, active: false });
+									}
+
+									await $.sleep(500);
+									// 学习页 →「知识点学习报告」→ 试卷，两层入口依次点；直接到试卷也认
+									const ok = await advanceToPointExam(btn);
+									if (ok) return true;
+
+									await $store.setTab(ZHS_MASTERY_RETURN_KEY, null);
+									await $store.setTab(ZHS_MASTERY_TIMES_KEY, { ...times, [key]: used });
+									$message.warn({ content: '未能进入掌握度练习页面，继续学习', duration: 5 });
+									$console.log('未能进入掌握度练习页面，继续学习');
+									return false;
+								} finally {
+									enteringMastery = false;
+								}
+							};
+
 							const doWork = async () => {
 								await $.sleep(5 * 1000);
 
@@ -1820,6 +2795,17 @@ export const ZHSProject = Project.create({
 										filter: (m) => m.src.length !== 0
 									});
 								} catch {
+									/**
+									 * 非视频任务点（PPT / 文档等）没有 <video>，但视频下方那块
+									 * 「知识点最高掌握度 + 去提升」照样存在。这里先试一次再跳下一节，
+									 * 否则这类小节会被整段跳过，掌握度永远是 0。
+									 */
+									try {
+										if (await tryEnterMasteryImprove()) return;
+									} catch (e) {
+										$console.warn('非视频任务点进入掌握度练习失败：' + e);
+									}
+
 									const msg = '未找到学习视频，即将自动下一节！';
 									$message.error(msg);
 									$console.error(msg);
@@ -1841,8 +2827,29 @@ export const ZHSProject = Project.create({
 										await $.sleep(1000);
 										state.study.currentMedia = media;
 										if (media) {
-											// 如果已经播放完了，则重置视频进度
-											media.currentTime = 1;
+											/**
+											 * 刚练完掌握度跳回来：本节视频本来就已经看完，
+											 * 再从 1 秒重播一遍纯属浪费（长视频要再等十几分钟），
+											 * 直接把进度顶到末尾触发 ended，好接着去下一节。
+											 * 标记带 3 分钟有效期，避免历史残留导致正常页面被跳过。
+											 */
+											const pending = (await $store.getTab(ZHS_MASTERY_RETURN_KEY)) as
+												| { url?: string; at?: number; skipReplay?: boolean }
+												| null;
+											const justReturned =
+												!!pending?.skipReplay && Date.now() - (pending.at || 0) < 3 * 60 * 1000;
+											if (justReturned) {
+												await $store.setTab(ZHS_MASTERY_RETURN_KEY, null);
+												// duration 要等元数据加载才有值，拿不到就退回 1 秒（最多把这节重播一遍）
+												for (let i = 0; i < 10 && !Number.isFinite(media.duration); i++) {
+													await $.sleep(300);
+												}
+												const duration = Number.isFinite(media.duration) ? media.duration : 0;
+												media.currentTime = duration > 2 ? duration - 1 : 1;
+											} else {
+												// 如果已经播放完了，则重置视频进度
+												media.currentTime = 1;
+											}
 											// 音量
 											media.volume = this.cfg.volume;
 										}
@@ -1872,6 +2879,14 @@ export const ZHSProject = Project.create({
 								};
 
 								video.onended = async () => {
+									// 视频看完先尝试提升掌握度：进入练习页会整页跳走，本节流程到此为止
+									try {
+										if (await tryEnterMasteryImprove()) return;
+									} catch (e) {
+										// 找按钮/写存储出错不能把整条学习流程带死，继续下一节
+										$console.warn('进入掌握度练习失败：' + e);
+									}
+
 									$message.info({ content: '即将自动跳转下一节' });
 									await $.sleep(3000);
 
@@ -1908,15 +2923,21 @@ export const ZHSProject = Project.create({
 						'可以搭配 “通用-在线搜题” 一起使用。',
 						'如果没开始答题，请尝试刷新页面。',
 						'禁止一次性打开多个作业/考试页面。',
-						...(remote_not_required_pages.some((domain) => location.href.includes(domain))
-							? []
-							: ['答题中请勿进行任何操作，如需暂停答题', '请等待全部题目搜索完成并执行自动保存功能后才能操作。'])
+						...smartWorkNotes()
 					]).outerHTML
 				},
 				workDelay: {
 					label: '作业答题开始时间延迟（秒）',
 					defaultValue: 3,
 					attrs: { type: 'number', min: 1, step: 1, max: 10 }
+				},
+				autoSubmitPointExam: {
+					label: '掌握度练习自动提交',
+					attrs: {
+						type: 'checkbox',
+						title: '仅在新形态课程掌握度练习页（studentexamcomh5）生效：答完自动点「提交」，提交后自动返回课程继续学习。提交不可逆，如担心正确率可关闭此项手动提交'
+					},
+					defaultValue: true
 				}
 			},
 			methods() {
@@ -1928,20 +2949,33 @@ export const ZHSProject = Project.create({
 						let remotePage: RemotePage | undefined;
 						// 掌握度
 						const remote_not_required = remote_not_required_pages.some((domain) => location.href.includes(domain));
+						// 掌握度练习页（学习页「去提升」跳过来的试卷页），没有桌面端也能靠 DOM 事件点
+						const is_point_exam = location.href.includes(ZHS_POINT_EXAM_PAGE);
 
-						remote_not_required ? await waitForElement('.exam-item') : await waitForElement('.questionContent');
+						if (is_point_exam) {
+							// 从学习页「去提升」过来时可能先落在 AI 复习过渡页，需要点一下主按钮才进试卷
+							const ready = await waitPointExamReady(60);
+							if (!ready) {
+								$message.warn({ content: '未检测到题目，请在页面上点一下「开始答题/继续」', duration: 0 });
+								await waitForElement('.questionContent');
+							}
+						} else {
+							remote_not_required ? await waitForElement('.exam-item') : await waitForElement('.questionContent');
+						}
 
 						if (remote_not_required) {
 							// 这两个页面不需要软件辅助
 						} else {
 							remotePage = await BackgroundProject.scripts.dev.methods.getRemotePlaywrightCurrentPage();
 							// 检查是否为软件环境
-							if (!remotePage) {
+							if (!remotePage && !is_point_exam) {
 								return $playwright.showError();
 							}
-							// 移动到左上角
-							$render.moveToEdge();
-							$message.warn({ content: '答题完毕之前请勿操作页面！', duration: 0 });
+							if (remotePage) {
+								// 移动到左上角
+								$render.moveToEdge();
+								$message.warn({ content: '答题完毕之前请勿操作页面！', duration: 0 });
+							}
 						}
 
 						commonWork(this, {
@@ -1952,7 +2986,14 @@ export const ZHSProject = Project.create({
 									return smartWork(remotePage, opts);
 								}
 							},
-							start_delay_seconds: this.cfg.workDelay ?? 3
+							start_delay_seconds: this.cfg.workDelay ?? 3,
+							onWorkerCreated: (worker) => {
+								if (!is_point_exam) return;
+								// 答完先提交、再跳回学习页，整个「视频 → 去提升 → 练习 → 返回」闭环在这里收口
+								worker.once('done', () => {
+									finishPointExamPractice(this.cfg.autoSubmitPointExam !== false);
+								});
+							}
 						});
 					}
 				};
@@ -3463,9 +4504,14 @@ function smartWork(
 	remotePage: RemotePage | undefined,
 	{ answererWrappers, period, thread, answerSeparators }: CommonWorkOptions
 ) {
-	$message.info({ content: '开始作业' });
+	/** 掌握度练习页由脚本自动交卷，提示文案要跟着换，别再说「自行保存或提交」 */
+	const autoSubmitOnThisPage = location.href.includes(ZHS_POINT_EXAM_HOST);
+
+	$message.info({ content: autoSubmitOnThisPage ? '开始答题（答完自动提交）' : '开始作业' });
 	$message.warn({
-		content: '答题中请勿进行任何操作，如需暂停答题，请等待全部题目搜索完成并执行自动保存功能后才能操作。',
+		content: autoSubmitOnThisPage
+			? '答题中请勿操作页面，答完会自动提交试卷并返回课程。'
+			: '答题中请勿进行任何操作，如需暂停答题，请等待全部题目搜索完成并执行自动保存功能后才能操作。',
 		duration: 0,
 		closeable: false
 	});
@@ -3493,9 +4539,35 @@ function smartWork(
 		thread: thread ?? 1,
 		answerSeparators: answerSeparators.split(',').map((s) => s.trim()),
 		/** 默认搜题方法构造器 */
-		answerer: (elements, ctx) => {
+		answerer: async (elements, ctx) => {
 			const title = titleTransform(elements.title);
 			if (title) {
+				/**
+				 * 优先用解析页抄下来的答案：
+				 * 掌握度重做轮用的就是这套题，比重新搜题又快又准。
+				 */
+				const collected = await lookupMasteryAnswer(title);
+				if (collected) {
+					return [
+						{
+							// 结果面板会显示这个来源，标明该题用的是「解析页抄下来的答案」
+							name: MASTERY_ANSWER_SOURCE,
+							homepage: '',
+							results: [{ question: title, answer: collected, extra_data: { cache: true } }]
+						}
+					];
+				}
+
+				/**
+				 * 掌握度练习页上没命中本地答案，说明题干对不上、或者这道是平台新抽的题。
+				 * 记一条方便排查「明明抄过答案却走了 AI」的情况。
+				 */
+				if (location.href.includes(ZHS_POINT_EXAM_HOST)) {
+					const total = await countMasteryAnswers();
+					if (total > 0) {
+						$console.log(`[掌握度] 未命中本地答案（表内 ${total} 条）：${title.slice(0, 40)}`);
+					}
+				}
 				return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
 					await $.sleep((period ?? 3) * 1000);
 					return defaultAnswerWrapperHandler(answererWrappers, {
@@ -3564,9 +4636,17 @@ function smartWork(
 			}
 
 			if (current.result?.finish) {
-				CommonProject.scripts.apps.methods.addQuestionCacheFromWorkResult(
-					simplifyWorkResult([current], titleTransform)
+				const swr = simplifyWorkResult([current], titleTransform);
+				/**
+				 * 用「解析页抄下来的答案」答对的题不再写进题库缓存：
+				 * 它本来就在本地答案表里，重复写只会挤占 localQuestionCaches 的 200 条额度。
+				 */
+				const cacheable = swr.filter(
+					(r) => !r.searchInfos.some((i) => i.name === MASTERY_ANSWER_SOURCE)
 				);
+				if (cacheable.length) {
+					CommonProject.scripts.apps.methods.addQuestionCacheFromWorkResult(cacheable);
+				}
 			}
 			CommonProject.scripts.workResults.methods.updateWorkState({
 				totalQuestionCount,
@@ -3576,7 +4656,45 @@ function smartWork(
 		}
 	});
 
-	const getNextBtn = () => document.querySelector<HTMLElement>('.next-topic.next-t');
+	const getNextBtn = () => {
+		const byClass = document.querySelector<HTMLElement>('.next-topic.next-t');
+		// 类名命中也要确认不是「提交/交卷」，否则最后一题会把提交按钮当下一题点掉
+		if (byClass && !/提交|交卷/.test(byClass.textContent || '')) return byClass;
+
+		/**
+		 * 平台到底后的写法：`.next-topic.next-t` 换成 `.next-topic.noNext`（按钮置灰）。
+		 * 这是最可靠的「最后一题」信号，直接返回 null 结束循环。
+		 */
+		const container = document.querySelector<HTMLElement>('.next-topic.next-t, .next-topic.noNext');
+		if (container && /noNext/i.test(String(container.className))) return null;
+
+		// 类名被平台改掉时按文案兜底，否则答完第一题就以为做完了
+		return findVisibleClickableByText(/^下一题$/) || null;
+	};
+
+	/**
+	 * 清掉当前题的旧选择
+	 *
+	 * 掌握度重做用的是同一个 examTestId，平台会把上一轮的作答带回来。
+	 * 不清的话，之前选错的选项还亮着，脚本判断「已选中」就跳过，
+	 * 这一轮改都改不动，重做等于白做。
+	 */
+	const clearCurrentQuestionSelections = async () => {
+		const root = document.querySelector('.questionContent');
+		if (!root) return;
+		const checked = Array.from(
+			root.querySelectorAll<HTMLElement>(
+				'.el-radio__input.is-checked, .el-checkbox__input.is-checked, i.iconfont.checkedIcon'
+			)
+		);
+		if (checked.length === 0) return;
+		for (const el of checked) {
+			await clickElement(remotePage, el);
+			await $.sleep(150);
+		}
+		await $.sleep(300);
+	};
+
 	let next = null as HTMLElement | null;
 
 	(async () => {
@@ -3588,7 +4706,16 @@ function smartWork(
 			await $.sleep(3000);
 		}
 		let count = 0;
+		// 答题卡题数作为循环上限的参考（拿不到就退回固定 100），防止任何未知原因空转
+		const cardCount = document.querySelectorAll('[role="treeitem"]').length;
+		const maxRounds = cardCount > 0 ? cardCount + 10 : 100;
 		while (worker.isClose === false) {
+			if (count > maxRounds) {
+				$console.log(`答题循环超过 ${maxRounds} 次，强制结束`);
+				break;
+			}
+
+			await clearCurrentQuestionSelections();
 			await worker.doWork({ enable_debug: BackgroundProject.scripts.dev.cfg.enable_answerer_debug });
 			next = getNextBtn();
 			if (!next) {
@@ -3599,21 +4726,158 @@ function smartWork(
 			if (remotePage) await remotePage.click(next);
 			else trustedClick(next);
 			// 等待题目加载
-			await $.sleep(1000);
+			await $.sleep(1500);
 			count++;
 		}
 
+		/**
+		 * 掌握度练习页是脚本自动交卷的，别再说「请自行检查后保存或提交」误导人。
+		 * 其它作业/考试页面保持原提示（那边确实要用户自己提交）。
+		 */
 		$message.info({
-			content: '作业/考试完成，请自行检查后保存或提交。',
-			duration:
-				// 题目过多则不自动关闭
-				count > 10 ? 0 : 30
+			content: autoSubmitOnThisPage
+				? '答题完成，正在自动提交试卷…'
+				: '作业/考试完成，请自行检查后保存或提交。',
+			duration: autoSubmitOnThisPage
+				? 8
+				: // 题目过多则不自动关闭
+				  count > 10
+					? 0
+					: 30
 		});
 		worker.emit('done');
 		// 答题完成后，题库选项点击才会同步题目，否则会导致题目错乱
 		CommonProject.scripts.workResults.cfg.questionPositionSyncHandlerType = 'zhs-smart';
 	})();
 	return worker;
+}
+
+/**
+ * 等掌握度练习页出题。
+ *
+ * 从学习页「去提升」跳过来时可能先落在「AI 复习过渡页」（pointAIReviewTransitionPage），
+ * 要先点一下主按钮才进试卷。这里一边等 `.questionContent`，一边尝试点一次
+ * 「开始答题 / 继续 / 进入练习」这类短文案按钮，避免只认题号而卡在过渡页。
+ */
+async function waitPointExamReady(timeoutSeconds = 60): Promise<boolean> {
+	const startedAt = Date.now();
+	let triedStart = false;
+	while (Date.now() - startedAt < timeoutSeconds * 1000) {
+		if (document.querySelector('.questionContent')) return true;
+
+		if (!triedStart) {
+			const start = findVisibleClickableByText(/^(开始答题|开始练习|继续答题|进入练习|立即开始|开始作答)$/);
+			if (start) {
+				triedStart = true;
+				$message.info({ content: '正在进入掌握度练习' });
+				await safeClick(start);
+				await $.sleep(3000);
+				continue;
+			}
+		}
+
+		await $.sleep(1000);
+	}
+	return !!document.querySelector('.questionContent');
+}
+
+/**
+ * 提交掌握度练习试卷：先点「提交/交卷」，再处理「你还有 X 道题未作答，是否提交？」的确认弹窗。
+ *
+ * 平台各版本按钮文案不统一，所以用文案匹配；点击后靠「提交按钮消失」或成功文案判定结果，
+ * 不能只 sleep 固定时间 —— 提交接口慢的时候会误判成已经提交，进而白跳回学习页丢掉答案。
+ */
+async function submitPointExamPaper(): Promise<boolean> {
+	await $.sleep(2000);
+
+	// 试卷页的按钮在右上角，文案是「提交作业」（不是「提交试卷」），且只是 div
+	const submitText = /^(提交作业|提交试卷|提交答卷|提交答案|提交|交卷)$/;
+	const submit = findVisibleClickableByText(submitText);
+	if (!submit) {
+		$message.warn({ content: '未找到「提交作业」按钮，请手动提交', duration: 0 });
+		return false;
+	}
+
+	dispatchMouseSequence(submit);
+	trustedClick(submit);
+	await $.sleep(1500);
+
+	// 有未作答题目时平台会弹确认框，确认按钮可能是「确定」也可能是「继续提交」
+	const dialog = document.querySelector<HTMLElement>('.el-message-box, .el-dialog, .confirm-dialog-component');
+	const confirm = dialog
+		? findVisibleClickableByText(/^(确定|确认|提交作业|提交|继续提交)$/, dialog)
+		: undefined;
+	if (confirm) {
+		dispatchMouseSequence(confirm);
+		trustedClick(confirm);
+		await $.sleep(1000);
+	}
+
+	for (let i = 0; i < 20; i++) {
+		await $.sleep(1000);
+		// 提交按钮消失，说明已经跳到结果页或试卷变为已提交状态
+		if (!findVisibleClickableByText(submitText)) {
+			$message.success({ content: '掌握度练习已提交', duration: 5 });
+			return true;
+		}
+		if (/提交成功|交卷成功|试卷已提交|提交完成/.test(document.body?.innerText || '')) {
+			$message.success({ content: '掌握度练习已提交', duration: 5 });
+			return true;
+		}
+	}
+
+	$message.warn({ content: '未能确认提交结果，请手动检查后返回学习页', duration: 0 });
+	return false;
+}
+
+/**
+ * 掌握度练习答完后收尾：提交试卷 → 跳回学习页继续。
+ *
+ * 只有从学习页「去提升」进来（tab 存储里有返回标记）的才跳回去，
+ * 用户手动打开试卷页答完保持原样，不会突然把人踢走。
+ */
+async function finishPointExamPractice(autoSubmit: boolean) {
+	const saved = (await $store.getTab(ZHS_MASTERY_RETURN_KEY)) as { url?: string; at?: number } | null;
+	// 标记只认 2 小时内的：题目多的时候答上一个小时也正常，太短的窗口会让返回失效
+	const back = saved?.url && Date.now() - (saved.at || 0) < 2 * 60 * 60 * 1000 ? saved : null;
+
+	/**
+	 * 只有从学习页「去提升」进来的（有返回标记）才自动提交并跳回。
+	 * 手动打开的试卷页保持原样 —— 这个域名下也可能有正式考试，不能替用户交卷。
+	 */
+	if (!back) {
+		$message.info({ content: '练习已完成，请手动检查后提交。', duration: 0 });
+		return;
+	}
+
+	if (!autoSubmit) {
+		$message.warn({ content: '已关闭自动提交，请手动提交试卷后返回学习页', duration: 0 });
+		return;
+	}
+
+	const ok = await submitPointExamPaper();
+	// 没提交成功就留在页面上让人工处理，跳走会把这份答案丢掉
+	if (!ok) return;
+
+	/**
+	 * 提交成功后平台通常会自己整页跳到 `/point/...` 结果页，
+	 * 判分、未满分重做都在那边接管（本页 JS 会被销毁，这里写什么都不会执行）。
+	 * 所以先等它跳，没跳再自己回学习页 —— 不然会和平台的跳转打架。
+	 */
+	for (let i = 0; i < 15; i++) {
+		await $.sleep(1000);
+		if (!location.href.includes(ZHS_POINT_EXAM_HOST)) return;
+	}
+
+	/**
+	 * 平台没跳：自己回学习页。
+	 * 注意这里不能把标记清掉：学习页要靠它判断「刚练完回来」，
+	 * 从而把视频进度顶到末尾而不是重播。
+	 */
+	await $store.setTab(ZHS_MASTERY_RETURN_KEY, { ...back, at: Date.now() });
+	$message.success({ content: '掌握度练习已完成，即将返回课程继续学习', duration: 5 });
+	await $.sleep(2000);
+	location.replace(back.url!);
 }
 
 function smartExam(

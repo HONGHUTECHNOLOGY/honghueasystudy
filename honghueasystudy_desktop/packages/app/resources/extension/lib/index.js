@@ -9409,6 +9409,29 @@
     "studywisdomh5.zhihuishu.com",
     "wisdom-mooc.zhihuishu.com"
   ];
+  const ZHS_MASTERY_RETURN_KEY = "zhs-mastery-return";
+  const ZHS_MASTERY_TIMES_KEY = "zhs-mastery-times";
+  const ZHS_POINT_EXAM_HOST = "studentexamcomh5.zhihuishu.com";
+  const ZHS_POINT_EXAM_PAGE = ZHS_POINT_EXAM_HOST + "/studentReviewTestOrExam";
+  const ZHS_MASTERY_REPORT_PATH = "/masteryHistory/";
+  const ZHS_POINT_RESULT_PATH = "/point/";
+  const ZHS_EXAM_PREVIEW_PATH = "/examPreview/";
+  const ZHS_MASTERY_ANSWERS_KEY = "zhs-mastery-answers";
+  const MASTERY_ANSWER_SOURCE = "[已记录] 解析页";
+  const ZHS_MASTERY_RETRY_KEY = "zhs-mastery-retry";
+  const ZHS_MASTERY_SETTLED_KEY = "zhs-mastery-settled";
+  function smartWorkNotes() {
+    if (location.href.includes(ZHS_POINT_EXAM_HOST)) {
+      return ["答完会自动提交试卷，提交后自动返回课程继续学习。"];
+    }
+    if (remote_not_required_pages.some((domain) => location.href.includes(domain))) {
+      return [];
+    }
+    return ["答题中请勿进行任何操作，如需暂停答题", "请等待全部题目搜索完成并执行自动保存功能后才能操作。"];
+  }
+  let pointExamRunning = false;
+  let previewCollectRunning = false;
+  let masteryReportRunning = false;
   const gxk_read_notes = [
     "如果未开始答题，请尝试刷新页面。",
     "禁止同时打开多个作业/考试页面。",
@@ -9420,6 +9443,355 @@
       return false;
     const text = (el.textContent || "").replace(/\s+/g, "");
     return /已完成|已学完|已看完/.test(text);
+  }
+  function isElementVisible(el) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0)
+      return false;
+    const style = getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+  }
+  function getMasteryImproveButton() {
+    const isImproveText = (el) => /^去提升[→>»›）)]{0,2}$/.test((el.textContent || "").replace(/\s+/g, ""));
+    const isUsable = (el) => {
+      if (el.disabled)
+        return false;
+      if (typeof el.className === "string" && /disabled/i.test(el.className))
+        return false;
+      if (!isImproveText(el))
+        return false;
+      return isElementVisible(el);
+    };
+    const known = Array.from(document.querySelectorAll(".simplified-mastery__action, .to-improve"));
+    const hit = known.find(isUsable);
+    if (hit)
+      return hit;
+    for (const el of Array.from(
+      document.querySelectorAll('button, a, div, span, [role="button"]')
+    )) {
+      if ((el.textContent || "").length > 20)
+        continue;
+      if (!isUsable(el))
+        continue;
+      return el.closest('button, a, [role="button"], [class*="btn"], [class*="button"], .to-improve') || el;
+    }
+    return void 0;
+  }
+  async function waitMasteryImproveButton(timeoutSeconds = 15) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutSeconds * 1e3) {
+      const btn = getMasteryImproveButton();
+      if (btn)
+        return btn;
+      await lib.$.sleep(1e3);
+    }
+    return void 0;
+  }
+  async function advanceToPointExam(firstBtn, maxLayers = 3) {
+    const arrived = () => location.href.includes(ZHS_POINT_EXAM_HOST);
+    let btn = firstBtn;
+    for (let layer = 0; layer < maxLayers; layer++) {
+      if (arrived())
+        return true;
+      if (!btn)
+        btn = await waitMasteryImproveButton(15);
+      if (!btn)
+        return arrived();
+      lib.$message.info({ content: layer === 0 ? "正在进入掌握度练习" : "正在打开掌握度试卷" });
+      await safeClick(btn);
+      btn = void 0;
+      for (let i = 0; i < 15; i++) {
+        await lib.$.sleep(1e3);
+        if (arrived())
+          return true;
+        if (getMasteryImproveButton())
+          break;
+      }
+    }
+    return arrived();
+  }
+  function readStatNumber(label) {
+    const nodes = Array.from(document.querySelectorAll("div, span, p"));
+    for (const el of nodes) {
+      if ((el.textContent || "").trim() !== label)
+        continue;
+      const next2 = el.nextElementSibling;
+      if (!next2)
+        continue;
+      const n = parseInt((next2.textContent || "").trim(), 10);
+      if (Number.isFinite(n))
+        return n;
+    }
+    return null;
+  }
+  function compactQuestion(text) {
+    return (text || "").replace(/https?:\/\/[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+/g, "").replace(/[\s\u3000]+/g, "").replace(/[（(][)）]/g, "").replace(/[_＿]{2,}/g, "").replace(/[，。！？；：""''、（）【】《》,.\-!?;:'"()[\]<>]/g, "").toLowerCase();
+  }
+  async function saveMasteryAnswers(items2) {
+    if (items2.length === 0)
+      return;
+    const now2 = Date.now();
+    const apply = (store2) => {
+      const list = store2.slice();
+      for (const item of items2) {
+        const key = compactQuestion(item.title);
+        if (!key)
+          continue;
+        const record = { title: item.title, answer: item.answer, at: now2 };
+        const idx = list.findIndex((s) => compactQuestion(s.title) === key);
+        if (idx === -1)
+          list.unshift(record);
+        else
+          list[idx] = record;
+      }
+      return list.slice(0, 500);
+    };
+    const tabStore = await lib.$store.getTab(ZHS_MASTERY_ANSWERS_KEY) || [];
+    await lib.$store.setTab(ZHS_MASTERY_ANSWERS_KEY, apply(tabStore));
+    const globalStore = lib.$store.get(ZHS_MASTERY_ANSWERS_KEY) || [];
+    lib.$store.set(ZHS_MASTERY_ANSWERS_KEY, apply(globalStore));
+  }
+  async function lookupMasteryAnswer(title) {
+    const key = compactQuestion(title);
+    if (!key)
+      return void 0;
+    const tabStore = await lib.$store.getTab(ZHS_MASTERY_ANSWERS_KEY) || [];
+    const globalStore = lib.$store.get(ZHS_MASTERY_ANSWERS_KEY) || [];
+    const store2 = [...tabStore, ...globalStore];
+    if (store2.length === 0)
+      return void 0;
+    const exact = store2.find((s) => compactQuestion(s.title) === key);
+    if (exact)
+      return exact.answer;
+    for (const s of store2) {
+      const other = compactQuestion(s.title);
+      if (!other)
+        continue;
+      const shorter = Math.min(other.length, key.length);
+      const longer = Math.max(other.length, key.length);
+      if (shorter < 8 || shorter / longer < 0.75)
+        continue;
+      if (other.includes(key) || key.includes(other))
+        return s.answer;
+    }
+    if (key.length >= 15) {
+      const head = key.slice(0, 15);
+      for (const s of store2) {
+        const other = compactQuestion(s.title);
+        if (other.length >= 15 && other.slice(0, 15) === head)
+          return s.answer;
+      }
+    }
+    return void 0;
+  }
+  async function countMasteryAnswers() {
+    const tabStore = await lib.$store.getTab(ZHS_MASTERY_ANSWERS_KEY) || [];
+    const globalStore = lib.$store.get(ZHS_MASTERY_ANSWERS_KEY) || [];
+    return Math.max(tabStore.length || 0, globalStore.length || 0);
+  }
+  async function markPreviewAnswerBadges() {
+    const items2 = Array.from(document.querySelectorAll(".question-item"));
+    for (const item of items2) {
+      const titleEl = item.querySelector(".quest-title");
+      const title = ((titleEl == null ? void 0 : titleEl.innerText) || "").trim();
+      if (!titleEl || !title)
+        continue;
+      if (item.querySelector(".hh-answer-badge"))
+        continue;
+      const recorded = !!await lookupMasteryAnswer(title);
+      const badge = document.createElement("span");
+      badge.className = "hh-answer-badge";
+      badge.textContent = recorded ? "✓ 已记录答案" : "未记录";
+      badge.style.cssText = [
+        "display:inline-block",
+        "margin-left:8px",
+        "padding:1px 8px",
+        "border-radius:10px",
+        "font-size:12px",
+        "line-height:18px",
+        "vertical-align:middle",
+        "white-space:nowrap",
+        recorded ? "background:#e8f7ee;color:#1a9e4b;border:1px solid #b6e6c9" : "background:#f5f5f5;color:#8c8c8f;border:1px solid #e0e0e0"
+      ].join(";");
+      titleEl.appendChild(badge);
+    }
+  }
+  async function markResultAnswerTip() {
+    const link = document.querySelector(".line1-count-link");
+    if (!link || link.querySelector(".hh-answer-tip"))
+      return;
+    const total = await countMasteryAnswers();
+    if (total === 0)
+      return;
+    const tip = document.createElement("span");
+    tip.className = "hh-answer-tip";
+    tip.textContent = `（答案库已记录 ${total} 题）`;
+    tip.style.cssText = "margin-left:8px;font-size:12px;color:#8c8c8f;font-weight:400;";
+    link.appendChild(tip);
+  }
+  async function collectPreviewAnswersCore(back) {
+    var _a, _b;
+    if (previewCollectRunning)
+      return;
+    previewCollectRunning = true;
+    try {
+      let lastCount = -1;
+      for (let i = 0; i < 15; i++) {
+        const count = document.querySelectorAll(".question-item").length;
+        if (count > 0 && count === lastCount)
+          break;
+        lastCount = count;
+        await lib.$.sleep(1e3);
+      }
+      const items2 = Array.from(document.querySelectorAll(".question-item"));
+      const collected = [];
+      for (const item of items2) {
+        const title = (((_a = item.querySelector(".quest-title")) == null ? void 0 : _a.innerText) || "").trim();
+        const answerText = (((_b = item.querySelector(".answer-title")) == null ? void 0 : _b.innerText) || "").replace(/参考答案[:：]/, "").trim();
+        if (!title || !answerText)
+          continue;
+        collected.push({ title, answer: answerText });
+      }
+      if (collected.length === 0) {
+        lib.$message.warn({ content: "解析页未解析到题目", duration: 0 });
+        $console.warn("[掌握度] 解析页未解析到题目");
+        if (back == null ? void 0 : back.url) {
+          await lib.$store.setTab(ZHS_MASTERY_RETURN_KEY, { ...back, at: Date.now() });
+          await lib.$.sleep(2e3);
+          location.replace(back.url);
+        }
+        return;
+      }
+      await saveMasteryAnswers(collected);
+      await markPreviewAnswerBadges();
+      lib.$message.success({
+        content: `已记录 ${collected.length} 道题的正确答案，正在重做这套题`,
+        duration: 5
+      });
+      $console.log(`[掌握度] 已记录 ${collected.length} 道题的正确答案`);
+      const retry = await lib.$store.getTab(ZHS_MASTERY_RETRY_KEY) || { count: 0 };
+      await lib.$store.setTab(ZHS_MASTERY_RETRY_KEY, { count: (retry.count || 0) + 1 });
+      await lib.$store.setTab(
+        ZHS_MASTERY_RETURN_KEY,
+        back ? { ...back, at: Date.now(), skipReplay: true } : null
+      );
+      await lib.$.sleep(3e3);
+      const remotePage = await BackgroundProject.scripts.dev.methods.getRemotePlaywrightCurrentPage();
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const found = findVisibleClickableByText(/^重新答题$/);
+        if (!found)
+          break;
+        const againBtn = found.closest(".submit") || found;
+        lib.$message.info({
+          content: attempt === 0 ? "正在重做这套题" : `正在重试重做（第 ${attempt + 1} 次）`
+        });
+        $console.log(
+          `[掌握度] 点击「重新答题」第 ${attempt + 1} 次：${againBtn.tagName}.${againBtn.className}（${remotePage ? "Playwright" : "DOM"}）`
+        );
+        await clickElement(remotePage, againBtn);
+        for (let i = 0; i < 6; i++) {
+          await lib.$.sleep(1e3);
+          if (location.href.includes(ZHS_POINT_EXAM_HOST))
+            return;
+        }
+        $console.log("[掌握度] 未进入试卷页，等待接口就绪后重试");
+        await lib.$.sleep(2e3);
+      }
+      lib.$message.warn({
+        content: "答案已记录。若没有自动重做，请手动点右上角「重新答题」（30 秒后返回学习页）",
+        duration: 0
+      });
+      $console.warn("[掌握度] 自动点击「重新答题」未生效，等待手动点击");
+      for (let i = 0; i < 30; i++) {
+        await lib.$.sleep(1e3);
+        if (location.href.includes(ZHS_POINT_EXAM_HOST))
+          return;
+      }
+      await lib.$store.setTab(ZHS_MASTERY_RETRY_KEY, { count: (retry.count || 0) + 1, active: true });
+      await lib.$store.setTab(
+        ZHS_MASTERY_RETURN_KEY,
+        back ? { ...back, at: Date.now(), skipReplay: true } : null
+      );
+      await lib.$.sleep(2e3);
+      if (back == null ? void 0 : back.url)
+        location.replace(back.url);
+    } finally {
+      previewCollectRunning = false;
+    }
+  }
+  function findClickableAncestor(el) {
+    let cur = el;
+    for (let i = 0; i < 4 && cur; i++) {
+      if (isProbablyClickable(cur))
+        return cur;
+      cur = cur.parentElement;
+    }
+    return el;
+  }
+  function isProbablyClickable(el) {
+    const cls = typeof el.className === "string" ? el.className : "";
+    if (/noNext|nopre|no-?next/i.test(cls))
+      return false;
+    const tag = el.tagName;
+    if (tag === "BUTTON" || tag === "A")
+      return true;
+    if (el.getAttribute("role") === "button")
+      return true;
+    if (/btn|button|click|submit|to-improve|next-topic/i.test(cls))
+      return true;
+    try {
+      return getComputedStyle(el).cursor === "pointer";
+    } catch {
+      return false;
+    }
+  }
+  function isDisabledLike(el) {
+    let cur = el;
+    for (let i = 0; i < 4 && cur; i++) {
+      if (cur.disabled)
+        return true;
+      if (cur.getAttribute("aria-disabled") === "true")
+        return true;
+      const cls = typeof cur.className === "string" ? cur.className : "";
+      if (/(^|[\s_-])(noNext|nopre|no-?next|disabled?|forbid|is-disabled)([\s_-]|$)/i.test(cls))
+        return true;
+      try {
+        const style = getComputedStyle(cur);
+        if (style.pointerEvents === "none")
+          return true;
+        if (style.cursor === "not-allowed")
+          return true;
+        const opacity = parseFloat(style.opacity);
+        if (Number.isFinite(opacity) && opacity > 0 && opacity < 0.5)
+          return true;
+      } catch (e) {
+      }
+      cur = cur.parentElement;
+    }
+    return false;
+  }
+  function findVisibleClickableByText(text, root2 = document) {
+    const candidates = Array.from(
+      root2.querySelectorAll('button, a, li, div, span, [role="button"]')
+    );
+    for (const el of candidates) {
+      const raw = (el.textContent || "").replace(/\s+/g, "");
+      if (!raw || raw.length > 12)
+        continue;
+      if (!text.test(raw))
+        continue;
+      if (el.disabled)
+        continue;
+      if (typeof el.className === "string" && /disabled/i.test(el.className))
+        continue;
+      if (!isElementVisible(el))
+        continue;
+      const target = findClickableAncestor(el);
+      if (isDisabledLike(target))
+        continue;
+      return target;
+    }
+    return void 0;
   }
   async function waitJobListSettled(timeout = 6e3, step = 300) {
     const snapshot = () => {
@@ -10593,6 +10965,12 @@
         matches: [
           ["新形态课程学习页面", "smartcoursestudent.zhihuishu.com/learnPage"],
           ["新形态课程新域名学习页面", "ai-smart-course-student-pro.zhihuishu.com/learnPage"],
+          ["新形态课程-知识点学习报告页", "ai-smart-course-student-pro.zhihuishu.com/masteryHistory"],
+          ["新形态课程-知识点学习报告页旧域名", "smartcoursestudent.zhihuishu.com/masteryHistory"],
+          ["新形态课程-知识点练习结果页", "ai-smart-course-student-pro.zhihuishu.com/point/"],
+          ["新形态课程-知识点练习结果页旧域名", "smartcoursestudent.zhihuishu.com/point/"],
+          ["新形态课程-知识点解析页", "ai-smart-course-student-pro.zhihuishu.com/examPreview/"],
+          ["新形态课程-知识点解析页旧域名", "smartcoursestudent.zhihuishu.com/examPreview/"],
           ["新形态课程首页", "smartcoursestudent.zhihuishu.com/singleCourse"],
           ["新形态课程新域名课程首页", "ai-smart-course-student-pro.zhihuishu.com/singleCourse"]
         ],
@@ -10600,7 +10978,8 @@
         configs: {
           notes: {
             defaultValue: lib.$ui.notes([
-              "掌握度和作业请视频看完后自行手动进入",
+              "视频看完会自动点「去提升」做掌握度练习，答完自动提交并返回继续学习（可在设置里关闭）。",
+              "掌握度练习次数可在设置中限制，避免掌握度未满时反复往返。",
               "不要最小化浏览器/关闭电脑屏幕，可能导致脚本暂停。",
               "任意选择一个章节，脚本会自动往下学“必学”课程。",
               "运行中请将浏览器缩放调整至适合的大小，避免元素遮挡，无法点击",
@@ -10629,6 +11008,44 @@
               ["1.25", "1.25 x"],
               ["1.5", "1.5 x"]
             ]
+          },
+          autoImproveMastery: {
+            label: "自动提升掌握度",
+            attrs: {
+              type: "checkbox",
+              title: "视频看完后，若视频下方出现「去提升」按钮，自动进入知识点练习（掌握度）；答完会自动提交并返回继续学习"
+            },
+            defaultValue: true
+          },
+          masteryImproveTimes: {
+            label: "每节掌握度练习次数",
+            defaultValue: 1,
+            attrs: {
+              type: "number",
+              min: 0,
+              step: 1,
+              max: 5,
+              title: "同一个小节自动进入掌握度练习的最大次数，0 表示不自动进入。掌握度未到 100% 时会反复出现「去提升」，限制次数可避免来回往返"
+            }
+          },
+          retryWhenNotFull: {
+            label: "未满分自动重做",
+            attrs: {
+              type: "checkbox",
+              title: "答题提交后若没有全对：自动点「查看作答记录与解析」进入解析页，把正确答案记进题库缓存，再返回重做这套题。开启后练习次数上限改由下面一项控制"
+            },
+            defaultValue: true
+          },
+          retryMaxTimes: {
+            label: "未满分重做上限",
+            defaultValue: 3,
+            attrs: {
+              type: "number",
+              min: 1,
+              step: 1,
+              max: 10,
+              title: "同一小节为了刷满掌握度最多自动重做几次（含第一次）。答完仍不满分就会停在这里，不再无限重刷"
+            }
           }
         },
         oncomplete() {
@@ -10641,7 +11058,142 @@
         },
         methods() {
           return {
+            resumeMasteryReport: async () => {
+              if (masteryReportRunning)
+                return;
+              const pending = await lib.$store.getTab(ZHS_MASTERY_RETURN_KEY);
+              if (!(pending == null ? void 0 : pending.url) || Date.now() - (pending.at || 0) > 5 * 60 * 1e3)
+                return;
+              masteryReportRunning = true;
+              try {
+                CommonProject.scripts.render.methods.pin(this);
+                lib.$message.info({ content: "正在打开掌握度练习试卷" });
+                const ok = await advanceToPointExam();
+                if (!ok) {
+                  lib.$message.warn({
+                    content: "未能自动打开试卷，请手动点击页面上的「去提升」",
+                    duration: 0
+                  });
+                  $console.warn("知识点学习报告页未能进入试卷");
+                }
+              } finally {
+                masteryReportRunning = false;
+              }
+            },
+            afterPointExam: async () => {
+              var _a, _b, _c;
+              if (pointExamRunning)
+                return;
+              const back = await lib.$store.getTab(ZHS_MASTERY_RETURN_KEY);
+              if (!(back == null ? void 0 : back.url))
+                return;
+              pointExamRunning = true;
+              try {
+                CommonProject.scripts.render.methods.pin(this);
+                let total = null;
+                let correct = null;
+                for (let i = 0; i < 15; i++) {
+                  total = readStatNumber("总题数");
+                  correct = readStatNumber("已答对");
+                  if (total !== null && total > 0 && correct !== null)
+                    break;
+                  await lib.$.sleep(1e3);
+                }
+                const full = total !== null && correct !== null && total > 0 && correct >= total;
+                $console.log(
+                  `[掌握度] 本次结果：${correct != null ? correct : "?"}/${total != null ? total : "?"}${full ? "（已满分）" : ""}`
+                );
+                await markResultAnswerTip();
+                if (total === null || correct === null) {
+                  lib.$message.warn({ content: "未能读取本次成绩，即将返回学习页", duration: 5 });
+                } else if (!full && this.cfg.retryWhenNotFull) {
+                  const retry = await lib.$store.getTab(ZHS_MASTERY_RETRY_KEY) || { count: 0 };
+                  const done = retry.count || 0;
+                  const limit = (_a = this.cfg.retryMaxTimes) != null ? _a : 3;
+                  if (done + 1 < limit) {
+                    const link = findVisibleClickableByText(/^查看作答记录与解析$/);
+                    if (link) {
+                      lib.$message.info({
+                        content: `未满分（${correct != null ? correct : "?"}/${total != null ? total : "?"}），正在查看解析抄答案后重做（第 ${done + 2}/${limit} 遍）`
+                      });
+                      await safeClick(link);
+                      for (let i = 0; i < 10; i++) {
+                        await lib.$.sleep(1e3);
+                        if (location.pathname.includes(ZHS_EXAM_PREVIEW_PATH)) {
+                          await collectPreviewAnswersCore(back);
+                          return;
+                        }
+                      }
+                    }
+                    lib.$message.warn({ content: "未能打开解析页，即将返回学习页", duration: 5 });
+                  } else {
+                    lib.$message.warn({
+                      content: `已答 ${done + 1} 遍仍未满分（上限 ${limit} 遍），即将返回学习页`,
+                      duration: 5
+                    });
+                  }
+                }
+                await lib.$store.setTab(ZHS_MASTERY_RETRY_KEY, { count: 0, active: false });
+                const learnKey = (() => {
+                  try {
+                    return new URL(back.url).pathname;
+                  } catch (e) {
+                    return "";
+                  }
+                })();
+                if (learnKey) {
+                  await lib.$store.setTab(ZHS_MASTERY_SETTLED_KEY, { key: learnKey, at: Date.now() });
+                  const times = await lib.$store.getTab(ZHS_MASTERY_TIMES_KEY) || {};
+                  const cap = Math.max(
+                    (_b = this.cfg.retryMaxTimes) != null ? _b : 3,
+                    (_c = this.cfg.masteryImproveTimes) != null ? _c : 1
+                  );
+                  await lib.$store.setTab(ZHS_MASTERY_TIMES_KEY, {
+                    ...times,
+                    [learnKey]: Math.max(times[learnKey] || 0, cap)
+                  });
+                }
+                await lib.$store.setTab(ZHS_MASTERY_RETURN_KEY, { ...back, at: Date.now() });
+                lib.$message.success({ content: "掌握度练习已完成，即将返回课程继续学习", duration: 5 });
+                await lib.$.sleep(3e3);
+                location.replace(back.url);
+              } finally {
+                pointExamRunning = false;
+              }
+            },
+            collectPreviewAnswers: async () => {
+              if (pointExamRunning)
+                return;
+              const back = await lib.$store.getTab(ZHS_MASTERY_RETURN_KEY);
+              if (!(back == null ? void 0 : back.url)) {
+                for (let i = 0; i < 10; i++) {
+                  if (document.querySelectorAll(".question-item").length > 0)
+                    break;
+                  await lib.$.sleep(1e3);
+                }
+                await markPreviewAnswerBadges();
+                lib.$message.info({
+                  content: "已标注每题的答案状态。要重做请点右上角「重新答题」，答案会自动命中",
+                  duration: 8
+                });
+                return;
+              }
+              CommonProject.scripts.render.methods.pin(this);
+              await collectPreviewAnswersCore(back);
+            },
             start: async () => {
+              if (location.pathname.includes(ZHS_EXAM_PREVIEW_PATH)) {
+                await this.methods.collectPreviewAnswers();
+                return;
+              }
+              if (location.pathname.includes(ZHS_POINT_RESULT_PATH)) {
+                await this.methods.afterPointExam();
+                return;
+              }
+              if (location.pathname.includes(ZHS_MASTERY_REPORT_PATH)) {
+                await this.methods.resumeMasteryReport();
+                return;
+              }
               if (location.href.includes("singleCourse")) {
                 lib.$message.info({ content: "请点击任意章节开始进行自动学习", duration: 60 });
                 return;
@@ -10729,6 +11281,63 @@
                 this.onConfigChange("definition", (curr) => {
                   processor.switchLine(curr);
                 });
+                let enteringMastery = false;
+                const tryEnterMasteryImprove = async () => {
+                  var _a, _b;
+                  if (enteringMastery)
+                    return false;
+                  enteringMastery = true;
+                  try {
+                    if (!this.cfg.autoImproveMastery)
+                      return false;
+                    const baseLimit = (_a = this.cfg.masteryImproveTimes) != null ? _a : 1;
+                    if (baseLimit <= 0)
+                      return false;
+                    const settledKey = location.pathname;
+                    const settled = await lib.$store.getTab(ZHS_MASTERY_SETTLED_KEY) || null;
+                    if ((settled == null ? void 0 : settled.key) === settledKey && Date.now() - (settled.at || 0) < 5 * 60 * 1e3) {
+                      await lib.$store.setTab(ZHS_MASTERY_SETTLED_KEY, null);
+                      $console.log("本节刚练完，跳过掌握度练习，继续下一节");
+                      return false;
+                    }
+                    const retryState = await lib.$store.getTab(ZHS_MASTERY_RETRY_KEY) || {};
+                    const limit = retryState.active && this.cfg.retryWhenNotFull ? (_b = this.cfg.retryMaxTimes) != null ? _b : 3 : baseLimit;
+                    const btn = await waitMasteryImproveButton(12);
+                    if (!btn) {
+                      $console.log("未发现「去提升」按钮，继续下一节");
+                      return false;
+                    }
+                    const key = location.pathname;
+                    const times = await lib.$store.getTab(ZHS_MASTERY_TIMES_KEY) || {};
+                    const used = times[key] || 0;
+                    if (used >= limit) {
+                      $console.log(`本节已自动进入掌握度练习 ${used} 次（上限 ${limit}），继续下一节`);
+                      return false;
+                    }
+                    lib.$message.info({ content: "检测到「去提升」，正在进入掌握度练习" });
+                    $console.log("检测到「去提升」，正在进入掌握度练习");
+                    await lib.$store.setTab(ZHS_MASTERY_RETURN_KEY, {
+                      url: location.href,
+                      at: Date.now(),
+                      skipReplay: true
+                    });
+                    await lib.$store.setTab(ZHS_MASTERY_TIMES_KEY, { ...times, [key]: used + 1 });
+                    if (!retryState.active) {
+                      await lib.$store.setTab(ZHS_MASTERY_RETRY_KEY, { count: 0, active: false });
+                    }
+                    await lib.$.sleep(500);
+                    const ok = await advanceToPointExam(btn);
+                    if (ok)
+                      return true;
+                    await lib.$store.setTab(ZHS_MASTERY_RETURN_KEY, null);
+                    await lib.$store.setTab(ZHS_MASTERY_TIMES_KEY, { ...times, [key]: used });
+                    lib.$message.warn({ content: "未能进入掌握度练习页面，继续学习", duration: 5 });
+                    $console.log("未能进入掌握度练习页面，继续学习");
+                    return false;
+                  } finally {
+                    enteringMastery = false;
+                  }
+                };
                 const doWork = async () => {
                   await lib.$.sleep(5 * 1e3);
                   const next2 = async () => {
@@ -10774,6 +11383,12 @@
                       filter: (m) => m.src.length !== 0
                     });
                   } catch {
+                    try {
+                      if (await tryEnterMasteryImprove())
+                        return;
+                    } catch (e) {
+                      $console.warn("非视频任务点进入掌握度练习失败：" + e);
+                    }
                     const msg2 = "未找到学习视频，即将自动下一节！";
                     lib.$message.error(msg2);
                     $console.error(msg2);
@@ -10791,7 +11406,18 @@
                       await lib.$.sleep(1e3);
                       state$8.study.currentMedia = media;
                       if (media) {
-                        media.currentTime = 1;
+                        const pending = await lib.$store.getTab(ZHS_MASTERY_RETURN_KEY);
+                        const justReturned = !!(pending == null ? void 0 : pending.skipReplay) && Date.now() - (pending.at || 0) < 3 * 60 * 1e3;
+                        if (justReturned) {
+                          await lib.$store.setTab(ZHS_MASTERY_RETURN_KEY, null);
+                          for (let i = 0; i < 10 && !Number.isFinite(media.duration); i++) {
+                            await lib.$.sleep(300);
+                          }
+                          const duration = Number.isFinite(media.duration) ? media.duration : 0;
+                          media.currentTime = duration > 2 ? duration - 1 : 1;
+                        } else {
+                          media.currentTime = 1;
+                        }
                         media.volume = this.cfg.volume;
                       }
                       return state$8.study.currentMedia;
@@ -10816,6 +11442,12 @@
                     }
                   };
                   video.onended = async () => {
+                    try {
+                      if (await tryEnterMasteryImprove())
+                        return;
+                    } catch (e) {
+                      $console.warn("进入掌握度练习失败：" + e);
+                    }
                     lib.$message.info({ content: "即将自动跳转下一节" });
                     await lib.$.sleep(3e3);
                     await next2();
@@ -10849,13 +11481,21 @@
               "可以搭配 “通用-在线搜题” 一起使用。",
               "如果没开始答题，请尝试刷新页面。",
               "禁止一次性打开多个作业/考试页面。",
-              ...remote_not_required_pages.some((domain) => location.href.includes(domain)) ? [] : ["答题中请勿进行任何操作，如需暂停答题", "请等待全部题目搜索完成并执行自动保存功能后才能操作。"]
+              ...smartWorkNotes()
             ]).outerHTML
           },
           workDelay: {
             label: "作业答题开始时间延迟（秒）",
             defaultValue: 3,
             attrs: { type: "number", min: 1, step: 1, max: 10 }
+          },
+          autoSubmitPointExam: {
+            label: "掌握度练习自动提交",
+            attrs: {
+              type: "checkbox",
+              title: "仅在新形态课程掌握度练习页（studentexamcomh5）生效：答完自动点「提交」，提交后自动返回课程继续学习。提交不可逆，如担心正确率可关闭此项手动提交"
+            },
+            defaultValue: true
           }
         },
         methods() {
@@ -10865,16 +11505,27 @@
               CommonProject.scripts.render.methods.pin(this);
               let remotePage;
               const remote_not_required = remote_not_required_pages.some((domain) => location.href.includes(domain));
-              remote_not_required ? await waitForElement(".exam-item") : await waitForElement(".questionContent");
+              const is_point_exam = location.href.includes(ZHS_POINT_EXAM_PAGE);
+              if (is_point_exam) {
+                const ready = await waitPointExamReady(60);
+                if (!ready) {
+                  lib.$message.warn({ content: "未检测到题目，请在页面上点一下「开始答题/继续」", duration: 0 });
+                  await waitForElement(".questionContent");
+                }
+              } else {
+                remote_not_required ? await waitForElement(".exam-item") : await waitForElement(".questionContent");
+              }
               if (remote_not_required)
                 ;
               else {
                 remotePage = await BackgroundProject.scripts.dev.methods.getRemotePlaywrightCurrentPage();
-                if (!remotePage) {
+                if (!remotePage && !is_point_exam) {
                   return $playwright.showError();
                 }
-                $render.moveToEdge();
-                lib.$message.warn({ content: "答题完毕之前请勿操作页面！", duration: 0 });
+                if (remotePage) {
+                  $render.moveToEdge();
+                  lib.$message.warn({ content: "答题完毕之前请勿操作页面！", duration: 0 });
+                }
               }
               commonWork(this, {
                 workerProvider: (opts) => {
@@ -10884,7 +11535,14 @@
                     return smartWork(remotePage, opts);
                   }
                 },
-                start_delay_seconds: (_a = this.cfg.workDelay) != null ? _a : 3
+                start_delay_seconds: (_a = this.cfg.workDelay) != null ? _a : 3,
+                onWorkerCreated: (worker) => {
+                  if (!is_point_exam)
+                    return;
+                  worker.once("done", () => {
+                    finishPointExamPractice(this.cfg.autoSubmitPointExam !== false);
+                  });
+                }
               });
             }
           };
@@ -12138,9 +12796,10 @@
     return worker;
   }
   function smartWork(remotePage, { answererWrappers, period, thread, answerSeparators }) {
-    lib.$message.info({ content: "开始作业" });
+    const autoSubmitOnThisPage = location.href.includes(ZHS_POINT_EXAM_HOST);
+    lib.$message.info({ content: autoSubmitOnThisPage ? "开始答题（答完自动提交）" : "开始作业" });
     lib.$message.warn({
-      content: "答题中请勿进行任何操作，如需暂停答题，请等待全部题目搜索完成并执行自动保存功能后才能操作。",
+      content: autoSubmitOnThisPage ? "答题中请勿操作页面，答完会自动提交试卷并返回课程。" : "答题中请勿进行任何操作，如需暂停答题，请等待全部题目搜索完成并执行自动保存功能后才能操作。",
       duration: 0,
       closeable: false
     });
@@ -12160,9 +12819,25 @@
       },
       thread: thread != null ? thread : 1,
       answerSeparators: answerSeparators.split(",").map((s) => s.trim()),
-      answerer: (elements2, ctx) => {
+      answerer: async (elements2, ctx) => {
         const title = titleTransform(elements2.title);
         if (title) {
+          const collected = await lookupMasteryAnswer(title);
+          if (collected) {
+            return [
+              {
+                name: MASTERY_ANSWER_SOURCE,
+                homepage: "",
+                results: [{ question: title, answer: collected, extra_data: { cache: true } }]
+              }
+            ];
+          }
+          if (location.href.includes(ZHS_POINT_EXAM_HOST)) {
+            const total = await countMasteryAnswers();
+            if (total > 0) {
+              $console.log(`[掌握度] 未命中本地答案（表内 ${total} 条）：${title.slice(0, 40)}`);
+            }
+          }
           return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
             await lib.$.sleep((period != null ? period : 3) * 1e3);
             return defaultAnswerWrapperHandler(answererWrappers, {
@@ -12228,9 +12903,13 @@
           resolvedCount++;
         }
         if ((_a = current.result) == null ? void 0 : _a.finish) {
-          CommonProject.scripts.apps.methods.addQuestionCacheFromWorkResult(
-            simplifyWorkResult([current], titleTransform)
+          const swr = simplifyWorkResult([current], titleTransform);
+          const cacheable = swr.filter(
+            (r) => !r.searchInfos.some((i) => i.name === MASTERY_ANSWER_SOURCE)
           );
+          if (cacheable.length) {
+            CommonProject.scripts.apps.methods.addQuestionCacheFromWorkResult(cacheable);
+          }
         }
         CommonProject.scripts.workResults.methods.updateWorkState({
           totalQuestionCount,
@@ -12239,7 +12918,32 @@
         });
       }
     });
-    const getNextBtn = () => document.querySelector(".next-topic.next-t");
+    const getNextBtn = () => {
+      const byClass = document.querySelector(".next-topic.next-t");
+      if (byClass && !/提交|交卷/.test(byClass.textContent || ""))
+        return byClass;
+      const container2 = document.querySelector(".next-topic.next-t, .next-topic.noNext");
+      if (container2 && /noNext/i.test(String(container2.className)))
+        return null;
+      return findVisibleClickableByText(/^下一题$/) || null;
+    };
+    const clearCurrentQuestionSelections = async () => {
+      const root2 = document.querySelector(".questionContent");
+      if (!root2)
+        return;
+      const checked = Array.from(
+        root2.querySelectorAll(
+          ".el-radio__input.is-checked, .el-checkbox__input.is-checked, i.iconfont.checkedIcon"
+        )
+      );
+      if (checked.length === 0)
+        return;
+      for (const el of checked) {
+        await clickElement(remotePage, el);
+        await lib.$.sleep(150);
+      }
+      await lib.$.sleep(300);
+    };
     let next2 = null;
     (async () => {
       const first = document.querySelector('[role="treeitem"] .font-sec-style-node');
@@ -12251,7 +12955,14 @@
         await lib.$.sleep(3e3);
       }
       let count = 0;
+      const cardCount = document.querySelectorAll('[role="treeitem"]').length;
+      const maxRounds = cardCount > 0 ? cardCount + 10 : 100;
       while (worker.isClose === false) {
+        if (count > maxRounds) {
+          $console.log(`答题循环超过 ${maxRounds} 次，强制结束`);
+          break;
+        }
+        await clearCurrentQuestionSelections();
         await worker.doWork({ enable_debug: BackgroundProject.scripts.dev.cfg.enable_answerer_debug });
         next2 = getNextBtn();
         if (!next2) {
@@ -12262,17 +12973,94 @@
           await remotePage.click(next2);
         else
           trustedClick(next2);
-        await lib.$.sleep(1e3);
+        await lib.$.sleep(1500);
         count++;
       }
       lib.$message.info({
-        content: "作业/考试完成，请自行检查后保存或提交。",
-        duration: count > 10 ? 0 : 30
+        content: autoSubmitOnThisPage ? "答题完成，正在自动提交试卷…" : "作业/考试完成，请自行检查后保存或提交。",
+        duration: autoSubmitOnThisPage ? 8 : count > 10 ? 0 : 30
       });
       worker.emit("done");
       CommonProject.scripts.workResults.cfg.questionPositionSyncHandlerType = "zhs-smart";
     })();
     return worker;
+  }
+  async function waitPointExamReady(timeoutSeconds = 60) {
+    const startedAt = Date.now();
+    let triedStart = false;
+    while (Date.now() - startedAt < timeoutSeconds * 1e3) {
+      if (document.querySelector(".questionContent"))
+        return true;
+      if (!triedStart) {
+        const start2 = findVisibleClickableByText(/^(开始答题|开始练习|继续答题|进入练习|立即开始|开始作答)$/);
+        if (start2) {
+          triedStart = true;
+          lib.$message.info({ content: "正在进入掌握度练习" });
+          await safeClick(start2);
+          await lib.$.sleep(3e3);
+          continue;
+        }
+      }
+      await lib.$.sleep(1e3);
+    }
+    return !!document.querySelector(".questionContent");
+  }
+  async function submitPointExamPaper() {
+    var _a;
+    await lib.$.sleep(2e3);
+    const submitText = /^(提交作业|提交试卷|提交答卷|提交答案|提交|交卷)$/;
+    const submit = findVisibleClickableByText(submitText);
+    if (!submit) {
+      lib.$message.warn({ content: "未找到「提交作业」按钮，请手动提交", duration: 0 });
+      return false;
+    }
+    dispatchMouseSequence(submit);
+    trustedClick(submit);
+    await lib.$.sleep(1500);
+    const dialog = document.querySelector(".el-message-box, .el-dialog, .confirm-dialog-component");
+    const confirm = dialog ? findVisibleClickableByText(/^(确定|确认|提交作业|提交|继续提交)$/, dialog) : void 0;
+    if (confirm) {
+      dispatchMouseSequence(confirm);
+      trustedClick(confirm);
+      await lib.$.sleep(1e3);
+    }
+    for (let i = 0; i < 20; i++) {
+      await lib.$.sleep(1e3);
+      if (!findVisibleClickableByText(submitText)) {
+        lib.$message.success({ content: "掌握度练习已提交", duration: 5 });
+        return true;
+      }
+      if (/提交成功|交卷成功|试卷已提交|提交完成/.test(((_a = document.body) == null ? void 0 : _a.innerText) || "")) {
+        lib.$message.success({ content: "掌握度练习已提交", duration: 5 });
+        return true;
+      }
+    }
+    lib.$message.warn({ content: "未能确认提交结果，请手动检查后返回学习页", duration: 0 });
+    return false;
+  }
+  async function finishPointExamPractice(autoSubmit) {
+    const saved = await lib.$store.getTab(ZHS_MASTERY_RETURN_KEY);
+    const back = (saved == null ? void 0 : saved.url) && Date.now() - (saved.at || 0) < 2 * 60 * 60 * 1e3 ? saved : null;
+    if (!back) {
+      lib.$message.info({ content: "练习已完成，请手动检查后提交。", duration: 0 });
+      return;
+    }
+    if (!autoSubmit) {
+      lib.$message.warn({ content: "已关闭自动提交，请手动提交试卷后返回学习页", duration: 0 });
+      return;
+    }
+    const ok = await submitPointExamPaper();
+    if (!ok)
+      return;
+    for (let i = 0; i < 15; i++) {
+      await lib.$.sleep(1e3);
+      if (!location.href.includes(ZHS_POINT_EXAM_HOST))
+        return;
+    }
+    await lib.$store.setTab(ZHS_MASTERY_RETURN_KEY, { ...back, at: Date.now() });
+    lib.$message.success({ content: "掌握度练习已完成，即将返回课程继续学习", duration: 5 });
+    await lib.$.sleep(2e3);
+    location.replace(back.url);
   }
   function smartExam(remotePage, { answererWrappers, period, thread, answerSeparators }) {
     lib.$message.info({ content: "开始作业" });
