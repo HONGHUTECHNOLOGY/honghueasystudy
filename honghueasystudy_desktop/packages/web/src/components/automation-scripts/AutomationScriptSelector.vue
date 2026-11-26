@@ -34,6 +34,18 @@
 							class="script-icon-fallback me-1"
 						/>
 						<b> {{ script.name }} </b>
+						<!--
+							`script` 是 :list 里 map 过的对象，Vue 推断出的类型不含 recommend，
+							这里显式断言一下，避免为一个展示字段去改 list 的推导
+						-->
+						<a-tag
+							v-if="(script as any).recommend"
+							size="small"
+							color="arcoblue"
+							style="margin-left: 6px"
+						>
+							推荐
+						</a-tag>
 					</div>
 					<span
 						style="font-size: 12px"

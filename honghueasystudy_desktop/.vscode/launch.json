@@ -1,0 +1,55 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "隔离调试：首次使用（保留数据）",
+			"type": "node",
+			"request": "launch",
+			"cwd": "${workspaceFolder}/packages/app",
+			"runtimeExecutable": "${workspaceFolder}/node_modules/electron/dist/electron.exe",
+			"runtimeArgs": ["."],
+			"env": {
+				"HH_DEBUG_USER_DATA": "${workspaceFolder}/.debug/user-data",
+				"HH_DEBUG_SERVER_PORT": "15419",
+				"HH_DEBUG_WEB_URL": "http://localhost:3000"
+			},
+			"sourceMaps": true,
+			"outFiles": ["${workspaceFolder}/packages/app/lib/**/*.js"],
+			"skipFiles": ["<node_internals>/**"],
+			"outputCapture": "std",
+			"console": "integratedTerminal",
+			"preLaunchTask": "隔离调试：准备数据并启动 Web（保留）",
+			"postDebugTask": "隔离调试：停止 Web 开发服务器"
+		},
+		{
+			"name": "隔离调试：首次使用（每次重置数据）",
+			"type": "node",
+			"request": "launch",
+			"cwd": "${workspaceFolder}/packages/app",
+			"runtimeExecutable": "${workspaceFolder}/node_modules/electron/dist/electron.exe",
+			"runtimeArgs": ["."],
+			"env": {
+				"HH_DEBUG_USER_DATA": "${workspaceFolder}/.debug/user-data",
+				"HH_DEBUG_SERVER_PORT": "15419",
+				"HH_DEBUG_WEB_URL": "http://localhost:3000"
+			},
+			"sourceMaps": true,
+			"outFiles": ["${workspaceFolder}/packages/app/lib/**/*.js"],
+			"skipFiles": ["<node_internals>/**"],
+			"outputCapture": "std",
+			"console": "integratedTerminal",
+			"preLaunchTask": "隔离调试：重置数据并启动 Web",
+			"postDebugTask": "隔离调试：停止 Web 开发服务器"
+		},
+		{
+			"name": "隔离调试：附加到主进程（需先 pnpm debug:inspect）",
+			"type": "node",
+			"request": "attach",
+			"port": 9229,
+			"restart": true,
+			"sourceMaps": true,
+			"outFiles": ["${workspaceFolder}/packages/app/lib/**/*.js"],
+			"skipFiles": ["<node_internals>/**"]
+		}
+	]
+}

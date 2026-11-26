@@ -1,12 +1,40 @@
 {
-	// See https://go.microsoft.com/fwlink/?LinkId=733558
-	// for the documentation about the tasks.json format
 	"version": "2.0.0",
 	"tasks": [
 		{
 			"label": "echo",
 			"type": "shell",
 			"command": "echo Hello"
+		},
+		{
+			"label": "隔离调试：准备数据并启动 Web（保留）",
+			"type": "shell",
+			"command": "node",
+			"args": ["scripts/debug-isolated.js", "--prepare-only"],
+			"options": {
+				"cwd": "${workspaceFolder}/honghueasystudy_desktop"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "隔离调试：重置数据并启动 Web",
+			"type": "shell",
+			"command": "node",
+			"args": ["scripts/debug-isolated.js", "--prepare-only", "--reset"],
+			"options": {
+				"cwd": "${workspaceFolder}/honghueasystudy_desktop"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "隔离调试：停止 Web 开发服务器",
+			"type": "shell",
+			"command": "node",
+			"args": ["scripts/debug-isolated.js", "--stop-web"],
+			"options": {
+				"cwd": "${workspaceFolder}/honghueasystudy_desktop"
+			},
+			"problemMatcher": []
 		}
 	]
 }

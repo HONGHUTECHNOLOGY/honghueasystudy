@@ -2,6 +2,7 @@ import { app } from 'electron';
 import path from 'path';
 import Store from 'electron-store';
 import { getDecryptedRenderData } from './crypto';
+import { isIsolatedDebug, getDebugServerPort, getDebugRemoteControlPort } from './debug.isolated';
 import type { SigninStoreState } from './signin/types';
 
 // IO操作只能在 app.getPath('userData') 下进行，否则会有权限问题。
@@ -45,7 +46,11 @@ export const OriginalAppStore = {
 	},
 	/** 本地服务器数据 */
 	server: {
-		port: 15319,
+		/**
+		 * 隔离调试实例默认 15419：正式版固定 15319，两个实例可同时运行。
+		 * startupServer() 启动时也会按调试模式重新确认端口。
+		 */
+		port: isIsolatedDebug() ? getDebugServerPort() : 15319,
 		authToken: ''
 	},
 	/**
@@ -55,8 +60,8 @@ export const OriginalAppStore = {
 	remoteControl: {
 		/** 是否开启远程控制 */
 		enabled: false,
-		/** 远程控制面板端口 */
-		port: 15320,
+		/** 远程控制面板端口（隔离调试实例默认服务端口 +1，避开正式版的 15320） */
+		port: isIsolatedDebug() ? getDebugRemoteControlPort() : 15320,
 		/** 是否允许局域网设备访问（false 时只监听 127.0.0.1） */
 		allowLan: true,
 		/** 访问验证方式：pair=随机配对码 / password=自设密码 / none=免验证 */

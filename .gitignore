@@ -166,3 +166,6 @@ sample/
 
 # electron-builder 的备用输出目录（dist-new / dist-old 之类，单个安装包近 1GB）
 honghueasystudy_desktop/packages/app/dist-*/
+
+# codegraph 本地索引库（54MB 的 sqlite + wal + pid/log，纯本机缓存）
+.codegraph/

@@ -16,7 +16,11 @@
     "dev:common": "pnpm --filter @honghu-desktop/common tsc",
     "dev:app": "pnpm --filter @honghu-desktop/common tsc && pnpm --filter @honghu-desktop/app dev",
     "dev:web": "pnpm --filter @honghu-desktop/common tsc && pnpm --filter @honghu-desktop/web dev",
-    "dev": "concurrently --kill-others-on-fail \"pnpm --filter @honghu-desktop/common tsc\" \"pnpm --filter @honghu-desktop/web dev\" \"pnpm --filter @honghu-desktop/app dev\""
+    "dev": "concurrently --kill-others-on-fail \"pnpm --filter @honghu-desktop/common tsc\" \"pnpm --filter @honghu-desktop/web dev\" \"pnpm --filter @honghu-desktop/app dev\"",
+    "debug:isolated": "node scripts/debug-isolated.js",
+    "debug:fresh": "node scripts/debug-isolated.js --reset",
+    "debug:inspect": "node scripts/debug-isolated.js --inspect",
+    "debug:web:stop": "node scripts/debug-isolated.js --stop-web"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.0.0",

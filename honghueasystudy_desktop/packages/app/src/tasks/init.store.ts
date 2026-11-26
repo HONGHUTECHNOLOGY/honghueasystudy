@@ -4,6 +4,7 @@ import { app } from 'electron';
 import { existsSync, mkdirSync } from 'fs';
 import { OriginalAppStore, store, getDecryptedRenderData } from '../store';
 import { encryptRenderString } from '../crypto';
+import { isIsolatedDebug, getDebugServerPort, getDebugRemoteControlPort } from '../debug.isolated';
 import { valid, coerce, clean, gt, SemVer } from 'semver';
 import defaultsDeep from 'lodash/defaultsDeep';
 import { Logger } from '../logger';
@@ -85,6 +86,17 @@ export function initStore() {
 
 	// 强制更新路径
 	store.set('paths', OriginalAppStore.paths);
+
+	/**
+	 * 隔离调试：端口必须强制落在独立区间。
+	 *
+	 * 调试目录可能复用过旧存档（例如上次调试留下的 15319），一旦沿用就会连到
+	 * 正在运行的正式版实例，读写都串台。这里每次启动都拉回调试端口。
+	 */
+	if (isIsolatedDebug()) {
+		store.set('server', { ...store.store.server, port: getDebugServerPort() });
+		store.set('remoteControl', { ...store.store.remoteControl, port: getDebugRemoteControlPort() });
+	}
 
 	if (!existsSync(store.store.paths.userDataDirsFolder)) {
 		mkdirSync(store.store.paths.userDataDirsFolder, { recursive: true });

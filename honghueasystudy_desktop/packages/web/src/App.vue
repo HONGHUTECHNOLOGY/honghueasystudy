@@ -18,18 +18,20 @@
 					不加 mode="out-in"：它与 keep-alive 组合时偶发缓存组件不显示，
 					靠 leave 极短（90ms）已经能达到「切换」而不是「交叠」的观感。
 				-->
+				<!--
+					这里**不能**绑 `:key="route.path"`。
+					专业模式的五个子页面共用同一个布局组件（pages/index.vue，
+					里面装着侧栏 + 内容区），一旦把 key 绑到完整路径上，
+					/browsers → /dashboard 会被当成"换了一个组件"——
+					整个布局连同侧栏一起销毁重建：侧栏入场动画每次重播、
+					侧栏滚动位置丢失、DOM 全部重排。
+					嵌套路由本来就该由内部的 <router-view> 负责切换。
+					（注释必须放在 keep-alive 外面：Vue 3.3 的 KeepAlive 校验
+					会把注释算成子节点，导致「expects exactly one child component」编译失败）
+				-->
 				<router-view v-slot="{ Component }">
 					<Transition name="t-page">
 						<keep-alive>
-							<!--
-								这里**不能**绑 `:key="route.path"`。
-								专业模式的五个子页面共用同一个布局组件（pages/index.vue，
-								里面装着侧栏 + 内容区），一旦把 key 绑到完整路径上，
-								/browsers → /dashboard 会被当成"换了一个组件"——
-								整个布局连同侧栏一起销毁重建：侧栏入场动画每次重播、
-								侧栏滚动位置丢失、DOM 全部重排。
-								嵌套路由本来就该由内部的 <router-view> 负责切换。
-							-->
 							<component :is="Component" />
 						</keep-alive>
 					</Transition>

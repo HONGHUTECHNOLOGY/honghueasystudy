@@ -15,6 +15,13 @@ export interface ScriptOptions<Run extends RunFunction = RunFunction> {
 	 * 靠这个列表仍能匹配到同一个脚本，不会被当成「目录里没有的脚本」晾在那里跑不起来。
 	 */
 	aliases?: string[];
+	/**
+	 * 推荐标记
+	 *
+	 * 只影响展示（列表里打一个「推荐」徽章），不参与匹配。
+	 * 用它而不是往 name 里塞「（推荐）」：name 是配置匹配的键，改名会让用户已存的条目失配。
+	 */
+	recommend?: boolean;
 }
 
 export abstract class Script<Run extends RunFunction = RunFunction, E extends EventsRecord = EventsRecord>
@@ -25,6 +32,7 @@ export abstract class Script<Run extends RunFunction = RunFunction, E extends Ev
 	run: Run;
 	icon?: string;
 	aliases?: string[];
+	recommend?: boolean;
 
 	constructor(opts: ScriptOptions<Run>) {
 		super();
@@ -32,6 +40,7 @@ export abstract class Script<Run extends RunFunction = RunFunction, E extends Ev
 		this.run = opts.run;
 		this.icon = opts.icon;
 		this.aliases = opts.aliases;
+		this.recommend = opts.recommend;
 	}
 }
 

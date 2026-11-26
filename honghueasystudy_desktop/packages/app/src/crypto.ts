@@ -2,11 +2,16 @@ import { safeStorage } from 'electron';
 import crypto from 'crypto';
 import keytar from 'keytar';
 import { Logger } from './logger';
+import { isIsolatedDebug } from './debug.isolated';
 
 const logger = Logger('crypto');
 
 // --- 常量 ---
-const SERVICE_NAME = 'honghueasystudy';
+/**
+ * 隔离调试实例使用独立服务名：
+ * 调试存档在独立目录里，密钥也必须独立，绝不能读写/覆盖正式版的系统密钥链条目。
+ */
+const SERVICE_NAME = isIsolatedDebug() ? 'honghueasystudy-debug' : 'honghueasystudy';
 /** 旧版服务名：老用户的 AES 密钥存在其下，读到后搬移到新服务名（迁移逻辑勿删，否则老用户加密数据全部解不开） */
 const LEGACY_SERVICE_NAME = 'ocs-desktop';
 const ACCOUNT_NAME = 'aes-key';
@@ -38,13 +43,16 @@ export async function initAesKey(): Promise<void> {
 		}
 
 		// 迁移：旧版本把密钥存在旧服务名下，搬到新服务名后清理旧条目
-		const legacyHex = await keytar.getPassword(LEGACY_SERVICE_NAME, ACCOUNT_NAME).catch(() => null);
-		if (legacyHex) {
-			cachedAesKey = Buffer.from(legacyHex, 'hex');
-			await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, legacyHex);
-			await keytar.deletePassword(LEGACY_SERVICE_NAME, ACCOUNT_NAME).catch(() => {});
-			logger.info('已迁移旧密钥链服务名下的 AES 密钥');
-			return;
+		// （隔离调试跳过：绝不读写正式版的旧密钥，更不会删除它的条目）
+		if (!isIsolatedDebug()) {
+			const legacyHex = await keytar.getPassword(LEGACY_SERVICE_NAME, ACCOUNT_NAME).catch(() => null);
+			if (legacyHex) {
+				cachedAesKey = Buffer.from(legacyHex, 'hex');
+				await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, legacyHex);
+				await keytar.deletePassword(LEGACY_SERVICE_NAME, ACCOUNT_NAME).catch(() => {});
+				logger.info('已迁移旧密钥链服务名下的 AES 密钥');
+				return;
+			}
 		}
 
 		// 密钥链中没有，生成新密钥并存入

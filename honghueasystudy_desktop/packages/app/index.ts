@@ -1,3 +1,9 @@
+import {
+	isIsolatedDebug,
+	getIsolatedUserDataPath,
+	getDebugServerPort,
+	getDebugRemoteControlPort
+} from './src/debug.isolated';
 import { app, ipcMain } from 'electron';
 import { remoteRegister } from './src/tasks/remote.register';
 import { initStore } from './src/tasks/init.store';
@@ -74,6 +80,14 @@ const silentStart = process.argv.includes('--hidden');
  * 出问题时（明明是自启却弹了界面）第一件事就是看它，别再靠猜。
  */
 logger.info(`启动参数：${process.argv.slice(1).join(' ') || '(无)'}；静默启动=${silentStart}`);
+
+/** 隔离调试模式留痕：数据目录、端口、被禁用的系统副作用都打出来，排查时不用猜 */
+if (isIsolatedDebug()) {
+	logger.info(
+		`[隔离调试] 数据目录=${getIsolatedUserDataPath()}；本地服务端口=${getDebugServerPort()}；` +
+			`远程控制端口=${getDebugRemoteControlPort()}；已禁用开机自启与自动更新`
+	);
+}
 
 // 沙箱兼容开关：部分环境下关掉才不会启动失败，与图形无关，保持原样
 app.commandLine.appendSwitch('no-sandbox');
@@ -185,7 +199,8 @@ function bootstrap() {
 						reportGpuStatus();
 
 						// 因为需要对渲染进程发送信息，所以要在显示完成后开始监听
-						if (app.isPackaged) {
+						// 隔离调试实例绝不能走自动更新：避免更新器替换掉现有安装版
+						if (app.isPackaged && !isIsolatedDebug()) {
 							task('软件更新', () => updater());
 						}
 					}, 1000);
@@ -200,8 +215,14 @@ function bootstrap() {
 				if (app.isPackaged) {
 					await window.loadFile('./public/index.html');
 				} else {
-					await window.loadURL('http://localhost:3000');
-					window.webContents.openDevTools();
+					await window.loadURL(process.env.HH_DEBUG_WEB_URL || 'http://localhost:3000');
+					/**
+					 * 隔离调试默认不弹 DevTools：
+					 * 首次使用流程要看完整界面，DevTools 会挡住内容（需要时设 HH_DEBUG_DEVTOOLS=1）。
+					 */
+					if (!isIsolatedDebug() || process.env.HH_DEBUG_DEVTOOLS === '1') {
+						window.webContents.openDevTools();
+					}
 				}
 
 				/**

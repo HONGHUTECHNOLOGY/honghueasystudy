@@ -226,7 +226,7 @@ async function testConnection() {
 
 	testing.value = true;
 	try {
-		const r = await fetch('http://localhost:15319/api/test-ai', {
+		const r = await fetch(`http://localhost:${store.server?.port || 15319}/api/test-ai`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ endpoint, apiKey, model })

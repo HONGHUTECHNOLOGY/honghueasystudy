@@ -1304,7 +1304,14 @@ export class ScriptWorker {
 		const page = await this.acquireAutomationPage();
 
 		const errors: string[] = [];
-		const onError = (...args: any[]) => errors.push(args.map((item) => String(item)).join(' '));
+		/** 验证码把自动化挡住了（需要人工介入）：结束时不收流光条，改成常显提示 */
+		let captchaBlocked = false;
+		const onError = (...args: any[]) => {
+			const msg = args.map((item) => String(item)).join(' ');
+			errors.push(msg);
+			/** 验证码过不去时用户必须介入，标记下来让流光条保持常显 */
+			if (/验证码/.test(msg)) captchaBlocked = true;
+		};
 		const onData = (...args: any[]) => this.info(...args);
 
 		script.on('script-data', onData);
@@ -1327,11 +1334,23 @@ export class ScriptWorker {
 				detTargetKey: 'det_target'
 			});
 		} catch (e) {
-			errors.push(e instanceof Error ? e.message : String(e));
+			const msg = e instanceof Error ? e.message : String(e);
+			errors.push(msg);
+			if (/验证码/.test(msg)) captchaBlocked = true;
 		} finally {
 			script.off('script-data', onData);
 			script.off('script-error', onError);
-			overlay?.hide();
+			/**
+			 * 验证码挡住了就不收提示
+			 *
+			 * 用户此刻必须去页面上手动点，流光条一消失他就不知道要干什么了。
+			 * 换成常显并写清动作，直到他操作完（或关掉浏览器）。
+			 */
+			if (captchaBlocked) {
+				overlay?.show('遇到验证码，请手动完成（勾选「下次自动登录」免验证）', true);
+			} else {
+				overlay?.hide();
+			}
 		}
 
 		if (errors.length) {
@@ -3756,6 +3775,20 @@ export async function launchBrowser({
 				 */
 				watchDesktopConfigChanges(browser, serverPort);
 
+				/**
+				 * 自动化脚本清单必须先在这里留痕
+				 *
+				 * `resolve()` 之后 worker 的 stdout 不再转发到主进程日志 ——
+				 * 后面 `runAutomationScripts` 里的日志（包括 `[启动] 自动化脚本：N 个`）
+				 * 在日志文件里根本看不到，之前排查「配了却不执行」就被这一点误导了很久。
+				 * 所以把最关键的「到底传进来几个脚本」放在 resolve 之前打。
+				 */
+				console.log(
+					`[启动] 自动化脚本：${automationScripts.length} 个${
+						automationScripts.length ? '（' + automationScripts.map((s) => s.name).join('、') + '）' : '（未配置）'
+					}`
+				);
+
 				// 浏览器进程已就绪：立即触发 onLaunch 并 resolve，
 				// 否则导航页加载、开发者模式、自动化脚本任何一步抛错/卡住
 				// 都会让远程端永远停留在「启动中」且无法截图（浏览器本身却在正常刷课）。
@@ -3825,6 +3858,18 @@ export async function launchBrowser({
 					browserNetworkRoute(authToken, browser, getAutoStop, overlay, uid);
 
 					// 运行自动化程序（导航页不参与，脚本自己新开标签）
+					/**
+					 * 先留痕
+					 *
+					 * `runAutomationScripts` 在数组为空时是**静默 return** 的，
+					 * 出问题时日志里「没配置脚本」和「配了但没执行」长得一模一样，
+					 * 之前排查就被这一点卡住。这里明确打出数量和名字。
+					 */
+					console.log(
+						`[启动] 自动化脚本：${automationScripts.length} 个${
+							automationScripts.length ? '（' + automationScripts.map((s) => s.name).join('、') + '）' : '（未配置，跳过）'
+						}`
+					);
 					if (automationScripts.length) {
 						overlay.show('正在自动操作中 · 自动程序', true);
 					}
@@ -3926,9 +3971,11 @@ export async function runAutomationScripts(opts: {
 		await step(`正在执行自动化程序 - ${ps.name} ...`);
 		const configs = transformScriptConfigToRaw(ps.configs);
 
+		let matched = false;
 		for (const script of AutomationScripts) {
 			/** 改过名的脚本：旧条目还叫老名字，靠 aliases 认回来，别让它在启动时被静默跳过 */
 			if (script.name !== ps.name && !(script.aliases || []).includes(ps.name)) continue;
+			matched = true;
 
 			script.on('script-data', (...msg) => console.log(...msg));
 			script.on('script-error', (...msg) =>
@@ -3969,6 +4016,12 @@ export async function runAutomationScripts(opts: {
 
 			onDone?.({ page: landed, platformId });
 			break;
+		}
+
+		if (!matched) {
+			console.warn(
+				`[启动] 自动化：「${ps.name}」没有匹配到任何脚本（可用脚本：${AutomationScripts.map((s) => s.name).join('、')}）`
+			);
 		}
 	}
 }

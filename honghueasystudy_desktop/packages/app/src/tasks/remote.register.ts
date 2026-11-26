@@ -26,7 +26,7 @@ import * as signin from '../signin';
 import type { SigninAccountConfig, SigninActivity } from '../signin/core/types';
 import type { PerformSignOptions } from '../signin/core/sign';
 
-export type RawAutomationScript = Pick<AutomationScript, 'configs' | 'name'>;
+export type RawAutomationScript = Pick<AutomationScript, 'configs' | 'name' | 'recommend'>;
 
 /**
  * 由主进程独占维护、渲染端无权覆盖的顶层配置。

@@ -5,6 +5,7 @@ import os from 'os';
 import path from 'path';
 import { Logger } from '../logger';
 import { store } from '../store';
+import { isIsolatedDebug } from '../debug.isolated';
 
 const logger = Logger('auto-launch');
 
@@ -224,6 +225,15 @@ function readLoginItemStatus(): { registered: boolean; willLaunch: boolean } {
  * 必须在 initStore 之后调用，否则全新安装时 store.window 还不存在。
  */
 export function autoLaunch() {
+	/**
+	 * 隔离调试实例绝不碰开机自启：
+	 * 它会以同一个注册表值名（electron.app.鸿鹄易学）写入 debug 的启动路径，
+	 * 把用户正式版的开机自启覆盖掉；清理旧快捷方式也会动到用户启动文件夹。
+	 */
+	if (isIsolatedDebug()) {
+		logger.info('隔离调试模式：跳过开机自启注册与启动文件夹清理');
+		return;
+	}
 	if (!app.isPackaged) return;
 	/** Linux 未实现登录启动项（Electron 只在 macOS / Windows 支持该接口） */
 	if (process.platform === 'linux') return;

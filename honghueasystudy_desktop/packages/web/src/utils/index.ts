@@ -246,6 +246,7 @@ export function iconUrl(url?: string): string {
 	if (!url) return '';
 	// 以 / 开头的路径视为本地静态资源（与页面同源，由本地服务器托管），不做图标代理
 	if (url.startsWith('/')) return url;
-	const port = 15319;
+	// 跟随主进程实际端口：隔离调试实例是 15419，不能写死 15319 去打正式版实例
+	const port = store.server?.port || 15319;
 	return `http://localhost:${port}/icon?url=${encodeURIComponent(url)}`;
 }

@@ -8,6 +8,7 @@ import { getDecryptedRenderData, encryptRenderString } from '../crypto';
 import { applyAnswerConfig, isAnswerConfigScope, readAnswerConfig, type AnswerConfigScope } from './answer-config';
 import { getCurrentWebContents, getProjectPath, moveWindowToTop } from '../utils';
 import { canOCR, det, ocr } from '../utils/ocr';
+import { isIsolatedDebug, getDebugServerPort, getDebugRemoteControlPort } from '../debug.isolated';
 import { randomUUID } from 'crypto';
 const logger = Logger('server');
 
@@ -162,8 +163,11 @@ function writeAnswerConfig(scope: AnswerConfigScope, uid: string, patch: Record<
 export async function startupServer() {
 	const app = express();
 
+	/** 隔离调试实例固定走 15419 起，避免抢占正在运行的正式版 15319 */
+	const preferredPort = isIsolatedDebug() ? getDebugServerPort() : 15319;
+
 	store.set('server', {
-		port: 15319,
+		port: preferredPort,
 		authToken: randomUUID().replace(/-/g, '')
 	});
 
@@ -470,23 +474,45 @@ export async function startupServer() {
 	app.use(express.static(path.join(getProjectPath(), './public')));
 
 	return new Promise<void>((resolve, reject) => {
-		const server = app.listen(store.store.server.port, () => {
-			const address = server.address();
-			if (address && typeof address === 'object') {
-				// 存储本次服务的端口
-				logger.info(`鸿鹄易学服务启动成功 => ${address.port}`);
-			}
-			resolve();
-		});
+		/**
+		 * 正式版保持「端口被占即失败」的原行为；
+		 * 隔离调试实例则向后找 20 个端口，避免和正在运行的正式版/其他调试实例冲突。
+		 */
+		const maxPort = preferredPort + (isIsolatedDebug() ? 20 : 0);
 
-		// eslint-disable-next-line no-undef
-		server.on('error', (err: NodeJS.ErrnoException) => {
-			if (err.code === 'EADDRINUSE') {
-				logger.error(`端口 ${store.store.server.port} 已被占用，服务启动失败`);
-			} else {
-				logger.error(`鸿鹄易学服务启动失败: ${err.message}`);
-			}
-			reject(err);
-		});
+		const listen = (port: number) => {
+			const server = app.listen(port, () => {
+				const address = server.address();
+				if (address && typeof address === 'object') {
+					// 端口可能因占用而向后顺延，成功后再把最终端口写回存档
+					store.set('server', { ...store.store.server, port: address.port });
+					logger.info(`鸿鹄易学服务启动成功 => ${address.port}`);
+				}
+				resolve();
+			});
+
+			// eslint-disable-next-line no-undef
+			server.on('error', (err: NodeJS.ErrnoException) => {
+				if (err.code === 'EADDRINUSE' && port < maxPort) {
+					let next = port + 1;
+					/** 调试实例的远程控制端口已被预留，顺延时跳过它 */
+					if (isIsolatedDebug() && next === getDebugRemoteControlPort()) next += 1;
+					if (next <= maxPort) {
+						logger.warn(`端口 ${port} 已被占用，尝试 ${next}`);
+						server.close();
+						listen(next);
+						return;
+					}
+				}
+				if (err.code === 'EADDRINUSE') {
+					logger.error(`端口 ${port} 已被占用，服务启动失败`);
+				} else {
+					logger.error(`鸿鹄易学服务启动失败: ${err.message}`);
+				}
+				reject(err);
+			});
+		};
+
+		listen(preferredPort);
 	});
 }
