@@ -584,6 +584,32 @@ export const CommonProject = Project.create({
 				 * 关闭：本浏览器单独配置，不与桌面端同步，桌面端也不再下发。
 				 * 开关本身是「这台浏览器怎么用」的本地决定，所以不参与全量同步。
 				 */
+				/**
+				 * 由桌面端管理（一次性标记）
+				 *
+				 * 桌面端第一次往扩展注入配置时把它置 true，之后**永不改变**。
+				 * 扩展只认这一个标记决定面板是不是只读：
+				 * - 从没装过桌面端 → 没有这个键 → 面板可正常编辑
+				 * - 装过桌面端 → true → 只读，题库/AI 统一在桌面端维护
+				 *
+				 * 相比原来的「开关 + 心跳时间戳 + 7 天有效期」，少了两层会失效的东西：
+				 * 浏览器挂着不关、卸载了桌面端、客户端版本没更新，都不会让状态漂移。
+				 */
+				desktopManaged: {
+					defaultValue: false,
+					extra: { appConfigSync: false },
+					/** 纯内部标记，不渲染（`showIf` 指向不存在的键） */
+					showIf: 'common.settings.zzInternalOnlyNeverRendered'
+				},
+				/**
+				 * 使用桌面端统一配置
+				 *
+				 * 只在「由桌面端管理的浏览器」上出现：`showIf` 依赖 `desktopManaged`，
+				 * 那个标记只有桌面端注入时才为 true。纯扩展用户（从没装过桌面端）看不到这一项，
+				 * 面板就是普通的本地配置，不会被一个用不上的开关占位。
+				 *
+				 * 桌面端浏览器里它是可见的、默认勾选；用户主动取消即可回到本浏览器独立配置。
+				 */
 				useDesktopAnswerConfig: {
 					label: '使用桌面端统一配置',
 					defaultValue: true,
@@ -591,7 +617,8 @@ export const CommonProject = Project.create({
 					attrs: {
 						type: 'checkbox',
 						title: '开启后题库与 AI 统一在桌面端「题库与 AI 配置」页维护，自动下发到本浏览器；关闭则本浏览器单独配置，不与桌面端同步。'
-					}
+					},
+					showIf: 'common.settings.desktopManaged'
 				},
 				upload: {
 					label: '答题完成后',
@@ -2400,12 +2427,19 @@ function aiTestConnection(endpoint: string, apiKey: string, model: string) {
 }
 
 /**
- * 是否使用「桌面端统一配置」（开关默认开启）
+ * 是否使用「桌面端统一配置」
  *
- * 开启时题库 / AI 一律在桌面端维护，由客户端启动浏览器时单向注入扩展 storage；
- * 关闭时回到本浏览器独立配置（只存在本地）。
+ * 只看一个一次性标记 `desktopManaged`：桌面端第一次注入配置时置 true，之后再不改变。
+ * 开启时题库 / AI 一律在桌面端维护，由客户端启动浏览器时单向注入扩展 storage。
+ *
+ * 为什么不用「开关 + 心跳 + 有效期」：那套东西有三处会漂 ——
+ * 浏览器长期不关会让心跳过期、客户端版本没更新会不写心跳、卸载桌面端后标记还在但心跳停了。
+ * 一次性标记没有这些问题，代价只是「装过桌面端的机器，卸了也保持只读」。
  */
 function isUsingDesktopConfig() {
+	/** 桌面端管理标记：只有它存在（桌面端注入过）时才谈得上统一配置 */
+	if (CommonProject.scripts.settings.cfg.desktopManaged !== true) return false;
+	/** 用户在面板上主动取消勾选 → 回到本浏览器独立配置 */
 	return CommonProject.scripts.settings.cfg.useDesktopAnswerConfig !== false;
 }
 
@@ -2440,7 +2474,7 @@ function createDesktopConfigTip() {
 		h(
 			'div',
 			{ className: 'secondary', style: { marginTop: '10px', fontSize: '12px', lineHeight: '1.6' } },
-			'想在本浏览器单独配置？在「全局设置」里关闭「使用桌面端统一配置」后重新打开面板。'
+			'想在本浏览器单独配置？到「全局设置」取消勾选「使用桌面端统一配置」，再打开这个面板。'
 		)
 	]);
 }

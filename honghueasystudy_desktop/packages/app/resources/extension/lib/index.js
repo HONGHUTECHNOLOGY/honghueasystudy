@@ -7136,6 +7136,11 @@
               };
             }
           },
+          desktopManaged: {
+            defaultValue: false,
+            extra: { appConfigSync: false },
+            showIf: "common.settings.zzInternalOnlyNeverRendered"
+          },
           useDesktopAnswerConfig: {
             label: "使用桌面端统一配置",
             defaultValue: true,
@@ -7143,7 +7148,8 @@
             attrs: {
               type: "checkbox",
               title: "开启后题库与 AI 统一在桌面端「题库与 AI 配置」页维护，自动下发到本浏览器；关闭则本浏览器单独配置，不与桌面端同步。"
-            }
+            },
+            showIf: "common.settings.desktopManaged"
           },
           upload: {
             label: "答题完成后",
@@ -8696,6 +8702,8 @@
     });
   }
   function isUsingDesktopConfig() {
+    if (CommonProject.scripts.settings.cfg.desktopManaged !== true)
+      return false;
     return CommonProject.scripts.settings.cfg.useDesktopAnswerConfig !== false;
   }
   function openDesktopSettings() {
@@ -8720,7 +8728,7 @@
       lib.h(
         "div",
         { className: "secondary", style: { marginTop: "10px", fontSize: "12px", lineHeight: "1.6" } },
-        "想在本浏览器单独配置？在「全局设置」里关闭「使用桌面端统一配置」后重新打开面板。"
+        "想在本浏览器单独配置？到「全局设置」取消勾选「使用桌面端统一配置」，再打开这个面板。"
       )
     ]);
   }

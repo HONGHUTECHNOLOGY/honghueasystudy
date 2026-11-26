@@ -3565,13 +3565,13 @@ function watchDesktopConfigChanges(browser: BrowserContext, serverPort: number) 
 			const worker = browser.serviceWorkers()[0];
 			if (!worker) return;
 
-			/** 开关关了就停手：本浏览器要用自己的配置 */
-			const flag = await worker.evaluate(() => {
-				/* @ts-ignore 该回调在扩展的 service worker 上下文里执行 */
-				return chrome.storage.local.get(['common.settings.useDesktopAnswerConfig']);
-			});
-			if (flag && flag['common.settings.useDesktopAnswerConfig'] === false) return;
-
+			/**
+			 * 开关判断与心跳保活都已移除
+			 *
+			 * 现在只有一个一次性标记 `desktopManaged`（见 markDesktopManaged），
+			 * 没有会随时间漂移的状态：浏览器开多久、桌面端重启多少次都不影响，
+			 * 所以轮询这里只需要盯着配置有没有变、变了就下发。
+			 */
 			const res = await fetch(`http://127.0.0.1:${serverPort}/api/answer-config?scope=shared`, {
 				signal: AbortSignal.timeout(2000)
 			}).then((r) => r.json());
@@ -3605,6 +3605,49 @@ function watchDesktopConfigChanges(browser: BrowserContext, serverPort: number) 
 }
 
 /**
+ * 写下「这台浏览器归桌面端管理」的一次性标记
+ *
+ * 只写一次：已存在 true 就不再动它，也不提供反向操作。
+ * 扩展侧 `isUsingDesktopConfig()` 只看这个值，所以不需要心跳、过期时间之类的兜底。
+ */
+async function markDesktopManaged(browser: BrowserContext): Promise<void> {
+	try {
+		let worker = browser.serviceWorkers()[0];
+		if (!worker) {
+			worker = await browser.waitForEvent('serviceworker', { timeout: 4000 });
+		}
+		await worker.evaluate(
+			({ key, value }) => {
+				/**
+				 * 这里不能用 async/await
+				 *
+				 * target 是 es2016，tsc 会把 async 编译成 `__awaiter(...)`，
+				 * 而这个回调是序列化到扩展的 service worker 里执行的，那边没有这个 helper ——
+				 * 实测报 `ReferenceError: __awaiter is not defined`，标记一次都没写进去。
+				 * 所以用 `.then` 链，编译后不依赖任何 helper。
+				 */
+				/* @ts-ignore 该回调在扩展的 service worker 上下文里执行，主进程的类型环境里没有 chrome */
+				const store = chrome.storage.local;
+				return store.get([key]).then((cur: Record<string, any>) => {
+					/**
+					 * 必须用 `!== true`，不能用 `=== undefined`
+					 *
+					 * 扩展初始化时会把这个字段的 `defaultValue: false` 主动写进 storage，
+					 * 所以它从来不是 undefined —— 用 undefined 判断等于永不写入（实测踩过）。
+					 */
+					if (cur[key] !== true) {
+						return store.set({ [key]: value });
+					}
+				});
+			},
+			{ key: 'common.settings.desktopManaged', value: true }
+		);
+	} catch (e: any) {
+		console.log('[启动] 写桌面端管理标记失败：' + (e?.message || e));
+	}
+}
+
+/**
  * 把答题 / AI 配置直接写进扩展的 `chrome.storage.local`（启动时注入一次）
  *
  * 扩展侧原本自己探测桌面端（`GM_xmlhttpRequest` → `localhost:15319`），但那条链在伪 Window
@@ -3620,6 +3663,18 @@ function watchDesktopConfigChanges(browser: BrowserContext, serverPort: number) 
  */
 async function syncAnswerConfigToExtension(browser: BrowserContext, serverPort: number): Promise<Record<string, any>> {
 	try {
+		/**
+		 * 先打标记，再谈配置
+		 *
+		 * 「这台浏览器归桌面端管」是一个一次性标记，写在扩展 storage 里、此后永不改变。
+		 * 扩展只认它来决定面板是否只读 —— 不用心跳、不用有效期，
+		 * 浏览器挂多久、客户端哪个版本都不会让状态漂移。
+		 *
+		 * 必须放在配置判断之前：桌面端还没配任何东西时下面会提前 return，
+		 * 而那种情况下浏览器同样归桌面端管，面板照样该是只读的。
+		 */
+		await markDesktopManaged(browser);
+
 		const res = await fetch(`http://127.0.0.1:${serverPort}/api/answer-config?scope=shared`, {
 			signal: AbortSignal.timeout(2500)
 		}).then((r) => r.json());
