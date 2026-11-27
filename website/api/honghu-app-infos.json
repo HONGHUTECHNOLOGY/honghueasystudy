@@ -106,6 +106,102 @@
     ],
     "versions": [
         {
+            "tag": "5.9.0",
+            "description": {
+                "feat": [],
+                "fix": [],
+                "other": [
+                    "桌面端与扩展同步更新，详见发布页"
+                ]
+            },
+            "installers": {
+                "win32": {
+                    "urls": [
+                        "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-win-x64.exe",
+                        "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-win-x64.exe"
+                    ],
+                    "sha256": "18feeceb72ee7a5c6e16275e8689413bd8f3c60900ff7021458676eac78def8e",
+                    "size": 341161090,
+                    "name": "honghueasystudy-5.9.0-setup-win-x64.exe"
+                },
+                "darwin": [
+                    {
+                        "arch": "arm64",
+                        "ext": "dmg",
+                        "name": "honghueasystudy-5.9.0-setup-mac-arm64.dmg",
+                        "urls": [
+                            "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-mac-arm64.dmg",
+                            "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-mac-arm64.dmg"
+                        ],
+                        "sha256": "1cfb2ac7e7269c4beae18b77f0de554024b7aece975a17f4c8940d61b21b02e9",
+                        "size": 583314623
+                    },
+                    {
+                        "arch": "x64",
+                        "ext": "dmg",
+                        "name": "honghueasystudy-5.9.0-setup-mac-x64.dmg",
+                        "urls": [
+                            "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-mac-x64.dmg",
+                            "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-mac-x64.dmg"
+                        ],
+                        "sha256": "c0138fc6a3671eb86106cf0d99cce29d6a7c33055f26564a2ebee7cfd4b7e08b",
+                        "size": 610588957
+                    }
+                ],
+                "linux": [
+                    {
+                        "arch": "arm64",
+                        "ext": "AppImage",
+                        "name": "honghueasystudy-5.9.0-setup-linux-arm64.AppImage",
+                        "urls": [
+                            "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-linux-arm64.AppImage",
+                            "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-linux-arm64.AppImage"
+                        ],
+                        "sha256": "50af0eb68c15f131d216fe8fee897a10b9e036c2474950e425856ce2b60b4610",
+                        "size": 216022153
+                    },
+                    {
+                        "arch": "x64",
+                        "ext": "AppImage",
+                        "name": "honghueasystudy-5.9.0-setup-linux-x86_64.AppImage",
+                        "urls": [
+                            "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-linux-x86_64.AppImage",
+                            "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-linux-x86_64.AppImage"
+                        ],
+                        "sha256": "06b450e31f4c9c0fd42639019f993ab3e9da753445f4c9fe18cc2c103e9c0c32",
+                        "size": 404300666
+                    },
+                    {
+                        "arch": "x64",
+                        "ext": "deb",
+                        "name": "honghueasystudy-5.9.0-setup-linux-amd64.deb",
+                        "urls": [
+                            "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-linux-amd64.deb",
+                            "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-linux-amd64.deb"
+                        ],
+                        "sha256": "4290e8e63df7c085e751100f196e86cd8a5a491f9b203b3cfc523f8787164ddc",
+                        "size": 324235674
+                    },
+                    {
+                        "arch": "x64",
+                        "ext": "rpm",
+                        "name": "honghueasystudy-5.9.0-setup-linux-x86_64.rpm",
+                        "urls": [
+                            "https://gitcode.com/honghutech/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-linux-x86_64.rpm",
+                            "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-linux-x86_64.rpm"
+                        ],
+                        "sha256": "45f3fb83813bcb3177bd7ab15b868e407b36f251acfe92cca896cb7ece873ac5",
+                        "size": 324557293
+                    }
+                ]
+            },
+            "app_downloads": {
+                "win32": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/download/v5.9.0/honghueasystudy-5.9.0-setup-win-x64.exe",
+                "darwin": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/tag/v5.9.0",
+                "linux": "https://github.com/HONGHUTECHNOLOGY/honghueasystudy/releases/tag/v5.9.0"
+            }
+        },
+        {
             "tag": "5.8.5",
             "description": {
                 "feat": [],
