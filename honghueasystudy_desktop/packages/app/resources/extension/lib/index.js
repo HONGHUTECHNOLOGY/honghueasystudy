@@ -6377,6 +6377,7 @@ ${url}`).join("\n");
     }
     const workOptions = CommonProject.scripts.settings.methods.getWorkOptions();
     let checkMessage = workPreCheckMessage({
+      allowEmptyAnswerer: options.allowEmptyAnswerer,
       onrun: () => startBtnPressed === false && start2(),
       onclose: (_, closedMsg) => checkMessage = closedMsg,
       onNoAnswererWrappers: () => {
@@ -6538,35 +6539,34 @@ ${url}`).join("\n");
   });
   function workPreCheckMessage(options) {
     var _a;
-    const { onrun, onNoAnswererWrappers, onclose, ...opts } = options;
-    if (opts.answererWrappers.length === 0) {
+    const { onrun, onNoAnswererWrappers, onclose, allowEmptyAnswerer, ...opts } = options;
+    if (opts.answererWrappers.length === 0 && allowEmptyAnswerer !== true) {
       onNoAnswererWrappers == null ? void 0 : onNoAnswererWrappers(opts);
       return answerWrapperEmptyWarning(0);
-    } else {
-      options.start_delay_seconds = (_a = options.start_delay_seconds) != null ? _a : 5;
-      return lib.$message.info({
-        duration: options.start_delay_seconds,
-        content: lib.h("span", [
-          `${options.start_delay_seconds}秒后自动答题，`,
-          lib.$ui.preventText({
-            name: "点击取消",
-            delay: options.start_delay_seconds,
-            ondefault: (span) => {
-              onrun(opts);
-            },
-            onprevent(span) {
-              const closedMessage = lib.$message.warn({
-                content: "已关闭此次的自动答题，请手动开启或者忽略此警告。",
-                duration: 0
-              });
-              if (closedMessage) {
-                onclose == null ? void 0 : onclose(opts, closedMessage);
-              }
-            }
-          })
-        ])
-      });
     }
+    options.start_delay_seconds = (_a = options.start_delay_seconds) != null ? _a : 5;
+    return lib.$message.info({
+      duration: options.start_delay_seconds,
+      content: lib.h("span", [
+        `${options.start_delay_seconds}秒后自动答题，`,
+        lib.$ui.preventText({
+          name: "点击取消",
+          delay: options.start_delay_seconds,
+          ondefault: (span) => {
+            onrun(opts);
+          },
+          onprevent(span) {
+            const closedMessage = lib.$message.warn({
+              content: "已关闭此次的自动答题，请手动开启或者忽略此警告。",
+              duration: 0
+            });
+            if (closedMessage) {
+              onclose == null ? void 0 : onclose(opts, closedMessage);
+            }
+          }
+        })
+      ])
+    });
   }
   function createRangeTooltip(input, defaultValue, transform) {
     input.addEventListener("change", () => {
@@ -31481,11 +31481,15 @@ ${lines.join("\n")}`);
       return isChosen(el) === wanted;
     }
     async search(subject, title, options, type) {
+      const wrappers = this.options.answererWrappers || [];
+      if (wrappers.length === 0) {
+        return [];
+      }
       const optionText = type === "completion" ? "" : options.map((el) => el.innerText).join("\n");
       return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
         var _a;
         await lib.$.sleep(((_a = this.options.period) != null ? _a : 3) * 1e3);
-        return defaultAnswerWrapperHandler(this.options.answererWrappers, { type, title, options: optionText });
+        return defaultAnswerWrapperHandler(wrappers, { type, title, options: optionText });
       });
     }
     async readPaperWithRetry() {
@@ -31511,8 +31515,9 @@ ${lines.join("\n")}`);
       $console.log(
         `[易班] 试卷共 ${total} 题${paper ? `，分组：${paper.map((s) => `${s.sectionName || "未命名"}(${s.subjects.length})`).join(" / ")}` : "（未取到整卷数据，按 DOM 逐题作答）"}`
       );
+      const hasExternalAnswerer = (this.options.answererWrappers || []).length > 0;
       $console.log(
-        this.options.useBank ? `[易班] 学生手册题库：已启用（内置 ${YOOC_BANK_ITEMS.length} 题），未命中的题目才走 AI` : "[易班] 学生手册题库：已关闭，全部题目走 AI / 题库接口"
+        this.options.useBank ? `[易班] 学生手册题库：已启用（内置 ${YOOC_BANK_ITEMS.length} 题）` + (hasExternalAnswerer ? "，未命中的题目才走 AI" : "，当前未配置题库/AI：未命中的题目会直接停止答题，不会乱翻页") : `[易班] 学生手册题库：已关闭，全部题目走 AI / 题库接口${hasExternalAnswerer ? "" : "（但当前未配置题库/AI，将无法作答）"}`
       );
       const separators = this.options.answerSeparators.split(",").map((s) => s.trim());
       const resolver = createDefaultQuestionResolver({
@@ -31530,6 +31535,7 @@ ${lines.join("\n")}`);
       const missing = [];
       let answered = 0;
       let bankHits = 0;
+      let stopped = false;
       for (let i = 0; i < total; i++) {
         if (this.isClose) {
           $console.log("[易班] 已手动关闭答题");
@@ -31656,21 +31662,36 @@ ${lines.join("\n")}`);
         } else {
           missing.push(pageIndex);
           $console.warn(`[易班] 第 ${pageIndex} 题未匹配到答案`);
+          if (!hasExternalAnswerer) {
+            stopped = true;
+            lib.$message.warn({
+              content: `第 ${pageIndex} 题未命中内置题库，且没有配置题库/AI，已停止自动答题；剩余 ${total - pageIndex} 题请手动处理。`,
+              duration: 0
+            });
+            break;
+          }
         }
         CommonProject.scripts.workResults.methods.updateWorkStateByResults(results);
         if (pageIndex < total) {
           await this.gotoIndex(pageIndex + 1);
         }
       }
-      $console.log(
-        this.options.useBank ? `[易班] 作答结束：共 ${total} 题，已选中 ${answered} 题（题库命中 ${bankHits} 题），未答 ${missing.length} 题` : `[易班] 作答结束：共 ${total} 题，已选中 ${answered} 题（题库开关已关闭，全部走 AI），未答 ${missing.length} 题`
-      );
+      if (stopped) {
+        $console.log(
+          `[易班] 已停止：共 ${total} 题，已选中 ${answered} 题（题库命中 ${bankHits} 题），剩余 ${total - answered} 题未处理`
+        );
+      } else {
+        $console.log(
+          this.options.useBank ? `[易班] 作答结束：共 ${total} 题，已选中 ${answered} 题（题库命中 ${bankHits} 题），未答 ${missing.length} 题` : `[易班] 作答结束：共 ${total} 题，已选中 ${answered} 题（题库开关已关闭，全部走 AI），未答 ${missing.length} 题`
+        );
+      }
       try {
-        CommonProject.scripts.workResults.methods.setResults(simplifyWorkResult(results));
-        CommonProject.scripts.workResults.methods.updateWorkStateByResults(results);
+        const handled = results.filter((item) => !!item);
+        CommonProject.scripts.workResults.methods.setResults(simplifyWorkResult(handled));
+        CommonProject.scripts.workResults.methods.updateWorkStateByResults(handled);
       } catch (e) {
       }
-      if (missing.length) {
+      if (missing.length && !stopped) {
         lib.$message.warn({
           content: `第 ${missing.slice(0, 20).join("、")}${missing.length > 20 ? " 等" : ""} 题没有匹配到答案，请手动处理。`,
           duration: 0
@@ -31714,8 +31735,7 @@ ${lines.join("\n")}`);
   }
   const workNotes = lib.$ui.notes([
     "易班优课考试页（地址含 /take）会自动逐题作答，其余页面仅提示。",
-    "脚本内置题库优先：命中过的题目直接按「正确选项文本」作答，不再请求 AI；未命中的题目才走题库配置里的 AI / 题库接口。",
-    "设置里的「启用学生手册题库」可一键关掉内置题库 —— 关掉后所有题目都交给 AI，适合换用别的卷子时避免被题库串题。",
+    "设置里的「启用学生手册题库」默认关闭（内置题库只覆盖学生手册这类固定卷子，默认开会串题）。需要时手动打开：命中过的题目直接按「正确选项文本」作答，不再请求 AI；未命中的题目才走题库配置里的 AI / 题库接口。",
     "题库只记正确答案文本，不记选项位置 —— 易班每场都会重新洗牌选项，记位置下次必错。",
     "考试进行中服务端不下发答案，题库未命中且未配置 AI 时该题会留空。",
     "交卷后可在解析页运行 `node scripts/collect-yooc-bank.js`，把这场官方答案抓进题库，下次同卷可满分。",
@@ -31757,7 +31777,7 @@ ${lines.join("\n")}`);
           },
           useBank: {
             label: "启用学生手册题库",
-            defaultValue: true,
+            defaultValue: false,
             attrs: {
               type: "checkbox",
               title: "开启后优先用内置题库（466 题）直接作答，未命中才请求 AI；关闭则全部题目交给 AI / 题库接口"
@@ -31788,13 +31808,14 @@ ${lines.join("\n")}`);
           CommonProject.scripts.workResults.methods.init();
           commonWork(this, {
             enable_control_panel: true,
+            allowEmptyAnswerer: true,
             start_delay_seconds: Number((_a = this.cfg.workDelay) != null ? _a : 3),
             workerProvider: (opts) => {
               const worker = new YoocExamWorker({
                 ...opts,
                 autoSubmit: !!this.cfg.autoSubmit,
                 skipAnswered: this.cfg.skipAnswered !== false,
-                useBank: this.cfg.useBank !== false
+                useBank: this.cfg.useBank === true
               });
               return worker;
             },

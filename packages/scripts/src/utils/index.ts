@@ -18,6 +18,13 @@ export interface CommonWorkOptions {
 export function workPreCheckMessage(
 	options: CommonWorkOptions & {
 		start_delay_seconds?: number;
+		/**
+		 * 没有题库配置也照常开始
+		 *
+		 * 给「平台自带内置题库」的脚本用（如易班学生手册题库）：题库命中就能答，
+		 * 没必要因为没配 AI 就整场不开始。
+		 */
+		allowEmptyAnswerer?: boolean;
 		onrun: (opts: CommonWorkOptions) => void;
 		/**
 		 * 当没有题库配置时的回调
@@ -29,36 +36,36 @@ export function workPreCheckMessage(
 		onclose?: (opts: CommonWorkOptions, closedMessage: MessageElement) => void;
 	}
 ) {
-	const { onrun, onNoAnswererWrappers, onclose, ...opts } = options;
+	const { onrun, onNoAnswererWrappers, onclose, allowEmptyAnswerer, ...opts } = options;
 
-	if (opts.answererWrappers.length === 0) {
+	if (opts.answererWrappers.length === 0 && allowEmptyAnswerer !== true) {
 		onNoAnswererWrappers?.(opts);
 		return answerWrapperEmptyWarning(0);
-	} else {
-		options.start_delay_seconds = options.start_delay_seconds ?? 5;
-		return $message.info({
-			duration: options.start_delay_seconds,
-			content: h('span', [
-				`${options.start_delay_seconds}秒后自动答题，`,
-				$ui.preventText({
-					name: '点击取消',
-					delay: options.start_delay_seconds,
-					ondefault: (span) => {
-						onrun(opts);
-					},
-					onprevent(span) {
-						const closedMessage = $message.warn({
-							content: '已关闭此次的自动答题，请手动开启或者忽略此警告。',
-							duration: 0
-						});
-						if (closedMessage) {
-							onclose?.(opts, closedMessage);
-						}
-					}
-				})
-			])
-		});
 	}
+
+	options.start_delay_seconds = options.start_delay_seconds ?? 5;
+	return $message.info({
+		duration: options.start_delay_seconds,
+		content: h('span', [
+			`${options.start_delay_seconds}秒后自动答题，`,
+			$ui.preventText({
+				name: '点击取消',
+				delay: options.start_delay_seconds,
+				ondefault: (span) => {
+					onrun(opts);
+				},
+				onprevent(span) {
+					const closedMessage = $message.warn({
+						content: '已关闭此次的自动答题，请手动开启或者忽略此警告。',
+						duration: 0
+					});
+					if (closedMessage) {
+						onclose?.(opts, closedMessage);
+					}
+				}
+			})
+		])
+	});
 }
 
 /**

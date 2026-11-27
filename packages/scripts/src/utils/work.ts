@@ -14,6 +14,8 @@ export function commonWork(
 	options: {
 		start_delay_seconds?: number;
 		enable_control_panel?: boolean;
+		/** 没有题库配置也照常开始（平台自带内置题库时用） */
+		allowEmptyAnswerer?: boolean;
 		workerProvider: (opts: CommonWorkOptions) => CommonEventEmitter<WorkerEvents> | undefined;
 		beforeRunning?: () => void | Promise<void>;
 		onRestart?: () => void | Promise<void>;
@@ -121,6 +123,7 @@ export function commonWork(
 	 * 检查题库是否配置，并询问是否开始答题
 	 */
 	let checkMessage = workPreCheckMessage({
+		allowEmptyAnswerer: options.allowEmptyAnswerer,
 		onrun: () => startBtnPressed === false && start(),
 		onclose: (_, closedMsg) => (checkMessage = closedMsg),
 		onNoAnswererWrappers: () => {

@@ -301,10 +301,20 @@ class YoocExamWorker extends CommonEventEmitter<WorkerEvents> {
 
 	/** 搜题：优先命中本地缓存 */
 	private async search(subject: YoocSubject | undefined, title: string, options: HTMLElement[], type: string) {
+		const wrappers = this.options.answererWrappers || [];
+		if (wrappers.length === 0) {
+			/**
+			 * 没配题库/AI：只剩内置题库可用
+			 *
+			 * 不能交给 `defaultAnswerWrapperHandler` —— 它会抛「题库配置不能为空」，
+			 * 而且每题还要先白等 period 秒。这里直接返回空结果，题目记为未答。
+			 */
+			return [];
+		}
 		const optionText = type === 'completion' ? '' : options.map((el) => el.innerText).join('\n');
 		return CommonProject.scripts.apps.methods.searchAnswerInCaches(title, async () => {
 			await $.sleep((this.options.period ?? 3) * 1000);
-			return defaultAnswerWrapperHandler(this.options.answererWrappers, { type, title, options: optionText });
+			return defaultAnswerWrapperHandler(wrappers, { type, title, options: optionText });
 		});
 	}
 
@@ -340,10 +350,16 @@ class YoocExamWorker extends CommonEventEmitter<WorkerEvents> {
 		$console.log(
 			`[易班] 试卷共 ${total} 题${paper ? `，分组：${paper.map((s) => `${s.sectionName || '未命名'}(${s.subjects.length})`).join(' / ')}` : '（未取到整卷数据，按 DOM 逐题作答）'}`
 		);
+		const hasExternalAnswerer = (this.options.answererWrappers || []).length > 0;
 		$console.log(
 			this.options.useBank
-				? `[易班] 学生手册题库：已启用（内置 ${YOOC_BANK_ITEMS.length} 题），未命中的题目才走 AI`
-				: '[易班] 学生手册题库：已关闭，全部题目走 AI / 题库接口'
+				? `[易班] 学生手册题库：已启用（内置 ${YOOC_BANK_ITEMS.length} 题）` +
+						(hasExternalAnswerer
+							? '，未命中的题目才走 AI'
+							: '，当前未配置题库/AI：未命中的题目会直接停止答题，不会乱翻页')
+				: `[易班] 学生手册题库：已关闭，全部题目走 AI / 题库接口${
+						hasExternalAnswerer ? '' : '（但当前未配置题库/AI，将无法作答）'
+					}`
 		);
 
 		const separators = this.options.answerSeparators.split(',').map((s) => s.trim());
@@ -365,6 +381,8 @@ class YoocExamWorker extends CommonEventEmitter<WorkerEvents> {
 		const missing: number[] = [];
 		let answered = 0;
 		let bankHits = 0;
+		/** 是否因为「没配题库且本题未命中」提前停止（剩余题目未处理） */
+		let stopped = false;
 
 		for (let i = 0; i < total; i++) {
 			if (this.isClose) {
@@ -503,6 +521,22 @@ class YoocExamWorker extends CommonEventEmitter<WorkerEvents> {
 			} else {
 				missing.push(pageIndex);
 				$console.warn(`[易班] 第 ${pageIndex} 题未匹配到答案`);
+				/**
+				 * 没配题库/AI 时只剩内置题库可用：一题没命中就停手
+				 *
+				 * 继续往下翻页只会点空题、把卷子翻乱，还会让用户以为在正常作答。
+				 * 直接 break，剩下的题留给人工处理。
+				 */
+				if (!hasExternalAnswerer) {
+					stopped = true;
+					$message.warn({
+						content: `第 ${pageIndex} 题未命中内置题库，且没有配置题库/AI，已停止自动答题；剩余 ${
+							total - pageIndex
+						} 题请手动处理。`,
+						duration: 0
+					});
+					break;
+				}
 			}
 
 			CommonProject.scripts.workResults.methods.updateWorkStateByResults(results);
@@ -512,19 +546,29 @@ class YoocExamWorker extends CommonEventEmitter<WorkerEvents> {
 			}
 		}
 
-		$console.log(
-			this.options.useBank
-				? `[易班] 作答结束：共 ${total} 题，已选中 ${answered} 题（题库命中 ${bankHits} 题），未答 ${missing.length} 题`
-				: `[易班] 作答结束：共 ${total} 题，已选中 ${answered} 题（题库开关已关闭，全部走 AI），未答 ${missing.length} 题`
-		);
+		if (stopped) {
+			$console.log(
+				`[易班] 已停止：共 ${total} 题，已选中 ${answered} 题（题库命中 ${bankHits} 题），剩余 ${
+					total - answered
+				} 题未处理`
+			);
+		} else {
+			$console.log(
+				this.options.useBank
+					? `[易班] 作答结束：共 ${total} 题，已选中 ${answered} 题（题库命中 ${bankHits} 题），未答 ${missing.length} 题`
+					: `[易班] 作答结束：共 ${total} 题，已选中 ${answered} 题（题库开关已关闭，全部走 AI），未答 ${missing.length} 题`
+			);
+		}
 		try {
-			CommonProject.scripts.workResults.methods.setResults(simplifyWorkResult(results));
-			CommonProject.scripts.workResults.methods.updateWorkStateByResults(results);
+			/** 中途 break 后 results 尾部是空洞，先滤掉再交给结果面板 */
+			const handled = results.filter((item) => !!item);
+			CommonProject.scripts.workResults.methods.setResults(simplifyWorkResult(handled));
+			CommonProject.scripts.workResults.methods.updateWorkStateByResults(handled);
 		} catch (e) {
 			// 结果面板异常不影响答题
 		}
 
-		if (missing.length) {
+		if (missing.length && !stopped) {
 			$message.warn({
 				content: `第 ${missing.slice(0, 20).join('、')}${missing.length > 20 ? ' 等' : ''} 题没有匹配到答案，请手动处理。`,
 				duration: 0
@@ -575,8 +619,7 @@ class YoocExamWorker extends CommonEventEmitter<WorkerEvents> {
 
 const workNotes = $ui.notes([
 	'易班优课考试页（地址含 /take）会自动逐题作答，其余页面仅提示。',
-	'脚本内置题库优先：命中过的题目直接按「正确选项文本」作答，不再请求 AI；未命中的题目才走题库配置里的 AI / 题库接口。',
-	'设置里的「启用学生手册题库」可一键关掉内置题库 —— 关掉后所有题目都交给 AI，适合换用别的卷子时避免被题库串题。',
+	'设置里的「启用学生手册题库」默认关闭（内置题库只覆盖学生手册这类固定卷子，默认开会串题）。需要时手动打开：命中过的题目直接按「正确选项文本」作答，不再请求 AI；未命中的题目才走题库配置里的 AI / 题库接口。',
 	'题库只记正确答案文本，不记选项位置 —— 易班每场都会重新洗牌选项，记位置下次必错。',
 	'考试进行中服务端不下发答案，题库未命中且未配置 AI 时该题会留空。',
 	'交卷后可在解析页运行 `node scripts/collect-yooc-bank.js`，把这场官方答案抓进题库，下次同卷可满分。',
@@ -620,7 +663,8 @@ export const YoocProject = Project.create({
 				},
 				useBank: {
 					label: '启用学生手册题库',
-					defaultValue: true,
+					// 内置题库只覆盖学生手册那一套卷子，默认关掉避免串题
+					defaultValue: false,
 					attrs: {
 						type: 'checkbox',
 						title: '开启后优先用内置题库（466 题）直接作答，未命中才请求 AI；关闭则全部题目交给 AI / 题库接口'
@@ -655,14 +699,19 @@ export const YoocProject = Project.create({
 
 				commonWork(this, {
 					enable_control_panel: true,
+					/**
+					 * 没配题库/AI 也要能跑：命中内置学生手册题库的题照样能作答，
+					 * 否则整场考试连开始都开始不了（通用前置检查会直接拦下）
+					 */
+					allowEmptyAnswerer: true,
 					start_delay_seconds: Number(this.cfg.workDelay ?? 3),
 					workerProvider: (opts) => {
 						const worker = new YoocExamWorker({
 							...opts,
 							autoSubmit: !!this.cfg.autoSubmit,
 							skipAnswered: this.cfg.skipAnswered !== false,
-							// configs 的 checkbox 默认值在未写过盘时可能为 undefined，按"默认开启"处理
-							useBank: this.cfg.useBank !== false
+							// 默认关闭：只有显式开启才用内置题库
+							useBank: this.cfg.useBank === true
 						});
 						return worker;
 					},
