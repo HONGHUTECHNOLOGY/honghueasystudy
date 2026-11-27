@@ -1,6 +1,21 @@
 # Changelog
 
 
+## [5.9.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.8.5...v5.9.0) (2026-11-27)
+
+
+### ✨ 新功能
+
+* **ai:** 面板实时显示 AI 思考状态，调试导出支持子 frame ([02f2257](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/02f2257fa7df713f5004bf339d840e1ce5ef18c0))
+* **ai:** 题目图片改为 base64 内联，输出预算不设限 ([c29df31](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/c29df315785f6b453f030ab191301e3b5af012cc))
+* **yooc:** 没配题库也能用内置题库作答，未命中立即停止 ([a7f2166](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/a7f2166562e90661deef0fadd0f505e8a87ea340))
+* **zhs:** 掌握度练习全流程自动化（去提升 / 自动提交 / 未满分重做） ([4020647](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/40206472523aa0df7b2355c8b10984a084cd2831))
+
+
+### 🐛 问题修复
+
+* **config:** 桌面端管理模式改为一次性标记，面板开关按环境显隐 ([444d5d2](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/444d5d25c3961cd8b9f201642fdac515a110c8ca))
+
 ## [5.8.5](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.8.0...v5.8.5) (2026-11-25)
 
 
