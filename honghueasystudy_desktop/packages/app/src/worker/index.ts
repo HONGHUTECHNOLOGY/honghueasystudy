@@ -39,6 +39,207 @@ const { bgRedBright, bgBlueBright, bgYellowBright, bgGray } = new Chalk({ level:
 const AUTOMATION_READY_TIMEOUT = 5 * 60 * 1000;
 
 /**
+ * 页面结构摘要（逐个 frame 执行）
+ *
+ * 超星这类平台把课程/作业放在跨域 iframe 里：只取主文档只能拿到一层壳，
+ * 题目节点（`mark_name` / `TiMu` / `num_option`）一个都进不来 —— issue #17
+ * 的导出就是这样白跑一趟。Playwright 读 frame 走 CDP，不受同源限制，
+ * 所以主文档和每个子 frame 各跑一次，分别落盘。
+ *
+ * 回调会被序列化到页面上下文执行，**必须自包含**；体积上限靠 `limits` 传入。
+ */
+const collectDomSummary = (limits: { containers: number; links: number; textBlocks: number; fields: number }) => {
+	const flat = (el: Element) => (el.textContent || '').replace(/\s+/g, ' ').trim();
+
+	const groups = new Map<string, Element[]>();
+	const all = Array.from(document.querySelectorAll('body *')).slice(0, 3000);
+	for (const el of all) {
+		const cls = String(el.className || '').trim();
+		if (!cls || cls.length > 140) continue;
+		const key = el.tagName.toLowerCase() + '|' + cls;
+		const list = groups.get(key);
+		if (!list) {
+			groups.set(key, [el]);
+		} else if (list.length < 40) {
+			list.push(el);
+		}
+	}
+
+	const containers = Array.from(groups.entries())
+		.filter(([, list]) => list.length >= 2)
+		.sort((a, b) => b[1].length - a[1].length)
+		.slice(0, limits.containers)
+		.map(([key, list]) => ({
+			key,
+			count: list.length,
+			text: flat(list[0]).slice(0, 160),
+			html: (list[0].outerHTML || '').replace(/\s+/g, ' ').slice(0, 500)
+		}));
+
+	/** 链接：判断「课程/作业入口在哪」最直接 */
+	const links = Array.from(document.querySelectorAll('a[href]'))
+		.slice(0, limits.links * 2)
+		.map((a) => ({
+			text: flat(a).slice(0, 60),
+			href: (a as HTMLAnchorElement).href,
+			title: a.getAttribute('title') || '',
+			cls: String(a.className || '').slice(0, 80)
+		}))
+		.filter((item) => item.text || item.title)
+		.slice(0, limits.links);
+
+	/** 独立的短文本块：课程名/作者名多半在这里，配合 class 更容易定选择器 */
+	const textBlocks: { tag: string; cls: string; text: string }[] = [];
+	for (const el of all) {
+		if (textBlocks.length >= limits.textBlocks) break;
+		if (el.children.length > 0) continue;
+		const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+		if (text.length < 2 || text.length > 60) continue;
+		textBlocks.push({
+			tag: el.tagName.toLowerCase(),
+			cls: String(el.className || '').slice(0, 80),
+			text
+		});
+	}
+
+	const fields = Array.from(document.querySelectorAll('input, textarea, select, button'))
+		.slice(0, limits.fields)
+		.map((el) => ({
+			tag: el.tagName.toLowerCase(),
+			type: el.getAttribute('type') || '',
+			name: el.getAttribute('name') || '',
+			placeholder: el.getAttribute('placeholder') || '',
+			text: flat(el).slice(0, 40),
+			cls: String(el.className || '').slice(0, 60)
+		}));
+
+	/**
+	 * 图片清单
+	 *
+	 * 公式题排查的核心线索：到底是 `<img>`、`data-src` 懒加载，还是 CSS 背景图。
+	 * `src` 与 `currentSrc` 都留，前者是原始地址（可能是空/data:），后者是实际加载的。
+	 */
+	const images = Array.from(document.querySelectorAll('img'))
+		.slice(0, 60)
+		.map((img) => ({
+			src: img.getAttribute('src') || '',
+			currentSrc: img.currentSrc || '',
+			dataSrc: img.getAttribute('data-src') || '',
+			cls: String(img.className || '').slice(0, 80),
+			w: img.naturalWidth || img.width || 0,
+			h: img.naturalHeight || img.height || 0,
+			alt: img.getAttribute('alt') || ''
+		}))
+		.filter((item) => item.src || item.currentSrc || item.dataSrc);
+
+	/**
+	 * 公式形态
+	 *
+	 * 超星/智慧树的公式可能是 MathJax（`mjx-container`）、原生 MathML（`math`）、
+	 * 服务端渲染的图片（`img.tex_img` 或带 latex 的 img）—— 三种处理方式完全不同，
+	 * 这里直接给出命中数量与首个样本，省得靠猜。
+	 */
+	const formulaSelectors = [
+		'math',
+		'mjx-container',
+		'.MathJax',
+		'.MathJax_Display',
+		'.MJXc-display',
+		'img.tex_img',
+		'img[tex]',
+		'img[src*="latex"]',
+		'.mathml',
+		'.tex'
+	];
+	const formulas = formulaSelectors
+		.map((sel) => {
+			const list = document.querySelectorAll(sel);
+			return {
+				sel,
+				count: list.length,
+				sample: list.length && list[0] ? (list[0].outerHTML || '').replace(/\s+/g, ' ').slice(0, 300) : ''
+			};
+		})
+		.filter((item) => item.count > 0);
+
+	/** CSS 背景图：有些平台把选项图放在 `background-image` 上，只扫 `<img>` 会一张都收不到 */
+	const backgroundImages: { tag: string; cls: string; image: string }[] = [];
+	for (const el of all.slice(0, 1500)) {
+		if (backgroundImages.length >= 20) break;
+		let bg = '';
+		try {
+			bg = getComputedStyle(el).backgroundImage || '';
+		} catch {
+			continue;
+		}
+		if (!bg || bg === 'none' || bg.indexOf('url(') === -1) continue;
+		backgroundImages.push({
+			tag: el.tagName.toLowerCase(),
+			cls: String(el.className || '').slice(0, 80),
+			image: bg.slice(0, 300)
+		});
+	}
+
+	/**
+	 * 存储键名
+	 *
+	 * 必须把取 storage 对象本身也包进 try：about:blank、沙箱 iframe、chrome:// 页面上
+	 * 读 localStorage 会直接抛 SecurityError，把整个摘要打挂（实测踩过）。
+	 */
+	const storageKeys = (getter: () => Storage) => {
+		try {
+			return Object.keys(getter()).slice(0, 60);
+		} catch {
+			return [];
+		}
+	};
+
+	const cookieNames = () => {
+		try {
+			return document.cookie
+				.split(';')
+				.map((item) => item.split('=')[0].trim())
+				.filter(Boolean);
+		} catch {
+			return [];
+		}
+	};
+
+	return {
+		href: location.href,
+		title: document.title,
+		readyState: document.readyState,
+		viewport: { width: window.innerWidth, height: window.innerHeight },
+		documentSize: {
+			width: document.documentElement.scrollWidth,
+			height: document.documentElement.scrollHeight
+		},
+		counts: {
+			elements: document.querySelectorAll('*').length,
+			links: document.querySelectorAll('a[href]').length,
+			iframes: document.querySelectorAll('iframe').length,
+			images: document.querySelectorAll('img').length
+		},
+		containers,
+		links,
+		textBlocks,
+		fields,
+		images,
+		formulas,
+		backgroundImages,
+		storage: {
+			local: storageKeys(() => localStorage),
+			session: storageKeys(() => sessionStorage),
+			/** 只留名字，不落 cookie 值 */
+			cookies: cookieNames()
+		},
+		iframes: Array.from(document.querySelectorAll('iframe'))
+			.map((item: HTMLIFrameElement) => item.src)
+			.slice(0, 20)
+	};
+};
+
+/**
  * 读课程时允许在登录页上等待多久
  *
  * 登录脚本「结束」不等于「登录成功」：脚本内部的异常都被吞掉转成 `script-error`，
@@ -738,9 +939,12 @@ export class ScriptWorker {
 	 * 一键获取当前页面信息（开发者调试用）
 	 *
 	 * 把页面「原样」落盘，交给人工或 AI 分析真实 DOM：
-	 * - `page.html`：完整 DOM 序列化
+	 * - `page.html`：主文档完整 DOM 序列化
+	 * - `page-frame-<n>.html`：每个子 frame 的 DOM（超星/智慧树的题目都在跨域 iframe 里，
+	 *   只取主文档只能拿到一层壳）
 	 * - `page.png`：当前视口截图
-	 * - `info.json`：URL / 标题 / 平台 / 同构容器分组 / 链接 / 文本块 / 表单 / 存储键
+	 * - `info.json`：URL / 标题 / 平台 / 每个 frame 的摘要（同构容器分组 / 链接 / 文本块 /
+	 *   表单 / 图片清单 / 公式形态 / CSS 背景图 / 存储键）
 	 *
 	 * 全程只读：不点击、不填表、不修改页面。落盘位置跟随日志目录
 	 * （`<logs>/debug-dumps/<时间戳>-<host>/`），方便直接打包发出去。
@@ -752,6 +956,7 @@ export class ScriptWorker {
 		platformId: string;
 		files: { name: string; size: number }[];
 		containerCount: number;
+		frameCount: number;
 	}> {
 		const pages = (this.browser?.pages() || []).filter((item) => !item.isClosed());
 		if (pages.length === 0) throw new Error('浏览器尚未打开任何页面');
@@ -788,132 +993,87 @@ export class ScriptWorker {
 		 * 都是同一份 class 重复 N 次。这里按 `tag|class` 分组后按数量排序，
 		 * 顺带带上第一个样本的文本与 HTML，肉眼即可判断哪一组是课程列表。
 		 */
-		const summary = await page.evaluate(() => {
-			const flat = (el: Element) => (el.textContent || '').replace(/\s+/g, ' ').trim();
-
-			const groups = new Map<string, Element[]>();
-			const all = Array.from(document.querySelectorAll('body *')).slice(0, 3000);
-			for (const el of all) {
-				const cls = String(el.className || '').trim();
-				if (!cls || cls.length > 140) continue;
-				const key = el.tagName.toLowerCase() + '|' + cls;
-				const list = groups.get(key);
-				if (!list) {
-					groups.set(key, [el]);
-				} else if (list.length < 40) {
-					list.push(el);
-				}
-			}
-
-			const containers = Array.from(groups.entries())
-				.filter(([, list]) => list.length >= 2)
-				.sort((a, b) => b[1].length - a[1].length)
-				.slice(0, 40)
-				.map(([key, list]) => ({
-					key,
-					count: list.length,
-					text: flat(list[0]).slice(0, 160),
-					html: (list[0].outerHTML || '').replace(/\s+/g, ' ').slice(0, 500)
-				}));
-
-			/** 链接：判断「课程入口在哪」最直接 */
-			const links = Array.from(document.querySelectorAll('a[href]'))
-				.slice(0, 120)
-				.map((a) => ({
-					text: flat(a).slice(0, 60),
-					href: (a as HTMLAnchorElement).href,
-					title: a.getAttribute('title') || '',
-					cls: String(a.className || '').slice(0, 80)
-				}))
-				.filter((item) => item.text || item.title);
-
-			/** 独立的短文本块：课程名/作者名多半在这里，配合 class 更容易定选择器 */
-			const textBlocks: { tag: string; cls: string; text: string }[] = [];
-			for (const el of all) {
-				if (textBlocks.length >= 120) break;
-				if (el.children.length > 0) continue;
-				const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
-				if (text.length < 2 || text.length > 60) continue;
-				textBlocks.push({
-					tag: el.tagName.toLowerCase(),
-					cls: String(el.className || '').slice(0, 80),
-					text
-				});
-			}
-
-			const fields = Array.from(document.querySelectorAll('input, textarea, select, button'))
-				.slice(0, 60)
-				.map((el) => ({
-					tag: el.tagName.toLowerCase(),
-					type: el.getAttribute('type') || '',
-					name: el.getAttribute('name') || '',
-					placeholder: el.getAttribute('placeholder') || '',
-					text: flat(el).slice(0, 40),
-					cls: String(el.className || '').slice(0, 60)
-				}));
-
-			/**
-			 * 存储键名
-			 *
-			 * 必须把取 storage 对象本身也包进 try：about:blank、沙箱 iframe、chrome:// 页面上
-			 * 读 localStorage 会直接抛 SecurityError，把整个摘要打挂（实测踩过）。
-			 */
-			const storageKeys = (getter: () => Storage) => {
-				try {
-					return Object.keys(getter()).slice(0, 60);
-				} catch {
-					return [];
-				}
-			};
-
-			const cookieNames = () => {
-				try {
-					return document.cookie
-						.split(';')
-						.map((item) => item.split('=')[0].trim())
-						.filter(Boolean);
-				} catch {
-					return [];
-				}
-			};
-
-			return {
-				href: location.href,
-				title: document.title,
-				readyState: document.readyState,
-				viewport: { width: window.innerWidth, height: window.innerHeight },
-				documentSize: {
-					width: document.documentElement.scrollWidth,
-					height: document.documentElement.scrollHeight
-				},
-				counts: {
-					elements: document.querySelectorAll('*').length,
-					links: document.querySelectorAll('a[href]').length,
-					iframes: document.querySelectorAll('iframe').length,
-					images: document.querySelectorAll('img').length
-				},
-				containers,
-				links,
-				textBlocks,
-				fields,
-				storage: {
-					local: storageKeys(() => localStorage),
-					session: storageKeys(() => sessionStorage),
-					/** 只留名字，不落 cookie 值 */
-					cookies: cookieNames()
-				},
-				iframes: Array.from(document.querySelectorAll('iframe'))
-					.map((item) => item.src)
-					.slice(0, 20)
-			};
-		});
-
 		const files: { name: string; size: number }[] = [];
 		const write = (name: string, content: string) => {
 			const target = path.join(dir, name);
 			fs.writeFileSync(target, content, 'utf8');
 			files.push({ name, size: fs.statSync(target).size });
 		};
+
+		/**
+		 * 逐个 frame 抓取
+		 *
+		 * 主文档写 `page.html`（沿用旧文件名），其余写 `page-frame-<n>.html`。
+		 * 超星的作业页、智慧树的课程内容都在跨域 iframe 里：只抓主文档等于只抓到一层壳，
+		 * 题目节点一个都进不来（issue #17 就是这么白跑一趟的）。
+		 */
+		const mainFrame = page.mainFrame();
+		const frames = page.frames();
+		const frameItems: any[] = [];
+		let mainSummary: any = undefined;
+
+		for (let i = 0; i < frames.length; i++) {
+			const frame = frames[i];
+			const isMainFrame = frame === mainFrame;
+			const fileName = isMainFrame ? 'page.html' : `page-frame-${i + 1}.html`;
+			const item: any = {
+				index: i + 1,
+				name: '',
+				url: '',
+				isMainFrame,
+				title: '',
+				file: '',
+				elements: 0,
+				images: 0,
+				formulaNodes: 0,
+				error: ''
+			};
+
+			/** frame 可能在遍历途中被移除，url / name 也要兜住 */
+			try {
+				item.url = frame.url();
+				item.name = frame.name() || '';
+			} catch {
+				// ignore
+			}
+
+			let frameSummary: any;
+			try {
+				frameSummary = await frame.evaluate(collectDomSummary, {
+					containers: isMainFrame ? 40 : 20,
+					links: isMainFrame ? 120 : 40,
+					textBlocks: isMainFrame ? 120 : 40,
+					fields: isMainFrame ? 60 : 20
+				});
+			} catch (err) {
+				item.error = err instanceof Error ? err.message : String(err);
+			}
+
+			if (frameSummary) {
+				item.title = frameSummary.title || '';
+				item.elements = frameSummary.counts?.elements || 0;
+				item.images = frameSummary.counts?.images || 0;
+				item.formulaNodes = Array.isArray(frameSummary.formulas)
+					? frameSummary.formulas.reduce((sum: number, f: any) => sum + (Number(f?.count) || 0), 0)
+					: 0;
+				item.summary = frameSummary;
+				if (isMainFrame) mainSummary = frameSummary;
+			}
+
+			try {
+				const html = await frame.content();
+				if (html) {
+					write(fileName, html);
+					item.file = fileName;
+				}
+			} catch (err) {
+				if (!item.error) item.error = err instanceof Error ? err.message : String(err);
+			}
+
+			frameItems.push(item);
+		}
+
+		const summary = mainSummary || {};
 
 		write(
 			'info.json',
@@ -924,13 +1084,15 @@ export class ScriptWorker {
 					title,
 					platformId,
 					userAgent: await page.evaluate(() => navigator.userAgent).catch(() => ''),
-					summary
+					frameCount: frameItems.length,
+					summary,
+					/** 每个 frame 各一份摘要：主文档往往只是壳，题目在子 frame 里 */
+					frames: frameItems
 				},
 				null,
 				2
 			)
 		);
-		write('page.html', await page.content());
 
 		try {
 			const shot = await page.screenshot({ type: 'png', timeout: 15000, animations: 'disabled', caret: 'hide' });
@@ -949,7 +1111,8 @@ export class ScriptWorker {
 			title,
 			platformId,
 			files,
-			containerCount: Array.isArray((summary as any)?.containers) ? (summary as any).containers.length : 0
+			containerCount: Array.isArray((summary as any)?.containers) ? (summary as any).containers.length : 0,
+			frameCount: frameItems.length
 		};
 	}
 

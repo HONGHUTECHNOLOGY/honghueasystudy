@@ -582,13 +582,15 @@ export class Process extends EventEmitter {
 		if (this.status !== 'launched') {
 			return Promise.reject(new Error('浏览器未运行，请先启动浏览器'));
 		}
-		return this.callWorkerTimeout('dumpPage', [{ page }], 60 * 1000) as Promise<{
+		return this.callWorkerTimeout('dumpPage', [{ page }], 120 * 1000) as Promise<{
 			dir: string;
 			url: string;
 			title: string;
 			platformId: string;
 			files: { name: string; size: number }[];
 			containerCount: number;
+			/** 页面里的 frame 数量：超星这类站点题目都在 iframe 里，会额外导出 page-frame-N.html */
+			frameCount: number;
 		}>;
 	}
 

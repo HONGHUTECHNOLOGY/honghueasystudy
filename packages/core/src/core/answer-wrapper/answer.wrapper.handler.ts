@@ -30,6 +30,28 @@ export function setQuestionImageResolver(fn: ((urls: string[]) => Promise<string
 	_questionImageResolver = fn;
 }
 
+/** 题库请求进度：宿主据此在面板上显示「AI 思考中…」这类实时状态 */
+export interface AnswerProgressEvent {
+	phase: 'start' | 'end';
+	/** 题库名（AI 答题固定为「AI答题」） */
+	name: string;
+}
+
+let _answerProgressListener: ((event: AnswerProgressEvent) => void) | undefined;
+
+export function setAnswerProgressListener(fn: ((event: AnswerProgressEvent) => void) | undefined) {
+	_answerProgressListener = fn;
+}
+
+function emitAnswerProgress(event: AnswerProgressEvent) {
+	try {
+		_answerProgressListener?.(event);
+	} catch (err) {
+		// 进度 UI 出错绝不能影响答题
+		console.log('答题进度回调异常', err);
+	}
+}
+
 /**
  * 去掉题干里被 `optimizationElementWithImage` 换进去的图片地址
  *
@@ -168,6 +190,8 @@ export async function defaultAnswerWrapperHandler(
 			let requestData: any;
 			// 请求地址
 			let url: URL | undefined;
+			/** 通知宿主：开始请求（面板显示实时状态） */
+			emitAnswerProgress({ phase: 'start', name });
 			try {
 				// 答案列表
 				let results: Result[] = [];
@@ -359,6 +383,9 @@ export async function defaultAnswerWrapperHandler(
 					data: undefined,
 					error: (error as any)?.message || '题库连接失败'
 				});
+			} finally {
+				/** 成功 / 失败 / 超时都要配对结束，否则面板会一直停在「思考中」 */
+				emitAnswerProgress({ phase: 'end', name });
 			}
 		})
 	);

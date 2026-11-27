@@ -4371,6 +4371,17 @@ try {
   function setQuestionImageResolver(fn) {
     _questionImageResolver = fn;
   }
+  let _answerProgressListener;
+  function setAnswerProgressListener(fn) {
+    _answerProgressListener = fn;
+  }
+  function emitAnswerProgress(event) {
+    try {
+      _answerProgressListener == null ? void 0 : _answerProgressListener(event);
+    } catch (err) {
+      console.log("答题进度回调异常", err);
+    }
+  }
   function stripInjectedImageUrls(text, urls) {
     let out = text;
     for (const url of urls) {
@@ -4450,6 +4461,7 @@ ${url}`).join("\n");
         } = wrapper;
         let requestData;
         let url;
+        emitAnswerProgress({ phase: "start", name });
         try {
           let results = [];
           if (method.toLocaleLowerCase() === "get") {
@@ -4606,6 +4618,8 @@ ${url}`).join("\n");
             data: void 0,
             error: (error == null ? void 0 : error.message) || "题库连接失败"
           });
+        } finally {
+          emitAnswerProgress({ phase: "end", name });
         }
       })
     );
@@ -7157,6 +7171,105 @@ ${url}`).join("\n");
     }
   };
   const TAB_WORK_RESULTS_KEY = "common.work-results.results";
+  const ANSWER_PROGRESS_KEY = "common.answer-progress";
+  const ANSWER_PROGRESS_TTL = 5 * 60 * 1e3;
+  let answerProgressActive = 0;
+  let answerProgressLabel = "";
+  let answerProgressStartedAt = 0;
+  let answerProgressTimer;
+  const answerProgressRows = [];
+  function progressRowFor(host) {
+    let row = answerProgressRows.find((item) => item.host === host);
+    if (!row) {
+      const el = lib.h("div", "");
+      el.style.color = "#a1a1a1";
+      el.style.fontWeight = "600";
+      el.style.textAlign = "center";
+      el.style.fontSize = "12px";
+      el.style.marginTop = "4px";
+      row = { host, el };
+      answerProgressRows.push(row);
+    }
+    if (!row.el.isConnected && host.isConnected)
+      host.append(row.el);
+    return row.el;
+  }
+  function paintAnswerProgress() {
+    const active = answerProgressActive > 0;
+    const seconds = Math.max(0, Math.round((Date.now() - answerProgressStartedAt) / 1e3));
+    const text = active ? `${answerProgressLabel} ${seconds}s` : "";
+    for (let i = answerProgressRows.length - 1; i >= 0; i--) {
+      const row = answerProgressRows[i];
+      if (!row.host.isConnected && !row.el.isConnected) {
+        answerProgressRows.splice(i, 1);
+        continue;
+      }
+      if (!row.el.isConnected && row.host.isConnected)
+        row.host.append(row.el);
+      if (active) {
+        row.el.textContent = text;
+        row.el.style.color = "#ff9f0a";
+      } else {
+        row.el.textContent = "AI 状态：空闲";
+        row.el.style.color = "#a1a1a1";
+      }
+    }
+    if (!active && answerProgressTimer) {
+      clearInterval(answerProgressTimer);
+      answerProgressTimer = void 0;
+    }
+  }
+  function applyProgressState(state2) {
+    if (!state2 || typeof state2 !== "object")
+      return;
+    let active = Math.max(0, Number(state2.active) || 0);
+    const at = Number(state2.at) || 0;
+    if (active > 0 && at > 0 && Date.now() - at > ANSWER_PROGRESS_TTL) {
+      active = 0;
+    }
+    answerProgressActive = active;
+    answerProgressLabel = active > 0 ? String(state2.label || "") : "";
+    answerProgressStartedAt = active > 0 ? Number(state2.startedAt) || Date.now() : 0;
+    if (active > 0 && !answerProgressTimer && typeof setInterval === "function") {
+      answerProgressTimer = setInterval(paintAnswerProgress, 1e3);
+    }
+    paintAnswerProgress();
+  }
+  const pinWorkResultsPanel = lib.cors.defineTopFunction(() => {
+    CommonProject.scripts.render.methods.pin(CommonProject.scripts.workResults);
+  });
+  setAnswerProgressListener((event) => {
+    var _a, _b;
+    if (event.phase === "start") {
+      answerProgressActive += 1;
+      answerProgressLabel = /AI/i.test(event.name || "") ? "AI 思考中…" : `正在查询 ${event.name}…`;
+      if (!answerProgressStartedAt)
+        answerProgressStartedAt = Date.now();
+      if (answerProgressActive === 1) {
+        (_b = (_a = pinWorkResultsPanel()) == null ? void 0 : _a.catch) == null ? void 0 : _b.call(_a, () => {
+        });
+      }
+    } else {
+      answerProgressActive = Math.max(0, answerProgressActive - 1);
+      if (answerProgressActive === 0) {
+        answerProgressLabel = "";
+        answerProgressStartedAt = 0;
+      }
+    }
+    const state2 = {
+      active: answerProgressActive,
+      label: answerProgressLabel,
+      startedAt: answerProgressStartedAt,
+      at: Date.now()
+    };
+    applyProgressState(state2);
+    try {
+      lib.$store.set(ANSWER_PROGRESS_KEY, state2);
+    } catch (err) {
+      console.log("答题进度广播失败", err);
+    }
+  });
+  lib.$store.addChangeListener(ANSWER_PROGRESS_KEY, (curr) => applyProgressState(curr));
   function issueLinks(prefix) {
     const link = (label, href) => lib.h(
       "a",
@@ -8150,6 +8263,7 @@ ${url}`).join("\n");
             createWorkResultsPanel: (mount2) => {
               const container2 = mount2 || lib.h("div");
               container2.style.width = "400px";
+              container2.append(progressRowFor(container2));
               let scrollPercent = 0;
               const list = lib.h("div", { className: "work-result-list" });
               let mouseoverIndex = -1;
@@ -8295,6 +8409,8 @@ ${url}`).join("\n");
                   lib.h("div", { className: "search-infos-num finish" }, "1"),
                   " 表示已搜索已答题 "
                 ]);
+                const progress = progressRowFor(container2);
+                paintAnswerProgress();
                 container2.prepend(
                   lib.h("hr"),
                   lib.h(
@@ -8327,7 +8443,8 @@ ${url}`).join("\n");
                           )
                         ],
                         { separator: "|" }
-                      )
+                      ),
+                      progress
                     ],
                     (div) => {
                       div.style.textAlign = "center";
@@ -8782,8 +8899,8 @@ ${url}`).join("\n");
       )
     );
   }
-  const AI_SYSTEM_PROMPT = "你是一个答题助手。请严格依据给出的「题目」和「选项」作答，只能从给定选项里选，禁止编造选项，也不允许给出选项之外的内容。\n输出要求（必须严格遵守；只输出答案本身，不要解释、不要理由、不要标点、不要引号、不要重复题干）：\n1. 单选题(single)：只输出所选项的字母，例如 A；不要输出选项文字。\n2. 多选题(multiple)：只输出所有正确选项的字母，用 # 分隔，例如 A#B#C。\n3. 判断题(judgement)：只输出所选项的文字，不要输出字母。选项写作「A.对」「B.错」时就输出「对」或「错」；写作「A.正确」「B.错误」时就输出「正确」或「错误」；必须与所选项的文字完全一致。\n4. 填空题(completion)：直接输出要填的内容，多个空用 # 分隔。\n禁止输出「正确答案是」「答案是」「因为」等任何前缀或解析，禁止输出多个选项。";
-  const AI_USER_PROMPT = "题目：${title}\n选项：\n${options}\n题型：${type}\n请只输出答案：";
+  const AI_SYSTEM_PROMPT = "你是一个答题助手。请严格依据给出的「题目」和「选项」作答，只能从给定选项里选，禁止编造选项，也不允许给出选项之外的内容。\n输出要求（必须严格遵守；只输出答案本身，不要解释、不要理由、不要标点、不要引号、不要重复题干）：\n1. 单选题(single)：只输出所选项的字母，例如 A；不要输出选项文字。\n2. 多选题(multiple)：只输出所有正确选项的字母，用 # 分隔，例如 A#B#C。\n3. 判断题(judgement)：只输出所选项的文字，不要输出字母。选项写作「A.对」「B.错」时就输出「对」或「错」；写作「A.正确」「B.错误」时就输出「正确」或「错误」；必须与所选项的文字完全一致。\n4. 填空题(completion)：直接输出要填的内容，多个空用 # 分隔。\n禁止输出「正确答案是」「答案是」「因为」等任何前缀或解析，禁止输出多个选项。\n必须给出答案：无论题目是否完整、公式是否看得清、你是否确定，都必须输出一个最可能的答案。绝对禁止留空，禁止只输出「无法确定」「不知道」「看不清」「略」「无」这类说明，禁止输出空行。";
+  const AI_USER_PROMPT = "题目：${title}\n选项：\n${options}\n题型：${type}\n请只输出答案（必须作答，禁止留空）：";
   function refreshAiAnswererWrapper(wrappers) {
     if (!wrappers || wrappers.length === 0)
       return;
@@ -17863,7 +17980,7 @@ ${lines}`;
         messages: [
           {
             role: "system",
-            content: "你是答题助手。用户会给你一整份作业的题目、选项和他上次提交的答案，并告诉你这份卷子没及格。\n你的任务是把错的答案改对、保留对的答案，并按要求的 JSON 格式整卷输出。"
+            content: "你是答题助手。用户会给你一整份作业的题目、选项和他上次提交的答案，并告诉你这份卷子没及格。\n你的任务是把错的答案改对、保留对的答案，并按要求的 JSON 格式整卷输出。\n每一题都必须给出答案：题目信息不全、公式看不清、你也不确定时同样要给最可能的答案，禁止留空、禁止输出「无法确定」「不知道」这类说明，也禁止把某题从结果里省掉。"
           },
           { role: "user", content: safePrompt }
         ]
@@ -32173,6 +32290,7 @@ ${lines.join("\n")}`);
   exports2.removeRedundant = removeRedundant;
   exports2.request = request;
   exports2.resolvePlainAnswer = resolvePlainAnswer;
+  exports2.setAnswerProgressListener = setAnswerProgressListener;
   exports2.setQuestionImageResolver = setQuestionImageResolver;
   exports2.setSizeErrorRetryHandler = setSizeErrorRetryHandler;
   exports2.splitAnswer = splitAnswer;

@@ -8,9 +8,10 @@ import {
 	WorkUploadType,
 	AnswerWrapperHandlerConfig,
 	setSizeErrorRetryHandler,
-	setQuestionImageResolver
+	setQuestionImageResolver,
+	setAnswerProgressListener
 } from '@honghu/core';
-import { $message, h, $gm, $store, Project, Script, $modal, StoreListenerType, $ui } from 'easy-us';
+import { $message, h, $gm, $store, Project, Script, $modal, StoreListenerType, $ui, cors } from 'easy-us';
 import type { AnswererWrapper, SearchInformation } from '@honghu/core';
 import { CXProject, ICourseProject, IcveMoocProject, YKTProject, ZHSProject, ZJYProject } from '../index';
 import { markdown } from '../utils/markdown';
@@ -22,6 +23,144 @@ import { trustedClick } from '../utils/safe-click';
 import { OFFICIAL_SITE, GITHUB_REPO, GITCODE_REPO, GITHUB_ISSUES, GITCODE_ISSUES } from '../utils/links';
 
 const TAB_WORK_RESULTS_KEY = 'common.work-results.results';
+
+/**
+ * 答题请求的实时进度（显示在结果面板底部）
+ *
+ * AI 答题一次要等几十秒，面板上原本只有「已搜题 x/y」，看起来像卡死。
+ *
+ * 关键：脚本是 `all_frames: true` 注入的 —— 超星的题目在 iframe 里答题，
+ * 面板通常画在顶层 frame，两个 frame 各有一份模块实例，模块级变量不互通。
+ * 所以状态除了本地更新，还要经 `$store`（GM 跨 frame 共享存储）广播；
+ * 面板所在 frame 监听同一个 key，才能把「AI 思考中」显示出来。
+ */
+const ANSWER_PROGRESS_KEY = 'common.answer-progress';
+/** 超过这个时间没更新就当失效：答题 frame 被销毁时不会发 end，会留下僵尸状态 */
+const ANSWER_PROGRESS_TTL = 5 * 60 * 1000;
+
+let answerProgressActive = 0;
+let answerProgressLabel = '';
+let answerProgressStartedAt = 0;
+let answerProgressTimer: any;
+
+/**
+ * 每个结果面板各持有一份进度行
+ *
+ * 面板不止一个：通用「结果」tab 与超星/智慧树的刷课面板都会 `replaceChildren`
+ * 清空自己的容器。用单例会互相抢节点（最后挂载的那个才显示），所以按宿主分开；
+ * 节点被 re-render 摘掉后，下一次刷状态再挂回去。
+ */
+const answerProgressRows: { host: HTMLElement; el: HTMLElement }[] = [];
+
+function progressRowFor(host: HTMLElement): HTMLElement {
+	let row = answerProgressRows.find((item) => item.host === host);
+	if (!row) {
+		const el = h('div', '');
+		el.style.color = '#a1a1a1';
+		el.style.fontWeight = '600';
+		el.style.textAlign = 'center';
+		el.style.fontSize = '12px';
+		el.style.marginTop = '4px';
+		row = { host, el: el as HTMLElement };
+		answerProgressRows.push(row);
+	}
+	if (!row.el.isConnected && host.isConnected) host.append(row.el);
+	return row.el;
+}
+
+function paintAnswerProgress() {
+	const active = answerProgressActive > 0;
+	const seconds = Math.max(0, Math.round((Date.now() - answerProgressStartedAt) / 1000));
+	const text = active ? `${answerProgressLabel} ${seconds}s` : '';
+
+	for (let i = answerProgressRows.length - 1; i >= 0; i--) {
+		const row = answerProgressRows[i];
+		/** 宿主与节点都脱离 DOM，说明这个面板已经销毁 */
+		if (!row.host.isConnected && !row.el.isConnected) {
+			answerProgressRows.splice(i, 1);
+			continue;
+		}
+		if (!row.el.isConnected && row.host.isConnected) row.host.append(row.el);
+		if (active) {
+			row.el.textContent = text;
+			row.el.style.color = '#ff9f0a';
+		} else {
+			row.el.textContent = 'AI 状态：空闲';
+			row.el.style.color = '#a1a1a1';
+		}
+	}
+
+	if (!active && answerProgressTimer) {
+		clearInterval(answerProgressTimer);
+		answerProgressTimer = undefined;
+	}
+}
+
+/** 应用一份进度状态（本地事件与跨 frame 广播共用） */
+function applyProgressState(state: any) {
+	if (!state || typeof state !== 'object') return;
+	let active = Math.max(0, Number(state.active) || 0);
+	const at = Number(state.at) || 0;
+	if (active > 0 && at > 0 && Date.now() - at > ANSWER_PROGRESS_TTL) {
+		/** 答题页面被关掉/跳走时不会有 end，过期的「思考中」必须自己清掉 */
+		active = 0;
+	}
+	answerProgressActive = active;
+	answerProgressLabel = active > 0 ? String(state.label || '') : '';
+	answerProgressStartedAt = active > 0 ? Number(state.startedAt) || Date.now() : 0;
+	if (active > 0 && !answerProgressTimer && typeof setInterval === 'function') {
+		answerProgressTimer = setInterval(paintAnswerProgress, 1000);
+	}
+	paintAnswerProgress();
+}
+
+/**
+ * 展开「结果」面板
+ *
+ * 答题可能发生在题目 iframe 里，而 pin 依赖 setTab（当前标签页存储），
+ * 必须由顶层 frame 执行 —— 所以用 defineTopFunction 跨 frame 调用。
+ * 第一题一开始「思考」就展开，不能等答案回来才弹面板。
+ */
+const pinWorkResultsPanel = cors.defineTopFunction(() => {
+	CommonProject.scripts.render.methods.pin(CommonProject.scripts.workResults);
+});
+
+setAnswerProgressListener((event) => {
+	if (event.phase === 'start') {
+		answerProgressActive += 1;
+		/** AI 答题固定叫「AI答题」；其它题库显示名字，方便判断卡在哪个源 */
+		answerProgressLabel = /AI/i.test(event.name || '') ? 'AI 思考中…' : `正在查询 ${event.name}…`;
+		if (!answerProgressStartedAt) answerProgressStartedAt = Date.now();
+		/** 从空闲进入答题的第一刻就展开结果面板（后面几题不再重复打扰） */
+		if (answerProgressActive === 1) {
+			pinWorkResultsPanel()?.catch?.(() => {});
+		}
+	} else {
+		answerProgressActive = Math.max(0, answerProgressActive - 1);
+		if (answerProgressActive === 0) {
+			answerProgressLabel = '';
+			answerProgressStartedAt = 0;
+		}
+	}
+
+	const state = {
+		active: answerProgressActive,
+		label: answerProgressLabel,
+		startedAt: answerProgressStartedAt,
+		at: Date.now()
+	};
+	/** 本 frame 立即生效，不用等存储回流 */
+	applyProgressState(state);
+	/** 广播到其它 frame：面板在顶层、答题在题目 iframe 的常见情形 */
+	try {
+		$store.set(ANSWER_PROGRESS_KEY, state);
+	} catch (err) {
+		console.log('答题进度广播失败', err);
+	}
+});
+
+/** 接收其它 frame 的进度广播（含自己写的那次，值相同，无副作用） */
+$store.addChangeListener(ANSWER_PROGRESS_KEY, (curr: any) => applyProgressState(curr));
 
 /**
  * 顶部提示区用的紧凑 Issue 链接片段。
@@ -1216,6 +1355,8 @@ export const CommonProject = Project.create({
 					createWorkResultsPanel: (mount?: HTMLElement) => {
 						const container = mount || h('div');
 						container.style.width = '400px';
+						/** 进度行常驻：面板一渲染就能显示「AI 思考中」，不必等第一题结果回来 */
+						container.append(progressRowFor(container));
 						/** 记录滚动高度 */
 						let scrollPercent = 0;
 
@@ -1410,6 +1551,15 @@ export const CommonProject = Project.create({
 								' 表示已搜索已答题 '
 							]);
 
+							/**
+							 * 实时进度节点
+							 *
+							 * 用常驻节点，不新建：答题刚开始时 render 可能还没被触发，
+							 * 节点必须早就在面板里，状态一到就能直接改文本。
+							 */
+							const progress = progressRowFor(container);
+							paintAnswerProgress();
+
 							/** 添加信息 */
 							container.prepend(
 								h('hr'),
@@ -1442,7 +1592,8 @@ export const CommonProject = Project.create({
 												)
 											],
 											{ separator: '|' }
-										)
+										),
+										progress
 									],
 									(div) => {
 										div.style.textAlign = 'center';
@@ -1970,8 +2121,10 @@ const AI_SYSTEM_PROMPT =
 	'2. 多选题(multiple)：只输出所有正确选项的字母，用 # 分隔，例如 A#B#C。\n' +
 	'3. 判断题(judgement)：只输出所选项的文字，不要输出字母。选项写作「A.对」「B.错」时就输出「对」或「错」；写作「A.正确」「B.错误」时就输出「正确」或「错误」；必须与所选项的文字完全一致。\n' +
 	'4. 填空题(completion)：直接输出要填的内容，多个空用 # 分隔。\n' +
-	'禁止输出「正确答案是」「答案是」「因为」等任何前缀或解析，禁止输出多个选项。';
-const AI_USER_PROMPT = '题目：${title}\n选项：\n${options}\n题型：${type}\n请只输出答案：';
+	'禁止输出「正确答案是」「答案是」「因为」等任何前缀或解析，禁止输出多个选项。\n' +
+	'必须给出答案：无论题目是否完整、公式是否看得清、你是否确定，都必须输出一个最可能的答案。' +
+	'绝对禁止留空，禁止只输出「无法确定」「不知道」「看不清」「略」「无」这类说明，禁止输出空行。';
+const AI_USER_PROMPT = '题目：${title}\n选项：\n${options}\n题型：${type}\n请只输出答案（必须作答，禁止留空）：';
 
 /**
  * 按当前代码刷新「AI答题」题库条目的地址、鉴权与提示词
