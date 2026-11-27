@@ -232,6 +232,34 @@ export function optimizationElementWithImage(root: HTMLElement, clone_node: bool
 }
 
 /**
+ * 收集题目（题干 + 选项）里的图片地址
+ *
+ * 题干提取走的是 `innerText`，图片在文字里只是一段 URL；那串地址对模型毫无意义。
+ * 这里只负责「有哪些图」，下载、压缩、转 base64 交给宿主注册的解析器
+ * （见 `setQuestionImageResolver`），最后以纯文本形式拼回题干。
+ *
+ * 过滤掉小图标：选项前的对勾、装饰性 png 既占 token 又干扰模型。
+ */
+export function collectQuestionImages(elements: (HTMLElement | undefined | null)[], limit = 4): string[] {
+	const urls: string[] = [];
+	for (const el of elements) {
+		if (!el) continue;
+		for (const img of Array.from(el.querySelectorAll('img'))) {
+			/** 和 `optimizationElementWithImage` 注入题干的那段文本保持同一个地址，才能精确删掉 */
+			const src = img.src || img.currentSrc || img.getAttribute('data-src') || '';
+			if (!src || !/^(https?:|data:image)/i.test(src)) continue;
+			/** 没有尺寸信息的图片（公式图常见）一律保留，只过滤明确很小的图标 */
+			const w = img.naturalWidth || img.width || 0;
+			const h = img.naturalHeight || img.height || 0;
+			if (w && h && w <= 32 && h <= 32) continue;
+			if (!urls.includes(src)) urls.push(src);
+			if (urls.length >= limit) return urls;
+		}
+	}
+	return urls;
+}
+
+/**
  * 创建一个不可见的文本节点，追加到图片后面，便于文本获取
  */
 export function createUnVisibleTextOfImage(img: HTMLImageElement) {

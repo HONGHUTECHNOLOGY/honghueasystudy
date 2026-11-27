@@ -301,6 +301,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 		handleXhr(payload, sendResponse);
 		return true;
 	}
+	if (type === 'fetchImage') {
+		handleFetchImage(payload, sendResponse);
+		return true;
+	}
 	if (type === 'notification') {
 		handleNotification(payload, sendResponse);
 		return true;
@@ -482,8 +486,46 @@ async function handleXhr(details, sendResponse) {
 	}
 }
 
-const DEFAULT_ICON =
-	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+/**
+ * 取图片二进制并转成 data URL
+ *
+ * 为什么不在内容脚本里做：桥接通道（handleXhr）只回 `res.text()`，
+ * 二进制会被当成文本弄坏；后台是扩展上下文，拥有全部站点的 host 权限，
+ * 还能带 cookie 取到防盗链的图（如超星的公式图）。
+ * 单张上限 8MB，避免把消息通道撑爆（内容脚本那边还会再压缩）。
+ */
+async function handleFetchImage(payload, sendResponse) {
+	const url = payload && payload.url;
+	if (!url) {
+		sendResponse({ error: '缺少图片地址' });
+		return;
+	}
+	try {
+		const res = await fetch(url, { credentials: 'include' });
+		if (!res.ok) {
+			sendResponse({ error: 'HTTP ' + res.status });
+			return;
+		}
+		const buf = await res.arrayBuffer();
+		if (buf.byteLength > 8 * 1024 * 1024) {
+			sendResponse({ error: '图片过大（' + Math.round(buf.byteLength / 1024) + 'KB）' });
+			return;
+		}
+		const bytes = new Uint8Array(buf);
+		let binary = '';
+		/** 分块拼接：一次性 apply 上百万参数会直接爆栈 */
+		const chunk = 0x8000;
+		for (let i = 0; i < bytes.length; i += chunk) {
+			binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+		}
+		const type = (res.headers.get('content-type') || 'image/png').split(';')[0];
+		sendResponse({ dataUrl: 'data:' + type + ';base64,' + btoa(binary), size: bytes.length });
+	} catch (e) {
+		sendResponse({ error: String((e && e.message) || e) });
+	}
+}
+
+const DEFAULT_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
 function handleNotification(details, sendResponse) {
 	const text = typeof details === 'string' ? { text: details } : details;

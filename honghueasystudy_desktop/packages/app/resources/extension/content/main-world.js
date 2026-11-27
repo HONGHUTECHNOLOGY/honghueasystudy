@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-var __HH_BRIDGE_KEY__="436156ca-2009-4fa7-a704-b2b8402a3740";
+var __HH_BRIDGE_KEY__="7e93ee93-bd21-4407-9a33-16196e7dba12";
 /* 鸿鹄易学 · MAIN world 运行时（ScriptCat 风格）
  *
  * 本文件由 background.js 通过 chrome.userScripts.register({ world: "MAIN" })
@@ -4639,16 +4639,48 @@ try {
     const msg2 = typeof error === "string" ? error : (error == null ? void 0 : error.message) || ((_a = error == null ? void 0 : error.toString) == null ? void 0 : _a.call(error)) || String(error || "");
     return /413|too large|too long|payload|entity|size.*limit|max.*size|request.*large|body.*limit/i.test(msg2);
   }
-  function ensureReasoningBudget(requestData) {
-    if (!requestData || typeof requestData !== "object")
-      return;
-    if (!Array.isArray(requestData.messages))
-      return;
-    if (typeof requestData.model !== "string")
-      return;
-    if (requestData.max_tokens != null || requestData.max_completion_tokens != null)
-      return;
-    requestData.max_tokens = 4096;
+  let _questionImageResolver;
+  function setQuestionImageResolver(fn) {
+    _questionImageResolver = fn;
+  }
+  function stripInjectedImageUrls(text, urls) {
+    let out = text;
+    for (const url of urls) {
+      if (url && out.includes(url))
+        out = out.split(url).join("");
+    }
+    return out;
+  }
+  function attachInlineImages(requestData, originalUrls, dataUrls) {
+    var _a;
+    const messages = requestData == null ? void 0 : requestData.messages;
+    if (!Array.isArray(messages) || dataUrls.length === 0)
+      return false;
+    let target;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i] && messages[i].role === "user") {
+        target = messages[i];
+        break;
+      }
+    }
+    if (!target)
+      return false;
+    const block = `
+
+【题目图片】共 ${dataUrls.length} 张，均为 base64 编码：
+` + dataUrls.map((url, i) => `[图片${i + 1}]
+${url}`).join("\n");
+    if (Array.isArray(target.content)) {
+      const textPart = target.content.find((part) => part && part.type === "text" && typeof part.text === "string");
+      if (textPart) {
+        textPart.text = stripInjectedImageUrls(textPart.text, originalUrls) + block;
+      } else {
+        target.content.unshift({ type: "text", text: block.trim() });
+      }
+    } else {
+      target.content = stripInjectedImageUrls(String((_a = target.content) != null ? _a : ""), originalUrls) + block;
+    }
+    return true;
   }
   function assertFinalAnswerPresent(responseData, results) {
     var _a, _b, _c, _d;
@@ -4665,7 +4697,7 @@ try {
     const reasoning = String((_d = message2.reasoning_content) != null ? _d : "").trim();
     if (!content && reasoning) {
       throw new Error(
-        "模型只返回了思考过程（reasoning_content），没有给出最终答案。已自动放宽输出长度，请重试；若仍为空，请改用非推理模型（如 deepseek-chat）。"
+        "模型只返回了思考过程（reasoning_content），没有给出最终答案。请改用非推理模型（如 deepseek-chat），或调小思考强度后重试。"
       );
     }
   }
@@ -4677,7 +4709,7 @@ try {
     }
     await Promise.all(
       temp.map(async (wrapper) => {
-        var _a, _b;
+        var _a;
         const {
           name = "未知题库",
           homepage = "#",
@@ -4714,54 +4746,75 @@ try {
               }
             });
             requestData = data;
-            ensureReasoningBudget(requestData);
           } else {
             throw new Error("不支持的请求方式");
           }
-          const responseData = await Promise.race([
-            request(url.toString(), {
-              method,
-              responseType: contentType,
-              data: requestData,
-              type,
-              headers: JSON.parse(JSON.stringify(headers || {}))
-            }),
-            $.sleep(((_a = AnswerWrapperHandlerConfig.timeout_seconds) != null ? _a : 60) * 1e3)
-          ]);
-          if (responseData === void 0) {
-            throw new Error("题库请求超时，可能是题库问题，或者请检查网络或者重试。");
+          const sourceImages = Array.isArray(env == null ? void 0 : env.images) ? env.images.filter((u) => typeof u === "string" && u).slice(0, 4) : [];
+          let imagesAttached = false;
+          if (wrapper.inlineImages === true && sourceImages.length > 0 && Array.isArray(requestData == null ? void 0 : requestData.messages)) {
+            try {
+              const resolved = _questionImageResolver ? await _questionImageResolver(sourceImages) : sourceImages;
+              if (resolved && resolved.length) {
+                imagesAttached = attachInlineImages(requestData, sourceImages, resolved);
+              }
+            } catch (err) {
+              console.log("题目图片处理失败，按纯文本发送", err);
+            }
           }
-          const responseHandler = Function(handler)();
-          if (typeof responseHandler !== "function") {
-            throw new Error("handler 响应处理器必须返回一个函数");
+          if (imagesAttached) {
+            console.log(`已把 ${sourceImages.length} 张题目图片以 base64 拼进题干`);
           }
-          const info = responseHandler(responseData);
-          if (info && Array.isArray(info)) {
-            if (info.every((item) => Array.isArray(item))) {
-              results = results.concat(
-                info.map((item) => ({
+          const send = (data) => {
+            var _a2;
+            return Promise.race([
+              request(url.toString(), {
+                method,
+                responseType: contentType,
+                data,
+                type,
+                headers: JSON.parse(JSON.stringify(headers || {}))
+              }),
+              $.sleep(((_a2 = AnswerWrapperHandlerConfig.timeout_seconds) != null ? _a2 : 60) * 1e3)
+            ]);
+          };
+          const collect = (responseData2, sentData) => {
+            const responseHandler = Function(handler)();
+            if (typeof responseHandler !== "function") {
+              throw new Error("handler 响应处理器必须返回一个函数");
+            }
+            let parsed = [];
+            const info = responseHandler(responseData2);
+            if (info && Array.isArray(info)) {
+              if (info.every((item) => Array.isArray(item))) {
+                parsed = info.map((item) => ({
                   question: item[0],
                   answer: item[1],
                   extra_data: item[2] || {}
-                }))
-              );
-            } else {
-              results.push({
-                question: info[0],
-                answer: info[1],
-                extra_data: info[2] || {}
-              });
+                }));
+              } else {
+                parsed.push({
+                  question: info[0],
+                  answer: info[1],
+                  extra_data: info[2] || {}
+                });
+              }
             }
+            assertFinalAnswerPresent(responseData2, parsed);
+            results = results.concat(parsed);
+            searchInfos.push({
+              url: wrapper.url,
+              name,
+              homepage,
+              results,
+              response: responseData2,
+              data: sentData
+            });
+          };
+          const responseData = await send(requestData);
+          if (responseData === void 0) {
+            throw new Error("题库请求超时，可能是题库问题，或者请检查网络或者重试。");
           }
-          assertFinalAnswerPresent(responseData, results);
-          searchInfos.push({
-            url: wrapper.url,
-            name,
-            homepage,
-            results,
-            response: responseData,
-            data: requestData
-          });
+          collect(responseData, requestData);
         } catch (error) {
           if (_sizeErrorRetryHandler && isSizeError(error) && url && requestData) {
             try {
@@ -4775,7 +4828,7 @@ try {
                     type,
                     headers: JSON.parse(JSON.stringify(headers || {}))
                   }),
-                  $.sleep(((_b = AnswerWrapperHandlerConfig.timeout_seconds) != null ? _b : 60) * 1e3)
+                  $.sleep(((_a = AnswerWrapperHandlerConfig.timeout_seconds) != null ? _a : 60) * 1e3)
                 ]);
                 if (retryResponse !== void 0) {
                   let retryResults = [];
@@ -4833,7 +4886,8 @@ try {
         const matches2 = data.match(/\${(.*?)}/g) || [];
         matches2.forEach((placeHolder) => {
           const value = env[placeHolder.replace(/\${(.*)}/, "$1")];
-          data = data.replace(placeHolder, (options == null ? void 0 : options.encodeURI) ? encodeURIComponent(value) : value);
+          const text = (options == null ? void 0 : options.encodeURI) ? encodeURIComponent(value) : String(value != null ? value : "");
+          data = data.split(placeHolder).join(text);
         });
       } else if (typeof data === "object") {
         const keys = Object.keys(data);
@@ -7090,6 +7144,27 @@ try {
     }
     return clone;
   }
+  function collectQuestionImages(elements2, limit = 4) {
+    const urls = [];
+    for (const el of elements2) {
+      if (!el)
+        continue;
+      for (const img of Array.from(el.querySelectorAll("img"))) {
+        const src2 = img.src || img.currentSrc || img.getAttribute("data-src") || "";
+        if (!src2 || !/^(https?:|data:image)/i.test(src2))
+          continue;
+        const w = img.naturalWidth || img.width || 0;
+        const h2 = img.naturalHeight || img.height || 0;
+        if (w && h2 && w <= 32 && h2 <= 32)
+          continue;
+        if (!urls.includes(src2))
+          urls.push(src2);
+        if (urls.length >= limit)
+          return urls;
+      }
+    }
+    return urls;
+  }
   function createUnVisibleTextOfImage(img) {
     const src2 = document.createElement("span");
     src2.innerText = img.src;
@@ -8260,7 +8335,8 @@ try {
                 "Content-Type": "application/json",
                 Authorization: "Bearer " + aiCfg.aiApiKey
               },
-              data: { ...next2[idx].data || {}, messages: buildAiMessages(aiCfg.referenceDocs || []) }
+              data: { ...next2[idx].data || {}, messages: buildAiMessages(aiCfg.referenceDocs || []) },
+              inlineImages: true
             };
             CommonProject.scripts.settings.cfg.answererWrappers = next2;
           };
@@ -9007,6 +9083,7 @@ try {
       messages: buildAiMessages(aiCfg.referenceDocs || []),
       temperature: 0
     };
+    wrapper.inlineImages = true;
   }
   function buildAiMessages(referenceDocs) {
     const enabled = (referenceDocs || []).filter((r) => r.enabled && r.content);
@@ -9055,6 +9132,8 @@ try {
           resolve(dataUrl);
           return;
         }
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, w, h2);
         ctx.drawImage(img, 0, 0, w, h2);
         let quality = 0.85;
         let result = canvas.toDataURL("image/jpeg", quality);
@@ -9068,20 +9147,32 @@ try {
       img.src = dataUrl;
     });
   }
+  const INLINE_IMAGE_RE = /data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/gi;
   async function compressMessagesForRetry(messages) {
     let compressed = false;
+    const shrink = async (text) => {
+      const matches2 = text.match(INLINE_IMAGE_RE);
+      if (!matches2 || !matches2.length)
+        return text;
+      let out = text;
+      for (const dataUrl of matches2) {
+        const smaller = await compressDataUrl(dataUrl, 24 * 1024, 640);
+        if (smaller.length < dataUrl.length) {
+          compressed = true;
+          out = out.split(dataUrl).join(smaller);
+        }
+      }
+      return out;
+    };
     const newMessages = [];
     for (const msg2 of messages) {
-      if (msg2 && Array.isArray(msg2.content)) {
+      if (typeof (msg2 == null ? void 0 : msg2.content) === "string") {
+        newMessages.push({ ...msg2, content: await shrink(msg2.content) });
+      } else if (Array.isArray(msg2 == null ? void 0 : msg2.content)) {
         const newContent = [];
         for (const part of msg2.content) {
-          if (part && part.type === "image_url" && part.image_url && part.image_url.url) {
-            const original = part.image_url.url;
-            const compressedUrl = await compressDataUrl(original);
-            if (compressedUrl.length < original.length) {
-              compressed = true;
-            }
-            newContent.push({ type: "image_url", image_url: { url: compressedUrl } });
+          if (part && part.type === "text" && typeof part.text === "string") {
+            newContent.push({ ...part, text: await shrink(part.text) });
           } else {
             newContent.push(part);
           }
@@ -9101,6 +9192,86 @@ try {
       return void 0;
     return { ...data, messages: newMessages };
   });
+  const aiImageCache = /* @__PURE__ */ new Map();
+  function fetchImageAsDataUrl(url) {
+    var _a;
+    const runtime = (_a = globalThis.chrome) == null ? void 0 : _a.runtime;
+    if (runtime == null ? void 0 : runtime.sendMessage) {
+      return new Promise((resolve, reject) => {
+        try {
+          runtime.sendMessage({ __HH__: "fetchImage", payload: { url } }, (resp) => {
+            const err = runtime.lastError;
+            if (err) {
+              reject(new Error(err.message));
+              return;
+            }
+            if (resp && resp.dataUrl)
+              resolve(String(resp.dataUrl));
+            else
+              reject(new Error(resp && resp.error || "图片下载失败"));
+          });
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        GM_xmlhttpRequest({
+          url,
+          method: "GET",
+          responseType: "arraybuffer",
+          onload: (resp) => {
+            if (resp.status !== 200 || !resp.response) {
+              reject(new Error("HTTP " + resp.status));
+              return;
+            }
+            try {
+              const blob = new Blob([resp.response]);
+              const reader = new FileReader();
+              reader.onload = () => resolve(String(reader.result || ""));
+              reader.onerror = () => reject(reader.error || new Error("读取图片失败"));
+              reader.readAsDataURL(blob);
+            } catch (e) {
+              reject(e);
+            }
+          },
+          onerror: (err) => reject(new Error(String(err && err.error || err || "图片下载失败")))
+        });
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+  async function resolveQuestionImagesInline(urls) {
+    const out = [];
+    const TOTAL_LIMIT = 200 * 1024;
+    let total = 0;
+    for (const url of urls) {
+      try {
+        let dataUrl = aiImageCache.get(url);
+        if (!dataUrl) {
+          dataUrl = url.startsWith("data:") ? url : await fetchImageAsDataUrl(url);
+          dataUrl = await compressDataUrl(dataUrl, 48 * 1024, 800);
+          if (aiImageCache.size > 40)
+            aiImageCache.clear();
+          aiImageCache.set(url, dataUrl);
+        }
+        if (!dataUrl || !/^data:image\//i.test(dataUrl))
+          continue;
+        if (total + dataUrl.length > TOTAL_LIMIT) {
+          console.log("题目图片总量过大，剩余图片不再发送");
+          break;
+        }
+        total += dataUrl.length;
+        out.push(dataUrl);
+      } catch (e) {
+        console.log("题目图片读取失败，已跳过：" + url, e);
+      }
+    }
+    return out;
+  }
+  setQuestionImageResolver(resolveQuestionImagesInline);
   function buildAiTestMessages(customText, referenceDocs) {
     const enabled = (referenceDocs || []).filter((r) => r.enabled && r.content);
     const textRefs = enabled.filter((r) => r.type === "text");
@@ -9523,7 +9694,8 @@ try {
           messages: buildAiMessages(aiCfg.referenceDocs || []),
           temperature: 0
         },
-        handler: "return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }"
+        handler: "return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }",
+        inlineImages: true
       };
       const aws = CommonProject.scripts.settings.cfg.answererWrappers || [];
       CommonProject.scripts.settings.cfg.answererWrappers = [...aws.filter((w) => w.name !== "AI答题"), wrapper];
@@ -17960,7 +18132,6 @@ ${lines}`;
       data: {
         model: (_a = aiWrapper.data) == null ? void 0 : _a.model,
         temperature: 0,
-        max_tokens: 16384,
         messages: [
           {
             role: "system",
@@ -18394,7 +18565,8 @@ ${lines}`;
               return defaultAnswerWrapperHandler(answererWrappers, {
                 type: type2,
                 title,
-                options: type2 === "completion" ? "" : ctx.elements.options.map((o) => optimizationElementWithImage(o, true).innerText).join("\n")
+                options: type2 === "completion" ? "" : ctx.elements.options.map((o) => optimizationElementWithImage(o, true).innerText).join("\n"),
+                images: collectQuestionImages([...elements2.title, ...ctx.elements.options])
               });
             };
             if (hasOverride) {
@@ -19855,7 +20027,8 @@ ${lines}`;
               return defaultAnswerWrapperHandler(answererWrappers, {
                 type,
                 title,
-                options: type === "completion" ? "" : ctx.elements.options.map((o) => optimizationElementWithImage(o, true).innerText).join("\n")
+                options: type === "completion" ? "" : ctx.elements.options.map((o) => optimizationElementWithImage(o, true).innerText).join("\n"),
+                images: collectQuestionImages([...elements2.title, ...ctx.elements.options])
               });
             };
             if (hasChapterOverride) {
@@ -32272,6 +32445,7 @@ ${lines.join("\n")}`);
   exports2.removeRedundant = removeRedundant;
   exports2.request = request;
   exports2.resolvePlainAnswer = resolvePlainAnswer;
+  exports2.setQuestionImageResolver = setQuestionImageResolver;
   exports2.setSizeErrorRetryHandler = setSizeErrorRetryHandler;
   exports2.splitAnswer = splitAnswer;
   exports2.start = lib.start;

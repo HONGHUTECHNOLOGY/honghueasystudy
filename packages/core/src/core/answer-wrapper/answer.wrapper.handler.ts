@@ -19,20 +19,67 @@ function isSizeError(error: any): boolean {
 }
 
 /**
- * 推理模型的思考过程会占用输出预算。
+ * 题目图片解析器：把题目里的图片地址转成 base64 data URL（由宿主注册）
  *
- * 调用方通常只配 model / messages / temperature，不会设 max_tokens：
- * 一旦模型把预算全花在 reasoning_content 上，最终答案所在的 content 就会被挤成空串，
- * 表现为「接口 200 但没有答案」。这里只对 OpenAI 风格的对话请求补一个默认上限，
- * 不认识的接口（普通题库 API）不会被塞入多余字段。
+ * 宿主要负责下载 + 压缩，核心层只做「拼进题干」这一步，
+ * 这样 core 不依赖 DOM/画布，脚本管理器环境也能跑。
  */
-function ensureReasoningBudget(requestData: any): void {
-	if (!requestData || typeof requestData !== 'object') return;
-	if (!Array.isArray(requestData.messages)) return;
-	if (typeof requestData.model !== 'string') return;
-	if (requestData.max_tokens != null || requestData.max_completion_tokens != null) return;
-	requestData.max_tokens = 4096;
+let _questionImageResolver: ((urls: string[]) => Promise<string[]>) | undefined;
+
+export function setQuestionImageResolver(fn: ((urls: string[]) => Promise<string[]>) | undefined) {
+	_questionImageResolver = fn;
 }
+
+/**
+ * 去掉题干里被 `optimizationElementWithImage` 换进去的图片地址
+ *
+ * 只删我们自己注入的那几条（精确匹配），避免误伤题目正文里的链接。
+ */
+function stripInjectedImageUrls(text: string, urls: string[]): string {
+	let out = text;
+	for (const url of urls) {
+		if (url && out.includes(url)) out = out.split(url).join('');
+	}
+	return out;
+}
+
+/**
+ * 把题目图片以 base64 文本拼到题干末尾
+ *
+ * 不用多模态 `content` 数组：各家网关对数组结构支持参差不齐，
+ * 一个 400 就让整道题失败。纯文本里带 `data:image/...;base64,...`
+ * 是最保守的形式，发不出去至少不会报错。
+ */
+function attachInlineImages(requestData: any, originalUrls: string[], dataUrls: string[]): boolean {
+	const messages = requestData?.messages;
+	if (!Array.isArray(messages) || dataUrls.length === 0) return false;
+	let target: any;
+	for (let i = messages.length - 1; i >= 0; i--) {
+		if (messages[i] && messages[i].role === 'user') {
+			target = messages[i];
+			break;
+		}
+	}
+	if (!target) return false;
+
+	const block =
+		`\n\n【题目图片】共 ${dataUrls.length} 张，均为 base64 编码：\n` +
+		dataUrls.map((url, i) => `[图片${i + 1}]\n${url}`).join('\n');
+
+	/** 参考资料里也可能有数组形式的 content，找到第一段文本往里追加 */
+	if (Array.isArray(target.content)) {
+		const textPart = target.content.find((part: any) => part && part.type === 'text' && typeof part.text === 'string');
+		if (textPart) {
+			textPart.text = stripInjectedImageUrls(textPart.text, originalUrls) + block;
+		} else {
+			target.content.unshift({ type: 'text', text: block.trim() });
+		}
+	} else {
+		target.content = stripInjectedImageUrls(String(target.content ?? ''), originalUrls) + block;
+	}
+	return true;
+}
+
 
 /**
  * 只取最终结果。
@@ -50,7 +97,7 @@ function assertFinalAnswerPresent(responseData: any, results: Result[]): void {
 	const reasoning = String(message.reasoning_content ?? '').trim();
 	if (!content && reasoning) {
 		throw new Error(
-			'模型只返回了思考过程（reasoning_content），没有给出最终答案。已自动放宽输出长度，请重试；若仍为空，请改用非推理模型（如 deepseek-chat）。'
+			'模型只返回了思考过程（reasoning_content），没有给出最终答案。请改用非推理模型（如 deepseek-chat），或调小思考强度后重试。'
 		);
 	}
 }
@@ -158,65 +205,95 @@ export async function defaultAnswerWrapperHandler(
 					});
 
 					requestData = data;
-					ensureReasoningBudget(requestData);
 				} else {
 					throw new Error('不支持的请求方式');
 				}
 
+				/**
+				 * 题目里带图片时，把图片的 base64 拼进题干
+				 *
+				 * 输出预算不设：不写 max_tokens，交给服务端按模型默认上限处理。
+				 */
+				const sourceImages: string[] = Array.isArray(env?.images)
+					? (env.images as any[]).filter((u) => typeof u === 'string' && u).slice(0, 4)
+					: [];
+				let imagesAttached = false;
+				if (wrapper.inlineImages === true && sourceImages.length > 0 && Array.isArray(requestData?.messages)) {
+					try {
+						const resolved = _questionImageResolver ? await _questionImageResolver(sourceImages) : sourceImages;
+						if (resolved && resolved.length) {
+							imagesAttached = attachInlineImages(requestData, sourceImages, resolved);
+						}
+					} catch (err) {
+						console.log('题目图片处理失败，按纯文本发送', err);
+					}
+				}
+				if (imagesAttached) {
+					console.log(`已把 ${sourceImages.length} 张题目图片以 base64 拼进题干`);
+				}
+
+				/** 发一次请求，超时返回 undefined */
+				const send = (data: any) =>
+					Promise.race([
+						request(url!.toString(), {
+							method,
+							// 历史遗留的命名问题
+							responseType: contentType,
+							data,
+							type,
+							headers: JSON.parse(JSON.stringify(headers || {}))
+						}),
+						$.sleep((AnswerWrapperHandlerConfig.timeout_seconds ?? 60) * 1000)
+					]);
+
+				/** 从 handler 获取搜索到的题目和回答 */
+				const collect = (responseData: any, sentData: any) => {
+					// eslint-disable-next-line no-new-func
+					const responseHandler = Function(handler)();
+					if (typeof responseHandler !== 'function') {
+						throw new Error('handler 响应处理器必须返回一个函数');
+					}
+					/** 先攒在局部变量里：解析失败（推理模型只回思考）时不能把半成品答案留下 */
+					let parsed: Result[] = [];
+					const info = responseHandler(responseData);
+					if (info && Array.isArray(info)) {
+						/** 如果返回一个二维数组 */
+						if (info.every((item: any) => Array.isArray(item))) {
+							parsed = info.map((item: any) => ({
+								question: item[0],
+								answer: item[1],
+								extra_data: item[2] || {}
+							}));
+						} else {
+							parsed.push({
+								question: info[0],
+								answer: info[1],
+								extra_data: info[2] || {}
+							});
+						}
+					}
+
+					// 只认最终结果：思考过程不能当答案
+					assertFinalAnswerPresent(responseData, parsed);
+
+					results = results.concat(parsed);
+					searchInfos.push({
+						url: wrapper.url,
+						name,
+						homepage,
+						results,
+						response: responseData,
+						data: sentData
+					});
+				};
+
 				// 发送请求
-				const responseData = await Promise.race([
-					request(url!.toString(), {
-						method,
-						// 历史遗留的命名问题
-						responseType: contentType,
-						data: requestData,
-						type,
-						headers: JSON.parse(JSON.stringify(headers || {}))
-					}),
-					$.sleep((AnswerWrapperHandlerConfig.timeout_seconds ?? 60) * 1000)
-				]);
+				const responseData = await send(requestData);
 				if (responseData === undefined) {
 					throw new Error('题库请求超时，可能是题库问题，或者请检查网络或者重试。');
 				}
 
-				/** 从 handler 获取搜索到的题目和回答 */
-
-				// eslint-disable-next-line no-new-func
-				const responseHandler = Function(handler)();
-				if (typeof responseHandler !== 'function') {
-					throw new Error('handler 响应处理器必须返回一个函数');
-				}
-				const info = responseHandler(responseData);
-				if (info && Array.isArray(info)) {
-					/** 如果返回一个二维数组 */
-					if (info.every((item: any) => Array.isArray(item))) {
-						results = results.concat(
-							info.map((item: any) => ({
-								question: item[0],
-								answer: item[1],
-								extra_data: item[2] || {}
-							}))
-						);
-					} else {
-						results.push({
-							question: info[0],
-							answer: info[1],
-							extra_data: info[2] || {}
-						});
-					}
-				}
-
-				// 只认最终结果：思考过程不能当答案
-				assertFinalAnswerPresent(responseData, results);
-
-				searchInfos.push({
-					url: wrapper.url,
-					name,
-					homepage,
-					results,
-					response: responseData,
-					data: requestData
-				});
+				collect(responseData, requestData);
 			} catch (error) {
 				// 大小错误自动重试（如压缩图片后重发）
 				if (_sizeErrorRetryHandler && isSizeError(error) && url && requestData) {
@@ -293,7 +370,15 @@ export async function defaultAnswerWrapperHandler(
 			matches.forEach((placeHolder) => {
 				/** 获取占位符的值 */
 				const value: any = env[placeHolder.replace(/\${(.*)}/, '$1')];
-				data = data.replace(placeHolder, options?.encodeURI ? encodeURIComponent(value) : value);
+				const text = options?.encodeURI ? encodeURIComponent(value) : String(value ?? '');
+				/**
+				 * 用 split/join 而不是 `replace(placeHolder, text)`
+				 *
+				 * 两个坑：① `String.prototype.replace` 会把替换文本里的 `$&`、`$'`、`` $` ``
+				 * 当成替换模式 —— 题目里带 LaTeX（`$\frac{1}{2}$`）时整段题干会被替换成
+				 * 别的内容甚至重复一遍；② replace 只换第一处，占位符出现多次时后面全留着。
+				 */
+				data = data.split(placeHolder).join(text);
 			});
 		} else if (typeof data === 'object') {
 			// 递归替换

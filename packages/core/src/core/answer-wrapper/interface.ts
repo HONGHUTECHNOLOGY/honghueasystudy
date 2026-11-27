@@ -42,6 +42,15 @@ export interface AnswererWrapper {
 	/** 附带请求头 */
 	headers: Record<string, string>;
 	/**
+	 * 是否把题目里的图片以 base64 文本形式拼进题干
+	 *
+	 * 只有 AI 答题这类对话接口才该开启：题目里的图片对普通题库接口没有意义。
+	 * 开启后由宿主注册的图片解析器把图片下载压缩成 `data:image/...;base64,...`，
+	 * 由核心层直接写进最后一条 user 消息的纯文本里 —— 全程不使用多模态
+	 * `content` 数组，任何 OpenAI 兼容网关都能原样接收。
+	 */
+	inlineImages?: boolean;
+	/**
 	 * 此选项是个字符串， 使用 [Function(string)](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Function) 构造方法进行解析生成方法
 	 *
 	 * 方法传入一个参数 : 请求获取到的文本 ，可以使用 contentType 定义文本类型

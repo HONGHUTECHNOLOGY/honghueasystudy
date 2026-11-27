@@ -24,6 +24,7 @@ import { workNotes, volume, playbackRate, dropdownStyle } from '../utils/configs
 import {
 	answerWrapperEmptyWarning,
 	commonWork,
+	collectQuestionImages,
 	optimizationElementWithImage,
 	removeRedundantWords,
 	simplifyWorkResult
@@ -1172,8 +1173,7 @@ async function requestPaperRedoByAI(
 		data: {
 			model: aiWrapper.data?.model,
 			temperature: 0,
-			/** 整卷的 JSON 比单题长得多，给足输出预算，免得被截断成不合法 JSON */
-			max_tokens: 16384,
+			/** 输出预算不设限：整卷的 JSON 比单题长得多，交给服务端按模型上限处理 */
 			messages: [
 				{
 					role: 'system',
@@ -1808,7 +1808,9 @@ function workOrExam(
 							options:
 								type === 'completion'
 									? ''
-									: ctx.elements.options.map((o) => optimizationElementWithImage(o, true).innerText).join('\n')
+									: ctx.elements.options.map((o) => optimizationElementWithImage(o, true).innerText).join('\n'),
+							/** 题干/选项里的公式、图表：多模态接口会随题一起收到 */
+							images: collectQuestionImages([...elements.title, ...ctx.elements.options])
 						});
 					};
 
@@ -4052,7 +4054,9 @@ const JobRunner = {
 							options:
 								type === 'completion'
 									? ''
-									: ctx.elements.options.map((o) => optimizationElementWithImage(o, true).innerText).join('\n')
+									: ctx.elements.options.map((o) => optimizationElementWithImage(o, true).innerText).join('\n'),
+							/** 题干/选项里的公式、图表：多模态接口会随题一起收到 */
+							images: collectQuestionImages([...elements.title, ...ctx.elements.options])
 						});
 					};
 

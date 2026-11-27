@@ -7,7 +7,8 @@ import {
 	$,
 	WorkUploadType,
 	AnswerWrapperHandlerConfig,
-	setSizeErrorRetryHandler
+	setSizeErrorRetryHandler,
+	setQuestionImageResolver
 } from '@honghu/core';
 import { $message, h, $gm, $store, Project, Script, $modal, StoreListenerType, $ui } from 'easy-us';
 import type { AnswererWrapper, SearchInformation } from '@honghu/core';
@@ -1099,7 +1100,8 @@ export const CommonProject = Project.create({
 						'Content-Type': 'application/json',
 						Authorization: 'Bearer ' + aiCfg.aiApiKey
 					},
-					data: { ...(next[idx].data || {}), messages: buildAiMessages((aiCfg.referenceDocs as any) || []) }
+					data: { ...(next[idx].data || {}), messages: buildAiMessages((aiCfg.referenceDocs as any) || []) },
+					inlineImages: true
 				};
 				CommonProject.scripts.settings.cfg.answererWrappers = next;
 			};
@@ -2004,6 +2006,8 @@ function refreshAiAnswererWrapper(wrappers: AnswererWrapper[] | undefined) {
 		messages: buildAiMessages((aiCfg.referenceDocs as any) || []),
 		temperature: 0
 	};
+	/** 题目里带图（公式/图表）时转成 base64 一起发给模型 */
+	wrapper.inlineImages = true;
 }
 
 function buildAiMessages(referenceDocs: ReferenceDoc[]) {
@@ -2056,6 +2060,9 @@ function compressDataUrl(dataUrl: string, maxSize = 2 * 1024 * 1024, maxDim = 19
 				resolve(dataUrl);
 				return;
 			}
+			/** 转 JPEG 时透明区域会变黑（公式图常见），先铺白底 */
+			ctx.fillStyle = '#ffffff';
+			ctx.fillRect(0, 0, w, h);
 			ctx.drawImage(img, 0, 0, w, h);
 			let quality = 0.85;
 			let result = canvas.toDataURL('image/jpeg', quality);
@@ -2070,20 +2077,33 @@ function compressDataUrl(dataUrl: string, maxSize = 2 * 1024 * 1024, maxDim = 19
 	});
 }
 
+/** 题干里内联的 base64 图片 */
+const INLINE_IMAGE_RE = /data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/gi;
+
 async function compressMessagesForRetry(messages: any[]): Promise<any[] | undefined> {
 	let compressed = false;
+	const shrink = async (text: string) => {
+		const matches = text.match(INLINE_IMAGE_RE);
+		if (!matches || !matches.length) return text;
+		let out = text;
+		for (const dataUrl of matches) {
+			const smaller = await compressDataUrl(dataUrl, 24 * 1024, 640);
+			if (smaller.length < dataUrl.length) {
+				compressed = true;
+				out = out.split(dataUrl).join(smaller);
+			}
+		}
+		return out;
+	};
 	const newMessages: any[] = [];
 	for (const msg of messages) {
-		if (msg && Array.isArray(msg.content)) {
+		if (typeof msg?.content === 'string') {
+			newMessages.push({ ...msg, content: await shrink(msg.content) });
+		} else if (Array.isArray(msg?.content)) {
 			const newContent: any[] = [];
 			for (const part of msg.content) {
-				if (part && part.type === 'image_url' && part.image_url && part.image_url.url) {
-					const original = part.image_url.url;
-					const compressedUrl = await compressDataUrl(original);
-					if (compressedUrl.length < original.length) {
-						compressed = true;
-					}
-					newContent.push({ type: 'image_url', image_url: { url: compressedUrl } });
+				if (part && part.type === 'text' && typeof part.text === 'string') {
+					newContent.push({ ...part, text: await shrink(part.text) });
 				} else {
 					newContent.push(part);
 				}
@@ -2102,6 +2122,108 @@ setSizeErrorRetryHandler(async (_error: any, data: any) => {
 	if (!newMessages) return undefined;
 	return { ...data, messages: newMessages };
 });
+
+/** 题目图片 → data URL 的缓存，避免同一张图（同一节里的重复公式）反复下载压缩 */
+const aiImageCache = new Map<string, string>();
+
+/**
+ * 下载图片并转成 data URL
+ *
+ * 走后台 `fetch` 而不是页面里的 `GM_xmlhttpRequest`：桥接通道只回文本，
+ * 二进制会被 `res.text()` 弄坏；后台是扩展上下文，拥有全部站点的 host 权限，
+ * 还能带上 cookie 取超星那种防盗链的图。
+ * 脚本管理器环境（没有 chrome.runtime）退回原生 GM 的 arraybuffer。
+ */
+function fetchImageAsDataUrl(url: string): Promise<string> {
+	const runtime = (globalThis as any).chrome?.runtime;
+	if (runtime?.sendMessage) {
+		return new Promise((resolve, reject) => {
+			try {
+				runtime.sendMessage({ __HH__: 'fetchImage', payload: { url } }, (resp: any) => {
+					const err = runtime.lastError;
+					if (err) {
+						reject(new Error(err.message));
+						return;
+					}
+					if (resp && resp.dataUrl) resolve(String(resp.dataUrl));
+					else reject(new Error((resp && resp.error) || '图片下载失败'));
+				});
+			} catch (e) {
+				reject(e);
+			}
+		});
+	}
+
+	return new Promise((resolve, reject) => {
+		try {
+			// eslint-disable-next-line no-undef
+			GM_xmlhttpRequest({
+				url,
+				method: 'GET',
+				responseType: 'arraybuffer',
+				onload: (resp: any) => {
+					if (resp.status !== 200 || !resp.response) {
+						reject(new Error('HTTP ' + resp.status));
+						return;
+					}
+					try {
+						const blob = new Blob([resp.response]);
+						const reader = new FileReader();
+						reader.onload = () => resolve(String(reader.result || ''));
+						reader.onerror = () => reject(reader.error || new Error('读取图片失败'));
+						reader.readAsDataURL(blob);
+					} catch (e) {
+						reject(e);
+					}
+				},
+				onerror: (err: any) => reject(new Error(String((err && err.error) || err || '图片下载失败')))
+			});
+		} catch (e) {
+			reject(e);
+		}
+	});
+}
+
+/**
+ * 把题目里的图片整理成 base64 文本
+ *
+ * 超星这类平台的公式图地址往往要带 cookie / referer，模型侧去下载大概率 403，
+ * 所以先在本地取回，再压到 800px / 48KB 以内。
+ *
+ * 这里压缩不是为了「限制输入长度」，而是因为 base64 是以纯文本内联进题干的，
+ * 每 3~4 个字符就是 1 个 token：一张 200KB 的原图 ≈ 7 万 token，4 张就能把
+ * 上下文直接撑爆。压到 48KB 后单张约 1.7 万 token，属于能发得出去的范围。
+ * 任何一张失败都只是少一张图，不能让整道题失败。
+ */
+async function resolveQuestionImagesInline(urls: string[]): Promise<string[]> {
+	const out: string[] = [];
+	/** 所有图片 base64 字符数之和的上限，超了就丢弃后面的图 */
+	const TOTAL_LIMIT = 200 * 1024;
+	let total = 0;
+	for (const url of urls) {
+		try {
+			let dataUrl = aiImageCache.get(url);
+			if (!dataUrl) {
+				dataUrl = url.startsWith('data:') ? url : await fetchImageAsDataUrl(url);
+				dataUrl = await compressDataUrl(dataUrl, 48 * 1024, 800);
+				if (aiImageCache.size > 40) aiImageCache.clear();
+				aiImageCache.set(url, dataUrl);
+			}
+			if (!dataUrl || !/^data:image\//i.test(dataUrl)) continue;
+			if (total + dataUrl.length > TOTAL_LIMIT) {
+				console.log('题目图片总量过大，剩余图片不再发送');
+				break;
+			}
+			total += dataUrl.length;
+			out.push(dataUrl);
+		} catch (e) {
+			console.log('题目图片读取失败，已跳过：' + url, e);
+		}
+	}
+	return out;
+}
+
+setQuestionImageResolver(resolveQuestionImagesInline);
 
 function buildAiTestMessages(customText: string, referenceDocs: ReferenceDoc[]) {
 	const enabled = (referenceDocs || []).filter((r) => r.enabled && r.content);
@@ -2578,7 +2700,8 @@ function createAiConfigCard() {
 				messages: buildAiMessages((aiCfg.referenceDocs as any) || []),
 				temperature: 0
 			},
-			handler: 'return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }'
+			handler: 'return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }',
+			inlineImages: true
 		};
 		const aws: any[] = CommonProject.scripts.settings.cfg.answererWrappers || [];
 		CommonProject.scripts.settings.cfg.answererWrappers = [...aws.filter((w) => w.name !== 'AI答题'), wrapper];
