@@ -1,6 +1,14 @@
 # Changelog
 
 
+## [5.9.1](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.9.0...v5.9.1) (2026-11-28)
+
+
+### 🐛 问题修复
+
+* **ai:** 桌面端统一配置下 AI 进不了 answererWrappers，误报「没配题库」 ([c0107dd](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/c0107dd543f23f113952de85edafb314f2ec9550))
+* **cx:** 新版考试页选项判定失效导致「点上了又灭」，考试不再自动交卷 ([bbf9567](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/bbf9567f533b732adf154796468186a3df1b32c2))
+
 ## [5.9.0](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/compare/v5.8.5...v5.9.0) (2026-11-27)
 
 
