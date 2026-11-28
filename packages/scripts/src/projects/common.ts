@@ -25,6 +25,19 @@ import { OFFICIAL_SITE, GITHUB_REPO, GITCODE_REPO, GITHUB_ISSUES, GITCODE_ISSUES
 const TAB_WORK_RESULTS_KEY = 'common.work-results.results';
 
 /**
+ * AI 的默认接口与模型
+ *
+ * 必须和「AI 答题配置」输入框的占位符一致，且是当前官方模型名：
+ * `deepseek-chat` / `deepseek-reasoner` 已于 2026-07-24 停用，
+ * 现行模型是 `deepseek-flash`（DeepSeek-V4.1-Flash）。
+ *
+ * 留空时一律回退到这两个值 —— 桌面端统一配置只下发它自己保存过的键，
+ * 用户没填模型时下发的是空串，不兜底就会「配置看着填了、却答不了题」。
+ */
+const DEFAULT_AI_ENDPOINT = 'https://api.deepseek.com';
+const DEFAULT_AI_MODEL = 'deepseek-flash';
+
+/**
  * 答题请求的实时进度（显示在结果面板底部）
  *
  * AI 答题一次要等几十秒，面板上原本只有「已搜题 x/y」，看起来像卡死。
@@ -384,22 +397,22 @@ export const CommonProject = Project.create({
 									},
 									[
 										h('option', '默认'),
-									h(
-										'option',
-										{
-											title:
-												'大学生网课题库接口适配器: 将不同的题库整合为一个API接口。详细查看 https://github.com/DokiDoki1103/tikuAdapter'
-										},
-										'TikuAdapter'
-									),
-									h(
-										'option',
-										{
-											title:
-												'使用 AI 大模型答题，填写 JSON 配置：{ "endpoint": "https://api.openai.com/v1/chat/completions", "apiKey": "sk-xxx", "model": "gpt-4o" }'
-										},
-										'AI答题'
-									)
+										h(
+											'option',
+											{
+												title:
+													'大学生网课题库接口适配器: 将不同的题库整合为一个API接口。详细查看 https://github.com/DokiDoki1103/tikuAdapter'
+											},
+											'TikuAdapter'
+										),
+										h(
+											'option',
+											{
+												title:
+													'使用 AI 大模型答题，填写 JSON 配置：{ "endpoint": "https://api.openai.com/v1/chat/completions", "apiKey": "sk-xxx", "model": "gpt-4o" }'
+											},
+											'AI答题'
+										)
 									]
 								)
 							);
@@ -408,11 +421,7 @@ export const CommonProject = Project.create({
 								width: 600,
 								maskCloseable: false,
 								content: $ui.notes([
-									[
-										h('div', { style: { fontSize: '16px', marginBottom: '8px' } }, [
-											h('b', '题库配置填写教程：')
-										])
-									],
+									[h('div', { style: { fontSize: '16px', marginBottom: '8px' } }, [h('b', '题库配置填写教程：')])],
 									[
 										h(
 											'div',
@@ -507,54 +516,55 @@ export const CommonProject = Project.create({
 														return;
 													}
 
-												try {
-													let awsResult: AnswererWrapper[] = [];
-													if (select.value === 'AI答题') {
-														let aiConfig: { endpoint: string; apiKey: string; model: string };
-														try {
-															aiConfig = JSON.parse(value);
-														} catch {
-															$modal.alert({
-																content:
-																	'AI 配置格式错误，请输入 JSON，例如：{ "endpoint": "https://api.openai.com/v1/chat/completions", "apiKey": "sk-xxx", "model": "gpt-4o" }'
+													try {
+														let awsResult: AnswererWrapper[] = [];
+														if (select.value === 'AI答题') {
+															let aiConfig: { endpoint: string; apiKey: string; model: string };
+															try {
+																aiConfig = JSON.parse(value);
+															} catch {
+																$modal.alert({
+																	content:
+																		'AI 配置格式错误，请输入 JSON，例如：{ "endpoint": "https://api.openai.com/v1/chat/completions", "apiKey": "sk-xxx", "model": "gpt-4o" }'
+																});
+																return;
+															}
+															if (!aiConfig.endpoint || !aiConfig.apiKey || !aiConfig.model) {
+																$modal.alert({ content: 'AI 配置缺少 endpoint / apiKey / model 字段' });
+																return;
+															}
+															select.value = '默认';
+															awsResult.push({
+																name: 'AI答题',
+																url: aiConfig.endpoint,
+																homepage: 'AI 大模型答题',
+																method: 'post',
+																type: 'GM_xmlhttpRequest',
+																contentType: 'json',
+																headers: {
+																	'Content-Type': 'application/json',
+																	Authorization: 'Bearer ' + aiConfig.apiKey
+																},
+																data: {
+																	model: aiConfig.model,
+																	messages: [
+																		{
+																			role: 'system',
+																			content:
+																				'你是一个考试答题助手。根据题目、选项和题型选出正确答案。规则：单选题(single)只输出一个选项字母如 A；多选题(multiple)输出多个字母用 # 分隔如 A#B#C；判断题(judgement)输出"正确"或"错误"；填空题(completion)直接输出答案。只输出答案，不要解释。'
+																		},
+																		{
+																			role: 'user',
+																			content: '题目：${title}\n选项：${options}\n题型：${type}'
+																		}
+																	],
+																	temperature: 0,
+																	...aiThinkingPayload(aiConfig.endpoint)
+																},
+																handler:
+																	'return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }'
 															});
-															return;
-														}
-														if (!aiConfig.endpoint || !aiConfig.apiKey || !aiConfig.model) {
-															$modal.alert({ content: 'AI 配置缺少 endpoint / apiKey / model 字段' });
-															return;
-														}
-														select.value = '默认';
-														awsResult.push({
-															name: 'AI答题',
-															url: aiConfig.endpoint,
-															homepage: 'AI 大模型答题',
-															method: 'post',
-															type: 'GM_xmlhttpRequest',
-															contentType: 'json',
-															headers: {
-																'Content-Type': 'application/json',
-																Authorization: 'Bearer ' + aiConfig.apiKey
-															},
-															data: {
-																model: aiConfig.model,
-																messages: [
-																	{
-																		role: 'system',
-																		content:
-																			'你是一个考试答题助手。根据题目、选项和题型选出正确答案。规则：单选题(single)只输出一个选项字母如 A；多选题(multiple)输出多个字母用 # 分隔如 A#B#C；判断题(judgement)输出"正确"或"错误"；填空题(completion)直接输出答案。只输出答案，不要解释。'
-																	},
-																	{
-																		role: 'user',
-																		content: '题目：${title}\n选项：${options}\n题型：${type}'
-																	}
-																],
-																temperature: 0
-															},
-															handler:
-																'return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }'
-														});
-													} else if (select.value === 'TikuAdapter') {
+														} else if (select.value === 'TikuAdapter') {
 															if (value.startsWith('http') === false) {
 																$modal.alert({
 																	content: h('div', [
@@ -691,7 +701,7 @@ export const CommonProject = Project.create({
 																	content: h('div', [
 																		h('div', [
 																			'配置成功，但检测到以下 域名/ip 不在脚本的白名单中，请安装 : ',
-																		'鸿鹄易学全域名通用版本',
+																			'鸿鹄易学全域名通用版本',
 																			'，或者手动添加 @connect ，否则无法进行请求。',
 																			h(
 																				'ul',
@@ -756,7 +766,8 @@ export const CommonProject = Project.create({
 					extra: { appConfigSync: false },
 					attrs: {
 						type: 'checkbox',
-						title: '开启后题库与 AI 统一在桌面端「题库与 AI 配置」页维护，自动下发到本浏览器；关闭则本浏览器单独配置，不与桌面端同步。'
+						title:
+							'开启后题库与 AI 统一在桌面端「题库与 AI 配置」页维护，自动下发到本浏览器；关闭则本浏览器单独配置，不与桌面端同步。'
 					},
 					showIf: 'common.settings.desktopManaged'
 				},
@@ -1077,10 +1088,7 @@ export const CommonProject = Project.create({
 					const tableContainer = h('div');
 					refresh.style.display = 'none';
 					tableContainer.style.display = 'none';
-					panel.body.append(
-						h('div', { style: { display: 'flex' } }, [testNotification, refresh]),
-						tableContainer
-					);
+					panel.body.append(h('div', { style: { display: 'flex' } }, [testNotification, refresh]), tableContainer);
 
 					// 更新题库状态
 					const updateState = async () => {
@@ -1104,11 +1112,7 @@ export const CommonProject = Project.create({
 									aiBody.append(
 										h('td', [
 											$ui.tooltip(
-												h(
-													'span',
-													{ title: 'AI 答题无需题库健康检查，请在「AI 答题配置」面板测试连接' },
-													'AI 答题'
-												)
+												h('span', { title: 'AI 答题无需题库健康检查，请在「AI 答题配置」面板测试连接' }, 'AI 答题')
 											)
 										])
 									);
@@ -1153,7 +1157,6 @@ export const CommonProject = Project.create({
 								} else {
 									success = false;
 								}
-
 
 								const body = h('tbody');
 								body.append(h('td', item.name));
@@ -1210,67 +1213,81 @@ export const CommonProject = Project.create({
 						'API Key 仅保存在本地，不会上传到任何第三方服务器。'
 					]).outerHTML
 				},
-			aiEndpoint: {
-				defaultValue: 'https://api.deepseek.com',
-				extra: { appConfigSync: false }
+				aiEndpoint: {
+					defaultValue: DEFAULT_AI_ENDPOINT,
+					extra: { appConfigSync: false }
+				},
+				aiApiKey: {
+					defaultValue: '',
+					extra: { appConfigSync: false }
+				},
+				aiModel: {
+					defaultValue: DEFAULT_AI_MODEL,
+					extra: { appConfigSync: false }
+				},
+				referenceDocs: {
+					defaultValue: [] as ReferenceDoc[],
+					extra: { appConfigSync: false }
+				}
 			},
-			aiApiKey: {
-				defaultValue: '',
-				extra: { appConfigSync: false }
+			onrender({ panel }) {
+				panel.body.replaceChildren(createAiConfigCard());
 			},
-		aiModel: {
-				defaultValue: 'deepseek-flash',
-				extra: { appConfigSync: false }
-			},
-			referenceDocs: {
-				defaultValue: [] as ReferenceDoc[],
-				extra: { appConfigSync: false }
-			}
-	},
-		onrender({ panel }) {
-			panel.body.replaceChildren(createAiConfigCard());
-		},
-		/**
-		 * 把 AI 配置写进「AI答题」wrapper
-		 *
-		 * 答题时实际用的是 `answererWrappers` 里 `AI答题` 那一项的 `url` /
-		 * `headers.Authorization` / `data.messages`，不是 `aiApiKey` 这些配置项。
-		 * 原来只在 AI 配置卡片渲染时（`updateBtns()`）才同步一次 ——
-		 * 但统一配置模式下那张卡片被提示卡替代，不再渲染，
-		 * 结果就是「桌面端改了 key、扩展里 wrapper 还挂着旧 key」，答题一直失败。
-		 *
-		 * 现在改成配置项一变就同步，和面板是否渲染无关。
-		 */
-		onstart() {
-			const syncWrapper = () => {
-				const aiCfg = CommonProject.scripts.aiSettings.cfg;
-				const aws = CommonProject.scripts.settings.cfg.answererWrappers || [];
-				const idx = aws.findIndex((w: any) => w.name === 'AI答题');
-				/** 没有 AI wrapper 说明用户没启用 AI 答题，不主动创建 */
-				if (idx === -1) return;
-				const next = [...aws];
-				next[idx] = {
-					...next[idx],
-					url: normalizeAiEndpoint(aiCfg.aiEndpoint),
-					headers: {
-						...(next[idx].headers || {}),
-						'Content-Type': 'application/json',
-						Authorization: 'Bearer ' + aiCfg.aiApiKey
-					},
-					data: { ...(next[idx].data || {}), messages: buildAiMessages((aiCfg.referenceDocs as any) || []) },
-					inlineImages: true
+			/**
+			 * 把 AI 配置写进「AI答题」wrapper
+			 *
+			 * 答题时实际用的是 `answererWrappers` 里 `AI答题` 那一项的 `url` /
+			 * `headers.Authorization` / `data.messages`，不是 `aiApiKey` 这些配置项。
+			 * 原来只在 AI 配置卡片渲染时（`updateBtns()`）才同步一次 ——
+			 * 但统一配置模式下那张卡片被提示卡替代，不再渲染，
+			 * 结果就是「桌面端改了 key、扩展里 wrapper 还挂着旧 key」，答题一直失败。
+			 *
+			 * 现在改成配置项一变就同步，和面板是否渲染无关。
+			 */
+			onstart() {
+				const syncWrapper = () => {
+					const aws: any[] = CommonProject.scripts.settings.cfg.answererWrappers || [];
+					const idx = aws.findIndex((w: any) => w && w.name === 'AI答题');
+					/** 没有 AI wrapper 说明用户没启用 AI 答题，不主动创建 */
+					if (idx === -1) return;
+					/**
+					 * Key 为空时**什么都不改**
+					 *
+					 * 配置可能在别处被清空（面板里清掉输入框、桌面端保存了空白表单），
+					 * 以前这里会无条件写回 `Bearer ` + 空串和 normalize('') 得到的
+					 * 相对地址 `/v1/chat/completions` —— 一个原本能用的 wrapper 被就地写坏，
+					 * 而 refreshAiAnswererWrapper 因为「配置不完整」又不会修它，只能靠用户重填。
+					 */
+					const ai = resolveAiConfig();
+					if (!ai) return;
+					const next = [...aws];
+					next[idx] = {
+						...next[idx],
+						url: normalizeAiEndpoint(ai.endpoint),
+						headers: {
+							...(next[idx].headers || {}),
+							'Content-Type': 'application/json',
+							Authorization: 'Bearer ' + ai.apiKey
+						},
+						data: {
+							...(next[idx].data || {}),
+							model: ai.model,
+							messages: buildAiMessages(buildAiReferenceDocs()),
+							...aiThinkingPayload(ai.endpoint)
+						},
+						inlineImages: true
+					};
+					CommonProject.scripts.settings.cfg.answererWrappers = next;
 				};
-				CommonProject.scripts.settings.cfg.answererWrappers = next;
-			};
 
-			syncWrapper();
-			this.onConfigChange('aiApiKey', syncWrapper);
-			this.onConfigChange('aiEndpoint', syncWrapper);
-			this.onConfigChange('aiModel', syncWrapper);
-			this.onConfigChange('referenceDocs', syncWrapper);
-		}
-	}),
-	workResults: new Script({
+				syncWrapper();
+				this.onConfigChange('aiApiKey', syncWrapper);
+				this.onConfigChange('aiEndpoint', syncWrapper);
+				this.onConfigChange('aiModel', syncWrapper);
+				this.onConfigChange('referenceDocs', syncWrapper);
+			}
+		}),
+		workResults: new Script({
 			name: '搜索结果',
 			matches: [['所有页面', /.*/]],
 			namespace: 'common.work-results',
@@ -2147,6 +2164,34 @@ const AI_SYSTEM_PROMPT =
 const AI_USER_PROMPT = '题目：${title}\n选项：\n${options}\n题型：${type}\n请只输出答案（必须作答，禁止留空）：';
 
 /**
+ * 取出「实际生效」的 AI 配置
+ *
+ * API Key 是唯一必须项：接口地址、模型留空时回退到默认值。
+ *
+ * 为什么不能三个都要求非空：桌面端统一配置是「按保存过的键下发」的，
+ * 用户只在桌面端填了 Key（模型框留空，占位符写着 deepseek-flash 很容易被忽略），
+ * 下发的就是空串，三个都校验的结果是**整条链路静默失效** ——
+ * 面板报「还没设置题库」，而统一配置模式下扩展里没有自救入口。
+ *
+ * @returns null 表示没有可用的 AI 配置（连 Key 都没有）
+ */
+function resolveAiConfig(): { endpoint: string; apiKey: string; model: string } | null {
+	let aiCfg: any;
+	try {
+		aiCfg = CommonProject.scripts.aiSettings.cfg;
+	} catch {
+		return null;
+	}
+	const apiKey = String(aiCfg?.aiApiKey || '').trim();
+	if (!apiKey) return null;
+	return {
+		endpoint: String(aiCfg?.aiEndpoint || '').trim() || DEFAULT_AI_ENDPOINT,
+		apiKey,
+		model: String(aiCfg?.aiModel || '').trim() || DEFAULT_AI_MODEL
+	};
+}
+
+/**
  * AI 配置齐全、但 `answererWrappers` 里还没有 `AI答题` 条目时补一份
  *
  * 为什么必须补：桌面端「使用桌面端统一配置」模式下，扩展面板的 AI 卡片被
@@ -2162,27 +2207,22 @@ function ensureAiAnswererWrapper(wrappers: any[]) {
 	if (!Array.isArray(wrappers)) return;
 	if (wrappers.some((aw) => aw && aw.name === 'AI答题')) return;
 
-	let aiCfg: any;
-	try {
-		aiCfg = CommonProject.scripts.aiSettings.cfg;
-	} catch {
-		return;
-	}
-	const { aiEndpoint, aiApiKey, aiModel } = aiCfg || {};
-	if (!aiEndpoint || !aiApiKey || !aiModel) return;
+	const ai = resolveAiConfig();
+	if (!ai) return;
 
 	wrappers.push({
 		name: 'AI答题',
-		url: normalizeAiEndpoint(aiEndpoint),
+		url: normalizeAiEndpoint(ai.endpoint),
 		homepage: 'AI 大模型答题',
 		method: 'post',
 		type: 'GM_xmlhttpRequest',
 		contentType: 'json',
-		headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + aiApiKey },
+		headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + ai.apiKey },
 		data: {
-			model: aiModel,
-			messages: buildAiMessages((aiCfg.referenceDocs as any) || []),
-			temperature: 0
+			model: ai.model,
+			messages: buildAiMessages(buildAiReferenceDocs()),
+			temperature: 0,
+			...aiThinkingPayload(ai.endpoint)
 		},
 		handler:
 			'return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }',
@@ -2202,29 +2242,33 @@ function refreshAiAnswererWrapper(wrappers: AnswererWrapper[] | undefined) {
 	const wrapper: any = wrappers.find((aw) => aw && aw.name === 'AI答题');
 	if (!wrapper) return;
 
-	let aiCfg: any;
-	try {
-		aiCfg = CommonProject.scripts.aiSettings.cfg;
-	} catch {
-		return;
-	}
-	const { aiEndpoint, aiApiKey, aiModel } = aiCfg || {};
-	if (!aiEndpoint || !aiApiKey || !aiModel) return;
+	const ai = resolveAiConfig();
+	if (!ai) return;
 
-	wrapper.url = normalizeAiEndpoint(aiEndpoint);
+	wrapper.url = normalizeAiEndpoint(ai.endpoint);
 	wrapper.headers = {
 		...((wrapper.headers as any) || {}),
 		'Content-Type': 'application/json',
-		Authorization: 'Bearer ' + aiApiKey
+		Authorization: 'Bearer ' + ai.apiKey
 	};
 	wrapper.data = {
 		...((wrapper.data as any) || {}),
-		model: aiModel,
-		messages: buildAiMessages((aiCfg.referenceDocs as any) || []),
-		temperature: 0
+		model: ai.model,
+		messages: buildAiMessages(buildAiReferenceDocs()),
+		temperature: 0,
+		...aiThinkingPayload(ai.endpoint)
 	};
 	/** 题目里带图（公式/图表）时转成 base64 一起发给模型 */
 	wrapper.inlineImages = true;
+}
+
+/** 参考资料：读配置失败时按「没有参考资料」处理，不能因此让 AI 不可用 */
+function buildAiReferenceDocs(): ReferenceDoc[] {
+	try {
+		return ((CommonProject.scripts.aiSettings.cfg as any).referenceDocs as ReferenceDoc[]) || [];
+	} catch {
+		return [];
+	}
 }
 
 function buildAiMessages(referenceDocs: ReferenceDoc[]) {
@@ -2234,7 +2278,8 @@ function buildAiMessages(referenceDocs: ReferenceDoc[]) {
 
 	if (imageRefs.length > 0) {
 		const textPart =
-			(textRefs.length > 0 ? '【参考资料】\n' + textRefs.map((r) => r.content).join('\n\n') + '\n\n' : '') + AI_USER_PROMPT;
+			(textRefs.length > 0 ? '【参考资料】\n' + textRefs.map((r) => r.content).join('\n\n') + '\n\n' : '') +
+			AI_USER_PROMPT;
 		const userContent: any[] = [{ type: 'text', text: textPart }];
 		for (const img of imageRefs) {
 			userContent.push({ type: 'image_url', image_url: { url: img.content } });
@@ -2246,7 +2291,10 @@ function buildAiMessages(referenceDocs: ReferenceDoc[]) {
 	} else if (textRefs.length > 0) {
 		return [
 			{ role: 'system', content: AI_SYSTEM_PROMPT },
-			{ role: 'user', content: '【参考资料】\n' + textRefs.map((r) => r.content).join('\n\n') + '\n\n' + AI_USER_PROMPT }
+			{
+				role: 'user',
+				content: '【参考资料】\n' + textRefs.map((r) => r.content).join('\n\n') + '\n\n' + AI_USER_PROMPT
+			}
 		];
 	} else {
 		return [
@@ -2474,7 +2522,12 @@ function aiSendTestMessageRaw(endpoint: string, apiKey: string, model: string, m
 				url: fullEndpoint,
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
-				data: JSON.stringify({ model, messages, temperature: 0 }),
+				data: JSON.stringify({
+					model,
+					messages,
+					temperature: 0,
+					...aiThinkingPayload(endpoint)
+				}),
 				responseType: 'json',
 				onload: (resp: any) => {
 					if (resp.status === 200) {
@@ -2486,7 +2539,8 @@ function aiSendTestMessageRaw(endpoint: string, apiKey: string, model: string, m
 								body = resp.responseText;
 							}
 						}
-						const content = body && body.choices && body.choices[0] && body.choices[0].message && body.choices[0].message.content;
+						const content =
+							body && body.choices && body.choices[0] && body.choices[0].message && body.choices[0].message.content;
 						resolve(content ? String(content).trim() : '(AI 未返回内容)');
 					} else {
 						reject(new Error('HTTP ' + resp.status + '：' + String(resp.responseText || '').slice(0, 300)));
@@ -2589,7 +2643,13 @@ function createReferenceArea(onChange: () => void) {
 				infoChildren.push(thumb);
 			}
 
-			listEl.appendChild(h('div', { className: 'ai-ref-item' }, [checkbox, h('div', { className: 'ai-ref-item-info' }, infoChildren), delBtn]));
+			listEl.appendChild(
+				h('div', { className: 'ai-ref-item' }, [
+					checkbox,
+					h('div', { className: 'ai-ref-item-info' }, infoChildren),
+					delBtn
+				])
+			);
 		}
 	};
 
@@ -2597,8 +2657,14 @@ function createReferenceArea(onChange: () => void) {
 
 	const addTextBtn = h('button', { className: 'ai-ref-btn' }, '+ 添加文字');
 	addTextBtn.onclick = () => {
-		const nameInput = h('input', { className: 'ai-ref-edit-input', placeholder: '资料名称（如：教材第三章知识点）' }) as HTMLInputElement;
-		const contentInput = h('textarea', { className: 'ai-ref-edit-textarea', placeholder: '粘贴或输入参考资料内容...' }) as HTMLTextAreaElement;
+		const nameInput = h('input', {
+			className: 'ai-ref-edit-input',
+			placeholder: '资料名称（如：教材第三章知识点）'
+		}) as HTMLInputElement;
+		const contentInput = h('textarea', {
+			className: 'ai-ref-edit-textarea',
+			placeholder: '粘贴或输入参考资料内容...'
+		}) as HTMLTextAreaElement;
 		const saveBtn = h('button', { className: 'ai-ref-edit-btn ai-ref-edit-save' }, '保存');
 		const cancelBtn = h('button', { className: 'ai-ref-edit-btn ai-ref-edit-cancel' }, '取消');
 
@@ -2611,7 +2677,13 @@ function createReferenceArea(onChange: () => void) {
 			}
 			saveDocs([
 				...getDocs(),
-				{ id: 'ref_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: name || '文字资料', type: 'text', content, enabled: true }
+				{
+					id: 'ref_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+					name: name || '文字资料',
+					type: 'text',
+					content,
+					enabled: true
+				}
 			]);
 			renderList();
 			editArea.replaceChildren();
@@ -2619,7 +2691,11 @@ function createReferenceArea(onChange: () => void) {
 		cancelBtn.onclick = () => editArea.replaceChildren();
 
 		editArea.replaceChildren(
-			h('div', { className: 'ai-ref-edit' }, [nameInput, contentInput, h('div', { className: 'ai-ref-edit-row' }, [saveBtn, cancelBtn])])
+			h('div', { className: 'ai-ref-edit' }, [
+				nameInput,
+				contentInput,
+				h('div', { className: 'ai-ref-edit-row' }, [saveBtn, cancelBtn])
+			])
 		);
 		nameInput.focus();
 	};
@@ -2656,7 +2732,11 @@ function createReferenceArea(onChange: () => void) {
 			saveDocs([...getDocs(), ...newDocs]);
 			renderList();
 			$message.success({
-				content: '已添加 ' + newDocs.length + ' 张图片' + (newDocs.length < files.length ? '（' + (files.length - newDocs.length) + ' 张失败）' : '')
+				content:
+					'已添加 ' +
+					newDocs.length +
+					' 张图片' +
+					(newDocs.length < files.length ? '（' + (files.length - newDocs.length) + ' 张失败）' : '')
 			});
 		}
 		fileInput.value = '';
@@ -2665,9 +2745,16 @@ function createReferenceArea(onChange: () => void) {
 	const testBtn = h('button', { className: 'ai-ref-btn' }, '测试资料');
 	const testArea = h('div');
 	testBtn.onclick = () => {
-		const testInput = h('textarea', { className: 'ai-ref-test-textarea', placeholder: '输入测试文字，如：请根据参考资料回答：1+1=?' }) as HTMLTextAreaElement;
+		const testInput = h('textarea', {
+			className: 'ai-ref-test-textarea',
+			placeholder: '输入测试文字，如：请根据参考资料回答：1+1=?'
+		}) as HTMLTextAreaElement;
 		const sendBtn = h('button', { className: 'ai-ref-edit-btn ai-ref-test-send' }, '发送给 AI');
-		const resultEl = h('div', { className: 'ai-ref-test-result' }, '点击「发送给 AI」，将把上方文字连同已启用的参考资料一并发送给 AI。');
+		const resultEl = h(
+			'div',
+			{ className: 'ai-ref-test-result' },
+			'点击「发送给 AI」，将把上方文字连同已启用的参考资料一并发送给 AI。'
+		);
 
 		sendBtn.onclick = async () => {
 			const text = testInput.value.trim();
@@ -2699,7 +2786,11 @@ function createReferenceArea(onChange: () => void) {
 		};
 
 		testArea.replaceChildren(
-			h('div', { className: 'ai-ref-test-area' }, [testInput, h('div', { className: 'ai-ref-edit-row' }, [sendBtn]), resultEl])
+			h('div', { className: 'ai-ref-test-area' }, [
+				testInput,
+				h('div', { className: 'ai-ref-edit-row' }, [sendBtn]),
+				resultEl
+			])
 		);
 		testInput.focus();
 	};
@@ -2732,6 +2823,22 @@ function normalizeAiEndpoint(raw: string) {
 		}
 	}
 	return ep;
+}
+
+/**
+ * DeepSeek 官方接口默认开着「思考模式」，答题时主动关掉
+ *
+ * 官方文档写明 `deepseek-flash` 默认 thinking 开启。答题只要最终答案，
+ * 开着思考的代价是：每题多等十几秒（面板上就是「AI 思考中…」一直跳），
+ * 而且思考内容同样计入输出 token —— 输出被截断时 `content` 会是空串、
+ * 只剩 `reasoning_content`，整道题判失败。
+ *
+ * ⚠️ 只对 DeepSeek 官方域名下发：`thinking` 是 DeepSeek 私有字段，
+ * 第三方 OpenAI 兼容网关（硅基流动、Azure、OneAPI 等）遇到不认识的字段
+ * 可能直接 400，那才是真正的「配好了也答不了」。
+ */
+function aiThinkingPayload(endpoint: string): Record<string, any> {
+	return /api\.deepseek\.com/i.test(String(endpoint || '')) ? { thinking: { type: 'disabled' } } : {};
 }
 
 function aiTestConnection(endpoint: string, apiKey: string, model: string) {
@@ -2854,6 +2961,15 @@ function createAiConfigCard() {
 		return createDesktopConfigTip();
 	}
 	const aiCfg = CommonProject.scripts.aiSettings.cfg;
+	/**
+	 * 空值补默认值
+	 *
+	 * 桌面端统一配置下发的是空串时会覆盖掉默认值，面板上就变成「地址/模型都是空的」，
+	 * 用户只填个 Key 点「启用」还会被校验拦住。这里把默认值回写一次（幂等），
+	 * 让「看到的」和「实际生效的」一致。
+	 */
+	if (!String(aiCfg.aiEndpoint || '').trim()) aiCfg.aiEndpoint = DEFAULT_AI_ENDPOINT;
+	if (!String(aiCfg.aiModel || '').trim()) aiCfg.aiModel = DEFAULT_AI_MODEL;
 	const aiCss = `.ai-cfg-card{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:16px;margin-top:12px;box-shadow:0 1px 3px rgba(0,0,0,.04);animation:hh-card-in .45s cubic-bezier(0.16,1,0.3,1) both;}
 .ai-cfg-title{font-size:15px;font-weight:600;margin-bottom:4px;color:#1d1d1f;}
 .ai-cfg-desc{color:#6e6e73;font-size:12px;margin-bottom:6px;line-height:1.5;}
@@ -2875,9 +2991,22 @@ function createAiConfigCard() {
 .ai-cfg-status{margin-top:12px;padding:7px 11px;border-radius:8px;font-size:12px;background:rgba(0,0,0,.05);color:#6e6e73;transition:background .3s ease,color .3s ease;}
 .ai-cfg-status.on{background:#e8f8ec;color:#1a7a37;font-weight:500;}`;
 
-	const epInput = h('input', { className: 'ai-cfg-input', value: aiCfg.aiEndpoint || '', placeholder: 'https://api.deepseek.com' });
-	const keyInput = h('input', { className: 'ai-cfg-input', type: 'password', value: aiCfg.aiApiKey || '', placeholder: 'sk-...' });
-	const modelInput = h('input', { className: 'ai-cfg-input', value: aiCfg.aiModel || '', placeholder: 'deepseek-flash' });
+	const epInput = h('input', {
+		className: 'ai-cfg-input',
+		value: aiCfg.aiEndpoint || '',
+		placeholder: 'https://api.deepseek.com'
+	});
+	const keyInput = h('input', {
+		className: 'ai-cfg-input',
+		type: 'password',
+		value: aiCfg.aiApiKey || '',
+		placeholder: 'sk-...'
+	});
+	const modelInput = h('input', {
+		className: 'ai-cfg-input',
+		value: aiCfg.aiModel || '',
+		placeholder: 'deepseek-flash'
+	});
 	epInput.onchange = () => {
 		aiCfg.aiEndpoint = epInput.value;
 	};
@@ -2947,9 +3076,11 @@ function createAiConfigCard() {
 			data: {
 				model: aiModel,
 				messages: buildAiMessages((aiCfg.referenceDocs as any) || []),
-				temperature: 0
+				temperature: 0,
+				...aiThinkingPayload(aiEndpoint)
 			},
-			handler: 'return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }',
+			handler:
+				'return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }',
 			inlineImages: true
 		};
 		const aws: any[] = CommonProject.scripts.settings.cfg.answererWrappers || [];
@@ -2959,9 +3090,9 @@ function createAiConfigCard() {
 	};
 
 	disableBtn.onclick = () => {
-		CommonProject.scripts.settings.cfg.answererWrappers = (CommonProject.scripts.settings.cfg.answererWrappers || []).filter(
-			(w: any) => w.name !== 'AI答题'
-		);
+		CommonProject.scripts.settings.cfg.answererWrappers = (
+			CommonProject.scripts.settings.cfg.answererWrappers || []
+		).filter((w: any) => w.name !== 'AI答题');
 		$message.success({ content: 'AI 答题已禁用' });
 		updateBtns();
 	};
@@ -2980,9 +3111,12 @@ function createAiConfigCard() {
 			if (ret.ok) {
 				$message.success({ content: 'AI 连接成功！模型 ' + aiModel });
 			} else if (ret.status === 0) {
-				$message.error({ content: 'AI 连接失败：网络错误 / 扩展无权访问该域名（' + fullEndpoint + '）。' + (ret.error || '') });
+				$message.error({
+					content: 'AI 连接失败：网络错误 / 扩展无权访问该域名（' + fullEndpoint + '）。' + (ret.error || '')
+				});
 			} else {
-				const bodyStr = typeof ret.body === 'string' ? ret.body.slice(0, 200) : JSON.stringify(ret.body || {}).slice(0, 200);
+				const bodyStr =
+					typeof ret.body === 'string' ? ret.body.slice(0, 200) : JSON.stringify(ret.body || {}).slice(0, 200);
 				$message.error({ content: 'AI 连接失败 [HTTP ' + ret.status + ']：' + bodyStr });
 			}
 		} catch (err) {
@@ -3152,7 +3286,11 @@ const createGuide = () => {
 	 */
 	const feedbackCard = h('div', { style: { ...cardStyle, marginTop: '8px' } }, [
 		h('div', { style: { marginBottom: '4px', fontWeight: 'bold' } }, '问题反馈'),
-		h('div', { className: 'secondary', style: { fontSize: '12px', lineHeight: '1.6' } }, '脚本不生效、漏题？欢迎到 GitHub 或 GitCode 提 Issue。'),
+		h(
+			'div',
+			{ className: 'secondary', style: { fontSize: '12px', lineHeight: '1.6' } },
+			'脚本不生效、漏题？欢迎到 GitHub 或 GitCode 提 Issue。'
+		),
 		issueButtons()
 	]);
 
@@ -3167,48 +3305,61 @@ const createGuide = () => {
 	const enabledBanks = (bankCfg.answererWrappers || []).filter(
 		(w) => w.name !== 'AI答题' && !(bankCfg.disabledAnswererWrapperNames || []).includes(w.name)
 	);
-	const aiGuideCard = !aiConfigured && enabledBanks.length === 0
-		? h(
-				'div',
-				{
-					style: {
-						...cardStyle,
-						marginBottom: '12px',
-						background: 'linear-gradient(135deg, #f5f7fa, #eef4ff)',
-						border: '1px solid rgba(0, 122, 255, 0.2)'
-					}
-				},
-				[
-					h('div', { style: { marginBottom: '6px', fontWeight: '600', fontSize: '14px', color: '#007aff' } }, 'AI 答题尚未配置'),
-					h('div', { style: { color: '#6e6e73', fontSize: '12px', lineHeight: '1.6', marginBottom: '10px' } }, [
-						'配置 AI API 后，插件将自动调用大模型完成答题。请按以下步骤操作：'
-					]),
-					h(
-						'ol',
-						{ style: { color: '#1d1d1f', fontSize: '12px', lineHeight: '1.8', paddingLeft: '20px', margin: '0 0 12px' } },
-						[
-							h('li', [
-								'前往 ',
-								h('b', 'DeepSeek'),
-								'（platform.deepseek.com）或 ',
-								h('b', '硅基流动'),
-								'（cloud.siliconflow.cn）等 API 提供商网站注册账号，创建 API Key'
-							]),
-							h('li', '点击下方按钮进入「AI 答题配置」面板'),
-							h('li', '填写 API 地址（如 https://api.deepseek.com）'),
-							h('li', '填写 API Key（如 sk-...）'),
-							h('li', '填写模型名称（如 deepseek-flash）'),
-							h('li', '点击「启用」按钮，刷新网页后生效')
-						]
-					),
-					(() => {
-						const btn = h('button', { className: 'base-style-button' }, '前往配置 AI 答题');
-						btn.onclick = () => CommonProject.scripts.render.methods.pin(CommonProject.scripts.aiSettings);
-						return btn;
-					})()
-				]
-		  )
-		: null;
+	const aiGuideCard =
+		!aiConfigured && enabledBanks.length === 0
+			? h(
+					'div',
+					{
+						style: {
+							...cardStyle,
+							marginBottom: '12px',
+							background: 'linear-gradient(135deg, #f5f7fa, #eef4ff)',
+							border: '1px solid rgba(0, 122, 255, 0.2)'
+						}
+					},
+					[
+						h(
+							'div',
+							{ style: { marginBottom: '6px', fontWeight: '600', fontSize: '14px', color: '#007aff' } },
+							'AI 答题尚未配置'
+						),
+						h('div', { style: { color: '#6e6e73', fontSize: '12px', lineHeight: '1.6', marginBottom: '10px' } }, [
+							'配置 AI API 后，插件将自动调用大模型完成答题。请按以下步骤操作：'
+						]),
+						h(
+							'ol',
+							{
+								style: {
+									color: '#1d1d1f',
+									fontSize: '12px',
+									lineHeight: '1.8',
+									paddingLeft: '20px',
+									margin: '0 0 12px'
+								}
+							},
+							[
+								h('li', [
+									'前往 ',
+									h('b', 'DeepSeek'),
+									'（platform.deepseek.com）或 ',
+									h('b', '硅基流动'),
+									'（cloud.siliconflow.cn）等 API 提供商网站注册账号，创建 API Key'
+								]),
+								h('li', '点击下方按钮进入「AI 答题配置」面板'),
+								h('li', '填写 API 地址（如 https://api.deepseek.com）'),
+								h('li', '填写 API Key（如 sk-...）'),
+								h('li', '填写模型名称（如 deepseek-flash）'),
+								h('li', '点击「启用」按钮，刷新网页后生效')
+							]
+						),
+						(() => {
+							const btn = h('button', { className: 'base-style-button' }, '前往配置 AI 答题');
+							btn.onclick = () => CommonProject.scripts.render.methods.pin(CommonProject.scripts.aiSettings);
+							return btn;
+						})()
+					]
+			  )
+			: null;
 
 	return h('div', { className: 'user-guide' }, [
 		...(aiGuideCard ? [aiGuideCard] : []),

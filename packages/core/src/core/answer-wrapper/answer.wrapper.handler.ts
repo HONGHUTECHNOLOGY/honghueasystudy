@@ -14,7 +14,7 @@ export function setSizeErrorRetryHandler(fn: ((error: any, data: any) => Promise
 }
 
 function isSizeError(error: any): boolean {
-	const msg = typeof error === 'string' ? error : (error?.message || error?.toString?.() || String(error || ''));
+	const msg = typeof error === 'string' ? error : error?.message || error?.toString?.() || String(error || '');
 	return /413|too large|too long|payload|entity|size.*limit|max.*size|request.*large|body.*limit/i.test(msg);
 }
 
@@ -102,7 +102,6 @@ function attachInlineImages(requestData: any, originalUrls: string[], dataUrls: 
 	return true;
 }
 
-
 /**
  * 只取最终结果。
  *
@@ -119,8 +118,11 @@ function assertFinalAnswerPresent(responseData: any, results: Result[]): void {
 	const reasoning = String(message.reasoning_content ?? '').trim();
 	if (!content && reasoning) {
 		throw new Error(
-			'模型只返回了思考过程（reasoning_content），没有给出最终答案。请改用非推理模型（如 deepseek-chat），或调小思考强度后重试。'
+			'模型只返回了思考过程（reasoning_content），没有给出最终答案。请改用非思考模式（DeepSeek 现行模型为 deepseek-flash，可在请求里加 thinking:{type:"disabled"}），或调小思考强度后重试。'
 		);
+	}
+	if (!content) {
+		throw new Error('模型返回了空内容（content 为空），请检查模型名是否正确、或稍后重试。');
 	}
 }
 

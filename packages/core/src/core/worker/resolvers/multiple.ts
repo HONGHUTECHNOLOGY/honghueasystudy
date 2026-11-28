@@ -1,7 +1,6 @@
 import { splitAnswer, resolvePlainAnswer } from '../utils';
 import { removeRedundant, answerNormalizedMatch, answerSimilarWithGap, normalizeString } from '../../utils/string';
 import { findBestMatch } from 'string-similarity';
-import { StringUtils } from '../../../utils/string';
 
 /** 多选题单个题库结果的匹配数据 */
 export interface MultipleMatchGroup {
@@ -131,13 +130,19 @@ export function resolveMultiple(
 	// 纯ABCD答案兜底
 	const plainOptions: string[] = [];
 	for (const answer of resultAnswers) {
-		const ans = StringUtils.nowrap(answer, '').trim();
-		if (resolvePlainAnswer(ans)) {
-			for (const char of ans) {
-				const index = char.charCodeAt(0) - 65;
-				if (options[index] !== undefined) {
-					plainOptions.push(options[index]);
-				}
+		/**
+		 * 用 stripAnswerDecoration 之后的文本判断与遍历
+		 *
+		 * 之前拿原始文本遍历：`答案：A、C` 里的「答」「案」会被当成字母参与
+		 * charCode 运算（算出越界索引被跳过，纯属侥幸），而 `resolvePlainAnswer`
+		 * 又因为前缀没剥而返回 undefined —— 整段答案直接作废。
+		 */
+		const ans = resolvePlainAnswer(String(answer ?? '').trim());
+		if (!ans) continue;
+		for (const char of ans) {
+			const index = char.charCodeAt(0) - 65;
+			if (options[index] !== undefined) {
+				plainOptions.push(options[index]);
 			}
 		}
 	}

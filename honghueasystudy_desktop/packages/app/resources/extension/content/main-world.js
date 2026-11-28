@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-var __HH_BRIDGE_KEY__="fc0fd141-f088-4436-ba8c-db6b28ce64da";
+var __HH_BRIDGE_KEY__="74c4cd27-c05e-4cfa-bdeb-c84f15b3af8d";
 /* 鸿鹄易学 · MAIN world 运行时（ScriptCat 风格）
  *
  * 本文件由 background.js 通过 chrome.userScripts.register({ world: "MAIN" })
@@ -4252,8 +4252,57 @@ try {
     }
     return true;
   }
+  function stripAnswerDecoration(answer, options = {}) {
+    let text = String(answer != null ? answer : "").trim();
+    if (!text)
+      return "";
+    if (/^```/.test(text)) {
+      const firstLineEnd = text.indexOf("\n");
+      if (firstLineEnd === -1) {
+        text = text.replace(/^```/, "").replace(/```$/, "").trim();
+      } else {
+        text = text.slice(firstLineEnd + 1).replace(/```\s*$/, "").trim();
+      }
+    }
+    text = text.replace(/^`+|`+$/g, "").trim();
+    for (let i = 0; i < 3; i++) {
+      let next2 = text.replace(/^(?:正确|参考|我的)?\s*答案\s*(?:[:：]|是|为|应该|应当|\s)+/i, "");
+      if (!options.fillBlank) {
+        next2 = next2.replace(/^(?:所以|因此|故|综上|最后|结论)\s*[:：]?\s*/i, "").replace(/^(?:应|应该|应当)?\s*(?:选|选择)\s*(?:是|为|[:：])?\s*(?=[（(【[]?\s*[A-Ha-h])/i, "");
+      }
+      next2 = next2.trim();
+      if (next2 === text)
+        break;
+      text = next2;
+    }
+    if (options.fillBlank)
+      return text;
+    const wrapped = text.match(/^[（(【[「『"']\s*([^（()）【[\]】「」『』"']{1,12})\s*[)）】\]」』"']$/);
+    if (wrapped)
+      text = wrapped[1].trim();
+    text = text.replace(/[。．.，,、;；:：\s]+$/, "").trim();
+    if (/^[a-h]$/.test(text))
+      text = text.toUpperCase();
+    return text;
+  }
+  function pickLabelledLetter(answer) {
+    const text = stripAnswerDecoration(String(answer != null ? answer : "").replace(/\n/g, " "));
+    if (!text)
+      return void 0;
+    if (/^[A-H]{1,8}$/.test(text))
+      return void 0;
+    const labelled = text.match(
+      /(?:答案|选|选择|应为|应该是|应该选|是|为|[:：])\s*[（(【[]?\s*([A-Ha-h])\s*(?![A-Za-z0-9])/
+    );
+    if (!labelled)
+      return void 0;
+    const distinct = new Set(text.toUpperCase().match(/[A-H]/g) || []);
+    if (distinct.size !== 1)
+      return void 0;
+    return labelled[1].toUpperCase();
+  }
   function resolvePlainAnswer(answer) {
-    const resolve = answer.trim().replace(/[,，.。．、 #]/g, "").trim();
+    const resolve = stripAnswerDecoration(answer).replace(/[,，.。．、 #]/g, "").trim();
     if (isPlainAnswer(resolve)) {
       return resolve;
     }
@@ -4319,7 +4368,7 @@ try {
     return score >= 2;
   }
   function splitAnswer(answer, separators = ["===", "#", "---", "###", "|", ";", "；"]) {
-    answer = answer.trim();
+    answer = String(answer != null ? answer : "").trim();
     if (answer.length === 0) {
       return [];
     }
@@ -4369,9 +4418,18 @@ try {
       };
     }
     for (const answer of allAnswer) {
-      const ans = resolvePlainAnswer(StringUtils.nowrap(answer, "").trim());
+      const ans = resolvePlainAnswer(String(answer != null ? answer : "").trim());
       if (ans && ans.length === 1) {
         const index = ans.charCodeAt(0) - 65;
+        if (optionStrings[index] !== void 0) {
+          return { finish: true, option: options[index] };
+        }
+      }
+    }
+    for (const answer of allAnswer) {
+      const letter = pickLabelledLetter(StringUtils.nowrap(answer, " ").trim());
+      if (letter && letter.length === 1) {
+        const index = letter.charCodeAt(0) - 65;
         if (optionStrings[index] !== void 0) {
           return { finish: true, option: options[index] };
         }
@@ -4459,13 +4517,13 @@ try {
     }
     const plainOptions = [];
     for (const answer of resultAnswers) {
-      const ans = StringUtils.nowrap(answer, "").trim();
-      if (resolvePlainAnswer(ans)) {
-        for (const char of ans) {
-          const index = char.charCodeAt(0) - 65;
-          if (options[index] !== void 0) {
-            plainOptions.push(options[index]);
-          }
+      const ans = resolvePlainAnswer(String(answer != null ? answer : "").trim());
+      if (!ans)
+        continue;
+      for (const char of ans) {
+        const index = char.charCodeAt(0) - 65;
+        if (options[index] !== void 0) {
+          plainOptions.push(options[index]);
         }
       }
     }
@@ -4519,7 +4577,8 @@ try {
     "0"
   ];
   function resolveJudgement(answerGroups, options) {
-    for (const answers of answerGroups) {
+    for (const rawAnswers of answerGroups) {
+      const answers = (rawAnswers || []).map((a) => normalizeJudgementAnswer(a, options));
       const answerShowCorrect = answers.find((a) => matches(a, CORRECT_WORDS));
       const answerShowIncorrect = answers.find((a) => matches(a, INCORRECT_WORDS));
       if (answerShowCorrect || answerShowIncorrect) {
@@ -4543,6 +4602,15 @@ try {
       (word) => clearString(removeRedundant(word), "√", "×") === clearString(removeRedundant(target), "√", "×")
     );
   }
+  function normalizeJudgementAnswer(answer, options) {
+    const text = stripAnswerDecoration(answer);
+    if (/^[A-H]$/.test(text)) {
+      const index = text.charCodeAt(0) - 65;
+      if (options[index] !== void 0)
+        return options[index];
+    }
+    return text;
+  }
   function isJudgementOptions(options) {
     if (options.length !== 2)
       return false;
@@ -4552,7 +4620,7 @@ try {
   }
   function resolveCompletion(answerGroups, blankCount, separators) {
     for (const answers of answerGroups) {
-      let ans = answers.filter((a) => a);
+      let ans = (answers || []).map((a) => stripAnswerDecoration(a, { fillBlank: true })).filter((a) => a);
       if (ans.length === 1) {
         ans = splitAnswer(ans[0], separators);
       }
@@ -4708,8 +4776,11 @@ ${url}`).join("\n");
     const reasoning = String((_d = message2.reasoning_content) != null ? _d : "").trim();
     if (!content && reasoning) {
       throw new Error(
-        "模型只返回了思考过程（reasoning_content），没有给出最终答案。请改用非推理模型（如 deepseek-chat），或调小思考强度后重试。"
+        '模型只返回了思考过程（reasoning_content），没有给出最终答案。请改用非思考模式（DeepSeek 现行模型为 deepseek-flash，可在请求里加 thinking:{type:"disabled"}），或调小思考强度后重试。'
       );
+    }
+    if (!content) {
+      throw new Error("模型返回了空内容（content 为空），请检查模型名是否正确、或稍后重试。");
     }
   }
   async function defaultAnswerWrapperHandler(answererWrappers, env) {
@@ -7463,6 +7534,8 @@ ${url}`).join("\n");
     }
   };
   const TAB_WORK_RESULTS_KEY = "common.work-results.results";
+  const DEFAULT_AI_ENDPOINT = "https://api.deepseek.com";
+  const DEFAULT_AI_MODEL = "deepseek-flash";
   const ANSWER_PROGRESS_KEY = "common.answer-progress";
   const ANSWER_PROGRESS_TTL = 5 * 60 * 1e3;
   let answerProgressActive = 0;
@@ -7906,7 +7979,8 @@ ${url}`).join("\n");
                                         content: "题目：${title}\n选项：${options}\n题型：${type}"
                                       }
                                     ],
-                                    temperature: 0
+                                    temperature: 0,
+                                    ...aiThinkingPayload(aiConfig.endpoint)
                                   },
                                   handler: "return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }"
                                 });
@@ -8438,7 +8512,7 @@ ${url}`).join("\n");
             ]).outerHTML
           },
           aiEndpoint: {
-            defaultValue: "https://api.deepseek.com",
+            defaultValue: DEFAULT_AI_ENDPOINT,
             extra: { appConfigSync: false }
           },
           aiApiKey: {
@@ -8446,7 +8520,7 @@ ${url}`).join("\n");
             extra: { appConfigSync: false }
           },
           aiModel: {
-            defaultValue: "deepseek-flash",
+            defaultValue: DEFAULT_AI_MODEL,
             extra: { appConfigSync: false }
           },
           referenceDocs: {
@@ -8459,21 +8533,28 @@ ${url}`).join("\n");
         },
         onstart() {
           const syncWrapper = () => {
-            const aiCfg = CommonProject.scripts.aiSettings.cfg;
             const aws = CommonProject.scripts.settings.cfg.answererWrappers || [];
-            const idx = aws.findIndex((w) => w.name === "AI答题");
+            const idx = aws.findIndex((w) => w && w.name === "AI答题");
             if (idx === -1)
+              return;
+            const ai = resolveAiConfig();
+            if (!ai)
               return;
             const next2 = [...aws];
             next2[idx] = {
               ...next2[idx],
-              url: normalizeAiEndpoint(aiCfg.aiEndpoint),
+              url: normalizeAiEndpoint(ai.endpoint),
               headers: {
                 ...next2[idx].headers || {},
                 "Content-Type": "application/json",
-                Authorization: "Bearer " + aiCfg.aiApiKey
+                Authorization: "Bearer " + ai.apiKey
               },
-              data: { ...next2[idx].data || {}, messages: buildAiMessages(aiCfg.referenceDocs || []) },
+              data: {
+                ...next2[idx].data || {},
+                model: ai.model,
+                messages: buildAiMessages(buildAiReferenceDocs()),
+                ...aiThinkingPayload(ai.endpoint)
+              },
               inlineImages: true
             };
             CommonProject.scripts.settings.cfg.answererWrappers = next2;
@@ -9199,32 +9280,43 @@ ${url}`).join("\n");
   }
   const AI_SYSTEM_PROMPT = "你是一个答题助手。请严格依据给出的「题目」和「选项」作答，只能从给定选项里选，禁止编造选项，也不允许给出选项之外的内容。\n输出要求（必须严格遵守；只输出答案本身，不要解释、不要理由、不要标点、不要引号、不要重复题干）：\n1. 单选题(single)：只输出所选项的字母，例如 A；不要输出选项文字。\n2. 多选题(multiple)：只输出所有正确选项的字母，用 # 分隔，例如 A#B#C。\n3. 判断题(judgement)：只输出所选项的文字，不要输出字母。选项写作「A.对」「B.错」时就输出「对」或「错」；写作「A.正确」「B.错误」时就输出「正确」或「错误」；必须与所选项的文字完全一致。\n4. 填空题(completion)：直接输出要填的内容，多个空用 # 分隔。\n禁止输出「正确答案是」「答案是」「因为」等任何前缀或解析，禁止输出多个选项。\n必须给出答案：无论题目是否完整、公式是否看得清、你是否确定，都必须输出一个最可能的答案。绝对禁止留空，禁止只输出「无法确定」「不知道」「看不清」「略」「无」这类说明，禁止输出空行。";
   const AI_USER_PROMPT = "题目：${title}\n选项：\n${options}\n题型：${type}\n请只输出答案（必须作答，禁止留空）：";
+  function resolveAiConfig() {
+    let aiCfg;
+    try {
+      aiCfg = CommonProject.scripts.aiSettings.cfg;
+    } catch {
+      return null;
+    }
+    const apiKey = String((aiCfg == null ? void 0 : aiCfg.aiApiKey) || "").trim();
+    if (!apiKey)
+      return null;
+    return {
+      endpoint: String((aiCfg == null ? void 0 : aiCfg.aiEndpoint) || "").trim() || DEFAULT_AI_ENDPOINT,
+      apiKey,
+      model: String((aiCfg == null ? void 0 : aiCfg.aiModel) || "").trim() || DEFAULT_AI_MODEL
+    };
+  }
   function ensureAiAnswererWrapper(wrappers) {
     if (!Array.isArray(wrappers))
       return;
     if (wrappers.some((aw) => aw && aw.name === "AI答题"))
       return;
-    let aiCfg;
-    try {
-      aiCfg = CommonProject.scripts.aiSettings.cfg;
-    } catch {
-      return;
-    }
-    const { aiEndpoint, aiApiKey, aiModel } = aiCfg || {};
-    if (!aiEndpoint || !aiApiKey || !aiModel)
+    const ai = resolveAiConfig();
+    if (!ai)
       return;
     wrappers.push({
       name: "AI答题",
-      url: normalizeAiEndpoint(aiEndpoint),
+      url: normalizeAiEndpoint(ai.endpoint),
       homepage: "AI 大模型答题",
       method: "post",
       type: "GM_xmlhttpRequest",
       contentType: "json",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + aiApiKey },
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + ai.apiKey },
       data: {
-        model: aiModel,
-        messages: buildAiMessages(aiCfg.referenceDocs || []),
-        temperature: 0
+        model: ai.model,
+        messages: buildAiMessages(buildAiReferenceDocs()),
+        temperature: 0,
+        ...aiThinkingPayload(ai.endpoint)
       },
       handler: "return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }",
       inlineImages: true
@@ -9236,28 +9328,30 @@ ${url}`).join("\n");
     const wrapper = wrappers.find((aw) => aw && aw.name === "AI答题");
     if (!wrapper)
       return;
-    let aiCfg;
-    try {
-      aiCfg = CommonProject.scripts.aiSettings.cfg;
-    } catch {
+    const ai = resolveAiConfig();
+    if (!ai)
       return;
-    }
-    const { aiEndpoint, aiApiKey, aiModel } = aiCfg || {};
-    if (!aiEndpoint || !aiApiKey || !aiModel)
-      return;
-    wrapper.url = normalizeAiEndpoint(aiEndpoint);
+    wrapper.url = normalizeAiEndpoint(ai.endpoint);
     wrapper.headers = {
       ...wrapper.headers || {},
       "Content-Type": "application/json",
-      Authorization: "Bearer " + aiApiKey
+      Authorization: "Bearer " + ai.apiKey
     };
     wrapper.data = {
       ...wrapper.data || {},
-      model: aiModel,
-      messages: buildAiMessages(aiCfg.referenceDocs || []),
-      temperature: 0
+      model: ai.model,
+      messages: buildAiMessages(buildAiReferenceDocs()),
+      temperature: 0,
+      ...aiThinkingPayload(ai.endpoint)
     };
     wrapper.inlineImages = true;
+  }
+  function buildAiReferenceDocs() {
+    try {
+      return CommonProject.scripts.aiSettings.cfg.referenceDocs || [];
+    } catch {
+      return [];
+    }
   }
   function buildAiMessages(referenceDocs) {
     const enabled = (referenceDocs || []).filter((r) => r.enabled && r.content);
@@ -9475,7 +9569,12 @@ ${url}`).join("\n");
           url: fullEndpoint,
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: "Bearer " + apiKey },
-          data: JSON.stringify({ model, messages, temperature: 0 }),
+          data: JSON.stringify({
+            model,
+            messages,
+            temperature: 0,
+            ...aiThinkingPayload(endpoint)
+          }),
           responseType: "json",
           onload: (resp) => {
             if (resp.status === 200) {
@@ -9716,6 +9815,9 @@ ${url}`).join("\n");
     }
     return ep;
   }
+  function aiThinkingPayload(endpoint) {
+    return /api\.deepseek\.com/i.test(String(endpoint || "")) ? { thinking: { type: "disabled" } } : {};
+  }
   function aiTestConnection(endpoint, apiKey, model) {
     return new Promise((resolve) => {
       try {
@@ -9802,6 +9904,10 @@ ${url}`).join("\n");
       return createDesktopConfigTip();
     }
     const aiCfg = CommonProject.scripts.aiSettings.cfg;
+    if (!String(aiCfg.aiEndpoint || "").trim())
+      aiCfg.aiEndpoint = DEFAULT_AI_ENDPOINT;
+    if (!String(aiCfg.aiModel || "").trim())
+      aiCfg.aiModel = DEFAULT_AI_MODEL;
     const aiCss = `.ai-cfg-card{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:16px;margin-top:12px;box-shadow:0 1px 3px rgba(0,0,0,.04);animation:hh-card-in .45s cubic-bezier(0.16,1,0.3,1) both;}
 .ai-cfg-title{font-size:15px;font-weight:600;margin-bottom:4px;color:#1d1d1f;}
 .ai-cfg-desc{color:#6e6e73;font-size:12px;margin-bottom:6px;line-height:1.5;}
@@ -9887,7 +9993,8 @@ ${url}`).join("\n");
         data: {
           model: aiModel,
           messages: buildAiMessages(aiCfg.referenceDocs || []),
-          temperature: 0
+          temperature: 0,
+          ...aiThinkingPayload(aiEndpoint)
         },
         handler: "return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }",
         inlineImages: true
@@ -32676,6 +32783,7 @@ ${lines.join("\n")}`);
   exports2.isPlainAnswer = isPlainAnswer;
   exports2.isProgramAnswer = isProgramAnswer;
   exports2.normalizeString = normalizeString;
+  exports2.pickLabelledLetter = pickLabelledLetter;
   exports2.removeRedundant = removeRedundant;
   exports2.request = request;
   exports2.resolvePlainAnswer = resolvePlainAnswer;
@@ -32684,6 +32792,7 @@ ${lines.join("\n")}`);
   exports2.setSizeErrorRetryHandler = setSizeErrorRetryHandler;
   exports2.splitAnswer = splitAnswer;
   exports2.start = lib.start;
+  exports2.stripAnswerDecoration = stripAnswerDecoration;
   Object.defineProperties(exports2, { __esModule: { value: true }, [Symbol.toStringTag]: { value: "Module" } });
 });
 

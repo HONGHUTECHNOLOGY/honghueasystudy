@@ -1,4 +1,4 @@
-import { splitAnswer, resolvePlainAnswer } from '../utils';
+import { splitAnswer, resolvePlainAnswer, pickLabelledLetter } from '../utils';
 import { removeRedundant, answerNormalizedMatch, answerSimilar } from '../../utils/string';
 import { StringUtils } from '../../../utils/string';
 
@@ -59,10 +59,25 @@ export function resolveSingle(answers: string[], options: string[], separators?:
 
 	// ========== 阶段3: 纯ABCD答案兜底 ==========
 	for (const answer of allAnswer) {
-		const ans = resolvePlainAnswer(StringUtils.nowrap(answer, '').trim());
+		/** 不要先 nowrap：markdown 代码块靠换行区分「语言标记」和「内容」 */
+		const ans = resolvePlainAnswer(String(answer ?? '').trim());
 		// 单选仅允许单字母答案（多字母视为多选答案，不在此处理）
 		if (ans && ans.length === 1) {
 			const index = ans.charCodeAt(0) - 65;
+			if (optionStrings[index] !== undefined) {
+				return { finish: true, option: options[index] };
+			}
+		}
+	}
+
+	// ========== 阶段3.1: 自然语言里被明确标注的单个字母 ==========
+	// 模型常回「因为……所以选 A。」这种带解释的答案，纯字母兜底拿不到。
+	// pickLabelledLetter 只认「答案/选/是/括号」紧跟着的字母，且全文不同字母唯一，
+	// 有歧义时返回 undefined —— 宁可判失败也不猜。
+	for (const answer of allAnswer) {
+		const letter = pickLabelledLetter(StringUtils.nowrap(answer, ' ').trim());
+		if (letter && letter.length === 1) {
+			const index = letter.charCodeAt(0) - 65;
 			if (optionStrings[index] !== undefined) {
 				return { finish: true, option: options[index] };
 			}

@@ -1,4 +1,4 @@
-import { splitAnswer } from '../utils';
+import { splitAnswer, stripAnswerDecoration } from '../utils';
 
 /** 填空题匹配结果 */
 export interface CompletionResolveResult {
@@ -22,7 +22,14 @@ export function resolveCompletion(
 	separators?: string[]
 ): CompletionResolveResult {
 	for (const answers of answerGroups) {
-		let ans = answers.filter((a) => a);
+		/**
+		 * 只剥代码块和「答案：」前缀
+		 *
+		 * 模型常把填空答成 `` ```光合作用``` `` 或 `答案：光合作用`，
+		 * 原样打进答题框就是错的；但填空题答案是要原样使用的文本，
+		 * 括号/大小写/结尾标点一概不能动（见 stripAnswerDecoration 的 fillBlank 说明）。
+		 */
+		let ans = (answers || []).map((a) => stripAnswerDecoration(a, { fillBlank: true })).filter((a) => a);
 		if (ans.length === 1) {
 			ans = splitAnswer(ans[0], separators);
 		}
