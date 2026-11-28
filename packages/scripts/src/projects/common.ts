@@ -965,12 +965,30 @@ export const CommonProject = Project.create({
 						// 使用 json 深拷贝，防止修改原始配置
 						const workOptions: typeof this.cfg = JSON.parse(JSON.stringify(this.cfg));
 
+						const disabled = this.cfg.disabledAnswererWrapperNames || [];
+						/** 用户是否显式停用了 AI（题库列表里的「禁用」） */
+						const aiDisabled = disabled.includes('AI答题');
+
 						/**
 						 * 过滤掉被禁用的题库
 						 */
-						workOptions.answererWrappers = workOptions.answererWrappers.filter(
-							(aw) => this.cfg.disabledAnswererWrapperNames.find((daw) => daw === aw.name) === undefined
+						workOptions.answererWrappers = (workOptions.answererWrappers || []).filter(
+							(aw) => !disabled.includes(aw.name)
 						);
+
+						/**
+						 * 桌面端统一配置模式下补一份 `AI答题`
+						 *
+						 * 这种模式下扩展面板的 AI 卡片被提示卡替代（没有「启用」按钮），
+						 * 桌面端保存时也只保留已有的 AI 条目、从不创建 —— 不补的话
+						 * 所有平台都会误报「你还没设置题库」，用户在扩展里也没有自救入口。
+						 *
+						 * 纯扩展端不自动补：那里有「启用」按钮，保持「填配置 ≠ 启用」的语义，
+						 * 免得用户只是试填了 key 就被每题都调用 AI。
+						 */
+						if (!aiDisabled && isUsingDesktopConfig()) {
+							ensureAiAnswererWrapper(workOptions.answererWrappers);
+						}
 
 						// AI 题库的提示词/模型在「启用」时就被写死进配置了，这里按当前代码刷新副本
 						refreshAiAnswererWrapper(workOptions.answererWrappers);
@@ -1680,8 +1698,10 @@ export const CommonProject = Project.create({
 				});
 
 				const search = async (value: string) => {
-					if (CommonProject.scripts.settings.cfg.answererWrappers.length === 0) {
-						$modal.alert({ content: '请先在 通用-全局设置 配置题库，才能进行在线搜题。' });
+					/** 用工作配置：里面已按 AI 配置补齐 `AI答题`，也过滤了被禁用的题库 */
+					const workOptions = CommonProject.scripts.settings.methods.getWorkOptions();
+					if (workOptions.answererWrappers.length === 0) {
+						$modal.alert({ content: '请先在 通用-全局设置 配置题库，或到 AI 页填写并启用 AI 答题。' });
 						return;
 					}
 
@@ -1689,7 +1709,7 @@ export const CommonProject = Project.create({
 
 					if (value) {
 						const t = Date.now();
-						const infos = await defaultAnswerWrapperHandler(CommonProject.scripts.settings.cfg.answererWrappers, {
+						const infos = await defaultAnswerWrapperHandler(workOptions.answererWrappers, {
 							title: value
 						});
 						// 耗时计算
@@ -2125,6 +2145,50 @@ const AI_SYSTEM_PROMPT =
 	'必须给出答案：无论题目是否完整、公式是否看得清、你是否确定，都必须输出一个最可能的答案。' +
 	'绝对禁止留空，禁止只输出「无法确定」「不知道」「看不清」「略」「无」这类说明，禁止输出空行。';
 const AI_USER_PROMPT = '题目：${title}\n选项：\n${options}\n题型：${type}\n请只输出答案（必须作答，禁止留空）：';
+
+/**
+ * AI 配置齐全、但 `answererWrappers` 里还没有 `AI答题` 条目时补一份
+ *
+ * 为什么必须补：桌面端「使用桌面端统一配置」模式下，扩展面板的 AI 卡片被
+ * `createDesktopConfigTip()` 替代（**没有「启用」按钮**），桌面端的 AI 配置区
+ * 也只存 aiEndpoint / aiApiKey / aiModel 三个键，保存时只「保留」已存在的
+ * AI wrapper、从不创建 —— 于是用户明明填好了 AI，`answererWrappers` 仍是空数组，
+ * 所有平台都报「你还没设置题库」，而且在扩展里没有自救入口。
+ *
+ * 只改传入的副本、不写存储：真正的「停用 AI」由题库列表的「禁用」表达，
+ * 调用方会在补之前先看禁用列表。
+ */
+function ensureAiAnswererWrapper(wrappers: any[]) {
+	if (!Array.isArray(wrappers)) return;
+	if (wrappers.some((aw) => aw && aw.name === 'AI答题')) return;
+
+	let aiCfg: any;
+	try {
+		aiCfg = CommonProject.scripts.aiSettings.cfg;
+	} catch {
+		return;
+	}
+	const { aiEndpoint, aiApiKey, aiModel } = aiCfg || {};
+	if (!aiEndpoint || !aiApiKey || !aiModel) return;
+
+	wrappers.push({
+		name: 'AI答题',
+		url: normalizeAiEndpoint(aiEndpoint),
+		homepage: 'AI 大模型答题',
+		method: 'post',
+		type: 'GM_xmlhttpRequest',
+		contentType: 'json',
+		headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + aiApiKey },
+		data: {
+			model: aiModel,
+			messages: buildAiMessages((aiCfg.referenceDocs as any) || []),
+			temperature: 0
+		},
+		handler:
+			'return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }',
+		inlineImages: true
+	} as any);
+}
 
 /**
  * 按当前代码刷新「AI答题」题库条目的地址、鉴权与提示词
@@ -2736,12 +2800,42 @@ function openDesktopSettings() {
 
 /** 开启统一配置时，替换掉题库 / AI 的编辑区 */
 function createDesktopConfigTip() {
+	/**
+	 * 把「桌面端到底有没有下发 AI」说清楚
+	 *
+	 * 统一配置模式下这里没有编辑入口，用户看到「未设置题库」时无从判断是
+	 * 桌面端没填、还是下发了但没启用 —— 直接把当前状态摆出来。
+	 */
+	let statusText = '';
+	try {
+		const aiCfg: any = CommonProject.scripts.aiSettings.cfg;
+		const wrappers: any[] = CommonProject.scripts.settings.cfg.answererWrappers || [];
+		const hasAiWrapper = wrappers.some((w) => w && w.name === 'AI答题');
+		const aiFilled = !!(aiCfg.aiEndpoint && aiCfg.aiApiKey && aiCfg.aiModel);
+		if (hasAiWrapper) {
+			statusText = `当前 AI：已启用（模型 ${aiCfg.aiModel || '?'}）`;
+		} else if (aiFilled) {
+			statusText = `当前 AI：配置已下发，答题时会自动启用（模型 ${aiCfg.aiModel || '?'}）`;
+		} else {
+			statusText = '当前 AI：桌面端还没有填写 API 配置，答题会提示「未设置题库」';
+		}
+	} catch {
+		statusText = '';
+	}
+
 	return h('div', {}, [
 		h(
 			'div',
 			{ className: 'secondary', style: { marginBottom: '10px', lineHeight: '1.7' } },
 			'已开启「使用桌面端统一配置」。题库与 AI 在桌面端统一维护，浏览器启动时自动同步，这里不再单独编辑。'
 		),
+		statusText
+			? h(
+					'div',
+					{ className: 'secondary', style: { marginBottom: '10px', fontSize: '12px', lineHeight: '1.6' } },
+					statusText
+			  )
+			: '',
 		h('button', '前往桌面端配置', (btn: HTMLButtonElement) => {
 			btn.classList.add('base-style-button');
 			btn.onclick = () => openDesktopSettings();
@@ -2824,7 +2918,9 @@ function createAiConfigCard() {
 		const hasAI = aiIdx !== -1;
 		enableBtn.style.display = hasAI ? 'none' : 'block';
 		disableBtn.style.display = hasAI ? 'block' : 'none';
-		statusEl.textContent = hasAI ? '● AI 答题已启用（模型 ' + (aiCfg.aiModel || '?') + '）' : '○ 未启用';
+		statusEl.textContent = hasAI
+			? '● AI 答题已启用（模型 ' + (aiCfg.aiModel || '?') + '）'
+			: '○ 未启用 —— 填好上面三项后点右侧「启用」才会开始答题';
 		statusEl.classList.toggle('on', hasAI);
 		if (hasAI && aiCfg.aiEndpoint && aiCfg.aiApiKey) {
 			aws[aiIdx].url = normalizeAiEndpoint(aiCfg.aiEndpoint);

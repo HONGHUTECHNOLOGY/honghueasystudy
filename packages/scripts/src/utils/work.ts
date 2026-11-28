@@ -334,9 +334,38 @@ export const answerWrapperEmptyWarning = cors.defineTopFunction((duration: numbe
 		}, 500);
 	};
 
+	/**
+	 * 精准提示
+	 *
+	 * 「填了 AI 配置」和「启用了 AI」是两件事：只有点过「启用」，AI 才会被写成
+	 * `AI答题` 条目进 `answererWrappers`，而所有平台的自动答题只看这个数组。
+	 * 原来一律提示「你还没设置题库」，用户明明填好了 AI 却被要求去配题库，根本对不上。
+	 */
+	let content: any[] = ['你还没设置题库，无法自动答题，请切换到 ', setting, ' 页面进行配置。'];
+	try {
+		const scripts: any = CommonProject.scripts;
+		const aiCfg: any = scripts.aiSettings?.cfg || {};
+		const cfg: any = scripts.settings?.cfg || {};
+		const wrappers: any[] = cfg.answererWrappers || [];
+		const hasAiWrapper = wrappers.some((aw) => aw && aw.name === 'AI答题');
+		const aiDisabled = (cfg.disabledAnswererWrapperNames || []).includes('AI答题');
+		const aiFilled = !!(aiCfg.aiEndpoint && aiCfg.aiApiKey && aiCfg.aiModel);
+
+		if (aiFilled && !hasAiWrapper) {
+			const aiBtn = h('button', { className: 'base-style-button-secondary' }, 'AI 答题配置');
+			aiBtn.onclick = () => CommonProject.scripts.render.methods.pin(CommonProject.scripts.aiSettings);
+			content = ['AI 配置已经填好，但还没点「启用」，所以无法自动答题。请到 ', aiBtn, ' 页面点击「启用」。'];
+		} else if (hasAiWrapper && aiDisabled) {
+			content = ['AI 答题被「禁用」了，无法自动答题。请到 ', setting, ' 的题库列表里取消禁用。'];
+		}
+	} catch (err) {
+		// 读配置失败就沿用默认文案，提示本身不能把流程打断
+		console.log('生成题库未配置提示失败', err);
+	}
+
 	answererWrapperUnsetMessage?.remove();
 	answererWrapperUnsetMessage = $message.warn({
-		content: h('span', {}, ['你还没设置题库，无法自动答题，请切换到 ', setting, ' 页面进行配置。']),
+		content: h('span', {}, content),
 		duration: duration
 	});
 });

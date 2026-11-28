@@ -6519,17 +6519,37 @@ ${url}`).join("\n");
   }
   let answererWrapperUnsetMessage;
   const answerWrapperEmptyWarning = lib.cors.defineTopFunction((duration) => {
+    var _a, _b;
     const setting = lib.h("button", { className: "base-style-button-secondary" }, "通用-全局设置");
     setting.onclick = () => {
       CommonProject.scripts.render.methods.pin(CommonProject.scripts.settings);
       setTimeout(() => {
-        var _a, _b;
-        (_b = (_a = lib.$elements.root) == null ? void 0 : _a.querySelector('[value="点击配置"]')) == null ? void 0 : _b.click();
+        var _a2, _b2;
+        (_b2 = (_a2 = lib.$elements.root) == null ? void 0 : _a2.querySelector('[value="点击配置"]')) == null ? void 0 : _b2.click();
       }, 500);
     };
+    let content = ["你还没设置题库，无法自动答题，请切换到 ", setting, " 页面进行配置。"];
+    try {
+      const scripts = CommonProject.scripts;
+      const aiCfg = ((_a = scripts.aiSettings) == null ? void 0 : _a.cfg) || {};
+      const cfg = ((_b = scripts.settings) == null ? void 0 : _b.cfg) || {};
+      const wrappers = cfg.answererWrappers || [];
+      const hasAiWrapper = wrappers.some((aw) => aw && aw.name === "AI答题");
+      const aiDisabled = (cfg.disabledAnswererWrapperNames || []).includes("AI答题");
+      const aiFilled = !!(aiCfg.aiEndpoint && aiCfg.aiApiKey && aiCfg.aiModel);
+      if (aiFilled && !hasAiWrapper) {
+        const aiBtn = lib.h("button", { className: "base-style-button-secondary" }, "AI 答题配置");
+        aiBtn.onclick = () => CommonProject.scripts.render.methods.pin(CommonProject.scripts.aiSettings);
+        content = ["AI 配置已经填好，但还没点「启用」，所以无法自动答题。请到 ", aiBtn, " 页面点击「启用」。"];
+      } else if (hasAiWrapper && aiDisabled) {
+        content = ["AI 答题被「禁用」了，无法自动答题。请到 ", setting, " 的题库列表里取消禁用。"];
+      }
+    } catch (err) {
+      console.log("生成题库未配置提示失败", err);
+    }
     answererWrapperUnsetMessage == null ? void 0 : answererWrapperUnsetMessage.remove();
     answererWrapperUnsetMessage = lib.$message.warn({
-      content: lib.h("span", {}, ["你还没设置题库，无法自动答题，请切换到 ", setting, " 页面进行配置。"]),
+      content: lib.h("span", {}, content),
       duration
     });
   });
@@ -7533,9 +7553,14 @@ ${url}`).join("\n");
           return {
             getWorkOptions: () => {
               const workOptions = JSON.parse(JSON.stringify(this.cfg));
-              workOptions.answererWrappers = workOptions.answererWrappers.filter(
-                (aw) => this.cfg.disabledAnswererWrapperNames.find((daw) => daw === aw.name) === void 0
+              const disabled = this.cfg.disabledAnswererWrapperNames || [];
+              const aiDisabled = disabled.includes("AI答题");
+              workOptions.answererWrappers = (workOptions.answererWrappers || []).filter(
+                (aw) => !disabled.includes(aw.name)
               );
+              if (!aiDisabled && isUsingDesktopConfig()) {
+                ensureAiAnswererWrapper(workOptions.answererWrappers);
+              }
               refreshAiAnswererWrapper(workOptions.answererWrappers);
               return workOptions;
             },
@@ -8099,14 +8124,15 @@ ${url}`).join("\n");
             content2.style.marginBottom = "12px";
           });
           const search = async (value) => {
-            if (CommonProject.scripts.settings.cfg.answererWrappers.length === 0) {
-              lib.$modal.alert({ content: "请先在 通用-全局设置 配置题库，才能进行在线搜题。" });
+            const workOptions = CommonProject.scripts.settings.methods.getWorkOptions();
+            if (workOptions.answererWrappers.length === 0) {
+              lib.$modal.alert({ content: "请先在 通用-全局设置 配置题库，或到 AI 页填写并启用 AI 答题。" });
               return;
             }
             content.replaceChildren(lib.h("span", "搜索中..."));
             if (value) {
               const t = Date.now();
-              const infos = await defaultAnswerWrapperHandler(CommonProject.scripts.settings.cfg.answererWrappers, {
+              const infos = await defaultAnswerWrapperHandler(workOptions.answererWrappers, {
                 title: value
               });
               const resume = ((Date.now() - t) / 1e3).toFixed(2);
@@ -8474,6 +8500,37 @@ ${url}`).join("\n");
   }
   const AI_SYSTEM_PROMPT = "你是一个答题助手。请严格依据给出的「题目」和「选项」作答，只能从给定选项里选，禁止编造选项，也不允许给出选项之外的内容。\n输出要求（必须严格遵守；只输出答案本身，不要解释、不要理由、不要标点、不要引号、不要重复题干）：\n1. 单选题(single)：只输出所选项的字母，例如 A；不要输出选项文字。\n2. 多选题(multiple)：只输出所有正确选项的字母，用 # 分隔，例如 A#B#C。\n3. 判断题(judgement)：只输出所选项的文字，不要输出字母。选项写作「A.对」「B.错」时就输出「对」或「错」；写作「A.正确」「B.错误」时就输出「正确」或「错误」；必须与所选项的文字完全一致。\n4. 填空题(completion)：直接输出要填的内容，多个空用 # 分隔。\n禁止输出「正确答案是」「答案是」「因为」等任何前缀或解析，禁止输出多个选项。\n必须给出答案：无论题目是否完整、公式是否看得清、你是否确定，都必须输出一个最可能的答案。绝对禁止留空，禁止只输出「无法确定」「不知道」「看不清」「略」「无」这类说明，禁止输出空行。";
   const AI_USER_PROMPT = "题目：${title}\n选项：\n${options}\n题型：${type}\n请只输出答案（必须作答，禁止留空）：";
+  function ensureAiAnswererWrapper(wrappers) {
+    if (!Array.isArray(wrappers))
+      return;
+    if (wrappers.some((aw) => aw && aw.name === "AI答题"))
+      return;
+    let aiCfg;
+    try {
+      aiCfg = CommonProject.scripts.aiSettings.cfg;
+    } catch {
+      return;
+    }
+    const { aiEndpoint, aiApiKey, aiModel } = aiCfg || {};
+    if (!aiEndpoint || !aiApiKey || !aiModel)
+      return;
+    wrappers.push({
+      name: "AI答题",
+      url: normalizeAiEndpoint(aiEndpoint),
+      homepage: "AI 大模型答题",
+      method: "post",
+      type: "GM_xmlhttpRequest",
+      contentType: "json",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + aiApiKey },
+      data: {
+        model: aiModel,
+        messages: buildAiMessages(aiCfg.referenceDocs || []),
+        temperature: 0
+      },
+      handler: "return (res)=>{ var c = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content; return [undefined, c ? String(c).trim() : undefined] }",
+      inlineImages: true
+    });
+  }
   function refreshAiAnswererWrapper(wrappers) {
     if (!wrappers || wrappers.length === 0)
       return;
@@ -9003,12 +9060,33 @@ ${url}`).join("\n");
     lib.$message.info({ content: "已切换到桌面端「软件设置」，请在其中配置题库与 AI" });
   }
   function createDesktopConfigTip() {
+    let statusText = "";
+    try {
+      const aiCfg = CommonProject.scripts.aiSettings.cfg;
+      const wrappers = CommonProject.scripts.settings.cfg.answererWrappers || [];
+      const hasAiWrapper = wrappers.some((w) => w && w.name === "AI答题");
+      const aiFilled = !!(aiCfg.aiEndpoint && aiCfg.aiApiKey && aiCfg.aiModel);
+      if (hasAiWrapper) {
+        statusText = `当前 AI：已启用（模型 ${aiCfg.aiModel || "?"}）`;
+      } else if (aiFilled) {
+        statusText = `当前 AI：配置已下发，答题时会自动启用（模型 ${aiCfg.aiModel || "?"}）`;
+      } else {
+        statusText = "当前 AI：桌面端还没有填写 API 配置，答题会提示「未设置题库」";
+      }
+    } catch {
+      statusText = "";
+    }
     return lib.h("div", {}, [
       lib.h(
         "div",
         { className: "secondary", style: { marginBottom: "10px", lineHeight: "1.7" } },
         "已开启「使用桌面端统一配置」。题库与 AI 在桌面端统一维护，浏览器启动时自动同步，这里不再单独编辑。"
       ),
+      statusText ? lib.h(
+        "div",
+        { className: "secondary", style: { marginBottom: "10px", fontSize: "12px", lineHeight: "1.6" } },
+        statusText
+      ) : "",
       lib.h("button", "前往桌面端配置", (btn) => {
         btn.classList.add("base-style-button");
         btn.onclick = () => openDesktopSettings();
@@ -9084,7 +9162,7 @@ ${url}`).join("\n");
       const hasAI = aiIdx !== -1;
       enableBtn.style.display = hasAI ? "none" : "block";
       disableBtn.style.display = hasAI ? "block" : "none";
-      statusEl.textContent = hasAI ? "● AI 答题已启用（模型 " + (aiCfg.aiModel || "?") + "）" : "○ 未启用";
+      statusEl.textContent = hasAI ? "● AI 答题已启用（模型 " + (aiCfg.aiModel || "?") + "）" : "○ 未启用 —— 填好上面三项后点右侧「启用」才会开始答题";
       statusEl.classList.toggle("on", hasAI);
       if (hasAI && aiCfg.aiEndpoint && aiCfg.aiApiKey) {
         aws[aiIdx].url = normalizeAiEndpoint(aiCfg.aiEndpoint);
