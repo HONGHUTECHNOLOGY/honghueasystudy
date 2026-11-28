@@ -447,17 +447,17 @@ export const CXProject = Project.create({
 				/**
 				 * 不及格重做（作业）
 				 *
-				 * 作业答完会先自动提交、读分数；低于及格线且配置了「AI答题」时，
-				 * 把整卷（题干 + 选项 + 上次答案）发给 AI 重做，再提交，最多 5 轮。
-				 * 没有配置 AI 答题时保持原来的行为：只作答，不自动提交。
+				 * 勾选后作业答完会**直接提交**、读分数；低于及格线时再把整卷交给 AI 重做并重新提交，
+				 * 最多 5 轮。因为「提交」是不可逆的，且面板上写的是「检查后自行提交」，
+				 * 所以**默认关闭**：不勾选时脚本只负责作答，交卷交给用户。
 				 */
 				aiRedoOnFail: {
-					label: '不及格时 AI 整卷重做',
+					label: '不及格时 AI 整卷重做（答完自动提交）',
 					attrs: {
 						type: 'checkbox',
-						title: '作业提交后若低于及格线，把整卷和上次答案一起发给 AI 重做并重新提交，最多 5 轮（需先在通用设置里启用 AI 答题）'
+						title: '勾选后作业答完会立即自动提交并读分；低于及格线时把整卷和上次答案发给 AI 重做、重新提交，最多 5 轮（需先在通用设置里启用 AI 答题）。不勾选则只作答，由你检查后手动提交'
 					},
-					defaultValue: true
+					defaultValue: false
 				},
 				passScore: {
 					label: '及格线（分）',
@@ -471,6 +471,27 @@ export const CXProject = Project.create({
 				}
 			},
 			async oncomplete() {
+				/**
+				 * 一次性迁移：把「答完自动提交」从默认开启改成默认关闭
+				 *
+				 * 旧版 `aiRedoOnFail` 默认 true，而 easy-us 的 configs 初始化会把默认值**写进存储**，
+				 * 所以只改 `defaultValue` 对跑过旧版的用户无效 —— 他们只要配了 AI，作业答完就会被
+				 * 无声自动提交、不及格还会连续重交 5 轮，而面板上写的是「请自行检查后提交」。
+				 * 这里迁移一次并打标记，之后不再动用户的选择。
+				 */
+				const workCfg = this.cfg as any;
+				if (workCfg.redoDefaultMigrated !== true) {
+					workCfg.redoDefaultMigrated = true;
+					if (workCfg.aiRedoOnFail === true) {
+						workCfg.aiRedoOnFail = false;
+						$message.warn({
+							content:
+								'已关闭「不及格时 AI 整卷重做」：脚本不再自动提交作业。需要答完自动交卷，请到面板重新勾选。',
+							duration: 0
+						});
+					}
+				}
+
 				const isExam = /\/exam\/preview/.test(location.href);
 				commonWork(this, {
 					workerProvider: (opts) => workOrExam(isExam ? 'exam' : 'work', { ...opts, preview_mode: true }),
@@ -1391,8 +1412,19 @@ function isOptionPicked(option: HTMLElement | null | undefined): boolean {
 	if (!option) return false;
 	if (option.matches?.('[class*="check_answer"]')) return true;
 	if (option.querySelector?.('[class*="check_answer"]')) return true;
-	const li = option.closest?.('li');
-	return !!li?.querySelector('[class*="check_answer"]');
+	/**
+	 * 两种情况都要认：
+	 *
+	 * - 旧版作业/测验：`li` 里放选项，选中标记加在 `span.num_option` 上
+	 * - 新版考试（`mooc1.chaoxing.com/exam-ans/...`）：容器是 `div.answerBg`，
+	 *   字母 `span.saveSingleSelect.num_option` 与文本 `div.answer_p` 是**兄弟节点**，
+	 *   整棵树里没有 `li`。只 `closest('li')` 会永远返回 false，于是
+	 *   {@link ensureOptionPicked} 反复点击，而页面的 `addChoice` 是 toggle ——
+	 *   点偶数次又变回未选中，表现就是「点上了又灭了」，但每次点击都触发
+	 *   `submitForm`，服务端其实已经存了答案。
+	 */
+	const box = option.closest?.('.answerBg') || option.closest?.('li');
+	return !!box?.querySelector('[class*="check_answer"]');
 }
 
 /**
@@ -1514,8 +1546,9 @@ function pickRedoOptions(options: HTMLElement[], answer: string): HTMLElement[] 
 	const textOf = (option: HTMLElement) => {
 		const own = String(option.innerText || option.textContent || '').trim();
 		if (own) return own;
-		const li = option.closest('li');
-		return String(li?.innerText || li?.textContent || '').trim();
+		/** 旧版文字挂在 li 上；新版考试页挂在 div.answerBg 上 */
+		const box = option.closest('li') || option.closest('.answerBg');
+		return String(box?.innerText || box?.textContent || '').trim();
 	};
 
 	const picked: HTMLElement[] = [];
@@ -1621,11 +1654,7 @@ function buildPaperSnapshotFromResults(
 			 * 和真正提交进卷子的答案不一定一致。传给 AI 的旧答案错了，它就会照着错的信息改。
 			 */
 			const picked = ((ctx?.elements?.options || []) as HTMLElement[])
-				.map((option, index) => {
-					const hit =
-						option.matches?.('[class*="check_answer"]') || option.querySelector?.('[class*="check_answer"]');
-					return hit ? String.fromCharCode(65 + index) : '';
-				})
+				.map((option, index) => (isOptionPicked(option) ? String.fromCharCode(65 + index) : ''))
 				.filter(Boolean);
 			const oldAnswer = picked.length
 				? picked.join('#')
@@ -1713,7 +1742,15 @@ function workOrExam(
 	 * 关掉标签页就自动消失，不会把上一份作业的旧答案带到下一份作业里。
 	 */
 	const redoCfg = (CXProject.scripts.work?.cfg || {}) as any;
-	const redoEnabled = type === 'work' && redoCfg.aiRedoOnFail !== false;
+	/** 是否真的会「答完自动提交」：必须显式勾选 + 配了 AI 答题，且当前是作业（考试不自动交卷） */
+	const aiConfigured = ((CommonProject.scripts.settings.cfg.answererWrappers || []) as any[]).some(
+		(wrapper) => wrapper && wrapper.name === 'AI答题'
+	);
+	const redoEnabled = type === 'work' && redoCfg.aiRedoOnFail === true && aiConfigured;
+	/** 完成提示按「会不会自动提交」区分，避免写着「自行提交」却偷偷交卷 */
+	const finishTip = redoEnabled
+		? '作业已完成，将自动提交并读取分数（可在面板关闭「不及格时 AI 整卷重做」）'
+		: '作业/考试完成，请自行检查后保存或提交。';
 	const passScore = Number(redoCfg.passScore ?? 60);
 	const maxRedoRounds = Math.max(0, Math.min(5, Number(redoCfg.aiRedoRounds ?? 5)));
 
@@ -2213,11 +2250,8 @@ function workOrExam(
 	 * 为什么每轮都要 reload：卷子上的选项只能加不能减，同一页上换答案是改不干净的。
 	 */
 	const submitAndRedoIfFailed = async (results: any[]) => {
-		const aiConfigured = ((CommonProject.scripts.settings.cfg.answererWrappers || []) as any[]).some(
-			(wrapper) => wrapper && wrapper.name === 'AI答题'
-		);
-		/** 考试不自动交卷；没开「不及格重做」或没配 AI 时保持原来的「自己检查后提交」 */
-		if (type !== 'work' || !redoEnabled || !aiConfigured) {
+		/** `redoEnabled` 已包含「作业 + 显式勾选 + 配了 AI」三个条件，这里不再重复判断 */
+		if (!redoEnabled) {
 			if (hasOverride) clearRedoPlan();
 			return;
 		}
@@ -2303,7 +2337,7 @@ function workOrExam(
 		worker
 			.doWork()
 			.then(async (results) => {
-				$message.info({ content: '作业/考试完成，请自行检查后保存或提交。', duration: 0 });
+				$message.info({ content: finishTip, duration: 0 });
 				try {
 					await submitAndRedoIfFailed(results || []);
 				} catch (error: any) {
@@ -2316,7 +2350,25 @@ function workOrExam(
 				$message.error('答题程序发生错误 : ' + err.message);
 			});
 	} else {
-		const getNextBtn = () => document.querySelector('[onclick="getTheNextQuestion(1)"]') as HTMLElement;
+		/**
+		 * 逐题模式（考试不允许整卷预览时的降级路径）
+		 *
+		 * 最后一题的「下一题」按钮**还是同一个 onclick**（`getTheNextQuestion(1)`），
+		 * 只是文案变成「交卷」。只按 onclick 选，会一直点它：点完弹交卷确认 / 验证码、
+		 * 页面不跳转、`next` 依然存在 —— 外层 while 就成了
+		 * 「doWork → 点交卷 → 弹验证码 → 再来一轮」的死循环，
+		 * 表现就是「一直在请求交卷，交卷验证码反复出现」。
+		 */
+		const getNextBtn = () => {
+			const btn = document.querySelector('[onclick="getTheNextQuestion(1)"]') as HTMLElement | null;
+			if (!btn) return null;
+			const label = String((btn as any).value || btn.innerText || '').replace(/\s+/g, '');
+			if (/交卷|提交|保存/.test(label)) {
+				$console.info(`[答题] 「下一题」按钮文案是「${label}」，判定为交卷入口，不再点击`);
+				return null;
+			}
+			return btn;
+		};
 		let next = getNextBtn();
 
 		(async () => {
@@ -2329,7 +2381,7 @@ function workOrExam(
 				await $.sleep(1000);
 			}
 
-			$message.success({ content: '作业/考试完成，请自行检查后保存或提交。', duration: 0 });
+			$message.success({ content: finishTip, duration: 0 });
 			worker.emit('done');
 			// 搜索完成后才会同步答案与题目的显示，防止题目错乱
 			CommonProject.scripts.workResults.cfg.questionPositionSyncHandlerType = 'cx';
