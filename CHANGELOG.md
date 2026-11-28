@@ -6,6 +6,7 @@
 
 ### 🐛 问题修复
 
+* **ai:** 答案解析层支持带装饰的模型输出，「答案：A」「代码块」「所以选 A」不再被判失败 ([6676099](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/6676099a85ae1e7310886ecf2c305740abac477a))
 * **ai:** 桌面端统一配置下 AI 进不了 answererWrappers，误报「没配题库」 ([c0107dd](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/c0107dd543f23f113952de85edafb314f2ec9550))
 * **cx:** 新版考试页选项判定失效导致「点上了又灭」，考试不再自动交卷 ([bbf9567](https://github.com/HONGHUTECHNOLOGY/honghueasystudy/commit/bbf9567f533b732adf154796468186a3df1b32c2))
 
