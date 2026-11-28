@@ -1210,6 +1210,7 @@ export const CommonProject = Project.create({
 						'填写 AI API 信息后，点击「启用 AI 答题」，将自动替代题库进行答题。',
 						'兼容 OpenAI 接口格式（OpenAI / DeepSeek / 智谱 GLM / Kimi / 硅基流动等）。',
 						'API 地址可只填域名（如 https://api.deepseek.com），将自动补全 /v1/chat/completions；若已含完整路径则保持不变。',
+						'思考模式默认开启（正确率更高）；关掉能让每题快十几秒，但多选题、判断题更容易出错。',
 						'API Key 仅保存在本地，不会上传到任何第三方服务器。'
 					]).outerHTML
 				},
@@ -1223,6 +1224,11 @@ export const CommonProject = Project.create({
 				},
 				aiModel: {
 					defaultValue: DEFAULT_AI_MODEL,
+					extra: { appConfigSync: false }
+				},
+				/** 思考模式：默认开（DeepSeek 官方默认也是开），关掉能快十几秒但正确率下降 */
+				aiThinking: {
+					defaultValue: true,
 					extra: { appConfigSync: false }
 				},
 				referenceDocs: {
@@ -1270,10 +1276,9 @@ export const CommonProject = Project.create({
 							Authorization: 'Bearer ' + ai.apiKey
 						},
 						data: {
-							...(next[idx].data || {}),
+							...applyAiThinking(next[idx].data, ai.endpoint),
 							model: ai.model,
-							messages: buildAiMessages(buildAiReferenceDocs()),
-							...aiThinkingPayload(ai.endpoint)
+							messages: buildAiMessages(buildAiReferenceDocs())
 						},
 						inlineImages: true
 					};
@@ -2252,11 +2257,10 @@ function refreshAiAnswererWrapper(wrappers: AnswererWrapper[] | undefined) {
 		Authorization: 'Bearer ' + ai.apiKey
 	};
 	wrapper.data = {
-		...((wrapper.data as any) || {}),
+		...applyAiThinking((wrapper as any).data, ai.endpoint),
 		model: ai.model,
 		messages: buildAiMessages(buildAiReferenceDocs()),
-		temperature: 0,
-		...aiThinkingPayload(ai.endpoint)
+		temperature: 0
 	};
 	/** 题目里带图（公式/图表）时转成 base64 一起发给模型 */
 	wrapper.inlineImages = true;
@@ -2826,19 +2830,46 @@ function normalizeAiEndpoint(raw: string) {
 }
 
 /**
- * DeepSeek 官方接口默认开着「思考模式」，答题时主动关掉
+ * 「思考模式」开关是否开启
  *
- * 官方文档写明 `deepseek-flash` 默认 thinking 开启。答题只要最终答案，
- * 开着思考的代价是：每题多等十几秒（面板上就是「AI 思考中…」一直跳），
- * 而且思考内容同样计入输出 token —— 输出被截断时 `content` 会是空串、
- * 只剩 `reasoning_content`，整道题判失败。
+ * 官方文档写明 `deepseek-flash` 默认 thinking 开启，**这里也默认跟随官方行为（开）**：
+ * 思考过程能明显提升多选/判断题的正确率，代价只是每题多等十几秒。
+ * 读不到配置（脚本还没初始化）时同样按「开」处理，绝不能让默认值变成关。
+ */
+function aiThinkingEnabled(): boolean {
+	try {
+		return (CommonProject.scripts.aiSettings.cfg as any).aiThinking !== false;
+	} catch {
+		return true;
+	}
+}
+
+/**
+ * DeepSeek 官方接口的「思考模式」参数
+ *
+ * 开启时**什么都不下发**，走接口默认（即开启）—— 这样对任何模型名都安全；
+ * 只有用户主动关掉时才下发 `thinking: {type:'disabled'}`。
  *
  * ⚠️ 只对 DeepSeek 官方域名下发：`thinking` 是 DeepSeek 私有字段，
  * 第三方 OpenAI 兼容网关（硅基流动、Azure、OneAPI 等）遇到不认识的字段
  * 可能直接 400，那才是真正的「配好了也答不了」。
  */
 function aiThinkingPayload(endpoint: string): Record<string, any> {
+	if (aiThinkingEnabled()) return {};
 	return /api\.deepseek\.com/i.test(String(endpoint || '')) ? { thinking: { type: 'disabled' } } : {};
+}
+
+/**
+ * 把思考模式写进**已存在**的 `wrapper.data`
+ *
+ * 不能只用 `...aiThinkingPayload()` 展开：开启时它返回空对象，
+ * 上一版固化进去的 `thinking:{type:'disabled'}` 会原样留着 ——
+ * 用户明明把开关打开了，实际请求还是关着的。所以先删再设。
+ */
+function applyAiThinking(data: any, endpoint: string): any {
+	const next = { ...(data || {}) };
+	delete next.thinking;
+	return Object.assign(next, aiThinkingPayload(endpoint));
 }
 
 function aiTestConnection(endpoint: string, apiKey: string, model: string) {
@@ -2989,7 +3020,10 @@ function createAiConfigCard() {
 .ai-cfg-btn-test{background:#007aff;}
 .ai-cfg-btn-test:hover{background:#0066d6;box-shadow:0 4px 14px rgba(0,122,255,.28);}
 .ai-cfg-status{margin-top:12px;padding:7px 11px;border-radius:8px;font-size:12px;background:rgba(0,0,0,.05);color:#6e6e73;transition:background .3s ease,color .3s ease;}
-.ai-cfg-status.on{background:#e8f8ec;color:#1a7a37;font-weight:500;}`;
+.ai-cfg-status.on{background:#e8f8ec;color:#1a7a37;font-weight:500;}
+.ai-cfg-check{display:flex;align-items:center;gap:7px;margin-top:14px;font-size:12px;color:#1d1d1f;cursor:pointer;user-select:none;}
+.ai-cfg-check input{width:15px;height:15px;margin:0;accent-color:#007aff;cursor:pointer;flex:none;}
+.ai-cfg-check-hint{color:#8e8e93;font-size:11px;}`;
 
 	const epInput = h('input', {
 		className: 'ai-cfg-input',
@@ -3015,6 +3049,23 @@ function createAiConfigCard() {
 	};
 	modelInput.onchange = () => {
 		aiCfg.aiModel = modelInput.value;
+	};
+	const thinkingInput = h('input', { type: 'checkbox', checked: aiCfg.aiThinking !== false });
+	/**
+	 * 开关一变就写进「已启用」的那份 wrapper
+	 *
+	 * thinking 字段是固化在 `answererWrappers[].data` 里的，只改配置项对正在用的
+	 * 那一份没有任何影响 —— 用户会以为「勾了没反应」，非得重新点一次「启用」。
+	 * 这里立刻同步一份，且用 `applyAiThinking` 先删后设（关→开要删掉残留的 disabled）。
+	 */
+	thinkingInput.onchange = () => {
+		aiCfg.aiThinking = thinkingInput.checked;
+		const aws: any[] = CommonProject.scripts.settings.cfg.answererWrappers || [];
+		const idx = aws.findIndex((w: any) => w && w.name === 'AI答题');
+		if (idx === -1) return;
+		const next = [...aws];
+		next[idx] = { ...next[idx], data: applyAiThinking(next[idx].data, aiCfg.aiEndpoint) };
+		CommonProject.scripts.settings.cfg.answererWrappers = next;
 	};
 	/**
 	 * 配置可能被外部改写（桌面端共享配置同步、其它标签页），
@@ -3152,6 +3203,11 @@ function createAiConfigCard() {
 		keyInput,
 		h('label', { className: 'ai-cfg-label' }, '模型名称 (Model)'),
 		modelInput,
+		h('label', { className: 'ai-cfg-check' }, [
+			thinkingInput,
+			h('span', {}, '开启思考模式'),
+			h('span', { className: 'ai-cfg-check-hint' }, '（更准确，每题多等十几秒）')
+		]),
 		h('div', { className: 'ai-cfg-btn-row' }, [enableBtn, disableBtn, testBtn]),
 		statusEl,
 		refArea

@@ -7144,11 +7144,7 @@ ${url}`).join("\n");
                   width: 600,
                   maskCloseable: false,
                   content: lib.$ui.notes([
-                    [
-                      lib.h("div", { style: { fontSize: "16px", marginBottom: "8px" } }, [
-                        lib.h("b", "题库配置填写教程：")
-                      ])
-                    ],
+                    [lib.h("div", { style: { fontSize: "16px", marginBottom: "8px" } }, [lib.h("b", "题库配置填写教程：")])],
                     [
                       lib.h(
                         "div",
@@ -7693,10 +7689,7 @@ ${url}`).join("\n");
             const tableContainer = lib.h("div");
             refresh.style.display = "none";
             tableContainer.style.display = "none";
-            panel.body.append(
-              lib.h("div", { style: { display: "flex" } }, [testNotification, refresh]),
-              tableContainer
-            );
+            panel.body.append(lib.h("div", { style: { display: "flex" } }, [testNotification, refresh]), tableContainer);
             const updateState = async () => {
               tableContainer.replaceChildren();
               let loadedCount = 0;
@@ -7714,11 +7707,7 @@ ${url}`).join("\n");
                     aiBody.append(
                       lib.h("td", [
                         lib.$ui.tooltip(
-                          lib.h(
-                            "span",
-                            { title: "AI 答题无需题库健康检查，请在「AI 答题配置」面板测试连接" },
-                            "AI 答题"
-                          )
+                          lib.h("span", { title: "AI 答题无需题库健康检查，请在「AI 答题配置」面板测试连接" }, "AI 答题")
                         )
                       ])
                     );
@@ -7809,6 +7798,7 @@ ${url}`).join("\n");
               "填写 AI API 信息后，点击「启用 AI 答题」，将自动替代题库进行答题。",
               "兼容 OpenAI 接口格式（OpenAI / DeepSeek / 智谱 GLM / Kimi / 硅基流动等）。",
               "API 地址可只填域名（如 https://api.deepseek.com），将自动补全 /v1/chat/completions；若已含完整路径则保持不变。",
+              "思考模式默认开启（正确率更高）；关掉能让每题快十几秒，但多选题、判断题更容易出错。",
               "API Key 仅保存在本地，不会上传到任何第三方服务器。"
             ]).outerHTML
           },
@@ -7822,6 +7812,10 @@ ${url}`).join("\n");
           },
           aiModel: {
             defaultValue: DEFAULT_AI_MODEL,
+            extra: { appConfigSync: false }
+          },
+          aiThinking: {
+            defaultValue: true,
             extra: { appConfigSync: false }
           },
           referenceDocs: {
@@ -7851,10 +7845,9 @@ ${url}`).join("\n");
                 Authorization: "Bearer " + ai.apiKey
               },
               data: {
-                ...next2[idx].data || {},
+                ...applyAiThinking(next2[idx].data, ai.endpoint),
                 model: ai.model,
-                messages: buildAiMessages(buildAiReferenceDocs()),
-                ...aiThinkingPayload(ai.endpoint)
+                messages: buildAiMessages(buildAiReferenceDocs())
               },
               inlineImages: true
             };
@@ -8639,11 +8632,10 @@ ${url}`).join("\n");
       Authorization: "Bearer " + ai.apiKey
     };
     wrapper.data = {
-      ...wrapper.data || {},
+      ...applyAiThinking(wrapper.data, ai.endpoint),
       model: ai.model,
       messages: buildAiMessages(buildAiReferenceDocs()),
-      temperature: 0,
-      ...aiThinkingPayload(ai.endpoint)
+      temperature: 0
     };
     wrapper.inlineImages = true;
   }
@@ -8671,7 +8663,10 @@ ${url}`).join("\n");
     } else if (textRefs.length > 0) {
       return [
         { role: "system", content: AI_SYSTEM_PROMPT },
-        { role: "user", content: "【参考资料】\n" + textRefs.map((r) => r.content).join("\n\n") + "\n\n" + AI_USER_PROMPT }
+        {
+          role: "user",
+          content: "【参考资料】\n" + textRefs.map((r) => r.content).join("\n\n") + "\n\n" + AI_USER_PROMPT
+        }
       ];
     } else {
       return [
@@ -8982,14 +8977,26 @@ ${url}`).join("\n");
           thumb.src = doc.content;
           infoChildren.push(thumb);
         }
-        listEl.appendChild(lib.h("div", { className: "ai-ref-item" }, [checkbox, lib.h("div", { className: "ai-ref-item-info" }, infoChildren), delBtn]));
+        listEl.appendChild(
+          lib.h("div", { className: "ai-ref-item" }, [
+            checkbox,
+            lib.h("div", { className: "ai-ref-item-info" }, infoChildren),
+            delBtn
+          ])
+        );
       }
     };
     const editArea = lib.h("div");
     const addTextBtn = lib.h("button", { className: "ai-ref-btn" }, "+ 添加文字");
     addTextBtn.onclick = () => {
-      const nameInput = lib.h("input", { className: "ai-ref-edit-input", placeholder: "资料名称（如：教材第三章知识点）" });
-      const contentInput = lib.h("textarea", { className: "ai-ref-edit-textarea", placeholder: "粘贴或输入参考资料内容..." });
+      const nameInput = lib.h("input", {
+        className: "ai-ref-edit-input",
+        placeholder: "资料名称（如：教材第三章知识点）"
+      });
+      const contentInput = lib.h("textarea", {
+        className: "ai-ref-edit-textarea",
+        placeholder: "粘贴或输入参考资料内容..."
+      });
       const saveBtn = lib.h("button", { className: "ai-ref-edit-btn ai-ref-edit-save" }, "保存");
       const cancelBtn = lib.h("button", { className: "ai-ref-edit-btn ai-ref-edit-cancel" }, "取消");
       saveBtn.onclick = () => {
@@ -9001,14 +9008,24 @@ ${url}`).join("\n");
         }
         saveDocs([
           ...getDocs(),
-          { id: "ref_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8), name: name || "文字资料", type: "text", content, enabled: true }
+          {
+            id: "ref_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+            name: name || "文字资料",
+            type: "text",
+            content,
+            enabled: true
+          }
         ]);
         renderList();
         editArea.replaceChildren();
       };
       cancelBtn.onclick = () => editArea.replaceChildren();
       editArea.replaceChildren(
-        lib.h("div", { className: "ai-ref-edit" }, [nameInput, contentInput, lib.h("div", { className: "ai-ref-edit-row" }, [saveBtn, cancelBtn])])
+        lib.h("div", { className: "ai-ref-edit" }, [
+          nameInput,
+          contentInput,
+          lib.h("div", { className: "ai-ref-edit-row" }, [saveBtn, cancelBtn])
+        ])
       );
       nameInput.focus();
     };
@@ -9053,9 +9070,16 @@ ${url}`).join("\n");
     const testBtn = lib.h("button", { className: "ai-ref-btn" }, "测试资料");
     const testArea = lib.h("div");
     testBtn.onclick = () => {
-      const testInput = lib.h("textarea", { className: "ai-ref-test-textarea", placeholder: "输入测试文字，如：请根据参考资料回答：1+1=?" });
+      const testInput = lib.h("textarea", {
+        className: "ai-ref-test-textarea",
+        placeholder: "输入测试文字，如：请根据参考资料回答：1+1=?"
+      });
       const sendBtn = lib.h("button", { className: "ai-ref-edit-btn ai-ref-test-send" }, "发送给 AI");
-      const resultEl = lib.h("div", { className: "ai-ref-test-result" }, "点击「发送给 AI」，将把上方文字连同已启用的参考资料一并发送给 AI。");
+      const resultEl = lib.h(
+        "div",
+        { className: "ai-ref-test-result" },
+        "点击「发送给 AI」，将把上方文字连同已启用的参考资料一并发送给 AI。"
+      );
       sendBtn.onclick = async () => {
         const text = testInput.value.trim();
         if (!text) {
@@ -9085,7 +9109,11 @@ ${url}`).join("\n");
         }
       };
       testArea.replaceChildren(
-        lib.h("div", { className: "ai-ref-test-area" }, [testInput, lib.h("div", { className: "ai-ref-edit-row" }, [sendBtn]), resultEl])
+        lib.h("div", { className: "ai-ref-test-area" }, [
+          testInput,
+          lib.h("div", { className: "ai-ref-edit-row" }, [sendBtn]),
+          resultEl
+        ])
       );
       testInput.focus();
     };
@@ -9116,8 +9144,22 @@ ${url}`).join("\n");
     }
     return ep;
   }
+  function aiThinkingEnabled() {
+    try {
+      return CommonProject.scripts.aiSettings.cfg.aiThinking !== false;
+    } catch {
+      return true;
+    }
+  }
   function aiThinkingPayload(endpoint) {
+    if (aiThinkingEnabled())
+      return {};
     return /api\.deepseek\.com/i.test(String(endpoint || "")) ? { thinking: { type: "disabled" } } : {};
+  }
+  function applyAiThinking(data, endpoint) {
+    const next2 = { ...data || {} };
+    delete next2.thinking;
+    return Object.assign(next2, aiThinkingPayload(endpoint));
   }
   function aiTestConnection(endpoint, apiKey, model) {
     return new Promise((resolve) => {
@@ -9228,10 +9270,26 @@ ${url}`).join("\n");
 .ai-cfg-btn-test{background:#007aff;}
 .ai-cfg-btn-test:hover{background:#0066d6;box-shadow:0 4px 14px rgba(0,122,255,.28);}
 .ai-cfg-status{margin-top:12px;padding:7px 11px;border-radius:8px;font-size:12px;background:rgba(0,0,0,.05);color:#6e6e73;transition:background .3s ease,color .3s ease;}
-.ai-cfg-status.on{background:#e8f8ec;color:#1a7a37;font-weight:500;}`;
-    const epInput = lib.h("input", { className: "ai-cfg-input", value: aiCfg.aiEndpoint || "", placeholder: "https://api.deepseek.com" });
-    const keyInput = lib.h("input", { className: "ai-cfg-input", type: "password", value: aiCfg.aiApiKey || "", placeholder: "sk-..." });
-    const modelInput = lib.h("input", { className: "ai-cfg-input", value: aiCfg.aiModel || "", placeholder: "deepseek-flash" });
+.ai-cfg-status.on{background:#e8f8ec;color:#1a7a37;font-weight:500;}
+.ai-cfg-check{display:flex;align-items:center;gap:7px;margin-top:14px;font-size:12px;color:#1d1d1f;cursor:pointer;user-select:none;}
+.ai-cfg-check input{width:15px;height:15px;margin:0;accent-color:#007aff;cursor:pointer;flex:none;}
+.ai-cfg-check-hint{color:#8e8e93;font-size:11px;}`;
+    const epInput = lib.h("input", {
+      className: "ai-cfg-input",
+      value: aiCfg.aiEndpoint || "",
+      placeholder: "https://api.deepseek.com"
+    });
+    const keyInput = lib.h("input", {
+      className: "ai-cfg-input",
+      type: "password",
+      value: aiCfg.aiApiKey || "",
+      placeholder: "sk-..."
+    });
+    const modelInput = lib.h("input", {
+      className: "ai-cfg-input",
+      value: aiCfg.aiModel || "",
+      placeholder: "deepseek-flash"
+    });
     epInput.onchange = () => {
       aiCfg.aiEndpoint = epInput.value;
     };
@@ -9240,6 +9298,17 @@ ${url}`).join("\n");
     };
     modelInput.onchange = () => {
       aiCfg.aiModel = modelInput.value;
+    };
+    const thinkingInput = lib.h("input", { type: "checkbox", checked: aiCfg.aiThinking !== false });
+    thinkingInput.onchange = () => {
+      aiCfg.aiThinking = thinkingInput.checked;
+      const aws = CommonProject.scripts.settings.cfg.answererWrappers || [];
+      const idx = aws.findIndex((w) => w && w.name === "AI答题");
+      if (idx === -1)
+        return;
+      const next2 = [...aws];
+      next2[idx] = { ...next2[idx], data: applyAiThinking(next2[idx].data, aiCfg.aiEndpoint) };
+      CommonProject.scripts.settings.cfg.answererWrappers = next2;
     };
     {
       const aiScript = CommonProject.scripts.aiSettings;
@@ -9306,9 +9375,7 @@ ${url}`).join("\n");
       updateBtns();
     };
     disableBtn.onclick = () => {
-      CommonProject.scripts.settings.cfg.answererWrappers = (CommonProject.scripts.settings.cfg.answererWrappers || []).filter(
-        (w) => w.name !== "AI答题"
-      );
+      CommonProject.scripts.settings.cfg.answererWrappers = (CommonProject.scripts.settings.cfg.answererWrappers || []).filter((w) => w.name !== "AI答题");
       lib.$message.success({ content: "AI 答题已禁用" });
       updateBtns();
     };
@@ -9326,7 +9393,9 @@ ${url}`).join("\n");
         if (ret.ok) {
           lib.$message.success({ content: "AI 连接成功！模型 " + aiModel });
         } else if (ret.status === 0) {
-          lib.$message.error({ content: "AI 连接失败：网络错误 / 扩展无权访问该域名（" + fullEndpoint + "）。" + (ret.error || "") });
+          lib.$message.error({
+            content: "AI 连接失败：网络错误 / 扩展无权访问该域名（" + fullEndpoint + "）。" + (ret.error || "")
+          });
         } else {
           const bodyStr = typeof ret.body === "string" ? ret.body.slice(0, 200) : JSON.stringify(ret.body || {}).slice(0, 200);
           lib.$message.error({ content: "AI 连接失败 [HTTP " + ret.status + "]：" + bodyStr });
@@ -9361,6 +9430,11 @@ ${url}`).join("\n");
       keyInput,
       lib.h("label", { className: "ai-cfg-label" }, "模型名称 (Model)"),
       modelInput,
+      lib.h("label", { className: "ai-cfg-check" }, [
+        thinkingInput,
+        lib.h("span", {}, "开启思考模式"),
+        lib.h("span", { className: "ai-cfg-check-hint" }, "（更准确，每题多等十几秒）")
+      ]),
       lib.h("div", { className: "ai-cfg-btn-row" }, [enableBtn, disableBtn, testBtn]),
       statusEl,
       refArea
@@ -9471,7 +9545,11 @@ ${url}`).join("\n");
     ]);
     const feedbackCard = lib.h("div", { style: { ...cardStyle, marginTop: "8px" } }, [
       lib.h("div", { style: { marginBottom: "4px", fontWeight: "bold" } }, "问题反馈"),
-      lib.h("div", { className: "secondary", style: { fontSize: "12px", lineHeight: "1.6" } }, "脚本不生效、漏题？欢迎到 GitHub 或 GitCode 提 Issue。"),
+      lib.h(
+        "div",
+        { className: "secondary", style: { fontSize: "12px", lineHeight: "1.6" } },
+        "脚本不生效、漏题？欢迎到 GitHub 或 GitCode 提 Issue。"
+      ),
       issueButtons()
     ]);
     const aiCfg = CommonProject.scripts.aiSettings.cfg;
@@ -9491,13 +9569,25 @@ ${url}`).join("\n");
         }
       },
       [
-        lib.h("div", { style: { marginBottom: "6px", fontWeight: "600", fontSize: "14px", color: "#007aff" } }, "AI 答题尚未配置"),
+        lib.h(
+          "div",
+          { style: { marginBottom: "6px", fontWeight: "600", fontSize: "14px", color: "#007aff" } },
+          "AI 答题尚未配置"
+        ),
         lib.h("div", { style: { color: "#6e6e73", fontSize: "12px", lineHeight: "1.6", marginBottom: "10px" } }, [
           "配置 AI API 后，插件将自动调用大模型完成答题。请按以下步骤操作："
         ]),
         lib.h(
           "ol",
-          { style: { color: "#1d1d1f", fontSize: "12px", lineHeight: "1.8", paddingLeft: "20px", margin: "0 0 12px" } },
+          {
+            style: {
+              color: "#1d1d1f",
+              fontSize: "12px",
+              lineHeight: "1.8",
+              paddingLeft: "20px",
+              margin: "0 0 12px"
+            }
+          },
           [
             lib.h("li", [
               "前往 ",
